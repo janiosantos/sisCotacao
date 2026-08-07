@@ -135,6 +135,7 @@ const PageCotacoes = (() => {
         <h3 style="font-size:15px;">Comparação de preços</h3>
         ${isFechada ? "" : `
           <div style="display:flex;gap:8px;">
+            <button class="btn btn--sm" id="btnImportarIA">⚡ Importar retorno</button>
             <button class="btn btn--sm" id="btnAddFornecedor">+ Fornecedor</button>
             <button class="btn btn--sm" id="btnAddItem">+ Item</button>
           </div>`}
@@ -156,6 +157,14 @@ const PageCotacoes = (() => {
       renderSummary($app, { itens, vencedores, fornecedores });
     } else {
       $app.querySelector("#btnFechar").addEventListener("click", () => abrirModalFechar($app, { cotacaoId, itens, fornecedores, precoMap }));
+      $app.querySelector("#btnImportarIA").addEventListener("click", () => {
+        PageIA.abrir({
+          cotacaoId,
+          fornecedores,
+          titulo: "Cotação nº " + cotacao.numero,
+          onAplicado: () => renderDetalhe($app, cotacaoId),
+        });
+      });
       $app.querySelector("#btnAddFornecedor").addEventListener("click", () => abrirModalAddFornecedor($app, cotacaoId, fornecedores, todosFornecedores));
       $app.querySelector("#btnAddItem").addEventListener("click", () => abrirModalAddItem($app, cotacaoId));
     }

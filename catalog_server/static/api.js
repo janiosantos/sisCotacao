@@ -19,6 +19,19 @@ const Api = (() => {
     return res.json();
   }
 
+  async function enviarArquivo(path, formData) {
+    const res = await fetch(path, { method: "POST", body: formData });
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const j = await res.json();
+        detail = j.error || detail;
+      } catch (e) {}
+      throw new Error(detail);
+    }
+    return res.json();
+  }
+
   return {
     // catálogo
     listarProdutos: (params = {}) => request("GET", "/api/produtos" + qs(params)),
@@ -60,6 +73,19 @@ const Api = (() => {
     // histórico
     historicoPrecos: (produtoId) => request("GET", "/api/historico-precos" + qs({ produto_id: produtoId })),
     produtosComHistorico: () => request("GET", "/api/historico-precos/produtos"),
+
+    // importador IA (microserviço)
+    iaHealth: () => request("GET", "/api/ia/health"),
+    iaSeed: (reset = false) => request("POST", "/api/ia/seed", { reset }),
+    iaExtrairTexto: (texto) => request("POST", "/api/ia/extract", { text: texto }),
+    iaExtrairPdf: (file) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      return enviarArquivo("/api/ia/extract/file", fd);
+    },
+    iaMatch: (items, topK = 5) => request("POST", "/api/ia/match", { items, top_k: topK }),
+    iaAplicar: (cotacaoId, data) =>
+      request("POST", "/api/ia/apply", { cotacao_id: cotacaoId, ...data }),
 
     // cadastro de produtos
     listarFamilias: (incluirInativas = false) =>

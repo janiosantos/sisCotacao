@@ -35,3 +35,9 @@ Backups/
 # Arquivos-lixo criados por comandos digitados errado
 h -u origin main
 “isCotação”
+
+# Microservi�o isolado (repo pr�prio)
+cotacoes-ia-importer/
+
+# Dados gerados em runtime
+backend/app/data/

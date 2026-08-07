@@ -155,6 +155,18 @@ class QuoteRepository:
 
     # ------------------------------------------------------------------
 
+    def item_por_produto(self, cotacao_id: int, produto_id: int) -> int | None:
+        """Devolve o cotacao_item_id de um produto dentro da cotação (o microserviço
+        devolve produto_id = id de variante do catálogo, que é o usado no cadastro)."""
+        with system_conn() as conn:
+            row = conn.execute(
+                "SELECT id FROM cotacao_itens WHERE cotacao_id=? AND produto_id=? ORDER BY id ASC LIMIT 1",
+                (cotacao_id, produto_id),
+            ).fetchone()
+        return row["id"] if row else None
+
+    # ------------------------------------------------------------------
+
     def registrar_preco(
         self,
         cotacao_id: int,

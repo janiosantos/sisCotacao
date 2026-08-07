@@ -428,7 +428,10 @@ const PageCompras = (() => {
           </div>
         </div>
         <div class="cpr-lista-foot" style="justify-content:space-between">
-          <button class="btn" id="cprRecarregar2">↻ Atualizar respostas</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" id="cprRecarregar2">↻ Atualizar respostas</button>
+            <button class="btn" id="cprImportarIA">⚡ Importar resposta IA</button>
+          </div>
           <button class="btn btn--accent" id="cprGerarPedidos">Gerar Pedidos ➔</button>
         </div>
       </div>`;
@@ -438,6 +441,14 @@ const PageCompras = (() => {
         desenharMatriz(body, m);
       }));
     body.querySelector("#cprRecarregar2").addEventListener("click", () => etapaComparando(body));
+    body.querySelector("#cprImportarIA").addEventListener("click", () => {
+      PageIA.abrir({
+        cotacaoId: S.cotacaoId,
+        fornecedores: fornecedores,
+        titulo: m.cotacao.titulo || ("Cotação " + m.cotacao.numero),
+        onAplicado: () => desenhar(body.closest("#app")),
+      });
+    });
     body.querySelector("#cprGerarPedidos").addEventListener("click", async () => {
       const btn = body.querySelector("#cprGerarPedidos");
       btn.disabled = true; btn.classList.add("is-loading"); btn.innerHTML = '<span class="spinner"></span> Gerando…';

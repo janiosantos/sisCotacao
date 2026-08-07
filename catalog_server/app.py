@@ -6,6 +6,7 @@ from catalog_server import config
 from catalog_server.blueprints import (
     api_catalog_bp,
     api_compras_bp,
+    api_ia_bp,
     api_produtos_bp,
     api_quotes_bp,
     api_suppliers_bp,
@@ -46,6 +47,7 @@ def create_app() -> Flask:
     app.register_blueprint(api_suppliers_bp)
     app.register_blueprint(api_quotes_bp)
     app.register_blueprint(api_compras_bp)
+    app.register_blueprint(api_ia_bp)
     app.register_blueprint(portal_bp)
     app.register_blueprint(pages_bp)
 

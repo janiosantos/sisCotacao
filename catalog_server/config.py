@@ -32,3 +32,12 @@ PAGE_SIZE = 60
 COTACAO_STATUSES = ["aberta", "fechada", "cancelada", "pendente", "analise", "finalizada"]
 
 FORNECEDOR_STATUS = ["pendente", "respondido"]
+
+# Microserviço "Cotações IA Importer" (recebe textos/PDF/WhatsApp e devolve
+# produtos do catálogo via busca semântica no Qdrant).
+IA_URL = os.getenv("IA_URL", "http://127.0.0.1:8001").rstrip("/")
+
+IA_TIMEOUT = int(os.getenv("IA_TIMEOUT", "240"))
+
+# Limite do catálogo enviado no seed (variantes reais do crawler.db).
+IA_SEED_LIMIT = int(os.getenv("IA_SEED_LIMIT", "2000"))
