@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Cotações</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">◆</span>
+    <div class="brand-text">
+      <span class="brand-title">COTAÇÕES</span>
+      <span class="brand-sub">catálogo · fornecedores · histórico</span>
+    </div>
+  </div>
+  <nav class="tabs" id="mainNav">
+    <a href="#/catalogo" data-route="catalogo">Catálogo</a>
+    <a href="#/compras" data-route="compras">Comprar</a>
+    <a href="#/produtos" data-route="produtos">Produtos</a>
+    <a href="#/cotacoes" data-route="cotacoes">Cotações</a>
+    <a href="#/fornecedores" data-route="fornecedores">Fornecedores</a>
+    <a href="#/historico" data-route="historico">Histórico de preços</a>
+  </nav>
+</header>
+
+<main id="app"></main>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="/static/api.js"></script>
+<script src="/static/ui.js"></script>
+<script src="/static/cart.js"></script>
+<script src="/static/page_catalogo.js"></script>
+<script src="/static/page_compras.js"></script>
+<script src="/static/page_produtos.js"></script>
+<script src="/static/page_cotacoes.js"></script>
+<script src="/static/page_fornecedores.js"></script>
+<script src="/static/page_historico.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

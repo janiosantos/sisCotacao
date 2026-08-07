@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>{{ doc.number }} — Pedido/Orçamento</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; color: #1B211C; padding: 28px; margin: 0; }
+    .no-print { margin-bottom: 18px; padding: 10px 18px; font-size: 13px; border: 1px solid #B8BEAE; border-radius: 3px; background: #fff; cursor: pointer; }
+    .doc-head { border-bottom: 2px solid #1B211C; padding-bottom: 12px; margin-bottom: 18px; }
+    .doc-title { font-family: "Arial Narrow", sans-serif; font-size: 24px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+    .doc-meta { color: #5B655C; margin-top: 4px; font-size: 13px; }
+    .doc-meta strong { color: #1B211C; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { padding: 9px 11px; border: 1px solid #D7DACE; text-align: left; vertical-align: top; }
+    th { background: #F1F2EC; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #5B655C; }
+    .mono { font-family: Consolas, monospace; font-size: 12.5px; }
+    .num { text-align: right; }
+    .total-doc { margin-top: 14px; font-size: 16px; font-weight: 700; }
+    .doc-footer { margin-top: 34px; font-size: 11.5px; color: #8B948A; }
+    .status { display: inline-block; padding: 3px 10px; border-radius: 20px; font-family: Consolas, monospace; font-size: 11px; text-transform: uppercase; background: #DEE6EA; color: #3C5468; }
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body>
+  <button class="no-print" onclick="window.print()">Imprimir / Salvar PDF</button>
+
+  <div class="doc-head">
+    <div class="doc-title">Pedido / Orçamento</div>
+    <div class="doc-meta">Nº <strong>{{ doc.number }}</strong> — <span class="status">{{ doc.status_label }}</span></div>
+    {% if doc.titulo %}<div class="doc-meta">Título: <strong>{{ doc.titulo }}</strong></div>{% endif %}
+    {% if doc.cliente %}<div class="doc-meta">Cliente: <strong>{{ doc.cliente }}</strong></div>{% endif %}
+    <div class="doc-meta">Criado em {{ doc.criado_em }}</div>
+    {% if doc.observacoes %}<div class="doc-meta">Obs.: {{ doc.observacoes }}</div>{% endif %}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Código</th>
+        <th>Descrição</th>
+        <th>Marca</th>
+        <th>Qtd.</th>
+        {% if doc.fechado_em %}
+          <th>Vencedor</th>
+          <th class="num">Preço</th>
+          <th class="num">Subtotal</th>
+        {% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in doc.itens %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td class="mono">{{ item.sku or item.produto_id }}</td>
+          <td>{{ item.name }}</td>
+          <td>{{ item.brand }}</td>
+          <td>{{ item.quantidade }}</td>
+          {% if doc.fechado_em %}
+            <td>{{ item.vencedor if item.vencedor else '—' }}</td>
+            <td class="num mono">{{ (item.vencedor_preco or 0)|brl }}</td>
+            <td class="num mono">{{ ((item.vencedor_preco or 0) * item.quantidade)|brl }}</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if doc.fechado_em %}
+    <p class="total-doc">Total do pedido: {{ doc.total|brl }}</p>
+  {% else %}
+    <p class="total-doc">Documento de consulta a fornecedores. Sujeito a confirmação de preço e disponibilidade.</p>
+  {% endif %}
+
+  <p class="doc-footer">Gerado pelo sistema de cotações local.</p>
+</body>
+</html>

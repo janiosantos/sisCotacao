@@ -1,0 +1,37 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Catalog server runtime data
+catalog_server/data/
+images/
+
+# Databases e caches locais
+*.db
+*.db-wal
+*.db-shm
+
+# Logs e saídas geradas
+*.log
+logs/
+output/
+precos_revalidados_*.csv
+
+# Backups de versões antigas
+Backups/
+
+# Arquivos temporários / acidentais
+*.tmp
+*.out
+*.err
+
+# Arquivos-lixo criados por comandos digitados errado
+h -u origin main
+“isCotação”

@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+MODULE_DIR = Path(__file__).resolve().parent
+
+PROJECT_DIR = MODULE_DIR.parent
+
+CATALOG_DB = PROJECT_DIR / "database" / "crawler.db"
+
+SYSTEM_DB = MODULE_DIR / "data" / "server.db"
+
+# Cache de páginas-fonte (HTML) em banco separado, para manter o banco de
+# dados principal enxuto e rápido (evita que os blobs de HTML inflem o DB).
+CACHE_DB = MODULE_DIR / "data" / "server_cache.db"
+
+IMAGES_DIR = PROJECT_DIR / "images"
+
+HOST = os.getenv("CATALOG_HOST", "0.0.0.0")
+
+PORT = int(os.getenv("CATALOG_PORT", "8000"))
+
+DEBUG = os.getenv("CATALOG_DEBUG", "0") == "1"
+
+OPEN_BROWSER = os.getenv("CATALOG_OPEN_BROWSER", "1") == "1"
+
+SECRET_KEY = os.getenv("CATALOG_SECRET", "catalog-server-local-dev")
+
+PAGE_SIZE = 60
+
+COTACAO_STATUSES = ["aberta", "fechada", "cancelada", "pendente", "analise", "finalizada"]
+
+FORNECEDOR_STATUS = ["pendente", "respondido"]

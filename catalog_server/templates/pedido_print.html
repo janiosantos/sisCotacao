@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Pedido {{ pedido.numero }}</title>
+<style>
+  @page{ margin:18mm; }
+  *{ box-sizing:border-box; }
+  body{ font-family:'Segoe UI',Arial,sans-serif; color:#1f2430; font-size:13px; margin:0; }
+  .cab{ border-bottom:3px solid #2E7D46; padding-bottom:12px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:flex-end; }
+  .cab h1{ margin:0; font-size:24px; color:#2E7D46; }
+  .cab .num{ font-size:18px; font-weight:700; }
+  .meta{ display:flex; gap:40px; margin-bottom:18px; }
+  .meta div{ flex:1; }
+  .meta small{ display:block; color:#6b7280; text-transform:uppercase; font-size:10px; letter-spacing:.05em; }
+  table{ width:100%; border-collapse:collapse; }
+  th,td{ border:1px solid #d7dace; padding:8px 10px; text-align:left; vertical-align:top; }
+  th{ background:#eef0ea; }
+  .num-c{ text-align:right; font-variant-numeric:tabular-nums; }
+  .tot{ margin-top:14px; text-align:right; font-size:17px; font-weight:700; color:#2E7D46; }
+  .rod{ margin-top:34px; font-size:11px; color:#6b7280; border-top:1px solid #d7dace; padding-top:8px; }
+</style>
+</head>
+<body>
+  <div class="cab">
+    <div><h1>PEDIDO DE COMPRA</h1><div>Referente à cotação {{ pedido.cotacao_numero }}</div></div>
+    <div class="num">Nº {{ pedido.numero }}</div>
+  </div>
+  <div class="meta">
+    <div><small>Fornecedor</small>{{ pedido.fornecedor }}<br>
+      {% if pedido.cnpj_cpf %}CNPJ/CPF: {{ pedido.cnpj_cpf }}{% endif %}
+      {% if pedido.razao_social %} · {{ pedido.razao_social }}{% endif %}</div>
+    <div><small>Status</small>{{ 'Faturado' if pedido.status == 'faturado' else 'Enviado' }}</div>
+    <div><small>Data de geração</small>{{ pedido.data_geracao or pedido.criado_em }}</div>
+  </div>
+  <table>
+    <thead>
+      <tr><th>#</th><th>Produto</th><th>SKU</th><th>Marca</th><th>Qtd</th><th>Preço unit.</th><th class="num-c">Total</th></tr>
+    </thead>
+    <tbody>
+      {% for it in pedido.itens %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ it.name }}</td>
+        <td>{{ it.sku }}</td>
+        <td>{{ it.brand }}</td>
+        <td>{{ it.quantidade }}</td>
+        <td>R$ {{ "%.2f"|format(it.preco_unitario) }}</td>
+        <td class="num-c">R$ {{ "%.2f"|format(it.preco_unitario * it.quantidade) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="tot">Total: R$ {{ "%.2f"|format(pedido.total) }}</div>
+  <div class="rod">Documento gerado automaticamente. Aguardamos o faturamento e entrega. Obrigado!</div>
+  <script>window.onload=function(){window.print();};</script>
+</body>
+</html>
