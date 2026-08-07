@@ -24,12 +24,23 @@ from pathlib import Path
 
 SERVER_DB = Path(__file__).resolve().parent / "catalog_server" / "data" / "server.db"
 
+# Variantes ativas + campos para montar o texto enriquecido de cada item.
 SQL_VARIANTES = """
-    SELECT v.id, p.nome
+    SELECT v.id, p.nome, p.familia_id, p.embalagem,
+           NULLIF(COALESCE(NULLIF(TRIM(v.marca), ''), NULLIF(TRIM(p.marca), '')), '') AS marca
     FROM variantes v
     JOIN produtos_cadastro p ON p.id = v.produto_id
     WHERE v.ativo = 1
     ORDER BY v.id
+"""
+
+# Atributos de cada variante (cor, bitola, embalagem…) já na ordem de exibição.
+SQL_ATRIBUTOS = """
+    SELECT va.variante_id, fa.nome, va.valor
+    FROM variante_atributos va
+    JOIN familia_atributos fa ON fa.id = va.atributo_id
+    WHERE va.valor IS NOT NULL AND TRIM(va.valor) <> ''
+    ORDER BY va.variante_id, fa.ordem
 """
 
 LOG: Path = Path(__file__).resolve().parent / "seed_catalog.log"
@@ -56,6 +67,31 @@ def post(url: str, payload: dict) -> dict:
         raise RuntimeError(f"não acessei o microserviço ({url}): {exc.reason}") from exc
 
 
+def montar_descricao(itens: list[sqlite3.Row], atributos: list[sqlite3.Row]) -> list[dict]:
+    """Constrói o texto rico de cada variante: nome base + marca + embalagem +
+    atributos (cor, bitola…), p/ o embed identificar a variante exata."""
+    attrs: dict[int, list[str]] = {}
+    parts: dict[int, list[str]] = {}
+    for a in atributos:
+        attrs.setdefault(a["variante_id"], []).append((a["nome"], a["valor"]))
+
+    texto: list[dict] = []
+    for r in itens:
+        n = r["nome"]
+        pedacos: list[str] = []
+        if r["marca"]:
+            pedacos.append(f"marca {r['marca']}")
+        if r["embalagem"]:
+            pedacos.append(f"embalagem {r['embalagem']}")
+        for nome_attr, valor in attrs.get(r["id"], []):
+            pedacos.append(f"{nome_attr}: {valor}")
+        descricao = n
+        if pedacos:
+            descricao += " · " + " · ".join(pedacos)
+        texto.append({"id": r["id"], "name": descricao, "base": n})
+    return texto
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--limit", type=int, default=0, help="0 = todas as variantes")
@@ -71,17 +107,19 @@ def main() -> int:
 
     inicio = time.time()
     try:
-        refs = conn.execute(sql).fetchall()
+        itens = conn.execute(sql).fetchall()
+        atributos = conn.execute(SQL_ATRIBUTOS).fetchall()
     finally:
         conn.close()
 
-    produtos = [{"id": r["id"], "name": r["nome"]} for r in refs if r["nome"]]
+    produtos = montar_descricao(itens, atributos)
     total = len(produtos)
     if not total:
         info("nenhuma variante ativa no catálogo; nada a fazer.")
         return 1
 
     info(f"catálogo real: {total} variantes — enviando em lotes de {args.chunk}")
+    info("exemplo: " + produtos[0]["name"])
 
     for offset in range(0, total, args.chunk):
         fatia = produtos[offset: offset + args.chunk]
