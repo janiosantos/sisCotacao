@@ -2,16 +2,14 @@ from __future__ import annotations
 
 from flask import Blueprint, abort, render_template, send_from_directory
 
-from catalog_server.config import MODULE_DIR, PROJECT_DIR
+from catalog_server.config import PROJECT_DIR
 from catalog_server.repositories import catalog_repo, compras_repo, quote_repo
 from catalog_server.services import quote_service
 from catalog_server.blueprints.api_quotes import _enrich_itens
 
 pages_bp = Blueprint("pages", __name__)
 
-STATIC_DIR = MODULE_DIR / "static"
-
-# Build do frontend (Vite+TS). Quando presente, substitui a SPA legada.
+# Build do frontend (Vite+TS); fonte única da SPA.
 FRONTEND_DIST = PROJECT_DIR / "frontend" / "dist"
 
 
@@ -22,17 +20,17 @@ def _frontend_ready() -> bool:
 @pages_bp.get("/")
 def index():
     if _frontend_ready():
-        return send_from_directory(FRONTEND_DIST, "index.html")
-    resp = send_from_directory(STATIC_DIR, "index.html")
-    resp.headers["Cache-Control"] = "no-cache"
-    return resp
+        resp = send_from_directory(FRONTEND_DIST, "index.html")
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+    abort(503, description="Frontend não compilado — rode `npm run build` em frontend/.")
 
 
 @pages_bp.get("/<path:path>")
 def spa_fallback(path: str):
     """Serve o build do frontend com fallback SPA.
 
-    Caminhos reais (assets hasheados, etc.) são servidos do disco; qualquer
+    Caminhos reais (assets hasheadados, etc.) são servidos do disco; qualquer
     outro caminho cai no index.html para o roteador de hash funcionar.
     """
     if not _frontend_ready():
