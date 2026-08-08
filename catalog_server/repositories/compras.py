@@ -154,12 +154,12 @@ class ComprasRepository:
                 conn.execute(
                     """INSERT INTO cotacao_precos
                          (cotacao_item_id, fornecedor_id, preco_unitario,
-                          desconto_percentual, prazo_entrega_dias,
+                          desconto, prazo_entrega_dias,
                           disponibilidade_estoque, observacao, registrado_em)
                        VALUES (?,?,?,?,?,?,?, datetime('now'))
                        ON CONFLICT(cotacao_item_id, fornecedor_id) DO UPDATE SET
                          preco_unitario=excluded.preco_unitario,
-                         desconto_percentual=excluded.desconto_percentual,
+                         desconto=excluded.desconto,
                          prazo_entrega_dias=excluded.prazo_entrega_dias,
                          disponibilidade_estoque=excluded.disponibilidade_estoque,
                          observacao=excluded.observacao,
@@ -168,7 +168,7 @@ class ComprasRepository:
                         int(p["cotacao_item_id"]),
                         row["fornecedor_id"],
                         float(p.get("preco_unitario") or 0),
-                        float(p.get("desconto_percentual") or 0),
+                        float(p.get("desconto") if p.get("desconto") is not None else p.get("desconto_percentual") or 0),
                         int(p["prazo_entrega_dias"]) if p.get("prazo_entrega_dias") not in (None, "") else None,
                         int(p.get("disponibilidade_estoque", 1) or 1),
                         (p.get("observacao") or "").strip() or None,
@@ -244,7 +244,7 @@ class ComprasRepository:
             ).fetchall()
             precos = conn.execute(
                 """SELECT cp.cotacao_item_id, cp.fornecedor_id, cp.preco_unitario,
-                          cp.desconto_percentual FROM cotacao_precos cp
+                          cp.desconto FROM cotacao_precos cp
                    JOIN cotacao_itens ci ON ci.id=cp.cotacao_item_id
                    WHERE ci.cotacao_id=? AND cp.disponibilidade_estoque=1""",
                 (cotacao_id,),
@@ -302,7 +302,7 @@ class ComprasRepository:
     # ------------------------------------------------------------------
 
     def _preco_liquido(self, row) -> float:
-        desc = float(row["desconto_percentual"] or 0)
+        desc = float(row["desconto"] or 0)
         return float(row["preco_unitario"]) * (1 - desc / 100.0)
 
     def _escolha_fracionada(self, itens, precos) -> dict[int, dict]:

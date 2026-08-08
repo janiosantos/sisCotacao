@@ -150,7 +150,7 @@
       return {
         cotacao_item_id: it.cotacao_item_id,
         preco_unitario: Number(r.preco||0),
-        desconto_percentual: Number(r.desconto||0)||0,
+        desconto: Number(r.desconto||0)||0,
         prazo_entrega_dias: Number(r.prazo||0)||0,
         disponibilidade_estoque: (r.estoque===0)?0:1
       };

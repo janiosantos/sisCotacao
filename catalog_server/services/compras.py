@@ -25,7 +25,7 @@ def montar_matriz(cotacao_id: int) -> dict | None:
         for pr in dados["precos"]:
             if pr["cotacao_item_id"] != it["cotacao_item_id"]:
                 continue
-            desc = float(pr["desconto_percentual"] or 0)
+            desc = float(pr["desconto"] or 0)
             preco_liquido = float(pr["preco_unitario"]) * (1 - desc / 100.0)
             disponivel = bool(pr["disponibilidade_estoque"])
             precos[str(pr["fornecedor_id"])] = {
