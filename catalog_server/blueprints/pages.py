@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, abort, render_template, send_from_directory
 
-from catalog_server.config import MODULE_DIR
+from catalog_server.config import MODULE_DIR, PROJECT_DIR
 from catalog_server.repositories import catalog_repo, compras_repo, quote_repo
 from catalog_server.services import quote_service
 from catalog_server.blueprints.api_quotes import _enrich_itens
@@ -11,12 +11,36 @@ pages_bp = Blueprint("pages", __name__)
 
 STATIC_DIR = MODULE_DIR / "static"
 
+# Build do frontend (Vite+TS). Quando presente, substitui a SPA legada.
+FRONTEND_DIST = PROJECT_DIR / "frontend" / "dist"
+
+
+def _frontend_ready() -> bool:
+    return (FRONTEND_DIST / "index.html").is_file()
+
 
 @pages_bp.get("/")
 def index():
+    if _frontend_ready():
+        return send_from_directory(FRONTEND_DIST, "index.html")
     resp = send_from_directory(STATIC_DIR, "index.html")
     resp.headers["Cache-Control"] = "no-cache"
     return resp
+
+
+@pages_bp.get("/<path:path>")
+def spa_fallback(path: str):
+    """Serve o build do frontend com fallback SPA.
+
+    Caminhos reais (assets hasheados, etc.) são servidos do disco; qualquer
+    outro caminho cai no index.html para o roteador de hash funcionar.
+    """
+    if not _frontend_ready():
+        abort(404)
+    candidate = FRONTEND_DIST / path
+    if candidate.is_file():
+        return send_from_directory(FRONTEND_DIST, path)
+    return send_from_directory(FRONTEND_DIST, "index.html")
 
 
 @pages_bp.get("/orcamentos/<int:cotacao_id>/imprimir")

@@ -1,0 +1,44 @@
+/* ============================================================
+   TOKENS - papel + ambar industrial (mesma linguagem do catalogo)
+   ============================================================ */
+:root {
+  --bg: #F1F2EC;
+  --bg-panel: #FFFFFF;
+  --bg-tray: #E7E9E1;
+  --ink: #1B211C;
+  --ink-soft: #5B655C;
+  --ink-faint: #8B948A;
+  --line: #D7DACE;
+  --line-strong: #B8BEAE;
+
+  --accent: #C6871E;
+  --accent-dark: #8F5F13;
+  --accent-soft: #F3E1BC;
+  --accent-ink: #40300F;
+
+  --green: #35553B;
+  --green-soft: #DEE8DD;
+  --steel: #3C5468;
+  --steel-soft: #DEE6EA;
+
+  --danger: #A8432A;
+  --danger-soft: #F3E0D8;
+
+  --radius: 3px;
+  --radius-lg: 6px;
+  --shadow-card: 0 1px 2px rgba(20, 24, 18, 0.06), 0 1px 0 rgba(20, 24, 18, 0.04);
+  --shadow-modal: 0 12px 40px rgba(20, 24, 18, 0.28);
+
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+:root {
+  --wa: #25D366;
+  --wa-dark: #1DA851;
+  --wa-soft: #E7F9EE;
+  --verde-cpr: #2E7D46;
+  --verde-cpr-soft: #E3F2E8;
+  --cpr-accent: #C6871E;
+}

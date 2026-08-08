@@ -9,6 +9,10 @@ wheels/
 # Virtual environments
 .venv
 
+# Frontend (Vite)
+frontend/node_modules/
+frontend/dist/
+
 # Catalog server runtime data
 catalog_server/data/
 images/
@@ -36,7 +40,7 @@ Backups/
 h -u origin main
 “isCotação”
 
-# Microservi�o isolado (repo pr�prio)
+# Microservi�o isolado (repo pr�prio)
 cotacoes-ia-importer/
 
 # Dados gerados em runtime
