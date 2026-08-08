@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "puppeteer-core": "^25.5.0",
     "typescript": "^7.0.2",
     "vite": "^8.2.1"
   }

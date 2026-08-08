@@ -384,7 +384,7 @@ function renderGrid($app: HTMLElement): void {
   $grid.innerHTML = items.map(cardHtml).join("");
   $grid.querySelectorAll<HTMLElement>(".p-card").forEach((card) => {
     if (card.dataset.group) {
-      const p = items.find((x) => "group" in x && x.id === Number(card.dataset.group)) as ProdutoGrupo | undefined;
+      const p = items.find((x) => "group" in x && x.group === true && x.id === Number(card.dataset.group)) as ProdutoGrupo | undefined;
       if (!p) return;
       const abrir = () => void abrirModalVariante(p);
       card.querySelector<HTMLElement>(".p-photo")!.addEventListener("click", abrir);
@@ -392,7 +392,7 @@ function renderGrid($app: HTMLElement): void {
       return;
     }
     const produtoId = Number(card.dataset.id);
-    const item = items.find((x) => !("group" in x) && x.id === produtoId) as ProdutoResumo | undefined;
+    const item = items.find((x) => x.id === produtoId && !("group" in x && x.group)) as ProdutoResumo | undefined;
     const det = item ? detFromItem(item) : undefined;
     card.querySelector<HTMLElement>(".p-minus")!.addEventListener("click", () =>
       setQty(produtoId, Math.max(0, (draft.itens[produtoId] || 0) - 1), $app, det)
@@ -740,7 +740,7 @@ async function abrirModalVariante(p: ProdutoGrupo): Promise<void> {
 function refreshGridSelection($app: HTMLElement): void {
   $app.querySelectorAll<HTMLElement>(".p-card").forEach((card) => {
     if (card.dataset.group) {
-      const p = items.find((x) => "group" in x && x.id === Number(card.dataset.group)) as ProdutoGrupo | undefined;
+      const p = items.find((x) => "group" in x && x.group === true && x.id === Number(card.dataset.group)) as ProdutoGrupo | undefined;
       const n = p ? p.variants.reduce((s, v) => s + (draft.itens[v.id] || 0), 0) : 0;
       card.classList.toggle("is-selected", n > 0);
       const $btn = card.querySelector<HTMLElement>(".p-pick");
