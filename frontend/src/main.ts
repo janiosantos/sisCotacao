@@ -3,7 +3,14 @@
 import "./styles/tokens.css";
 import "./styles/base.css";
 
+import { render as renderCatalogo } from "./pages/catalogo";
+import { render as renderCompras, registrarImportadorIA } from "./pages/compras";
+import { render as renderFornecedores } from "./pages/fornecedores";
 import { render as renderHistorico } from "./pages/historico";
+import { renderLista as renderProdutosLista, renderEditor as renderProdutosEditor } from "./pages/produtos";
+import { renderLista as renderCotacoesLista, renderDetalhe as renderCotacoesDetalhe } from "./pages/cotacoes";
+import { abrir as abrirImportia } from "./pages/importia";
+import { injectOverlay as injectCartOverlay } from "./cart";
 
 const $app = document.getElementById("app");
 const $navLinks = document.querySelectorAll<HTMLAnchorElement>("#mainNav a");
@@ -16,25 +23,16 @@ interface Route {
 }
 
 const routes: Route[] = [
-  { pattern: /^#\/catalogo$/, handler: () => renderPlaceholder("Catálogo"), tab: "catalogo" },
-  { pattern: /^#\/compras$/, handler: () => renderPlaceholder("Comprar"), tab: "compras" },
-  { pattern: /^#\/produtos$/, handler: () => renderPlaceholder("Produtos"), tab: "produtos" },
-  { pattern: /^#\/cotacoes$/, handler: () => renderPlaceholder("Cotações"), tab: "cotacoes" },
-  { pattern: /^#\/fornecedores$/, handler: () => renderPlaceholder("Fornecedores"), tab: "fornecedores" },
+  { pattern: /^#\/catalogo$/, handler: () => renderCatalogo($app), tab: "catalogo" },
+  { pattern: /^#\/compras$/, handler: () => renderCompras($app), tab: "compras" },
+  { pattern: /^#\/produtos$/, handler: () => renderProdutosLista($app), tab: "produtos" },
+  { pattern: /^#\/produtos\/novo$/, handler: () => renderProdutosEditor($app, null), tab: "produtos" },
+  { pattern: /^#\/produtos\/(\d+)$/, handler: (m) => renderProdutosEditor($app, Number(m[1])), tab: "produtos" },
+  { pattern: /^#\/cotacoes$/, handler: () => renderCotacoesLista($app), tab: "cotacoes" },
+  { pattern: /^#\/cotacoes\/(\d+)$/, handler: (m) => renderCotacoesDetalhe($app, Number(m[1])), tab: "cotacoes" },
+  { pattern: /^#\/fornecedores$/, handler: () => renderFornecedores($app), tab: "fornecedores" },
   { pattern: /^#\/historico$/, handler: () => renderHistorico($app), tab: "historico" },
 ];
-
-function renderPlaceholder(titulo: string): void {
-  if (!$app) return;
-  $app.innerHTML = `
-    <div class="page-head">
-      <div>
-        <h1 class="page-title">${titulo}</h1>
-        <p class="page-sub">Página migrada para Vite+TS nesta ietapa — em breve.</p>
-      </div>
-    </div>
-  `;
-}
 
 function resolve(): void {
   const hash = location.hash || "#/catalogo";
@@ -52,3 +50,6 @@ function resolve(): void {
 
 window.addEventListener("hashchange", resolve);
 window.addEventListener("DOMContentLoaded", resolve);
+
+registrarImportadorIA(abrirImportia);
+injectCartOverlay();
