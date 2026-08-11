@@ -3,7 +3,8 @@ import { resolve } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const PORT_BACKEND = 8000;
+const BACKEND_HOST = process.env["BACKEND_HOST"] || "localhost";
+const PORT_BACKEND = parseInt(process.env["BACKEND_PORT"] || "8000", 10);
 const FRONTEND_DIR = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
@@ -17,11 +18,16 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,
     port: 5173,
     strictPort: true,
     proxy: {
       "/api": {
-        target: `http://localhost:${PORT_BACKEND}`,
+        target: `http://${BACKEND_HOST}:${PORT_BACKEND}`,
+        changeOrigin: true,
+      },
+      "/images": {
+        target: `http://${BACKEND_HOST}:${PORT_BACKEND}`,
         changeOrigin: true,
       },
     },

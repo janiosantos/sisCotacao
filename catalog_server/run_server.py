@@ -5,7 +5,7 @@ import threading
 import webbrowser
 
 from catalog_server import config
-from catalog_server.app import create_app
+from catalog_server.app_factory import create_app
 
 app = create_app()
 

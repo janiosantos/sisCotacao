@@ -7,12 +7,12 @@ import {
   type FamiliaAtributo,
   type FamiliaPayload,
   type Fornecedor,
-  type FornecedorVariante,
   type FornecedorVariantePayload,
   type ItemListaCadastro,
   type ProdutoCadastro,
   type ProdutoCadastroPayload,
   type ProdutoPreview,
+  type UnidadeCompra,
 } from "../api/client";
 import { escapeHtml, fmtMoney } from "../ui/format";
 import { closeModal, confirmDialog, openModal, toast } from "../ui/dom";
@@ -21,9 +21,10 @@ let familias: Familia[] = [];
 let categoriasSugestoes: string[] = [];
 let categoriasTree: Record<string, string[]> = {};
 let fornecedores: Fornecedor[] = []; // lista p/ códigos por fornecedor
+let unidadesCompra: UnidadeCompra[] = []; // unidades predefinidas p/ unidade_compra
 
 // ---------------- estado da lista ----------------
-let filters = { q: "", familia_id: "" } as { q: string; familia_id: string };
+let filters = { q: "", categoria: "" } as { q: string; categoria: string; subcategoria: string };
 let items: ItemListaCadastro[] = [];
 let total = 0;
 let page = 1;
@@ -38,7 +39,8 @@ type Atributo = Omit<FamiliaAtributo, "obrigatorio"> & {
 let atributos: Atributo[] = []; // defs da família selecionada
 let valores: Record<number, Set<string>> = {}; // attrId -> Set(valores)
 let variantes: VarianteLocal[] = []; // {id?, sku, ean, preco, prom, valores:{attrId:value}}
-let fornecedorEdits: Record<string, FornecedorEdit> = {}; // "fornecedorId:idx" -> {codigo, unidade, fator, descricao}
+let fornecedorRows: FornecedorRow[] = [];
+let fornecedorSeq = 0;
 
 interface VarianteLocal {
   id?: number;
@@ -49,14 +51,14 @@ interface VarianteLocal {
   valores: Record<string, string>;
 }
 
-interface FornecedorEdit {
+interface FornecedorRow {
+  uid: string;
+  fornecedor_id: string;
   codigo: string;
   unidade: string;
   fator: string | number;
-  descricao: string;
+  variante_idx: number;
 }
-
-const FORN_EDIT_VAZIO: FornecedorEdit = { codigo: "", unidade: "", fator: "", descricao: "" };
 
 function debounce<T extends (...args: never[]) => void>(fn: T, ms: number): (...args: Parameters<T>) => void {
   let t: ReturnType<typeof setTimeout> | undefined;
@@ -118,8 +120,12 @@ export async function renderLista($app: HTMLElement): Promise<void> {
         <p class="search-hint" id="searchHint">Digite ao menos 3 caracteres para buscar.</p>
       </div>
       <div class="field">
-        <label>Família</label>
-        <select id="fFamilia"><option value="">Todas</option></select>
+        <label>Categoria</label>
+        <select id="fCategoria"><option value="">Todas</option></select>
+      </div>
+      <div class="field">
+        <label>Subcategoria</label>
+        <select id="fSubcategoria"><option value="">Todas</option></select>
       </div>
       <button class="btn btn--outline" id="btnFamilias">Famílias</button>
       <button class="btn btn--outline" id="btnNovoUrl">Novo via URL</button>
@@ -131,10 +137,13 @@ export async function renderLista($app: HTMLElement): Promise<void> {
     <div class="load-more" id="paginacao"></div>
   `;
 
-  const $familia = $app.querySelector<HTMLSelectElement>("#fFamilia");
-  if ($familia) {
-    for (const f of familias) {
-      $familia.insertAdjacentHTML("beforeend", `<option value="${f.id}">${escapeHtml(f.nome)}</option>`);
+  // Popula categorias a partir do categoriasTree
+  const catsDisponiveis = Object.keys(categoriasTree).sort();
+  const $cat = $app.querySelector<HTMLSelectElement>("#fCategoria");
+  const $sub = $app.querySelector<HTMLSelectElement>("#fSubcategoria");
+  if ($cat) {
+    for (const c of catsDisponiveis) {
+      $cat.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`);
     }
   }
 
@@ -156,9 +165,24 @@ export async function renderLista($app: HTMLElement): Promise<void> {
       void carregar($app, true);
     }, 300));
   }
-  if ($familia) {
-    $familia.addEventListener("change", (e) => {
-      filters.familia_id = (e.target as HTMLSelectElement).value;
+  if ($cat) {
+    $cat.addEventListener("change", () => {
+      filters.categoria = $cat.value;
+      filters.subcategoria = "";
+      // Recarrega subcategorias
+      const subs = categoriasTree[$cat.value] || [];
+      if ($sub) {
+        $sub.innerHTML = '<option value="">Todas</option>';
+        for (const s of subs) {
+          $sub.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`);
+        }
+      }
+      void carregar($app, true);
+    });
+  }
+  if ($sub) {
+    $sub.addEventListener("change", () => {
+      filters.subcategoria = $sub.value;
       void carregar($app, true);
     });
   }
@@ -176,7 +200,8 @@ async function carregar($app: HTMLElement, reset: boolean): Promise<void> {
   try {
     const res = await api.listarProdutosCadastro({
       q: filters.q,
-      familia_id: filters.familia_id || undefined,
+      categoria: filters.categoria || undefined,
+      subcategoria: filters.subcategoria || undefined,
       offset: (page - 1) * PAGE,
       limit: PAGE,
     });
@@ -248,8 +273,12 @@ function renderGrid($app: HTMLElement): void {
       const ok = await confirmDialog("Excluir este produto e todas as suas variações e imagens?");
       if (!ok) return;
       try {
-        await api.excluirProdutoCadastro(id);
-        toast("Produto excluído", "success");
+        const res = await api.excluirProdutoCadastro(id);
+        if (res.desativadas > 0) {
+          toast(`Produto desativado (não excluído): ${res.desativadas} variação(ões) possuem estoque/preço/fornecedor e foram preservadas.`, "warn");
+        } else {
+          toast("Produto excluído", "success");
+        }
         void carregar($app, true);
       } catch (err) {
         toast("Erro ao excluir: " + (err as Error).message, "error");
@@ -270,7 +299,7 @@ function cardHtml(p: ItemListaCadastro): string {
     <article class="p-card" data-id="${p.id}">
       <div class="p-photo">${p.imagem_url ? `<img src="${escapeHtml(p.imagem_url)}" loading="lazy" alt="">` : `<span style="font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);">sem imagem</span>`}</div>
       <div class="p-body">
-        <p class="p-code"><span class="p-badge">${escapeHtml(p.familia_nome || "Sem família")}</span> ${p.variant_count} variações ${badgeClasse} ${badgeLinha}</p>
+        <p class="p-code"><span class="p-badge">${escapeHtml(p.categoria || p.familia_nome || "Sem categoria")}${p.subcategoria ? ` / ${escapeHtml(p.subcategoria)}` : ""}</span> ${p.variant_count} variações ${badgeClasse} ${badgeLinha}</p>
         <p class="p-desc">${escapeHtml(p.nome)}</p>
         ${p.marca ? `<p class="p-brand">${escapeHtml(p.marca)}</p>` : ""}
         <p class="p-price">${price}</p>
@@ -612,6 +641,10 @@ export async function renderEditor($app: HTMLElement, produtoId: number | null):
               <label>Marca</label>
               <input id="eMarca" type="text" value="${escapeHtml(produto ? produto.marca : "")}" placeholder="Ex.: Corfio">
             </div>
+            <div class="field">
+              <label>Código Fabricante</label>
+              <input id="eExternalId" type="text" value="${escapeHtml(produto ? (produto.external_id || '') : '')}" placeholder="Ex.: B-66874">
+            </div>
             <div class="field ed-span2">
               <label>Nome base do produto *</label>
               <input id="eNome" type="text" value="${escapeHtml(produto ? produto.nome : "")}" placeholder="Ex.: Cabo Flexível 750V Antichama">
@@ -669,10 +702,10 @@ export async function renderEditor($app: HTMLElement, produtoId: number | null):
         <div class="vt-supplier">
           <div class="vt-supplier-head">
             <h4>Códigos por fornecedor</h4>
-            <p style="margin:0;font-size:11px;color:var(--erp-ink-soft);">Código usado pelo fornecedor para cada variação, unidade de compra e fator de conversão (ex.: embalagem com 10 unidades &rarr; fator 10).</p>
+            <p style="margin:0;font-size:11px;color:var(--erp-ink-soft);">Informe para cada variação o fornecedor, o código usado por ele, a unidade de compra e o fator de conversão (ex.: embalagem com 10 unidades &rarr; fator 10).</p>
           </div>
           <div class="vt-supplier-controls">
-            <select id="fvFornecedor"><option value="">Selecione o fornecedor…</option></select>
+            <span style="flex:1;"></span>
             <button class="btn btn--accent btn--sm" id="btnSalvarFornecedor">Salvar códigos</button>
           </div>
           <div id="fvGrid" class="vt-supplier-grid"></div>
@@ -873,93 +906,190 @@ async function carregarFornecedores(): Promise<void> {
   try { fornecedores = await api.listarFornecedores(true); } catch { fornecedores = []; }
 }
 
+async function carregarUnidadesCompra(): Promise<void> {
+  if (unidadesCompra.length) return;
+  try { unidadesCompra = await api.listarUnidadesCompra(true); } catch { unidadesCompra = []; }
+}
+
+function selectUnidade(uid: string, selected: string): string {
+  const opts = unidadesCompra
+    .map(
+      (u) =>
+        `<option value="${escapeHtml(u.sigla)}" ${u.sigla === selected ? "selected" : ""}>${escapeHtml(u.sigla)}${u.descricao ? " — " + escapeHtml(u.descricao) : ""}</option>`
+    )
+    .join("");
+  const sem = selected && !unidadesCompra.some((u) => u.sigla === selected)
+    ? `<option value="${escapeHtml(selected)}" selected>${escapeHtml(selected)} (não cadastrada)</option>`
+    : "";
+  return `<select data-uid="${uid}" data-f="unidade" style="width:100%;padding:5px 7px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--bg-panel);font-size:12.5px;">
+    <option value="">—</option>${opts}${sem}
+  </select>`;
+}
+
+function selectFornecedor(uid: string, selected: string): string {
+  const opts = fornecedores
+    .map(
+      (f) =>
+        `<option value="${f.id}" ${String(f.id) === selected ? "selected" : ""}>${escapeHtml(f.nome)}</option>`
+    )
+    .join("");
+  return `<select data-uid="${uid}" data-f="fornecedor_id" style="width:100%;max-width:220px;padding:5px 7px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--bg-panel);font-size:12.5px;">
+    <option value="">—</option>${opts}
+  </select>`;
+}
+
+function selectVariante(uid: string, selectedIdx: number): string {
+  const opts = variantes
+    .map(
+      (v, i) =>
+        `<option value="${i}" ${i === selectedIdx ? "selected" : ""}>${escapeHtml(varianteLabel(v, i))}${v.sku ? " · " + escapeHtml(v.sku) : ""}</option>`
+    )
+    .join("");
+  return `<select data-uid="${uid}" data-f="variante_idx" style="width:100%;padding:5px 7px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--bg-panel);font-size:12.5px;">
+    ${opts}
+  </select>`;
+}
+
+function foraSemear(produto: ProdutoCadastro): void {
+  fornecedorRows = [];
+  const idxPorId: Record<number, number> = {};
+  variantes.forEach((v, i) => { if (v.id != null) idxPorId[v.id] = i; });
+  for (const r of produto.fornecedor_variantes || []) {
+    fornecedorRows.push({
+      uid: "fvr" + ++fornecedorSeq,
+      variante_idx: r.variante_id in idxPorId ? idxPorId[r.variante_id] : 0,
+      fornecedor_id: String(r.fornecedor_id),
+      codigo: r.codigo_fornecedor || "",
+      unidade: r.unidade_compra || "",
+      fator: r.fator_conversao ?? "",
+    });
+  }
+  if (!fornecedorRows.length && variantes.length) {
+    fornecedorRows.push({ uid: "fvr" + ++fornecedorSeq, variante_idx: 0, fornecedor_id: "", codigo: "", unidade: "", fator: "" });
+  }
+}
+
 function bindFornecedor($app: HTMLElement, produto: ProdutoCadastro): void {
-  const $select = $app.querySelector<HTMLSelectElement>("#fvFornecedor");
-  if (!$select) return;
-  void carregarFornecedores().then(() => {
-    $select.innerHTML = `<option value="">Selecione o fornecedor…</option>` +
-      fornecedores.map((f) => `<option value="${f.id}">${escapeHtml(f.nome)}</option>`).join("");
-  });
-  $select.addEventListener("change", () => renderFornecedor($app, produto));
+  foraSemear(produto);
+  void Promise.all([carregarFornecedores(), carregarUnidadesCompra()]).then(() =>
+    renderFornecedor($app, produto)
+  );
   $app.querySelector<HTMLElement>("#btnSalvarFornecedor")!.onclick = () => void salvarFornecedor($app, produto);
   renderFornecedor($app, produto);
 }
 
-function fornecedorMap(produto: ProdutoCadastro, fornecedorId: number): Record<number, FornecedorVariante> {
-  const map: Record<number, FornecedorVariante> = {};
-  (produto.fornecedor_variantes || [])
-    .filter((r) => r.fornecedor_id === fornecedorId)
-    .forEach((r) => { map[r.variante_id] = r; });
-  return map;
+function varianteLabel(v: VarianteLocal, idx: number): string {
+  return atributos.map((a) => v.valores[String(a.id)]).filter(Boolean).join(" · ") || `Variação ${idx + 1}`;
 }
 
 function renderFornecedor($app: HTMLElement, produto: ProdutoCadastro): void {
   const $grid = $app.querySelector<HTMLElement>("#fvGrid");
-  const $select = $app.querySelector<HTMLSelectElement>("#fvFornecedor");
-  if (!$grid || !$select) return;
-  const fornecedorId = Number($select.value);
-  if (!fornecedorId) { $grid.innerHTML = ""; return; }
-  const mapa = fornecedorMap(produto, fornecedorId);
-  const rows = variantes.map((v, idx) => {
-    const label = atributos.map((a) => v.valores[String(a.id)]).filter(Boolean).join(" · ") || `Variação ${idx + 1}`;
-    const key = `${fornecedorId}:${idx}`;
-    const saved = v.id != null ? mapa[v.id] : undefined;
-    fornecedorEdits[key] = fornecedorEdits[key] || {
-      codigo: saved ? saved.codigo_fornecedor : "",
-      unidade: saved ? saved.unidade_compra : "",
-      fator: saved ? saved.fator_conversao ?? "" : "",
-      descricao: saved ? saved.descricao_fornecedor : "",
-    };
-    const e = fornecedorEdits[key];
-    return `
-      <tr>
-        <td class="fv-variacao" title="${escapeHtml(label)}">${escapeHtml(label)}${v.sku ? ` <span style="color:var(--erp-ink-soft);font-weight:400;">· ${escapeHtml(v.sku)}</span>` : ""}</td>
-        <td><input type="text" data-k="${key}" data-f="codigo" placeholder="Código do fornecedor" value="${escapeHtml(e.codigo)}"></td>
-        <td><input type="text" data-k="${key}" data-f="unidade" placeholder="Ex.: CX, RL, PC" value="${escapeHtml(e.unidade)}"></td>
-        <td><input type="number" min="0" step="0.01" data-k="${key}" data-f="fator" placeholder="1" value="${escapeHtml(String(e.fator !== "" && e.fator != null ? e.fator : ""))}"></td>
-      </tr>`;
-  }).join("");
+  if (!$grid) return;
+
+  if (fornecedores.length === 0) {
+    $grid.innerHTML = `<p class="vt-supplier-empty">Nenhum fornecedor ativo cadastrado.</p>`;
+    return;
+  }
   if (!variantes.length) {
     $grid.innerHTML = `<p class="vt-supplier-empty">Gere as variações primeiro para associar os códigos.</p>`;
     return;
   }
+
+  const rows = fornecedorRows
+    .map((r) => `
+      <tr data-uid="${r.uid}">
+        <td>${selectVariante(r.uid, r.variante_idx)}</td>
+        <td>${selectFornecedor(r.uid, r.fornecedor_id)}</td>
+        <td><input type="text" data-uid="${r.uid}" data-f="codigo" placeholder="Código do fornecedor" value="${escapeHtml(r.codigo)}"></td>
+        <td>${selectUnidade(r.uid, r.unidade)}</td>
+        <td><input type="number" min="0" step="0.01" data-uid="${r.uid}" data-f="fator" placeholder="1" value="${escapeHtml(String(r.fator !== "" && r.fator != null ? r.fator : ""))}"></td>
+        <td><button type="button" class="btn btn--sm btn--ghost fv-remove" data-uid="${r.uid}" title="Remover linha">✕</button></td>
+      </tr>`)
+    .join("");
+
   $grid.innerHTML = `
-    <table class="vt-supplier-table">
-      <thead><tr><th class="fv-c-variacao">Variação</th><th>Código do fornecedor</th><th>Unid. compra</th><th>Fator conv.</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-  $grid.querySelectorAll<HTMLInputElement>("input[data-k]").forEach((i) => {
-    i.oninput = () => {
-      const key = i.dataset.k;
-      if (!key) return;
-      fornecedorEdits[key] = fornecedorEdits[key] || { ...FORN_EDIT_VAZIO };
-      const field = i.dataset.f as keyof FornecedorEdit;
-      fornecedorEdits[key][field] = i.value;
+    <div class="fv-scroll">
+      <table class="vt-supplier-table">
+        <thead>
+          <tr>
+            <th class="fv-c-variacao">Variação</th>
+            <th class="fv-c-fornecedor">Fornecedor</th>
+            <th>Código do fornecedor</th>
+            <th>Unid. compra</th>
+            <th>Fator conv.</th>
+            <th style="width:34px;"></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;">
+      <button type="button" class="btn btn--sm" id="fvAdicionar">+ Adicionar linha</button>
+      <span class="vt-supplier-count">${fornecedorRows.length} linha(s) · salve quando terminar</span>
+    </div>`;
+
+  $grid.querySelector<HTMLElement>("#fvAdicionar")!.onclick = () => {
+    fornecedorRows.push({ uid: "fvr" + ++fornecedorSeq, variante_idx: 0, fornecedor_id: "", codigo: "", unidade: "", fator: "" });
+    renderFornecedor($app, produto);
+  };
+  $grid.querySelectorAll<HTMLElement>("input[data-uid], select[data-uid]").forEach((i) => {
+    const upd = () => {
+      const row = fornecedorRows.find((x) => x.uid === i.dataset.uid);
+      if (!row) return;
+      const field = i.dataset.f as keyof FornecedorRow;
+      if (field === "variante_idx") row[field] = Number((i as HTMLSelectElement).value);
+      else (row as unknown as Record<string, string>)[field] = (i as HTMLInputElement).value;
+    };
+    i.addEventListener("input", upd);
+    i.addEventListener("change", upd);
+  });
+  $grid.querySelectorAll<HTMLElement>("button.fv-remove").forEach((b) => {
+    b.onclick = () => {
+      fornecedorRows = fornecedorRows.filter((x) => x.uid !== b.dataset.uid);
+      renderFornecedor($app, produto);
     };
   });
 }
 
 async function salvarFornecedor($app: HTMLElement, produto: ProdutoCadastro): Promise<void> {
-  const fornecedorId = Number($app.querySelector<HTMLSelectElement>("#fvFornecedor")!.value);
-  if (!fornecedorId) { toast("Selecione o fornecedor", "error"); return; }
-  const itens: FornecedorVariantePayload[] = variantes.map((v, idx) => {
-    const e = fornecedorEdits[`${fornecedorId}:${idx}`] || FORN_EDIT_VAZIO;
-    return {
-      variante_id: v.id ?? 0,
-      codigo_fornecedor: e.codigo || "",
-      descricao_fornecedor: e.descricao || "",
-      unidade_compra: e.unidade || "",
-      fator_conversao: e.fator !== "" && e.fator != null ? Number(e.fator) : 1,
-    };
-  });
-  try {
-    const res = await api.salvarFornecedorVariantes(produto.id, fornecedorId, itens);
-    produto.fornecedor_variantes = res.mapping;
-    toast(`Códigos salvos para ${fornecedores.find((f) => f.id === fornecedorId)?.nome || "o fornecedor"}`, "success");
-    renderFornecedor($app, produto);
-  } catch (e) {
-    toast("Erro ao salvar códigos: " + (e as Error).message, "error");
+  const porFornecedor: Record<number, Map<number, FornecedorVariantePayload>> = {};
+  const semId: VarianteLocal[] = [];
+  for (const r of fornecedorRows) {
+    const fornecedorId = Number(r.fornecedor_id);
+    if (!fornecedorId) continue;
+    const v = variantes[r.variante_idx];
+    if (!v) continue;
+    if (v.id == null || v.id === 0) { if (!semId.includes(v)) semId.push(v); continue; }
+    (porFornecedor[fornecedorId] ||= new Map()).set(v.id, {
+      variante_id: v.id,
+      codigo_fornecedor: r.codigo || "",
+      descricao_fornecedor: "",
+      unidade_compra: r.unidade || "",
+      fator_conversao: r.fator !== "" && r.fator != null ? Number(r.fator) : 1,
+    });
   }
+
+  const envolver = new Set(Object.keys(porFornecedor).map(Number));
+  for (const fv of produto.fornecedor_variantes || []) envolver.add(fv.fornecedor_id);
+
+  const sucesso: string[] = [];
+  const erros: string[] = [];
+  for (const fid of envolver) {
+    try {
+      const itens = porFornecedor[fid] ? Array.from(porFornecedor[fid]!.values()) : [];
+      const res = await api.salvarFornecedorVariantes(produto.id, fid, itens);
+      produto.fornecedor_variantes = res.mapping;
+      sucesso.push(fornecedores.find((f) => f.id === fid)?.nome || "fornecedor " + fid);
+    } catch (e) {
+      erros.push((fornecedores.find((f) => f.id === fid)?.nome || String(fid)) + " (" + (e as Error).message + ")");
+    }
+  }
+  if (!sucesso.length && !erros.length && !semId.length) { toast("Adicione ao menos uma linha e selecione o fornecedor.", "warn"); return; }
+  if (sucesso.length) toast(`Códigos salvos: ${sucesso.join(", ")}`, "success");
+  if (semId.length) toast(`As variações recém-geradas só vinculam após salvar o produto (Salvar produto).`, "warn");
+  if (erros.length) toast("Erro: " + erros.join("; "), "error");
+  foraSemear(produto);
+  renderFornecedor($app, produto);
 }
 
 function renderAtributos($app: HTMLElement): void {
@@ -1165,10 +1295,12 @@ async function salvar($app: HTMLElement, produto: ProdutoCadastro | null): Promi
     }
   }
 
+  const externalId = $app.querySelector<HTMLInputElement>("#eExternalId")!.value.trim();
   const payload: ProdutoCadastroPayload = {
     familia_id,
     nome,
     marca: $app.querySelector<HTMLInputElement>("#eMarca")!.value.trim(),
+    external_id: externalId || null,
     descricao: $app.querySelector<HTMLInputElement>("#eDesc")!.value.trim(),
     termos_busca: $app.querySelector<HTMLInputElement>("#eTermosBusca")!.value.trim(),
     categoria: $app.querySelector<HTMLInputElement>("#eCategoria")!.value.trim(),
@@ -1185,13 +1317,23 @@ async function salvar($app: HTMLElement, produto: ProdutoCadastro | null): Promi
   };
   try {
     let id = produto ? produto.id : null;
-    if (produto) await api.atualizarProdutoCadastro(produto.id, payload);
+    let desativadas = 0;
+    if (produto) {
+      const res = await api.atualizarProdutoCadastro(produto.id, payload);
+      desativadas = res.variantes?.desativadas || 0;
+    }
     else {
       const res = await api.criarProdutoCadastro(payload);
       id = res.id;
     }
-    toast("Produto salvo", "success");
+    toast(
+      desativadas
+        ? `Produto salvo. ${desativadas} variação(ões) removida(s) foram desativadas por possuírem estoque/preço/fornecedor — nenhum dado foi excluído.`
+        : "Produto salvo",
+      desativadas ? "warn" : "success"
+    );
     if (produto) {
+      await salvarFornecedor($app, produto);
       location.hash = `#/produtos/${produto.id}`;
     } else {
       location.hash = `#/produtos/${id}`;

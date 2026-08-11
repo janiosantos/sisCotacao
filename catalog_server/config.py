@@ -9,13 +9,13 @@ PROJECT_DIR = MODULE_DIR.parent
 
 CATALOG_DB = PROJECT_DIR / "database" / "crawler.db"
 
-SYSTEM_DB = MODULE_DIR / "data" / "server.db"
+SYSTEM_DB = Path(os.getenv("SYSTEM_DB", str(MODULE_DIR / "data" / "server.db")))
 
 # Cache de páginas-fonte (HTML) em banco separado, para manter o banco de
 # dados principal enxuto e rápido (evita que os blobs de HTML inflem o DB).
-CACHE_DB = MODULE_DIR / "data" / "server_cache.db"
+CACHE_DB = Path(os.getenv("CACHE_DB", str(MODULE_DIR / "data" / "server_cache.db")))
 
-IMAGES_DIR = PROJECT_DIR / "images"
+IMAGES_DIR = Path(os.getenv("IMAGES_DIR", str(PROJECT_DIR / "images")))
 
 HOST = os.getenv("CATALOG_HOST", "0.0.0.0")
 

@@ -1,5 +1,6 @@
 // E2E interações: carrinho, matriz de variação, filtros.
 import puppeteer from "puppeteer-core";
+import { login } from "./e2e_auth.mjs";
 
 const BASE = "http://localhost:5173";
 const CHROME = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
@@ -9,6 +10,7 @@ const fail = (n, e) => results.push({ name: n, pass: false, err: String(e).slice
 
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: "new", args: ["--no-sandbox"] });
 const page = await browser.newPage();
+await login(page);
 page.on("pageerror", (e) => console.log("[pageerror]", String(e).slice(0, 250)));
 page.on("console", (m) => { if (m.type() === "error") console.log("[console.error]", m.text().slice(0, 200)); });
 

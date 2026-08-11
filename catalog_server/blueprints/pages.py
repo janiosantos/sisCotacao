@@ -13,34 +13,6 @@ pages_bp = Blueprint("pages", __name__)
 FRONTEND_DIST = PROJECT_DIR / "frontend" / "dist"
 
 
-def _frontend_ready() -> bool:
-    return (FRONTEND_DIST / "index.html").is_file()
-
-
-@pages_bp.get("/")
-def index():
-    if _frontend_ready():
-        resp = send_from_directory(FRONTEND_DIST, "index.html")
-        resp.headers["Cache-Control"] = "no-cache"
-        return resp
-    abort(503, description="Frontend não compilado — rode `npm run build` em frontend/.")
-
-
-@pages_bp.get("/<path:path>")
-def spa_fallback(path: str):
-    """Serve o build do frontend com fallback SPA.
-
-    Caminhos reais (assets hasheadados, etc.) são servidos do disco; qualquer
-    outro caminho cai no index.html para o roteador de hash funcionar.
-    """
-    if not _frontend_ready():
-        abort(404)
-    candidate = FRONTEND_DIST / path
-    if candidate.is_file():
-        return send_from_directory(FRONTEND_DIST, path)
-    return send_from_directory(FRONTEND_DIST, "index.html")
-
-
 @pages_bp.get("/orcamentos/<int:cotacao_id>/imprimir")
 def quote_print(cotacao_id: int):
     data = quote_repo.get(cotacao_id)
@@ -48,7 +20,7 @@ def quote_print(cotacao_id: int):
         abort(404)
     itens = _enrich_itens(data["itens"])
     doc = quote_service.document_context(
-        data["cotacao"], itens, data["fornecedores"], data["vencedores"]
+        data["cotacao"], itens, data["fornecedores"], data["vencedores"], data["precos"]
     )
     return render_template("quote_print.html", doc=doc)
 

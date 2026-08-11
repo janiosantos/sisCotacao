@@ -44,6 +44,7 @@
         <th>Qtd.</th>
         {% if doc.fechado_em %}
           <th>Vencedor</th>
+          <th>Embalagem</th>
           <th class="num">Preço</th>
           <th class="num">Subtotal</th>
         {% endif %}
@@ -59,7 +60,8 @@
           <td>{{ item.quantidade }}</td>
           {% if doc.fechado_em %}
             <td>{{ item.vencedor if item.vencedor else '—' }}</td>
-            <td class="num mono">{{ (item.vencedor_preco or 0)|brl }}</td>
+            <td>{% if item.vencedor_fator and item.vencedor_fator > 1 %}{{ item.vencedor_unidade or 'embalagem' }} c/ {{ item.vencedor_fator }} un{% else %}unidade{% endif %}</td>
+            <td class="num mono">{{ (item.vencedor_preco or 0)|brl }}/un</td>
             <td class="num mono">{{ ((item.vencedor_preco or 0) * item.quantidade)|brl }}</td>
           {% endif %}
         </tr>

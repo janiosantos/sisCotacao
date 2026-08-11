@@ -205,7 +205,7 @@ class ComprasRepository:
             if cot is None:
                 return None
             itens = conn.execute(
-                "SELECT id AS cotacao_item_id, produto_id, quantidade"
+                "SELECT id AS cotacao_item_id, produto_id, descricao, quantidade"
                 " FROM cotacao_itens WHERE cotacao_id=? ORDER BY id",
                 (cotacao_id,),
             ).fetchall()
@@ -238,7 +238,7 @@ class ComprasRepository:
         logica = "centralizado" if logica == "centralizado" else "fracionado"
         with system_conn() as conn:
             itens = conn.execute(
-                "SELECT id AS cotacao_item_id, produto_id, quantidade"
+                "SELECT id AS cotacao_item_id, produto_id, descricao, quantidade"
                 " FROM cotacao_itens WHERE cotacao_id=? ORDER BY id",
                 (cotacao_id,),
             ).fetchall()
@@ -268,7 +268,7 @@ class ComprasRepository:
                 )
 
             pedidos = []
-            numero_base = conn.execute("SELECT COUNT(*) n FROM pedidos_compra").fetchone()["n"]
+            numero_base = conn.execute("SELECT COALESCE(MAX(CAST(numero AS INTEGER)), 0) FROM pedidos_compra").fetchone()[0]
             for i, (fid, linhas) in enumerate(sorted(agrupados.items()), start=1):
                 numero = str(numero_base + i).zfill(4)
                 cur = conn.execute(
@@ -393,7 +393,7 @@ class ComprasRepository:
             if p is None:
                 return None
             itens = conn.execute(
-                """SELECT pi.*, ci.produto_id
+                """SELECT pi.*, ci.produto_id, ci.descricao
                    FROM pedido_itens pi
                    JOIN cotacao_itens ci ON ci.id=pi.cotacao_item_id
                    WHERE pi.pedido_id=? ORDER BY pi.id""",
@@ -403,3 +403,36 @@ class ComprasRepository:
             d["itens"] = [dict(r) for r in itens]
             d["total"] = sum(r["preco_unitario"] * r["quantidade"] for r in itens)
             return d
+
+    def confirmar_recebimento(self, pedido_id: int, deposito_id: int = 1, usuario_id: int | None = None) -> dict:
+        with system_conn() as conn:
+            pedido = conn.execute("SELECT * FROM pedidos_compra WHERE id=?", (pedido_id,)).fetchone()
+            if not pedido:
+                raise ValueError("Pedido não encontrado")
+            if pedido["status"] != "enviado":
+                raise ValueError("Pedido já recebido")
+            itens = conn.execute(
+                """SELECT pi.*, ci.produto_id FROM pedido_itens pi
+                   JOIN cotacao_itens ci ON ci.id=pi.cotacao_item_id
+                   WHERE pi.pedido_id=?""",
+                (pedido_id,),
+            ).fetchall()
+            total = 0.0
+            for item in itens:
+                qtd = float(item["quantidade"] or 0)
+                preco = float(item["preco_unitario"] or 0)
+                total += preco * qtd
+                vid = item.get("produto_id")
+                if vid and qtd > 0:
+                    from catalog_server.repositories.estoque import estoque_repo
+                    estoque_repo.movimentar(deposito_id, vid, "entrada", qtd, str(pedido["numero"]), "Recebimento compra", usuario_id=usuario_id, _conn=conn)
+            from catalog_server.repositories.financeiro import contas_repo
+            fornecedor = conn.execute("SELECT nome FROM fornecedores WHERE id=?", (pedido["fornecedor_id"],)).fetchone()
+            fnome = fornecedor["nome"] if fornecedor else f"fornecedor #{pedido['fornecedor_id']}"
+            from datetime import datetime, timedelta
+            venc = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+            contas_repo.criar_pagar(fornecedor=fnome, valor=round(total, 2), data_vencimento=venc,
+                                    descricao=f"Pedido {pedido['numero']}", documento=pedido["numero"],
+                                    _conn=conn)
+            conn.execute("UPDATE pedidos_compra SET status='recebido' WHERE id=?", (pedido_id,))
+            return {"ok": True, "total": round(total, 2), "itens": len(itens)}

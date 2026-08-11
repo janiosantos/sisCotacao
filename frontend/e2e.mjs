@@ -1,6 +1,7 @@
 // E2E smoke vs dev server (:5173, proxy /api -> :8000).
 // Uso: node e2e.mjs [baseUrl]
 import puppeteer from "puppeteer-core";
+import { login } from "./e2e_auth.mjs";
 
 const BASE = process.argv[2] || "http://localhost:5173";
 const CHROME = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
@@ -19,6 +20,7 @@ const browser = await puppeteer.launch({
   args: ["--no-sandbox"],
 });
 const page = await browser.newPage();
+await login(page);
 page.on("console", (m) => {
   if (m.type() === "error") console.log("[browser.error]", m.text().slice(0, 200));
 });

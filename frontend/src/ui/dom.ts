@@ -3,8 +3,9 @@
 import { escapeHtml } from "./format";
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
+let escHandler: ((e: KeyboardEvent) => void) | null = null;
 
-export function toast(msg: string, type: "error" | "success" | "" = ""): void {
+export function toast(msg: string, type: "error" | "success" | "warn" | "" = ""): void {
   const el = document.getElementById("toast");
   if (!el) return;
   el.textContent = msg;
@@ -16,14 +17,28 @@ export function toast(msg: string, type: "error" | "success" | "" = ""): void {
 
 export function openModal(
   innerHtml: string,
-  { onMount, modalClass }: { onMount?: (modal: HTMLElement) => void; modalClass?: string } = {}
+  {
+    onMount,
+    modalClass,
+    fecharClickFora = true,
+  }: {
+    onMount?: (modal: HTMLElement) => void;
+    modalClass?: string;
+    fecharClickFora?: boolean;
+  } = {}
 ): HTMLElement {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `<div class="modal${modalClass ? " " + modalClass : ""}">${innerHtml}</div>`;
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) closeModal();
-  });
+  if (fecharClickFora) {
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) closeModal();
+    });
+  }
+  escHandler = (e: KeyboardEvent) => {
+    if (e.key === "Escape") closeModal();
+  };
+  window.addEventListener("keydown", escHandler);
   document.body.appendChild(overlay);
   document.body.style.overflow = "hidden";
   if (onMount) onMount(overlay.querySelector<HTMLElement>(".modal")!);
@@ -31,6 +46,7 @@ export function openModal(
 }
 
 export function closeModal(): void {
+  if (escHandler) { window.removeEventListener("keydown", escHandler); escHandler = null; }
   document.querySelectorAll(".modal-overlay").forEach((el) => el.remove());
   document.body.style.overflow = "";
 }

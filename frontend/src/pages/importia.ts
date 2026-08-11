@@ -100,7 +100,7 @@ export function abrir(opts: ImportIAOpts): void {
          <h3>Importar resposta${opts.titulo ? " — " + esc(opts.titulo) : ""}</h3>
          <p style="font-size:12px;color:var(--ink-soft);margin-top:2px;">
            Cole o retorno do fornecedor (WhatsApp/e-mail) ou anexe o PDF do orçamento. A IA extrai os itens
-           e cruza com o catálogo real — revise antes de aplicar.
+           e cruza com os itens deste pedido — revise antes de aplicar.
          </p>
        </div>
        <button class="icon-btn" data-close>×</button>
@@ -131,7 +131,7 @@ export function abrir(opts: ImportIAOpts): void {
        <button class="btn" data-close>Fechar</button>
        <button class="btn btn--accent" id="iaAplicar" disabled>Aplicar preços na cotação</button>
      </div>`,
-    { modalClass: "modal--ia", onMount }
+    { modalClass: "modal--ia", onMount, fecharClickFora: false }
   );
 }
 
@@ -179,7 +179,7 @@ async function extrair(modal: HTMLElement, file: File | null): Promise<void> {
       resultBox.innerHTML = `<p class="ia-info">Não identifiquei itens com preço nesse retorno. Confira o texto/PDF enviado.</p>`;
       return;
     }
-    const match = await api.iaMatch(itens, 5);
+    const match = await api.iaMatch(itens, 5, state.cotacaoId ?? undefined);
     state.itens = (match.items || []).map((m) => ({
       produto_fornecedor: m.produto_fornecedor,
       preco_extraido: m.preco_extraido,
@@ -201,14 +201,14 @@ function renderResultado(modal: HTMLElement): void {
     <table class="data-table ia-table">
       <thead><tr>
         <th>Item do fornecedor</th><th>Preço</th>
-        <th style="min-width:220px;">Produto do catálogo (semântico)</th><th>Confiança</th>
+        <th style="min-width:220px;">Produto do pedido</th><th>Confiança</th>
       </tr></thead>
       <tbody>
         ${rows.map((r, i) => linha(r, i)).join("")}
       </tbody>
     </table>
     <p style="font-size:11.5px;color:var(--ink-faint);margin:8px 0 0;">
-      Itens em "Sem correspondência" não serão aplicados. Produtos que não estão nesta cotação são ignorados no lançamento.
+      Os candidatos são os itens deste pedido. Itens em "Sem correspondência" não serão aplicados.
     </p>`;
   modal.querySelectorAll<HTMLSelectElement>(".ia-cand").forEach((sel) =>
     sel.addEventListener("change", () => {
@@ -223,7 +223,8 @@ function renderResultado(modal: HTMLElement): void {
 function linha(r: ItemSelecionado, i: number): string {
   const opts = (r.candidatos || []).map((c, j) => {
     const rotulo = j === 0 ? " — melhor" : "";
-    return `<option value="${c.produto_catalogo_id ?? ""}" data-score="${c.score}">${esc(c.produto_catalogo_nome)} (${Math.round(c.score * 100)}%)${rotulo}</option>`;
+    const sel = j === 0 ? " selected" : "";
+    return `<option value="${c.produto_catalogo_id ?? ""}" data-score="${c.score}"${sel}>${esc(c.produto_catalogo_nome)} (${Math.round(c.score * 100)}%)${rotulo}</option>`;
   }).join("");
   const primeiro = (r.candidatos || [])[0];
   return `
@@ -232,8 +233,7 @@ function linha(r: ItemSelecionado, i: number): string {
       <td class="ia-preco">${money(r.preco_extraido ?? null)}</td>
       <td>
         <select class="ia-cand" data-row="${i}" style="width:100%;">
-          <option value="">Sem correspondência (não aplicar)</option>
-          ${opts}
+          ${opts || `<option value="">Sem correspondência (não aplicar)</option>`}
         </select>
       </td>
       <td class="ia-conf" data-conf="${i}">${primeiro ? Math.round(primeiro.score * 100) + "%" : "—"}</td>

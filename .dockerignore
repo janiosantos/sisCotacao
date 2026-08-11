@@ -1,0 +1,13 @@
+images
+data
+database
+.venv
+.git
+__pycache__
+*.pyc
+node_modules
+dist
+.vite
+*.db
+scraper_app.py
+frontend

@@ -1,9 +1,9 @@
-"""Repositório do catálogo — lê da base única (`server.db`).
+﻿"""RepositÃ³rio do catÃ¡logo â€” lÃª da base Ãºnica (`server.db`).
 
-O catálogo agora consome o mesmo cadastro de produtos (`produtos_cadastro` +
+O catÃ¡logo agora consome o mesmo cadastro de produtos (`produtos_cadastro` +
 `variantes`) alimentado pelo scraper e pelo CRUD manual. Cada
-`produtos_cadastro` corresponde a um card; suas variantes ativas são as
-variações (cor/bitola/potência…) exibidas no seletor.
+`produtos_cadastro` corresponde a um card; suas variantes ativas sÃ£o as
+variaÃ§Ãµes (cor/bitola/potÃªnciaâ€¦) exibidas no seletor.
 """
 from __future__ import annotations
 
@@ -14,13 +14,30 @@ from catalog_server.db import system_conn
 from catalog_server.grouping import PACKAGE_LABELS
 from catalog_server.utils import image_url
 
-# Código de barras/código interno: curto, sem espaços e com dígitos.
+# CÃ³digo de barras/cÃ³digo interno: curto, sem espaÃ§os e com dÃ­gitos.
 _CODE_RE = re.compile(r"^[A-Za-z0-9./-]{1,16}$")
 
 
 def _is_code_query(q: str) -> bool:
-    """Verdadeiro quando a busca parece um código (SKU/EAN) e não um nome."""
+    """Verdadeiro quando a busca parece um cÃ³digo (SKU/EAN) e nÃ£o um nome."""
     return bool(q) and any(c.isdigit() for c in q) and bool(_CODE_RE.fullmatch(q))
+
+
+def _order_abc(ordenar: str = "", prefix: str = "", extra: str = "") -> str:
+    """ClÃ¡usula ORDER BY do catÃ¡logo; `ordenar="abc"` prioriza a Curva ABC (Aâ†’C)."""
+    if ordenar == "abc":
+        base = (
+            "CASE WHEN p.classe_abc IN ('A','B','C') THEN p.classe_abc ELSE 'Z' END,"
+            " p.ordem_abc, p.nome COLLATE NOCASE"
+        )
+        if extra:
+            base += ", " + extra
+        return "ORDER BY " + base
+    if prefix:
+        return "ORDER BY " + prefix + ", p.nome COLLATE NOCASE" + (", " + extra if extra else "")
+    if extra:
+        return "ORDER BY p.nome COLLATE NOCASE, " + extra
+    return "ORDER BY p.nome COLLATE NOCASE, p.id"
 
 
 class CatalogRepository:
@@ -37,25 +54,29 @@ class CatalogRepository:
         offset: int = 0,
         limit: int = 60,
         agrupado: bool = True,
+        ordenar: str = "",
 ) -> tuple[list[dict], int]:
-        """Retorna os itens do catálogo.
+        """Retorna os itens do catÃ¡logo.
 
-        `agrupado=True`: um card por produtos_cadastro, com as variações
-        (cor/diâmetro) agrupadas num seletor — ideal para montar a RFQ ao
-        fornecedor. `agrupado=False`: cada variante é um item individual com
-        seu próprio preço — ideal para o orçamento ao cliente.
+        `agrupado=True`: um card por produtos_cadastro, com as variaÃ§Ãµes
+        (cor/diÃ¢metro) agrupadas num seletor â€” ideal para montar a RFQ ao
+        fornecedor. `agrupado=False`: cada variante Ã© um item individual com
+        seu prÃ³prio preÃ§o â€” ideal para o orÃ§amento ao cliente.
         `classe`: filtro pela Curva ABC (A/B/C); usado para priorizar a RFQ.
-        `em_linha`: se True (padrão), exibe só o rolar em foco (exclui
+        `em_linha`: se True (padrÃ£o), exibe sÃ³ o rolar em foco (exclui
         equipamentos de alto valor marcados `em_linha=0`).
+        `ordenar`: "abc" ordena por Curva ABC (Aâ†’C por `ordem_abc`); vazio
+        mantÃ©m a ordenaÃ§Ã£o padrÃ£o (nome/relevÃ¢ncia).
         """
         q = (q or "").strip()
+        ordenar = (ordenar or "").strip().lower()
         with system_conn() as conn:
             fts.ensure_fts(conn)
             if agrupado:
                 if q and not fts.is_empty(conn) and not _is_code_query(q):
-                    rows, total = self._search_fts(conn, categoria, subcategoria, q, classe, em_linha, offset, limit)
+                    rows, total = self._search_fts(conn, categoria, subcategoria, q, classe, em_linha, offset, limit, ordenar)
                 else:
-                    rows, total = self._browse(conn, categoria, subcategoria, q, classe, em_linha, offset, limit)
+                    rows, total = self._browse(conn, categoria, subcategoria, q, classe, em_linha, offset, limit, ordenar)
                 produto_ids = [r["id"] for r in rows]
                 variants = self._load_variants(conn, produto_ids)
                 variante_ids = [v["id"] for v in variants]
@@ -72,9 +93,9 @@ class CatalogRepository:
                         cards.append(card)
             else:
                 if q and not fts.is_empty(conn) and not _is_code_query(q):
-                    rows, total = self._search_flat(conn, categoria, subcategoria, q, classe, em_linha, offset, limit)
+                    rows, total = self._search_flat(conn, categoria, subcategoria, q, classe, em_linha, offset, limit, ordenar)
                 else:
-                    rows, total = self._browse_flat(conn, categoria, subcategoria, q, classe, em_linha, offset, limit)
+                    rows, total = self._browse_flat(conn, categoria, subcategoria, q, classe, em_linha, offset, limit, ordenar)
                 variant_ids = [r["id"] for r in rows]
                 attrs = self._load_variant_attrs(conn, variant_ids)
                 images = self._load_images(conn, [r["produto_id"] for r in rows])
@@ -84,7 +105,7 @@ class CatalogRepository:
         return cards, total
 
     def _browse(
-        self, conn, categoria: str, subcategoria: str, q: str, classe: str, em_linha: bool, offset: int, limit: int
+        self, conn, categoria: str, subcategoria: str, q: str, classe: str, em_linha: bool, offset: int, limit: int, ordenar: str = ""
     ) -> tuple[list[dict], int]:
         joins = (
             " LEFT JOIN categorias cat ON cat.id=p.categoria_id"
@@ -125,10 +146,10 @@ class CatalogRepository:
                 SELECT p.id, p.familia_id, p.nome, p.marca,
                        COALESCE(cat.nome, '') AS categoria,
                        COALESCE(sub.nome, '') AS subcategoria,
-                       p.embalagem
+                       p.embalagem, p.classe_abc, p.ordem_abc
                 FROM produtos_cadastro p{joins}
                 WHERE {where_sql}
-                ORDER BY p.nome COLLATE NOCASE, p.id
+                {_order_abc(ordenar)}
                 LIMIT ? OFFSET ?
                 """,
             params + [limit, offset],
@@ -136,7 +157,7 @@ class CatalogRepository:
         return [dict(r) for r in rows], total
 
     def _search_fts(
-        self, conn, categoria: str, subcategoria: str, q: str, classe: str, em_linha: bool, offset: int, limit: int
+        self, conn, categoria: str, subcategoria: str, q: str, classe: str, em_linha: bool, offset: int, limit: int, ordenar: str = ""
     ) -> tuple[list[dict], int]:
         match = fts.search_query(q)
         if not match:
@@ -172,11 +193,11 @@ class CatalogRepository:
             f"""
             SELECT p.id, p.familia_id, p.nome, p.marca,
                    COALESCE(cat.nome, '') AS categoria,
-                   COALESCE(sub.nome, '') AS subcategoria, p.embalagem
+                   COALESCE(sub.nome, '') AS subcategoria, p.embalagem, p.classe_abc, p.ordem_abc
             FROM produtos_fts ft
             JOIN produtos_cadastro p ON p.id=ft.produto_id{joins}
             WHERE {where_sql}
-            ORDER BY bm25(produtos_fts), p.nome COLLATE NOCASE, p.id
+            {_order_abc(ordenar, prefix="bm25(produtos_fts)")}
             LIMIT ? OFFSET ?
             """,
 params + [limit, offset],
@@ -184,12 +205,12 @@ params + [limit, offset],
         return [dict(r) for r in rows], total
 
     # ------------------------------------------------------------------
-    # Modo "listar variantes" (orçamento ao cliente) — cada variante é um item
-    # individual com seu próprio preço; paginação no nível da variante.
+    # Modo "listar variantes" (orÃ§amento ao cliente) â€” cada variante Ã© um item
+    # individual com seu prÃ³prio preÃ§o; paginaÃ§Ã£o no nÃ­vel da variante.
     # ------------------------------------------------------------------
 
     def _browse_flat(
-        self, conn, categoria: str, subcategoria: str, q: str, classe: str, em_linha: bool, offset: int, limit: int
+        self, conn, categoria: str, subcategoria: str, q: str, classe: str, em_linha: bool, offset: int, limit: int, ordenar: str = ""
     ) -> tuple[list[dict], int]:
         joins = (
             " LEFT JOIN categorias cat ON cat.id=p.categoria_id"
@@ -227,10 +248,11 @@ params + [limit, offset],
                    v.pix_price, v.installment, v.marca AS marca_var,
                    p.nome, p.marca AS marca_prod, p.familia_id,
                    COALESCE(cat.nome, '') AS categoria,
-                   COALESCE(sub.nome, '') AS subcategoria, p.embalagem
+                   COALESCE(sub.nome, '') AS subcategoria, p.embalagem,
+                   p.classe_abc, p.ordem_abc
             {join}
             WHERE {where_sql}
-            ORDER BY p.nome COLLATE NOCASE, p.id, v.id
+            {_order_abc(ordenar, extra="p.id, v.id")}
             LIMIT ? OFFSET ?
             """,
             params + [limit, offset],
@@ -238,7 +260,7 @@ params + [limit, offset],
         return [dict(r) for r in rows], total
 
     def _search_flat(
-        self, conn, categoria: str, subcategoria: str, q: str, classe: str, em_linha: bool, offset: int, limit: int
+        self, conn, categoria: str, subcategoria: str, q: str, classe: str, em_linha: bool, offset: int, limit: int, ordenar: str = ""
     ) -> tuple[list[dict], int]:
         match = fts.search_query(q)
         if not match:
@@ -279,10 +301,11 @@ params + [limit, offset],
                    v.pix_price, v.installment, v.marca AS marca_var,
                    p.nome, p.marca AS marca_prod, p.familia_id,
                    COALESCE(cat.nome, '') AS categoria,
-                   COALESCE(sub.nome, '') AS subcategoria, p.embalagem
+                   COALESCE(sub.nome, '') AS subcategoria, p.embalagem,
+                   p.classe_abc, p.ordem_abc
             {join}
             WHERE {where_sql}
-            ORDER BY p.nome COLLATE NOCASE, p.id, v.id
+            {_order_abc(ordenar, extra="p.id, v.id")}
             LIMIT ? OFFSET ?
             """,
             params + [limit, offset],
@@ -290,12 +313,14 @@ params + [limit, offset],
         return [dict(r) for r in rows], total
 
     # ------------------------------------------------------------------
+    # OrdenaÃ§Ã£o
+    # ------------------------------------------------------------------
 
     def categorias(self) -> dict[str, list[str]]:
-        """Árvore categoria -> subcategorias, a partir da taxonomia normalizada.
+        """Ãrvore categoria -> subcategorias, a partir da taxonomia normalizada.
 
-        Só categorias com ao menos um produto ativo (em linha) aparecem, para o
-        filtro do catálogo não oferecer opções vazias.
+        SÃ³ categorias com ao menos um produto ativo (em linha) aparecem, para o
+        filtro do catÃ¡logo nÃ£o oferecer opÃ§Ãµes vazias.
         """
         with system_conn() as conn:
             pairs = conn.execute(
@@ -342,6 +367,49 @@ params + [limit, offset],
                 if sub_nome:
                     tree[nome_cat].append(sub_nome)
         return tree
+
+    # ------------------------------------------------------------------
+
+    def resumo_abc(
+        self, categoria: str = "", subcategoria: str = "", q: str = "", em_linha: bool = True
+    ) -> dict:
+        """Contagem de produtos por classe ABC sob os mesmos filtros do catÃ¡logo."""
+        q = (q or "").strip()
+        joins = (
+            " LEFT JOIN categorias cat ON cat.id=p.categoria_id"
+            " LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id"
+        )
+        where = [
+            "p.ativo=1",
+            "EXISTS (SELECT 1 FROM variantes v WHERE v.produto_id=p.id AND v.ativo=1)",
+        ]
+        params: list = []
+        if categoria:
+            where.append("cat.nome=?")
+            params.append(categoria)
+        if subcategoria:
+            where.append("sub.nome=?")
+            params.append(subcategoria)
+        if em_linha:
+            where.append("p.em_linha=1")
+        if q:
+            like = f"%{q}%"
+            where.append(
+                "(p.nome LIKE ? OR p.marca LIKE ? OR EXISTS ("
+                " SELECT 1 FROM variantes v2 WHERE v2.produto_id=p.id"
+                " AND (v2.sku LIKE ? OR v2.ean LIKE ?)))"
+            )
+            params += [like, like, like, like]
+        with system_conn() as conn:
+            rows = conn.execute(
+                f"SELECT p.classe_abc AS c, COUNT(*) AS n FROM produtos_cadastro p{joins}"
+                f" WHERE {' AND '.join(where)} GROUP BY p.classe_abc",
+                params,
+            ).fetchall()
+        out = {"A": 0, "B": 0, "C": 0, "sem": 0}
+        for r in rows:
+            out[r["c"] if r["c"] in ("A", "B", "C") else "sem"] = r["n"]
+        return out
 
 # ------------------------------------------------------------------
 
@@ -402,7 +470,7 @@ params + [limit, offset],
     # ------------------------------------------------------------------
 
     def products_by_ids(self, ids: list[int]) -> dict[int, dict]:
-        """Resolve ids de variante para enriquecer cotações/histórico."""
+        """Resolve ids de variante para enriquecer cotaÃ§Ãµes/histÃ³rico."""
         if not ids:
             return {}
         out: dict[int, dict] = {}
@@ -442,7 +510,7 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
     # ------------------------------------------------------------------
 
     def products_with_history(self) -> list[dict]:
-        """Variantes disponíveis para consulta de histórico."""
+        """Variantes disponÃ­veis para consulta de histÃ³rico."""
         with system_conn() as conn:
             rows = conn.execute(
                 """
@@ -501,7 +569,7 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
 
     @staticmethod
     def _load_variant_suppliers(conn, variante_ids: list[int]) -> dict[int, list[str]]:
-        """Nome dos fornecedores mapeados para cada variante (códigos de compra)."""
+        """Nome dos fornecedores mapeados para cada variante (cÃ³digos de compra)."""
         out: dict[int, list[str]] = {}
         if not variante_ids:
             return out
@@ -606,6 +674,7 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
                 "installment": v["installment"] or "",
                 "category": category,
                 "subcategory": subcategory,
+                "classe_abc": produto.get("classe_abc") or "",
                 "imagem_url": first_image(),
                 "fornecedores": (suppliers or {}).get(v["id"], []),
             }
@@ -661,6 +730,7 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
             "brand": produto["marca"] or "",
             "category": category,
 "subcategory": subcategory,
+            "classe_abc": produto.get("classe_abc") or "",
             "imagem_url": first_image(),
             "attrs": attr_cards,
             "brands": brands,
@@ -694,7 +764,7 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
             "ean": row["ean"] or "",
             "name": row["nome"] or "",
             "base": row["nome"] or "",
-            "spec": " · ".join(spec_parts),
+            "spec": " Â· ".join(spec_parts),
             "package": package,
             "package_label": PACKAGE_LABELS.get(package, ""),
             "attrs": vattrs,
@@ -705,6 +775,7 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
             "installment": row["installment"] or "",
             "category": row["categoria"] or "",
             "subcategory": row["subcategoria"] or "",
+            "classe_abc": row["classe_abc"] or "",
             "imagem_url": image_url(fns[0]) if fns else None,
             "fornecedores": (suppliers or {}).get(row["id"], []),
         }

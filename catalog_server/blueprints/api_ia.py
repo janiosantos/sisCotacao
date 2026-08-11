@@ -7,6 +7,10 @@
 
 from __future__ import annotations
 
+import difflib
+import re
+import unicodedata
+
 from flask import Blueprint, jsonify, request
 
 from catalog_server.config import IA_SEED_LIMIT
@@ -96,10 +100,102 @@ def ia_match():
     itens = data.get("items") or []
     if not isinstance(itens, list) or not itens:
         return jsonify({"error": "Lista de itens vazia."}), 400
+
+    limite = int(data.get("top_k", 5))
+    cotacao_id = data.get("cotacao_id")
+    if cotacao_id is not None:
+        try:
+            cotacao_id = int(cotacao_id)
+        except (TypeError, ValueError):
+            return jsonify({"error": "cotacao_id inválido."}), 400
+
     try:
-        return jsonify(importer.match(itens, limite=int(data.get("top_k", 5))))
+        if cotacao_id is not None:
+            return jsonify(_match_cotacao(itens, cotacao_id, limite))
+        return jsonify(importer.match(itens, limite=limite))
     except importer.ImporterError as exc:
         return jsonify({"error": str(exc)}), 502
+
+
+def _match_cotacao(itens: list[dict], cotacao_id: int, limite: int) -> dict:
+    """Limita os candidatos de cada item extraído aos produtos do próprio pedido.
+
+    Em vez de buscar semelhanças no catálogo inteiro (Qdrant), o escopo é a
+    lista de produtos vinculados à cotação: 1) monta o pool com os nomes, 2) ao
+    escore de similaridade textual, 3) devolve apenas itens do pedido, ordenados.
+    Itens cujo texto não se parece com nenhum item da cotação ficam sem candidato.
+    """
+    cotacao = quote_repo.get(cotacao_id)
+    if not cotacao or not cotacao.get("itens"):
+        return {"items": [{"produto_fornecedor": i.get("produto_fornecedor"), "preco_extraido": i.get("preco_extraido"), "candidatos": []} for i in itens]}
+
+    ids_pedido = [i["produto_id"] for i in cotacao["itens"] if i.get("produto_id")]
+    catalogo = catalog_repo.products_by_ids(ids_pedido)
+    if not catalogo:
+        return {"items": [{"produto_fornecedor": i.get("produto_fornecedor"), "preco_extraido": i.get("preco_extraido"), "candidatos": []} for i in itens]}
+
+    pool = [
+        {
+            "id": pid,
+            "texto": _normalizar(f"{d.get('name') or ''} {d.get('brand') or ''} {d.get('sku') or ''}"),
+            "nome": d.get("name") or "",
+        }
+        for pid, d in catalogo.items()
+    ]
+
+    resp = []
+    for item in itens:
+        texto_origem = _normalizar(item.get("produto_fornecedor") or "")
+        candidatos = []
+        for p in pool:
+            escore = _similaridade(texto_origem, p["texto"])
+            if escore >= _MATCH_MIN:
+                candidatos.append(
+                    {
+                        "produto_catalogo_id": p["id"],
+                        "produto_catalogo_nome": p["nome"],
+                        "score": round(escore, 4),
+                    }
+                )
+        candidatos.sort(key=lambda c: c["score"], reverse=True)
+        resp.append(
+            {
+                "produto_fornecedor": item.get("produto_fornecedor"),
+                "preco_extraido": item.get("preco_extraido"),
+                "candidatos": candidatos[:limite],
+            }
+        )
+    return {"items": resp}
+
+
+_MATCH_MIN = 0.35
+
+
+def _normalizar(texto: str) -> str:
+    texto = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode()
+    texto = texto.lower()
+    return re.sub(r"[^a-z0-9]+", " ", texto).strip()
+
+
+def _similaridade(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
+    ratio = difflib.SequenceMatcher(None, a, b).ratio()
+    ta = {_token_key(t) for t in a.split()}
+    tb = {_token_key(t) for t in b.split()}
+    if not ta or not tb:
+        return ratio
+    inter = len(ta & tb)
+    jaccard = inter / len(ta | tb)
+    return 0.65 * ratio + 0.35 * jaccard
+
+
+def _token_key(token: str) -> str:
+    """Chave de token que aproxima variantes numéricas (ex.: '3t' e '3', '4t' e '4')."""
+    m = re.match(r"\d+", token)
+    if m:
+        return "n" + m.group()
+    return token.strip(".-_")[-20:]
 
 
 # ----------------------------------------------------------------------

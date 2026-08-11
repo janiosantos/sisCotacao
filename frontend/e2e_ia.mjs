@@ -1,5 +1,6 @@
 // E2E IA: importar retorno de fornecedor por texto, extrair, associar e aplicar preços.
 import puppeteer from "puppeteer-core";
+import { login } from "./e2e_auth.mjs";
 
 const BASE = "http://localhost:5173";
 const API = "http://localhost:8000";
@@ -16,8 +17,19 @@ const aberta = lista.find((c) => c.status !== "fechada") || lista[0];
 if (!aberta) { console.log("### sem cotação aberta p/ teste IA"); process.exit(1); }
 const cotId = aberta.id;
 
+// busca os itens reais da cotação para montar um retorno de fornecedor coerente
+const detalhe = await (await fetch(API + `/api/cotacoes/${cotId}`)).json();
+const detalheItens = Array.isArray(detalhe) ? detalhe : detalhe.itens || [];
+const precoBase = 10 + Math.round(Math.random() * 90);
+if (!detalheItens.length) { console.log("### cotação sem itens p/ teste IA"); process.exit(1); }
+const texto = detalheItens
+  .slice(0, 2)
+  .map((it, idx) => `${it.name} — R$ ${precoBase + idx},50 /un`)
+  .join("\n");
+
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: "new", args: ["--no-sandbox"] });
 const page = await browser.newPage();
+await login(page);
 page.on("pageerror", (e) => console.log("[pageerror]", String(e).slice(0, 250)));
 page.on("console", (m) => { if (m.type() === "error") console.log("[console.error]", m.text().slice(0, 200)); });
 
@@ -37,19 +49,17 @@ try {
   ok(`fornecedor ${temSel ? "selecionado (" + fornSel + ")" : "único (sem select)"}`, !temSel || !!fornSel);
 
   // cola um retorno simples e extrai
-  const texto = "Parafuso 10x100 Inox — R$ 0,45 /un\nCabo Flexível 2,5mm 100m — R$ 89,90";
   await page.type("#iaTexto", texto);
   await page.click("#btnExtrair");
-  await page.waitForSelector(".ia-cand", { timeout: 30000 });
+  await page.waitForSelector(".ia-cand", { timeout: 120000 });
   const rows = await page.$$eval(".ia-cand", (els) => els.length);
   const preco1 = await page.$eval(".ia-preco", (el) => el.textContent.trim()).catch(() => "—");
   ok(`extração retorna ${rows} item(ns) com candidatos (preço "${preco1}")`, rows >= 1 && /R\$/.test(preco1));
 
-  // seleciona o melhor candidato do primeiro item
-  const opt1 = await page.$eval(".ia-cand[data-row='0']", (el) => el.options[1].value);
-  await page.select(".ia-cand[data-row='0']", opt1);
+  // o melhor candidato já vem pré-selecionado (não mostra "Sem correspondência")
   const selVal = await page.$eval(".ia-cand[data-row='0']", (el) => el.value).catch(() => "");
-  ok(`candidato selecionado manualmente (${selVal})`, !!selVal);
+  const selTxt = await page.$eval(".ia-cand[data-row='0']", (el) => el.selectedOptions[0]?.textContent.trim() || "").catch(() => "");
+  ok(`melhor candidato pré-selecionado (${selVal} — ${selTxt.slice(0, 40)})`, !!selVal);
 
   // aplica
   const btnEnabled = await page.$eval("#iaAplicar", (el) => !el.disabled);

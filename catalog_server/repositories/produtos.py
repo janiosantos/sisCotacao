@@ -142,6 +142,8 @@ class ProdutoRepository:
         self,
         q: str = "",
         familia_id: int | None = None,
+        categoria: str = "",
+        subcategoria: str = "",
         offset: int = 0,
         limit: int = 60,
     ) -> tuple[list[dict], int]:
@@ -149,14 +151,16 @@ class ProdutoRepository:
         with system_conn() as conn:
             fts.ensure_fts(conn)
             if q and not fts.is_empty(conn):
-                return self._search_fts(conn, q, familia_id, offset, limit)
-            return self._browse(conn, q, familia_id, offset, limit)
+                return self._search_fts(conn, q, familia_id, categoria, subcategoria, offset, limit)
+            return self._browse(conn, q, familia_id, categoria, subcategoria, offset, limit)
 
     def _browse(
         self,
         conn,
         q: str = "",
         familia_id: int | None = None,
+        categoria: str = "",
+        subcategoria: str = "",
         offset: int = 0,
         limit: int = 60,
     ) -> tuple[list[dict], int]:
@@ -169,13 +173,20 @@ class ProdutoRepository:
         if familia_id:
             where.append("p.familia_id=?")
             params.append(familia_id)
+        if categoria:
+            where.append("cat.nome=?")
+            params.append(categoria)
+        if subcategoria:
+            where.append("sub.nome=?")
+            params.append(subcategoria)
         where_sql = " AND ".join(where)
+        joins_cat = " LEFT JOIN categorias cat ON cat.id=p.categoria_id LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id"
 
         total = conn.execute(
-            f"SELECT COUNT(*) AS n FROM produtos_cadastro p LEFT JOIN familias f ON f.id=p.familia_id WHERE {where_sql}",
+            f"SELECT COUNT(*) AS n FROM produtos_cadastro p LEFT JOIN familias f ON f.id=p.familia_id{joins_cat} WHERE {where_sql}",
             params,
         ).fetchone()["n"]
-        from_sql = f"FROM produtos_cadastro p LEFT JOIN familias f ON f.id=p.familia_id WHERE {where_sql}"
+        from_sql = f"FROM produtos_cadastro p LEFT JOIN familias f ON f.id=p.familia_id{joins_cat} WHERE {where_sql}"
         rows = self._select_rows(conn, from_sql, params, offset, limit)
         return [dict(r) for r in rows], total
 
@@ -184,6 +195,8 @@ class ProdutoRepository:
         conn,
         q: str,
         familia_id: int | None,
+        categoria: str,
+        subcategoria: str,
         offset: int,
         limit: int,
     ) -> tuple[list[dict], int]:
@@ -195,14 +208,21 @@ class ProdutoRepository:
         if familia_id:
             where += " AND p.familia_id=?"
             params.append(familia_id)
+        if categoria:
+            where += " AND cat.nome=?"
+            params.append(categoria)
+        if subcategoria:
+            where += " AND sub.nome=?"
+            params.append(subcategoria)
 
+        joins_cat = " LEFT JOIN categorias cat ON cat.id=p.categoria_id LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id"
         total = conn.execute(
-            f"SELECT COUNT(*) AS n FROM produtos_fts ft JOIN produtos_cadastro p ON p.id=ft.produto_id"
+            f"SELECT COUNT(*) AS n FROM produtos_fts ft JOIN produtos_cadastro p ON p.id=ft.produto_id{joins_cat}"
             f" WHERE {where}",
             params,
         ).fetchone()["n"]
         from_sql = f"FROM produtos_fts ft JOIN produtos_cadastro p ON p.id=ft.produto_id"
-        from_sql += f" LEFT JOIN familias f ON f.id=p.familia_id WHERE {where}"
+        from_sql += f" LEFT JOIN familias f ON f.id=p.familia_id{joins_cat} WHERE {where}"
         rows = self._select_rows(conn, from_sql, params, offset, limit, order_by="bm25(produtos_fts)")
         return [dict(r) for r in rows], total
 
@@ -215,6 +235,8 @@ class ProdutoRepository:
         return conn.execute(
             f"""
             SELECT p.*, f.nome AS familia_nome,
+                   COALESCE(cat.nome,'') AS categoria,
+                   COALESCE(sub.nome,'') AS subcategoria,
                    (SELECT COUNT(*) FROM variantes v
                     WHERE v.produto_id=p.id AND v.ativo=1) AS variant_count,
                    (SELECT MIN(preco) FROM variantes v
@@ -277,7 +299,7 @@ class ProdutoRepository:
 
     def create_product(
         self,
-        familia_id: int,
+        familia_id: int | None,
         nome: str,
         marca: str,
         descricao: str,
@@ -285,13 +307,14 @@ class ProdutoRepository:
         variantes: list[dict],
         subcategoria: str = "",
         termos_busca: str = "",
+        external_id: str | None = None,
     ) -> int:
         with system_conn() as conn:
             categoria_id, subcategoria_id = categorias.resolve(conn, categoria, subcategoria)
             cur = conn.execute(
                 "INSERT INTO produtos_cadastro"
-                " (familia_id, nome, marca, descricao, termos_busca, categoria_id, subcategoria_id)"
-                " VALUES (?,?,?,?,?,?,?)",
+                " (familia_id, nome, marca, descricao, termos_busca, categoria_id, subcategoria_id, external_id)"
+                " VALUES (?,?,?,?,?,?,?,?)",
                 (
                     familia_id,
                     nome,
@@ -300,17 +323,19 @@ class ProdutoRepository:
                     termos_busca or "",
                     categoria_id,
                     subcategoria_id,
+                    str(external_id).strip() if external_id else None,
                 ),
             )
             produto_id = cur.lastrowid
             self._replace_variantes(conn, produto_id, variantes)
-            fts.sync_product(conn, produto_id)
+            if familia_id:
+                fts.sync_product(conn, produto_id)
             return produto_id
 
     def update_product(
         self,
         produto_id: int,
-        familia_id: int,
+        familia_id: int | None,
         nome: str,
         marca: str,
         descricao: str,
@@ -318,12 +343,14 @@ class ProdutoRepository:
         variantes: list[dict],
         subcategoria: str = "",
         termos_busca: str = "",
-    ) -> bool:
+        external_id: str | None = None,
+    ) -> tuple[bool, dict]:
         with system_conn() as conn:
             categoria_id, subcategoria_id = categorias.resolve(conn, categoria, subcategoria)
             cur = conn.execute(
                 "UPDATE produtos_cadastro SET familia_id=?, nome=?, marca=?, descricao=?,"
-                " termos_busca=?, categoria_id=?, subcategoria_id=?, atualizado_em=datetime('now') WHERE id=?",
+                " termos_busca=?, categoria_id=?, subcategoria_id=?, external_id=?,"
+                " atualizado_em=datetime('now') WHERE id=?",
                 (
                     familia_id,
                     nome,
@@ -332,24 +359,135 @@ class ProdutoRepository:
                     termos_busca or "",
                     categoria_id,
                     subcategoria_id,
+                    str(external_id).strip() if external_id else None,
                     produto_id,
                 ),
             )
             if cur.rowcount == 0:
-                return False
-            self._replace_variantes(conn, produto_id, variantes)
+                return False, {}
+            resultado = self._replace_variantes(conn, produto_id, variantes)
             fts.sync_product(conn, produto_id)
-            return True
+            return True, resultado
 
-    def delete_product(self, produto_id: int) -> bool:
+    def delete_product(self, produto_id: int) -> tuple[bool, dict]:
+        """Exclui um produto sem destruir dados.
+
+        A exclusão física só acontece quando **nenhuma** variante do produto tem
+        dependências (estoque, movimentos, preços, fornecedores, garantia etc.).
+        Com dependências, o produto e essas variantes são apenas desativados
+        (`ativo=0`), preservando histórico e referências.
+        """
         with system_conn() as conn:
-            cur = conn.execute("DELETE FROM produtos_cadastro WHERE id=?", (produto_id,))
+            vids = [
+                r["id"]
+                for r in conn.execute(
+                    "SELECT id FROM variantes WHERE produto_id=?", (produto_id,)
+                ).fetchall()
+            ]
+            resultado = {"excluidas": 0, "desativadas": 0}
+            for vid in vids:
+                resultado[self._regra_remover_variante(conn, vid)] += 1
+            cur = conn.execute(
+                "UPDATE produtos_cadastro SET ativo=0 WHERE id=?", (produto_id,)
+            )
             if cur.rowcount == 0:
-                return False
+                return False, {}
+            if resultado["desativadas"] == 0:
+                conn.execute(
+                    "DELETE FROM produtos_cadastro WHERE id=? AND ativo=0", (produto_id,)
+                )
             fts.delete_product(conn, produto_id)
-            return True
+            return True, resultado
 
-    def _replace_variantes(self, conn, produto_id: int, variantes: list[dict]) -> None:
+    # ------------------------------------------------------------------
+    # Item livre (tamanho/cor fora do cadastro)
+    # ------------------------------------------------------------------
+
+    def find_or_create_variant(
+        self,
+        produto_id: int,
+        atributos: dict[int, str],
+        marca: str = "",
+    ) -> int:
+        """Localiza (ou cadastra) uma variação do **produto pai** `produto_id`.
+
+        Usado quando o pedido precisa de uma combinação de tamanho/cor que ainda
+        não existe como SKU no catálogo: reusa a variante existente se houver uma
+        com exatamente os mesmos atributos; caso contrário cria a variação, monta
+        os `variante_atributos` e reindexa o produto no FTS.
+        """
+        norm = {int(k): str(v).strip() for k, v in (atributos or {}).items() if v not in (None, "")}
+        if not norm:
+            raise ValueError("find_or_create_variant precisa de ao menos 1 atributo")
+        with system_conn() as conn:
+            for r in conn.execute(
+                "SELECT id FROM variantes WHERE produto_id=? AND ativo=1", (produto_id,)
+            ).fetchall():
+                existing = {
+                    int(r["atributo_id"]): r["valor"]
+                    for r in conn.execute(
+                        "SELECT atributo_id, valor FROM variante_atributos WHERE variante_id=?",
+                        (r["id"],),
+                    ).fetchall()
+                }
+                if existing == norm:
+                    return r["id"]
+            prod = conn.execute(
+                "SELECT marca FROM produtos_cadastro WHERE id=?", (produto_id,)
+            ).fetchone()
+            prod_marca = (prod["marca"] or "") if prod else ""
+            cur = conn.execute(
+                "INSERT INTO variantes (produto_id, preco, marca, ativo) VALUES (?,0,?,1)",
+                (produto_id, marca or prod_marca),
+            )
+            vid = cur.lastrowid
+            for aid, valor in norm.items():
+                conn.execute(
+                    "INSERT INTO variante_atributos (variante_id, atributo_id, valor) VALUES (?,?,?)",
+                    (vid, aid, valor),
+                )
+            fts.sync_product(conn, produto_id)
+            return vid
+
+    # Tabelas com variante_id sem `ON DELETE CASCADE`. Se a variante for usada
+    # em qualquer uma delas, ela nunca deve ser excluída fisicamente.
+    _DEPENDENCIAS_VARIANTE = [
+        "estoque_movimento",
+        "lotes",
+        "estoque_saldo",
+        "tabela_preco_itens",
+        "promocao_itens",
+        "fornecedor_preco",
+        "fornecedor_preferencial",
+        "solicitacao_itens",
+        "expedicao_itens",
+        "fiscal_config",
+        "fornecedor_variantes",
+        "garantia",
+    ]
+
+    @classmethod
+    def _regra_remover_variante(cls, conn, variante_id: int) -> str:
+        """Define o destino de uma variante removida do cadastro.
+
+        Se existir **qualquer** dependência (estoque, movimento, lote, preço,
+        fornecedor, garantia, configuração fiscal etc.) a variante não pode ser
+        apagada — ela é apenas **desativada** (`ativo=0`), preservando todo o
+        histórico e as referências. Sem dependências, a exclusão física é segura.
+        Retorna "desativadas" ou "excluidas".
+        """
+        for tabela in cls._DEPENDENCIAS_VARIANTE:
+            row = conn.execute(
+                f"SELECT 1 FROM {tabela} WHERE variante_id=? LIMIT 1", (variante_id,)
+            ).fetchone()
+            if row:
+                conn.execute("UPDATE variantes SET ativo=0 WHERE id=?", (variante_id,))
+                return "desativadas"
+        conn.execute("DELETE FROM variantes WHERE id=?", (variante_id,))
+        return "excluidas"
+
+    def _replace_variantes(self, conn, produto_id: int, variantes: list[dict]) -> dict:
+        resultado = {"excluidas": 0, "desativadas": 0}
         existing = {
             r["id"]
             for r in conn.execute(
@@ -401,7 +539,8 @@ class ProdutoRepository:
                     (vid, int(aid), str(valor)),
                 )
         for vid in existing - submitted:
-            conn.execute("DELETE FROM variantes WHERE id=?", (vid,))
+            resultado[self._regra_remover_variante(conn, vid)] += 1
+        return resultado
 
     # ------------------------------------------------------------------
     # Imagens
@@ -514,7 +653,12 @@ class ProdutoRepository:
             conn.execute(
                 "INSERT INTO fornecedor_variantes (variante_id, fornecedor_id,"
                 " codigo_fornecedor, descricao_fornecedor, unidade_compra, fator_conversao)"
-                " VALUES (?,?,?,?,?,?)",
+                " VALUES (?,?,?,?,?,?)"
+                " ON CONFLICT(variante_id, fornecedor_id) DO UPDATE SET"
+                " codigo_fornecedor=excluded.codigo_fornecedor,"
+                " descricao_fornecedor=excluded.descricao_fornecedor,"
+                " unidade_compra=excluded.unidade_compra,"
+                " fator_conversao=excluded.fator_conversao",
                 (
                     vid,
                     fornecedor_id,

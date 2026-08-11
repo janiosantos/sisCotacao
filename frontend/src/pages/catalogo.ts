@@ -6,7 +6,7 @@ import { escapeHtml, fmtMoney } from "../ui/format";
 import { closeModal, confirmDialog, openModal, toast } from "../ui/dom";
 
 let categorias: CategoriaMap = {};
-let filters: { categoria: string; subcategoria: string; q: string } = { categoria: "", subcategoria: "", q: "" };
+let filters: { categoria: string; subcategoria: string; q: string; classe: string; ordenar: string } = { categoria: "", subcategoria: "", q: "", classe: "", ordenar: "" };
 let items: CatalogoItem[] = [];
 let total = 0;
 let page = 1;
@@ -82,8 +82,8 @@ interface MatrixResult {
 }
 
 function buildVariationMatrix(variations: Variante[], meta: { attrs?: Atributo[] }): MatrixResult {
-  const attrs = (meta && meta.attrs) || [];
-  const vset = variations || [];
+  let attrs = (meta && meta.attrs) || [];
+  let vset = variations || [];
   const usable = attrs.filter((a) => vset.some((v) => v.attrs && v.attrs[String(a.id)] != null));
   const DIM = /bitola|di[âa]metro|tamanho|medida|capacidade|pot[eê]ncia|tens[aã]o|voltagem|corrente|amperagem|comprimento|volume|peso|quantidade|rolo|embalagem|mm|w\b|litros|kg|metro|pol/i;
 
@@ -96,6 +96,23 @@ function buildVariationMatrix(variations: Variante[], meta: { attrs?: Atributo[]
     row = dims[0] || usable[0];
     col = usable.find((a) => a.id !== row!.id) || null;
   }
+
+  // Some legacy products have multiple variants but no family/attribute rows.
+  // Keep them selectable instead of hiding the variants from the matrix.
+  if (!row && vset.length > 1) {
+    const fallback: Atributo = {
+      id: -1,
+      label: "Variação / SKU",
+      options: vset.map((v) => v.sku || `#${v.id}`),
+    };
+    attrs = [fallback];
+    vset = vset.map((v) => ({
+      ...v,
+      attrs: { ...(v.attrs || {}), "-1": v.sku || `#${v.id}` },
+    }));
+    row = fallback;
+  }
+
   if (!row) {
     return { rowAttr: null, colAttr: null, rows: [] };
   }
@@ -126,6 +143,31 @@ function buildVariationMatrix(variations: Variante[], meta: { attrs?: Atributo[]
   }));
 
   return { rowAttr: row, colAttr: col, rows };
+}
+
+function freeCellKey(parts: Array<[number, string]>): string {
+  return parts.map(([id, v]) => `${id}=${encodeURIComponent(v)}`).join("&");
+}
+
+function freeCellAttrs(key: string): Record<number, string> {
+  const out: Record<number, string> = {};
+  String(key)
+    .split("&")
+    .forEach((part) => {
+      const eq = part.indexOf("=");
+      if (eq <= 0) return;
+      out[Number(part.slice(0, eq))] = decodeURIComponent(part.slice(eq + 1));
+    });
+  return out;
+}
+
+function cartItemKey(descricao: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < descricao.length; i++) {
+    h = Math.imul(h ^ descricao.charCodeAt(i), 16777619);
+  }
+  if (!h) h = 1;
+  return -(Math.abs(h >>> 0) || 1);
 }
 
 // ---------------- tooltips educativos ----------------
@@ -227,10 +269,28 @@ export async function render($app: HTMLElement): Promise<void> {
             <label>Subcategoria</label>
             <select id="fSubcategoria"><option value="">Todas</option></select>
           </div>
+          <div class="field">
+            <label>Curva ABC</label>
+            <select id="fClasse">
+              <option value="">Todas as classes</option>
+              <option value="A">Classe A</option>
+              <option value="B">Classe B</option>
+              <option value="C">Classe C</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Ordenar por</label>
+            <select id="fOrdenar">
+              <option value="">Nome</option>
+              <option value="abc">Curva ABC (A → C)</option>
+            </select>
+          </div>
           <button class="btn btn--ghost" id="btnLimpar">Limpar filtros</button>
           <button class="btn" id="btnModo"></button>
           <span class="result-count" id="resultCount"></span>
         </div>
+
+        <div class="abc-chips" id="abcResumo"></div>
 
         <div id="grid" class="product-grid"></div>
         <div class="load-more" id="paginacao"></div>
@@ -275,10 +335,20 @@ export async function render($app: HTMLElement): Promise<void> {
     filters.subcategoria = (e.target as HTMLSelectElement).value;
     void loadProducts($app, true);
   });
+  const $classe = $app.querySelector<HTMLSelectElement>("#fClasse")!;
+  $classe.addEventListener("change", (e) => {
+    filters.classe = (e.target as HTMLSelectElement).value;
+    void loadProducts($app, true);
+  });
+  $app.querySelector<HTMLSelectElement>("#fOrdenar")!.addEventListener("change", (e) => {
+    filters.ordenar = (e.target as HTMLSelectElement).value;
+    void loadProducts($app, true);
+  });
   $app.querySelector<HTMLButtonElement>("#btnLimpar")!.addEventListener("click", () => {
-    filters = { categoria: "", subcategoria: "", q: "" };
+    filters = { categoria: "", subcategoria: "", q: "", classe: "", ordenar: "" };
     ($app.querySelector<HTMLInputElement>("#fSearch")!).value = "";
     $categoria.value = "";
+    $classe.value = "";
     updateSubcategoryOptions($app);
     void loadProducts($app, true);
   });
@@ -320,6 +390,8 @@ async function loadProducts($app: HTMLElement, reset: boolean): Promise<void> {
       categoria: filters.categoria,
       subcategoria: filters.subcategoria,
       q: filters.q,
+      classe: filters.classe,
+      ordenar: filters.ordenar,
       offset: (page - 1) * PAGE,
       limit: PAGE,
       agrupado: agrupado ? 1 : 0,
@@ -332,6 +404,42 @@ async function loadProducts($app: HTMLElement, reset: boolean): Promise<void> {
     toast("Erro ao carregar catálogo: " + (e as Error).message, "error");
   } finally {
     loading = false;
+    void renderAbcResumo($app);
+  }
+}
+
+async function renderAbcResumo($app: HTMLElement): Promise<void> {
+  const $chips = $app.querySelector<HTMLElement>("#abcResumo");
+  if (!$chips) return;
+  try {
+    const r = await api.resumoAbc({
+      categoria: filters.categoria,
+      subcategoria: filters.subcategoria,
+      q: filters.q,
+    });
+    const total = r.A + r.B + r.C + r.sem;
+    const pct = (n: number) => (total ? Math.round((n / total) * 100) : 0);
+    const chip = (classe: "A" | "B" | "C" | "sem", n: number, ativo: boolean) => `
+      <button type="button" class="abc-chip abc-chip--${classe === "A" ? "a" : classe === "B" ? "b" : "c"}${ativo ? " is-active" : ""}"
+        data-classe="${classe}" title="${classe === "sem" ? "Sem classe ABC calculada" : `Filtrar curva ${classe}`}">
+        ${classe === "sem" ? "sem classe" : `Classe ${classe}`}: <strong>${n}</strong> (${pct(n)}%)</button>`;
+    $chips.innerHTML = [
+      chip("A", r.A, filters.classe === "A"),
+      chip("B", r.B, filters.classe === "B"),
+      chip("C", r.C, filters.classe === "C"),
+      r.sem > 0 ? chip("sem", r.sem, filters.classe === "") : "",
+    ].join("");
+    $chips.querySelectorAll<HTMLButtonElement>("[data-classe]").forEach((b) => {
+      b.onclick = () => {
+        const c = b.dataset.classe || "";
+        const $classe = $app.querySelector<HTMLSelectElement>("#fClasse");
+        if ($classe) $classe.value = c === "sem" ? "" : c;
+        filters.classe = c === "sem" ? "" : c;
+        void loadProducts($app, true);
+      };
+    });
+  } catch {
+    $chips.innerHTML = "";
   }
 }
 
@@ -416,7 +524,7 @@ function cardHtml(p: CatalogoItem): string {
     <article class="p-card ${qty > 0 ? "is-selected" : ""}" data-id="${prod.id}">
       <div class="p-photo">${prod.imagem_url ? `<img src="${escapeHtml(prod.imagem_url)}" loading="lazy" alt="">` : `<span style="font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);">sem imagem</span>`}</div>
       <div class="p-body">
-        <p class="p-code">${escapeHtml(prod.sku || "#" + prod.id)}</p>
+        <p class="p-code">${prod.classe_abc ? `<span class="abc-chip abc-chip--${prod.classe_abc.toLowerCase()}" title="Curva ABC">${prod.classe_abc}</span> ` : ""}${escapeHtml(prod.sku || "#" + prod.id)}</p>
         <p class="p-desc">${escapeHtml(prod.name)}</p>
         ${prod.spec ? `<p class="p-spec">${escapeHtml(prod.spec)}</p>` : ""}
         ${prod.brand ? `<p class="p-brand">${escapeHtml(prod.brand)}</p>` : ""}
@@ -442,7 +550,7 @@ function groupCardHtml(p: ProdutoGrupo): string {
     <article class="p-card ${naDraft > 0 ? "is-selected" : ""}" data-group="${p.id}">
       <div class="p-photo">${p.imagem_url ? `<img src="${escapeHtml(p.imagem_url)}" loading="lazy" alt="">` : `<span style="font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);">sem imagem</span>`}</div>
       <div class="p-body">
-        <p class="p-code">${pkgLabel ? `<span class="p-badge">${escapeHtml(pkgLabel)}</span>` : ""}${p.variant_count} variações</p>
+        <p class="p-code">${p.classe_abc ? `<span class="abc-chip abc-chip--${p.classe_abc.toLowerCase()}" title="Curva ABC">${p.classe_abc}</span> ` : ""}${pkgLabel ? `<span class="p-badge">${escapeHtml(pkgLabel)}</span>` : ""}${p.variant_count} variações</p>
         <p class="p-desc">${escapeHtml(p.name)}</p>
         <p class="p-price">${priceLabel}</p>
       </div>
@@ -549,6 +657,10 @@ async function abrirModalVariante(p: ProdutoGrupo): Promise<void> {
   let selBrand: string | null = brands.length ? brands[0] : null;
   const qtys: Record<number, number> = {};
   const allById: Record<number, Variante> = {};
+  const freeQtys: Record<string, number> = {};
+  const addedRows: string[] = []; // valores de bitola adicionados pelo usuário
+  const addedCols: string[] = []; // valores de cor adicionados pelo usuário
+  const addedQtys: Record<string, number> = {}; // key: "row|<rowVal>|col|<colVal>" -> qty
   variants.forEach((v) => {
     allById[v.id] = v;
   });
@@ -583,6 +695,22 @@ async function abrirModalVariante(p: ProdutoGrupo): Promise<void> {
     }, 0);
   }
 
+  function simKey(m: MatrixResult, rowVal: string | number, colVal: string | number | null): string {
+    const parts: Array<[number, string]> = [[m.rowAttr!.id, String(rowVal)]];
+    if (m.colAttr && colVal != null) parts.push([m.colAttr.id, String(colVal)]);
+    return freeCellKey(parts);
+  }
+
+  function allRowValues(m: MatrixResult): string[] {
+    return [...m.rows.map((r) => String(r.value)), ...addedRows];
+  }
+
+  function allColValues(m: MatrixResult): string[] {
+    if (!m.colAttr) return [];
+    const existing = m.rows.length ? m.rows[0].cells.map((c) => c.colValue).filter((v): v is string => v != null) : [];
+    return [...existing, ...addedCols];
+  }
+
   function cellHtml(v: Variante): string {
     return `
       <div class="m-qty-wrap">
@@ -591,47 +719,116 @@ async function abrirModalVariante(p: ProdutoGrupo): Promise<void> {
       </div>`;
   }
 
+  function freeCellHtml(key: string, labelTxt: string): string {
+    return `
+      <div class="m-qty-wrap m-qty-wrap--free">
+        <input class="m-qty m-qty--free" type="number" min="0" step="1" data-key="${escapeHtml(key)}" value="${freeQtys[key] || ""}" placeholder="0" inputmode="numeric" title="${escapeHtml(labelTxt)}">
+        <div class="m-price m-price--free">sob consulta</div>
+      </div>`;
+  }
+
+  function addedCellHtml(rowVal: string, colVal: string | null, m: MatrixResult): string {
+    const key = simKey(m, rowVal, colVal);
+    const label = m.colAttr ? `${rowVal} · ${colVal}` : String(rowVal);
+    return `
+      <div class="m-qty-wrap m-qty-wrap--added">
+        <input class="m-qty m-qty--added" type="number" min="0" step="1" data-added-key="${escapeHtml(key)}" value="${addedQtys[key] || ""}" placeholder="0" inputmode="numeric" title="${escapeHtml(label)}">
+        <div class="m-price m-price--added">sob consulta</div>
+      </div>`;
+  }
+
+  function addRowBtnHtml(m: MatrixResult): string {
+    if (!m.rowAttr) return "";
+    const label = escapeHtml(m.rowAttr.label);
+    const colCount = m.colAttr ? allColValues(m).length : 1;
+    return `
+      <tr class="m-add-row">
+        <td class="m-row" colspan="${colCount + 1}" style="text-align:left; padding:8px 10px;">
+          <button type="button" class="btn btn--sm btn--ghost m-add-btn m-add-row-btn" style="width:auto; padding:4px 10px; font-size:12px;">
+            + Adicionar nova ${label}
+          </button>
+        </td>
+      </tr>`;
+  }
+
+  function addColBtnHtml(m: MatrixResult): string {
+    if (!m.colAttr) return "";
+    const label = escapeHtml(m.colAttr.label);
+    return `
+      <th class="m-col m-col--add" style="width:40px; vertical-align:middle; background:var(--bg-tray);">
+        <button type="button" class="m-add-btn m-add-col-btn" title="Adicionar ${label}">+</button>
+      </th>`;
+  }
+
   function matrizHtml(m: MatrixResult): string {
     if (!m.rowAttr) return `<p class="erp-empty">Sem variações para esta marca.</p>`;
     const corner = m.rowAttr.label || "Característica";
     const cornerTip = tipValor(m.rowAttr.label || "", "");
-    const rowTd = (row: MatrixRow) => `
-      <td class="m-row">
-        <span class="m-row-val">${escapeHtml(row.value)}</span>
-        ${row.tip ? `<span class="tip" data-tip="${escapeHtml(row.tip)}">?</span>` : ""}
-      </td>`;
+
+    const rowTd = (rv: string) => {
+      const isAdded = addedRows.includes(rv);
+      return `
+        <td class="m-row">
+          <span class="m-row-val">${escapeHtml(rv)}</span>
+          ${isAdded ? `<button type="button" class="m-rm-btn" data-rm-row="${escapeHtml(rv)}" title="Remover">×</button>` : ""}
+          ${!isAdded ? (tipValor(m.rowAttr!.label || "", rv) ? `<span class="tip" data-tip="${escapeHtml(tipValor(m.rowAttr!.label || "", rv))}">?</span>` : "") : ""}
+        </td>`;
+    };
+
     if (!m.colAttr) {
+      const rows = allRowValues(m).map((rv) => {
+        const orig = m.rows.find((r) => String(r.value) === rv);
+        const cell = orig && orig.cells[0].variant
+          ? cellHtml(orig.cells[0].variant)
+          : freeCellHtml(simKey(m, rv, null), `${corner}: ${rv}`);
+        return `<tr>${rowTd(rv)}<td class="m-cell">${cell}</td></tr>`;
+      }).join("");
       return `
         <table class="m-grid m-grid--1col">
           <thead><tr>
             <th class="m-corner">${escapeHtml(corner)} <span class="tip" data-tip="${escapeHtml(cornerTip)}">?</span></th>
             <th class="m-col">Quantidade</th>
           </tr></thead>
-          <tbody>
-            ${m.rows
-              .map((row) => {
-                const v = row.cells[0].variant;
-                return `<tr>${rowTd(row)}<td class="m-cell">${v ? cellHtml(v) : `<span class="m-na">—</span>`}</td></tr>`;
-              })
-              .join("")}
-          </tbody>
+          <tbody>${rows}${addRowBtnHtml(m)}</tbody>
         </table>`;
     }
+
+    const colVals = allColValues(m);
+    const headCols = colVals.map((cv) => {
+      const isAdded = addedCols.includes(cv);
+      return `
+        <th class="m-col">
+          ${escapeHtml(cv)}
+          ${isAdded ? `<button type="button" class="m-rm-btn" data-rm-col="${escapeHtml(cv)}" title="Remover">×</button>` : ""}
+        </th>`;
+    }).join("");
+
+    const body = allRowValues(m).map((rv) => {
+      const orig = m.rows.find((r) => String(r.value) === rv);
+      const cells = colVals.map((cv) => {
+        const existing = orig?.cells.find((c) => c.colValue === cv);
+        if (existing?.variant) return `<td class="m-cell">${cellHtml(existing.variant)}</td>`;
+        if (existing) return `<td class="m-cell">${freeCellHtml(simKey(m, rv, cv), `${rv} · ${cv}`)}</td>`;
+        return `<td class="m-cell">${addedCellHtml(rv, cv, m)}</td>`;
+      }).join("");
+      return `<tr>${rowTd(rv)}${cells}<td class="m-cell-empty" style="background:var(--bg-tray);"></td></tr>`;
+    }).join("");
+
     return `
       <table class="m-grid">
         <thead>
           <tr>
             <th class="m-corner">${escapeHtml(corner)} <span class="tip" data-tip="${escapeHtml(cornerTip)}">?</span></th>
-            <th class="m-colspan" colspan="${m.rows.length ? m.rows[0].cells.length : 1}">${escapeHtml(m.colAttr.label)} <span class="tip" data-tip="${escapeHtml(tipValor(m.colAttr.label, ""))}">?</span></th>
+            <th class="m-colspan" colspan="${colVals.length}">${escapeHtml(m.colAttr.label)} <span class="tip" data-tip="${escapeHtml(tipValor(m.colAttr.label, ""))}">?</span></th>
+            <th class="m-corner" style="background:var(--bg-tray);"></th>
           </tr>
           <tr>
             <th class="m-corner"></th>
-            ${m.rows.length ? m.rows[0].cells.map((c) => `<th class="m-col">${escapeHtml(c.colValue)}</th>`).join("") : ""}
+            ${headCols}
+            ${addColBtnHtml(m)}
           </tr>
         </thead>
-        <tbody>
-          ${m.rows.map((row) => `<tr>${rowTd(row)}${row.cells.map((c) => (c.variant ? `<td class="m-cell">${cellHtml(c.variant)}</td>` : `<td class="m-cell is-empty"></td>`)).join("")}</tr>`).join("")}
-        </tbody>
+        <tbody>${body}${addRowBtnHtml(m)}</tbody>
       </table>`;
   }
 
@@ -639,10 +836,60 @@ async function abrirModalVariante(p: ProdutoGrupo): Promise<void> {
     const $mtx = $wrap.querySelector<HTMLElement>("#mmMatriz")!;
     const m = buildVariationMatrix(filtered(), { attrs: p.attrs || [] });
     $mtx.innerHTML = matrizHtml(m);
-    $mtx.querySelectorAll<HTMLInputElement>(".m-qty").forEach((i) => {
+    $mtx.querySelectorAll<HTMLInputElement>(".m-qty[data-id]").forEach((i) => {
       i.oninput = () => {
         qtys[Number(i.dataset.id)] = parseInt(i.value, 10) || 0;
         atualizarResumo($wrap);
+      };
+    });
+    $mtx.querySelectorAll<HTMLInputElement>(".m-qty--free").forEach((i) => {
+      i.oninput = () => {
+        freeQtys[i.dataset.key || ""] = parseInt(i.value, 10) || 0;
+        atualizarResumo($wrap);
+      };
+    });
+    $mtx.querySelectorAll<HTMLInputElement>(".m-qty--added").forEach((i) => {
+      i.oninput = () => {
+        addedQtys[i.dataset.addedKey || ""] = parseInt(i.value, 10) || 0;
+        atualizarResumo($wrap);
+      };
+    });
+    $mtx.querySelectorAll<HTMLButtonElement>(".m-add-row-btn").forEach((b) => {
+      b.onclick = () => {
+        const val = prompt(`Nova ${m.rowAttr?.label || "linha"}:`);
+        if (val && val.trim()) {
+          addedRows.push(val.trim());
+          renderMatriz($wrap);
+        }
+      };
+    });
+    $mtx.querySelectorAll<HTMLButtonElement>(".m-add-col-btn").forEach((b) => {
+      b.onclick = () => {
+        const val = prompt(`Nova ${m.colAttr?.label || "coluna"}:`);
+        if (val && val.trim()) {
+          addedCols.push(val.trim());
+          renderMatriz($wrap);
+        }
+      };
+    });
+    $mtx.querySelectorAll<HTMLButtonElement>(".m-rm-btn").forEach((b) => {
+      b.onclick = () => {
+        const r = b.dataset.rmRow;
+        const c = b.dataset.rmCol;
+        if (r) {
+          const idx = addedRows.indexOf(r);
+          if (idx !== -1) addedRows.splice(idx, 1);
+        }
+        if (c) {
+          const idx = addedCols.indexOf(c);
+          if (idx !== -1) addedCols.splice(idx, 1);
+        }
+        // Limpa qtys associadas a esse row/col
+        Object.keys(addedQtys).forEach((key) => {
+          if (r && key.includes(`=${encodeURIComponent(r)}`)) delete addedQtys[key];
+          if (c && key.includes(`=${encodeURIComponent(c)}`)) delete addedQtys[key];
+        });
+        renderMatriz($wrap);
       };
     });
     atualizarResumo($wrap);
@@ -665,7 +912,9 @@ async function abrirModalVariante(p: ProdutoGrupo): Promise<void> {
 
   function adicionar(): void {
     const selecionadas = Object.entries(qtys).filter(([, q]) => q > 0);
-    if (!selecionadas.length) {
+    const livreSel = Object.entries(freeQtys).filter(([, q]) => q > 0);
+    const addedSel = Object.entries(addedQtys).filter(([, q]) => q > 0);
+    if (!selecionadas.length && !livreSel.length && !addedSel.length) {
       toast("Digite ao menos uma quantidade na matriz", "error");
       return;
     }
@@ -684,6 +933,50 @@ async function abrirModalVariante(p: ProdutoGrupo): Promise<void> {
         brand: v.brand || "",
         price: v.price || 0,
         imagem_url: v.imagem_url || p.imagem_url || "",
+      });
+      totalAdd += q;
+    });
+    livreSel.forEach(([key, q]) => {
+      const attrs = freeCellAttrs(key);
+      const specs: string[] = [];
+      (p.attrs || []).forEach((a) => {
+        const val = attrs[a.id];
+        if (val != null && val !== "") specs.push(`${a.label}: ${val}`);
+      });
+      const descricao = specs.join(" · ") || p.name || "";
+      Cart.addCustomItem(cartItemKey(key), q, {
+        name: p.name || "",
+        spec: specs.join(" · "),
+        brand: selBrand || "",
+        price: 0,
+        imagem_url: p.imagem_url || "",
+        custom: true,
+        descricao,
+        produto_pai: p.id,
+        marca: selBrand || "",
+        atributos: { ...attrs },
+      });
+      totalAdd += q;
+    });
+    addedSel.forEach(([key, q]) => {
+      const attrs = freeCellAttrs(key);
+      const specs: string[] = [];
+      (p.attrs || []).forEach((a) => {
+        const val = attrs[a.id];
+        if (val != null && val !== "") specs.push(`${a.label}: ${val}`);
+      });
+      const descricao = specs.join(" · ") || p.name || "";
+      Cart.addCustomItem(cartItemKey(key), q, {
+        name: p.name || "",
+        spec: specs.join(" · "),
+        brand: selBrand || "",
+        price: 0,
+        imagem_url: p.imagem_url || "",
+        custom: true,
+        descricao,
+        produto_pai: p.id,
+        marca: selBrand || "",
+        atributos: { ...attrs },
       });
       totalAdd += q;
     });

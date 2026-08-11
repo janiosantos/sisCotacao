@@ -28,16 +28,25 @@ def fmt_brl(value: float | None) -> str:
         return "R$ 0,00"
 
 
-def document_context(cotacao: dict, itens: list[dict], fornecedores: list[dict], vencedores: list[dict]) -> dict:
+def document_context(cotacao: dict, itens: list[dict], fornecedores: list[dict], vencedores: list[dict], precos: list[dict] | None = None) -> dict:
     vencedor_map = {
         v["cotacao_item_id"]: v for v in vencedores
     }
     fornecedor_nome = {f["fornecedor_id"]: f["nome"] for f in fornecedores}
+    preco_vencedor = {
+        (v["fornecedor_id"], v["cotacao_item_id"]): p
+        for p in (precos or [])
+        for v in [vencedor_map.get(p["cotacao_item_id"])]
+        if v and v["fornecedor_id"] == p["fornecedor_id"]
+    }
     for item in itens:
         v = vencedor_map.get(item["cotacao_item_id"])
         if v:
             item["vencedor"] = fornecedor_nome.get(v["fornecedor_id"], "—")
             item["vencedor_preco"] = v["preco_unitario"]
+            vp = preco_vencedor.get((v["fornecedor_id"], item["cotacao_item_id"]))
+            item["vencedor_unidade"] = (vp or {}).get("unidade_compra") or ""
+            item["vencedor_fator"] = float((vp or {}).get("fator_conversao") or 0)
     return {
         "number": cotacao["numero"],
         "titulo": cotacao["titulo"],

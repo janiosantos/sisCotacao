@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from catalog_server.repositories import catalog_repo, quote_repo
+from catalog_server.repositories import catalog_repo, produto_repo, quote_repo
 from catalog_server.services import quote_service
 
 api_quotes_bp = Blueprint("api_quotes", __name__)
@@ -13,13 +13,15 @@ def _enrich_itens(itens: list[dict]) -> list[dict]:
     enriched = []
     for i in itens:
         p = products.get(i["produto_id"], {})
+        desc = i.get("descricao") or ""
         enriched.append(
             {
                 "cotacao_item_id": i["id"],
                 "produto_id": i["produto_id"],
                 "quantidade": i["quantidade"],
+                "descricao": desc,
                 "sku": p.get("sku", ""),
-                "name": p.get("name", f"Produto #{i['produto_id']}"),
+                "name": desc or p.get("name", f"Produto #{i['produto_id']}"),
                 "brand": p.get("brand", ""),
                 "category": p.get("category", ""),
                 "subcategory": p.get("subcategory", ""),
@@ -47,15 +49,38 @@ def criar():
     itens = data.get("itens") or []
     if not itens:
         return jsonify({"error": "A cotação precisa de ao menos 1 item"}), 400
-    produto_ids = [i.get("produto_id") for i in itens]
-    if not all(produto_ids):
-        return jsonify({"error": "Item sem produto válido"}), 400
+    resolved = []
+    for i in itens:
+        quantidade = float(i.get("quantidade", 1) or 1)
+        descricao = (i.get("descricao") or "").strip()
+        produto_id = i.get("produto_id")
+        if produto_id:
+            resolved.append({"produto_id": int(produto_id), "quantidade": quantidade, "descricao": descricao})
+            continue
+        # item livre: tamanho/cor fora do cadastro — registra a variação sob o pai
+        produto_pai = i.get("produto_pai") or i.get("produto_cadastro_id")
+        if not produto_pai:
+            return jsonify({"error": "Item sem produto válido"}), 400
+        atributos = i.get("atributos") or {}
+        try:
+            atributos_int = {int(k): str(v) for k, v in atributos.items() if v not in (None, "")}
+        except (TypeError, ValueError):
+            return jsonify({"error": "Atributos inválidos no item livre"}), 400
+        try:
+            vid = produto_repo.find_or_create_variant(
+                int(produto_pai),
+                atributos_int,
+                marca=i.get("marca") or "",
+            )
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        resolved.append({"produto_id": vid, "quantidade": quantidade, "descricao": descricao})
     cotacao_id, numero = quote_repo.create(
         titulo=(data.get("titulo") or "").strip(),
         cliente=(data.get("cliente") or "").strip(),
         observacoes=(data.get("observacoes") or "").strip(),
         fornecedor_ids=[int(f) for f in (data.get("fornecedor_ids") or [])],
-        itens=[(int(i["produto_id"]), float(i.get("quantidade", 1) or 1)) for i in itens],
+        itens=resolved,
     )
     return jsonify({"id": cotacao_id, "numero": numero})
 
@@ -113,7 +138,12 @@ def adicionar_item(cotacao_id: int):
     produto_id = data.get("produto_id")
     if not produto_id:
         return jsonify({"error": "Informe o produto"}), 400
-    quote_repo.add_item(cotacao_id, int(produto_id), float(data.get("quantidade", 1) or 1))
+    quote_repo.add_item(
+        cotacao_id,
+        int(produto_id),
+        float(data.get("quantidade", 1) or 1),
+        descricao=(data.get("descricao") or "").strip(),
+    )
     return jsonify({"ok": True})
 
 

@@ -29,8 +29,22 @@ def listar_produtos():
         offset=offset,
         limit=limit,
         agrupado=request.args.get("agrupado", "1") != "0",
+        ordenar=(request.args.get("ordenar") or "").strip(),
     )
     return jsonify({"items": items, "total": total, "offset": offset, "limit": limit})
+
+
+@api_catalog_bp.get("/api/produtos/abc-resumo")
+def produtos_abc_resumo():
+    """Contagem de produtos por classe ABC sob os filtros atuais do catálogo."""
+    return jsonify(
+        catalog_repo.resumo_abc(
+            categoria=(request.args.get("categoria") or "").strip(),
+            subcategoria=(request.args.get("subcategoria") or "").strip(),
+            q=(request.args.get("q") or "").strip(),
+            em_linha=request.args.get("em_linha", "1") != "0",
+        )
+    )
 
 
 @api_catalog_bp.get("/api/produtos/abc")

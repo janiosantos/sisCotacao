@@ -1,0 +1,14 @@
+/* ESTOQUE */
+.tab-bar{ display:flex; gap:4px; margin-bottom:16px; border-bottom:2px solid var(--line); }
+.tab-btn{ padding:8px 16px; font-size:13px; font-weight:600; border:none; background:transparent; cursor:pointer; color:var(--ink-soft); border-bottom:2px solid transparent; margin-bottom:-2px; transition:border-color .15s,color .15s; }
+.tab-btn:hover{ color:var(--ink); }
+.tab-btn.is-active{ color:var(--accent-ink); border-bottom-color:var(--accent); }
+.estq-filtros{ display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px; }
+.estq-filtros .field{ margin:0; }
+.cell-actions{ display:flex; gap:4px; justify-content:flex-end; }
+.cell-actions .btn--sm{ padding:4px 10px; font-size:12px; }
+.fin-caixa-top{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+.fin-saldo-box{ display:flex; flex-direction:column; padding:16px 20px; background:var(--accent-soft); border-radius:var(--radius-lg); min-width:200px; }
+.fin-saldo-label{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); }
+.fin-saldo-valor{ font-size:24px; font-weight:700; color:var(--accent-ink); font-variant-numeric:tabular-nums; }
+.fin-acoes-caixa{ display:flex; gap:8px; flex-wrap:wrap; }

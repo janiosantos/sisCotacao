@@ -339,9 +339,13 @@ function rowHtml(
           const isBest = p != null && best !== null && p.preco_unitario === best;
           const isWinner = vencedor && vencedor.fornecedor_id === f.fornecedor_id;
           const delta = p != null && best !== null && !isBest ? (((p.preco_unitario - best) / best) * 100).toFixed(1) : null;
+          const pack = p && p.fator_conversao && p.fator_conversao > 1 && p.unidade_compra
+            ? `<span class="price-pack">${escapeHtml(p.unidade_compra)} · ${p.fator_conversao} un · ${qtdEmbalagens(it.quantidade, p.fator_conversao)} emb. ≈ ${fmtMoney(p.preco_unitario * p.fator_conversao)}/emb.</span>`
+            : "";
           if (isFechada) {
             return `<td class="price-cell ${isWinner ? "is-best" : ""}">
               ${p ? fmtMoney(p.preco_unitario) : "—"}
+              ${pack}
               ${isWinner ? '<span class="price-best-tag">✓ vencedor</span>' : ""}
             </td>`;
           }
@@ -349,12 +353,18 @@ function rowHtml(
             <input class="price-input" type="text" inputmode="decimal"
                    data-item="${it.cotacao_item_id}" data-fornecedor="${f.fornecedor_id}"
                    value="${p != null ? p.preco_unitario : ""}" placeholder="R$">
+            ${pack}
             ${isBest ? '<span class="price-best-tag">✓ melhor preço</span>' : ""}
             ${delta ? `<span class="price-delta">+${delta}%</span>` : ""}
           </td>`;
         })
         .join("")}
     </tr>`;
+}
+
+function qtdEmbalagens(quantidade: number, fator: number): number {
+  if (!fator || fator <= 0) return 1;
+  return Math.ceil(quantidade / fator);
 }
 
 function renderSummary(

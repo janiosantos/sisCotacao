@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request
 
 from catalog_server.repositories import produto_repo
 from catalog_server.services import imagens_service, parse_url_service
+from catalog_server import categorias as cat_svc, unidades as unidades_svc
 from catalog_server.db import system_conn
 from catalog_server.utils import image_url
 
@@ -82,6 +83,8 @@ def list_products():
     items, total = produto_repo.list_products(
         q=(request.args.get("q") or "").strip(),
         familia_id=request.args.get("familia_id", type=int),
+        categoria=(request.args.get("categoria") or "").strip(),
+        subcategoria=(request.args.get("subcategoria") or "").strip(),
         offset=offset,
         limit=limit,
     )
@@ -94,14 +97,12 @@ def list_products():
 @api_produtos_bp.post("/api/produtos-cadastro")
 def create_product():
     data = request.get_json(silent=True) or {}
-    familia_id = data.get("familia_id")
+    familia_id = data.get("familia_id") or None
     nome = (data.get("nome") or "").strip()
-    if not familia_id:
-        return jsonify({"error": "Selecione a família"}), 400
     if not nome:
         return jsonify({"error": "Informe o nome base do produto"}), 400
     produto_id = produto_repo.create_product(
-        int(familia_id),
+        int(familia_id) if familia_id else None,
         nome,
         (data.get("marca") or "").strip(),
         (data.get("descricao") or "").strip(),
@@ -109,6 +110,7 @@ def create_product():
         data.get("variantes") or [],
         (data.get("subcategoria") or "").strip(),
         (data.get("termos_busca") or "").strip(),
+        external_id=data.get("external_id"),
     )
     return jsonify({"id": produto_id}), 201
 
@@ -124,15 +126,13 @@ def get_product(produto_id: int):
 @api_produtos_bp.put("/api/produtos-cadastro/<int:produto_id>")
 def update_product(produto_id: int):
     data = request.get_json(silent=True) or {}
-    familia_id = data.get("familia_id")
+    familia_id = data.get("familia_id") or None
     nome = (data.get("nome") or "").strip()
-    if not familia_id:
-        return jsonify({"error": "Selecione a família"}), 400
     if not nome:
         return jsonify({"error": "Informe o nome base do produto"}), 400
-    if not produto_repo.update_product(
+    ok, variantes_result = produto_repo.update_product(
         produto_id,
-        int(familia_id),
+        int(familia_id) if familia_id else None,
         nome,
         (data.get("marca") or "").strip(),
         (data.get("descricao") or "").strip(),
@@ -140,17 +140,21 @@ def update_product(produto_id: int):
         data.get("variantes") or [],
         (data.get("subcategoria") or "").strip(),
         (data.get("termos_busca") or "").strip(),
-    ):
+        external_id=data.get("external_id"),
+    )
+    if not ok:
         return jsonify({"error": "Produto não encontrado"}), 404
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "variantes": variantes_result})
 
 
 @api_produtos_bp.delete("/api/produtos-cadastro/<int:produto_id>")
 def delete_product(produto_id: int):
-    if not produto_repo.delete_product(produto_id):
+    ok, resultado = produto_repo.delete_product(produto_id)
+    if not ok:
         return jsonify({"error": "Produto não encontrado"}), 404
-    imagens_service.remover_arquivos_produto(produto_id)
-    return jsonify({"ok": True})
+    if not resultado["desativadas"]:
+        imagens_service.remover_arquivos_produto(produto_id)
+    return jsonify({"ok": True, **resultado})
 
 
 # ----------------------------------------------------------------------
@@ -255,3 +259,147 @@ def save_fornecedor_variantes(produto_id: int):
         )
         mapping = produto_repo.get_fornecedor_variantes(conn, produto_id)
     return jsonify({"ok": True, "mapping": mapping})
+
+
+# ----------------------------------------------------------------------
+# Categorias e Subcategorias (CRUD)
+# ----------------------------------------------------------------------
+
+
+@api_produtos_bp.get("/api/categorias-tree")
+def listar_categorias_tree():
+    """Retorna árvore completa de categorias com subcategorias (para o CRUD)."""
+    return jsonify(cat_svc.listar())
+
+
+@api_produtos_bp.post("/api/categorias")
+def criar_categoria():
+    data = request.get_json(silent=True) or {}
+    nome = (data.get("nome") or "").strip()
+    if not nome:
+        return jsonify({"error": "Informe o nome da categoria"}), 400
+    cat_id = cat_svc.criar_categoria(nome)
+    if not cat_id:
+        return jsonify({"error": "Erro ao criar categoria"}), 400
+    return jsonify({"id": cat_id}), 201
+
+
+@api_produtos_bp.put("/api/categorias/<int:categoria_id>")
+def atualizar_categoria(categoria_id: int):
+    data = request.get_json(silent=True) or {}
+    nome = (data.get("nome") or "").strip()
+    if not nome:
+        return jsonify({"error": "Informe o nome da categoria"}), 400
+    if not cat_svc.atualizar_categoria(categoria_id, nome):
+        return jsonify({"error": "Categoria nao encontrada"}), 404
+    return jsonify({"ok": True})
+
+
+@api_produtos_bp.delete("/api/categorias/<int:categoria_id>")
+def excluir_categoria(categoria_id: int):
+    ok, erro = cat_svc.excluir_categoria(categoria_id)
+    if not ok:
+        return jsonify({"error": erro}), 400
+    return jsonify({"ok": True})
+
+
+@api_produtos_bp.post("/api/categorias/<int:categoria_id>/subcategorias")
+def criar_subcategoria(categoria_id: int):
+    data = request.get_json(silent=True) or {}
+    nome = (data.get("nome") or "").strip()
+    if not nome:
+        return jsonify({"error": "Informe o nome da subcategoria"}), 400
+    sub_id = cat_svc.criar_subcategoria(categoria_id, nome)
+    if not sub_id:
+        return jsonify({"error": "Erro ao criar subcategoria"}), 400
+    return jsonify({"id": sub_id}), 201
+
+
+@api_produtos_bp.put("/api/subcategorias/<int:subcategoria_id>")
+def atualizar_subcategoria(subcategoria_id: int):
+    data = request.get_json(silent=True) or {}
+    nome = (data.get("nome") or "").strip()
+    if not nome:
+        return jsonify({"error": "Informe o nome da subcategoria"}), 400
+    if not cat_svc.atualizar_subcategoria(subcategoria_id, nome):
+        return jsonify({"error": "Subcategoria nao encontrada"}), 404
+    return jsonify({"ok": True})
+
+
+@api_produtos_bp.delete("/api/subcategorias/<int:subcategoria_id>")
+def excluir_subcategoria(subcategoria_id: int):
+    ok, erro = cat_svc.excluir_subcategoria(subcategoria_id)
+    if not ok:
+        return jsonify({"error": erro}), 400
+    return jsonify({"ok": True})
+
+
+# ----------------------------------------------------------------------
+# Unidades de compra (CRUD)
+# ----------------------------------------------------------------------
+
+
+@api_produtos_bp.get("/api/unidades-compra")
+def listar_unidades_compra():
+    apenas_ativas = request.args.get("ativas", "0") == "1"
+    return jsonify(unidades_svc.listar(apenas_ativas=apenas_ativas))
+
+
+@api_produtos_bp.post("/api/unidades-compra")
+def criar_unidade_compra():
+    data = request.get_json(silent=True) or {}
+    unidade_id, erro = unidades_svc.criar(
+        data.get("sigla") or "", data.get("descricao") or ""
+    )
+    if not unidade_id:
+        return jsonify({"error": erro or "Erro ao criar unidade"}), 400
+    return jsonify({"id": unidade_id}), 201
+
+
+@api_produtos_bp.put("/api/unidades-compra/<int:unidade_id>")
+def atualizar_unidade_compra(unidade_id: int):
+    data = request.get_json(silent=True) or {}
+    ok, erro = unidades_svc.atualizar(
+        unidade_id,
+        data.get("sigla") or "",
+        data.get("descricao") or "",
+        bool(data.get("ativo", True)),
+    )
+    if not ok:
+        return jsonify({"error": erro}), 400
+    return jsonify({"ok": True})
+
+
+@api_produtos_bp.delete("/api/unidades-compra/<int:unidade_id>")
+def excluir_unidade_compra(unidade_id: int):
+    ok, erro = unidades_svc.excluir(unidade_id)
+    if not ok:
+        return jsonify({"error": erro}), 400
+    return jsonify({"ok": True})
+
+
+# ----------------------------------------------------------------------
+# Produtos por subcategoria + reclassificação
+# ----------------------------------------------------------------------
+
+
+@api_produtos_bp.get("/api/subcategorias/<int:subcategoria_id>/produtos")
+def listar_produtos_sub(subcategoria_id: int):
+    offset = max(0, request.args.get("offset", 0, type=int))
+    limit = min(200, max(1, request.args.get("limit", 60, type=int)))
+    items, total = cat_svc.produtos_por_subcategoria(subcategoria_id, offset, limit)
+    return jsonify({"items": items, "total": total, "offset": offset, "limit": limit})
+
+
+@api_produtos_bp.post("/api/produtos/reclassificar")
+def reclassificar():
+    data = request.get_json(silent=True) or {}
+    produto_ids = data.get("produto_ids") or []
+    categoria = (data.get("categoria") or "").strip()
+    subcategoria = (data.get("subcategoria") or "").strip()
+    if not produto_ids:
+        return jsonify({"error": "Informe os produtos"}), 400
+    if not categoria and not subcategoria:
+        return jsonify({"error": "Informe categoria ou subcategoria de destino"}), 400
+    count = cat_svc.reclassificar_produtos(produto_ids, categoria, subcategoria)
+    return jsonify({"ok": True, "count": count})

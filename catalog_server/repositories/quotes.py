@@ -15,8 +15,11 @@ class QuoteRepository:
         cliente: str,
         observacoes: str,
         fornecedor_ids: list[int],
-        itens: list[tuple[int, float]],
+        itens: list[dict],
     ) -> tuple[int, str]:
+        """Cria a cotação. Cada item: `{"produto_id": int, "quantidade": float,
+        "descricao": str}` — itens livres (tamanho/cor fora do cadastro) já
+        chegam com `produto_id` resolvido pela API (variação criada sob o pai)."""
         with system_conn() as conn:
             numero = next_cotacao_numero(conn)
             cur = conn.execute(
@@ -24,10 +27,15 @@ class QuoteRepository:
                 (numero, titulo or None, cliente or None, observacoes or None),
             )
             cotacao_id = cur.lastrowid
-            for produto_id, quantidade in itens:
+            for it in itens:
                 conn.execute(
-                    "INSERT OR IGNORE INTO cotacao_itens (cotacao_id, produto_id, quantidade) VALUES (?,?,?)",
-                    (cotacao_id, produto_id, quantidade),
+                    "INSERT OR IGNORE INTO cotacao_itens (cotacao_id, produto_id, descricao, quantidade) VALUES (?,?,?,?)",
+                    (
+                        cotacao_id,
+                        int(it["produto_id"]),
+                        it.get("descricao") or "",
+                        float(it.get("quantidade", 1) or 1),
+                    ),
                 )
             for fid in fornecedor_ids:
                 conn.execute(
@@ -64,7 +72,7 @@ class QuoteRepository:
             if cotacao is None:
                 return None
             itens = conn.execute(
-                "SELECT id, produto_id, quantidade FROM cotacao_itens WHERE cotacao_id=? ORDER BY id",
+                "SELECT id, produto_id, descricao, quantidade FROM cotacao_itens WHERE cotacao_id=? ORDER BY id",
                 (cotacao_id,),
             ).fetchall()
             fornecedores = conn.execute(
@@ -75,8 +83,11 @@ class QuoteRepository:
                 (cotacao_id,),
             ).fetchall()
             precos = conn.execute(
-                """SELECT cp.* FROM cotacao_precos cp
+                """SELECT cp.*, fv.unidade_compra, fv.fator_conversao
+                   FROM cotacao_precos cp
                    JOIN cotacao_itens ci ON ci.id = cp.cotacao_item_id
+                   LEFT JOIN fornecedor_variantes fv
+                          ON fv.fornecedor_id = cp.fornecedor_id AND fv.variante_id = ci.produto_id
                    WHERE ci.cotacao_id = ?""",
                 (cotacao_id,),
             ).fetchall()
@@ -131,11 +142,11 @@ class QuoteRepository:
 
     # ------------------------------------------------------------------
 
-    def add_item(self, cotacao_id: int, produto_id: int, quantidade: float) -> None:
+    def add_item(self, cotacao_id: int, produto_id: int, quantidade: float, descricao: str = "") -> None:
         with system_conn() as conn:
             conn.execute(
-                "INSERT OR IGNORE INTO cotacao_itens (cotacao_id, produto_id, quantidade) VALUES (?,?,?)",
-                (cotacao_id, produto_id, quantidade),
+                "INSERT OR IGNORE INTO cotacao_itens (cotacao_id, produto_id, descricao, quantidade) VALUES (?,?,?,?)",
+                (cotacao_id, produto_id, descricao or "", quantidade),
             )
 
     # ------------------------------------------------------------------

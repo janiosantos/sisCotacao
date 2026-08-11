@@ -57,6 +57,20 @@ export function addItem(variantId: number, qty: number, det: Partial<DetalheCart
   emit();
 }
 
+export function addCustomItem(
+  key: number,
+  qty: number,
+  det: Partial<DetalheCartItem> & { custom: true; descricao?: string; produto_pai: number; marca?: string; atributos: Record<string, unknown> }
+): void {
+  const d = load();
+  d.itens = d.itens || {};
+  d.detalhes = d.detalhes || {};
+  d.itens[key] = (Number(d.itens[key]) || 0) + (Number(qty) || 0);
+  d.detalhes[key] = { id: key, name: det.name || "", price: det.price || 0, ...det };
+  save(d);
+  emit();
+}
+
 export function setQty(variantId: number, qty: number, det: Partial<DetalheCartItem>): void {
   const d = load();
   d.itens = d.itens || {};
@@ -405,12 +419,24 @@ export async function criarCotacao(btn: HTMLElement | null): Promise<void> {
     toast("Adicione pelo menos um item para criar a cotação", "error");
     return;
   }
-  const payloadItens = lista.map(({ id, qty, detail }) => ({
-    produto_id: id,
-    variante_id: id,
-    quantidade: qty,
-    preco_estimado: detail.price != null ? Number(detail.price) : null,
-  }));
+  const itensEnviar = lista.map(({ id, qty, detail }) => {
+    if (detail.custom) {
+      const atributos: Record<number, string> = {};
+      Object.entries(detail.atributos || {}).forEach(([k, v]) => {
+        atributos[Number(k)] = String(v);
+      });
+      return {
+        produto_pai: detail.produto_pai,
+        descricao:
+          detail.descricao ||
+          `${detail.name || ""}${detail.spec ? ` — ${detail.spec}` : ""}`,
+        marca: detail.marca || detail.brand || "",
+        atributos,
+        quantidade: qty,
+      };
+    }
+    return { produto_id: id, quantidade: qty };
+  });
 
   setLoading(btn, true);
   try {
@@ -455,7 +481,7 @@ export async function criarCotacao(btn: HTMLElement | null): Promise<void> {
             const fornecedor_ids = [...modal.querySelectorAll<HTMLInputElement>('input[name="fornecedor"]:checked')].map(
               (el) => Number(el.value)
             );
-            if (!payloadItens.length) {
+            if (!itensEnviar.length) {
               toast("Adicione pelo menos um item para criar a cotação", "error");
               return;
             }
@@ -467,7 +493,7 @@ export async function criarCotacao(btn: HTMLElement | null): Promise<void> {
                 cliente: modal.querySelector<HTMLInputElement>("#mCliente")!.value.trim() || null,
                 observacoes: modal.querySelector<HTMLTextAreaElement>("#mObs")!.value.trim() || null,
                 fornecedor_ids,
-                itens: payloadItens.map(({ produto_id, quantidade }) => ({ produto_id, quantidade })),
+                itens: itensEnviar,
               });
               clear();
               closeModal();

@@ -1,7 +1,9 @@
 import puppeteer from "puppeteer-core";
+import { login } from "./e2e_auth.mjs";
 const CHROME = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: "new" });
 const page = await browser.newPage();
+await login(page);
 page.on("pageerror", (e) => console.log("[pageerror]", String(e).slice(0, 300)));
 
 const results = [];
