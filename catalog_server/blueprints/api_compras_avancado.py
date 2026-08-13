@@ -2,8 +2,17 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 from catalog_server.repositories import fornecedor_preco_repo, fornecedor_preferencial_repo, solicitacao_repo, tolerancia_repo
+from catalog_server.services import custo_engine
 
 api_compras_avancado_bp = Blueprint("api_compras_avancado", __name__)
+
+
+# ─── Custo líquido (Motor Fiscal → Custo) ──────────────────
+
+@api_compras_avancado_bp.get("/api/custos/calcular/<int:variante_id>")
+def calcular_custo(variante_id: int):
+    fornecedor_id = request.args.get("fornecedor_id", type=int)
+    return jsonify(custo_engine.calcular_custo(variante_id, fornecedor_id=fornecedor_id))
 
 
 @api_compras_avancado_bp.get("/api/fornecedor-preco")

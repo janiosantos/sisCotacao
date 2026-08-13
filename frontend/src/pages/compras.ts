@@ -16,6 +16,91 @@ import { toast } from "../ui/dom";
 
 const KEY_DRAFT = "compras_draft";
 const KEY_COT = "compras_cotacao";
+const KEY_PESOS = "compras_pesos_recomendado";
+
+interface Pesos {
+  preco: number;
+  prazo: number;
+  pagamento: number;
+}
+
+const PESOS_PADRAO: Pesos = { preco: 50, prazo: 30, pagamento: 20 };
+
+function carregarPesos(): Pesos {
+  try {
+    const raw = sessionStorage.getItem(KEY_PESOS);
+    if (!raw) return { ...PESOS_PADRAO };
+    const p = JSON.parse(raw) as Partial<Pesos>;
+    return {
+      preco: p.preco ?? PESOS_PADRAO.preco,
+      prazo: p.prazo ?? PESOS_PADRAO.prazo,
+      pagamento: p.pagamento ?? PESOS_PADRAO.pagamento,
+    };
+  } catch {
+    return { ...PESOS_PADRAO };
+  }
+}
+
+function salvarPesos(p: Pesos): void {
+  sessionStorage.setItem(KEY_PESOS, JSON.stringify(p));
+}
+
+/**
+ * Para cada item, calcula qual fornecedor tem a melhor pontuação combinando
+ * preço líquido, prazo de entrega e condição de pagamento do fornecedor,
+ * conforme os pesos informados pelo comprador (0-100 cada, normalizados
+ * internamente). Quanto menor o preço/prazo e maior o prazo de pagamento
+ * (mais dias para pagar), melhor a pontuação.
+ */
+function calcularRecomendados(
+  itens: MatrizItem[],
+  fornecedores: CotacaoFornecedor[],
+  pesos: Pesos
+): Map<number, number> {
+  const diasPagto = new Map<number, number | null>();
+  fornecedores.forEach((f) => diasPagto.set(f.fornecedor_id, f.condicao_pagamento_dias ?? null));
+
+  const somaPesos = Math.max(1, pesos.preco + pesos.prazo + pesos.pagamento);
+  const wPreco = pesos.preco / somaPesos;
+  const wPrazo = pesos.prazo / somaPesos;
+  const wPagto = pesos.pagamento / somaPesos;
+
+  const resultado = new Map<number, number>();
+
+  for (const item of itens) {
+    const candidatos = Object.entries(item.precos).filter(
+      ([, pr]) => pr.disponivel && pr.preco_liquido > 0
+    );
+    if (candidatos.length === 0) continue;
+
+    const maxPreco = Math.max(...candidatos.map(([, pr]) => pr.preco_liquido));
+    const prazosValidos = candidatos.map(([, pr]) => pr.prazo).filter((p): p is number => p != null);
+    const maxPrazo = prazosValidos.length ? Math.max(...prazosValidos) : 0;
+    const diasValidos = candidatos
+      .map(([fid]) => diasPagto.get(Number(fid)))
+      .filter((d): d is number => d != null);
+    const maxDias = diasValidos.length ? Math.max(...diasValidos) : 0;
+
+    let melhorFid: number | null = null;
+    let melhorScore = -Infinity;
+
+    for (const [fid, pr] of candidatos) {
+      const normPreco = maxPreco > 0 ? pr.preco_liquido / maxPreco : 0;
+      const normPrazo = maxPrazo > 0 ? (pr.prazo ?? maxPrazo) / maxPrazo : 0;
+      const dias = diasPagto.get(Number(fid)) ?? 0;
+      const normDias = maxDias > 0 ? dias / maxDias : 0;
+
+      const score = wPreco * (1 - normPreco) + wPrazo * (1 - normPrazo) + wPagto * normDias;
+      if (score > melhorScore) {
+        melhorScore = score;
+        melhorFid = Number(fid);
+      }
+    }
+    if (melhorFid != null) resultado.set(item.cotacao_item_id, melhorFid);
+  }
+
+  return resultado;
+}
 
 // ---------------------------------------------------------------- helpers
 
@@ -619,26 +704,34 @@ function desenharMatriz(body: HTMLElement, m: MatrizComparacao): void {
   const fornecedores = m.fornecedores;
   const central = m.centralizado;
   const vencedorCentral = central ? central.fornecedor_id : null;
+  const pesos = carregarPesos();
+  const recomendados =
+    m.logica === "recomendado" ? calcularRecomendados(m.itens, fornecedores, pesos) : new Map<number, number>();
+
   body.innerHTML = `
     <div class="cpr-panel">
       <div class="cpr-matriz-head">
         <h3 class="cpr-titulo">Comparar propostas ${esc(m.cotacao.titulo ? "— “" + m.cotacao.titulo + "”" : "")}</h3>
         <div class="cpr-logica">
-          <button class="btn${m.logica === "fracionado" ? " btn--accent" : ""}" data-logica="fracionado">Melhor preço por item</button>
-          <button class="btn${m.logica === "centralizado" ? " btn--accent" : ""}" data-logica="centralizado">Melhor preço por lote</button>
+          <button class="btn${m.logica === "fracionado" ? " btn--accent" : ""}" data-logica="fracionado">💰 Melhor preço por item</button>
+          <button class="btn${m.logica === "centralizado" ? " btn--accent" : ""}" data-logica="centralizado">📦 Melhor preço por lote</button>
+          <button class="btn${m.logica === "recomendado" ? " btn--accent" : ""}" data-logica="recomendado">⭐ Recomendado</button>
         </div>
       </div>
       ${central ? `<p class="cpr-central">Opção de lote: <b>${esc(central.nome)}</b> — total ${fmtMoney(central.total)}</p>` : `<p class="cpr-central cpr-central-none">Nenhum fornecedor precificou todos os itens para a opção de lote.</p>`}
+      ${m.logica === "recomendado" ? blocoPesos(pesos) : ""}
       <div class="cpr-ttrowe">
         <div class="cpr-tabwrap">
           <table class="cpr-matriz ${m.logica}">
             <thead><tr><th class="cpr-col-prod">Produto</th>
-              ${fornecedores.map((f) => `<th>${esc(f.nome)}${f.status === "respondido" ? "" : '<span class="cpr-noresp">—</span>'}</th>`).join("")}
+              ${fornecedores.map((f) => `<th>${esc(f.nome)}${f.status === "respondido" ? "" : '<span class="cpr-noresp">—</span>'}
+                ${f.condicao_pagamento ? `<span class="cpr-cond-pgto" title="Condição de pagamento">${esc(f.condicao_pagamento)}</span>` : ""}</th>`).join("")}
             </tr></thead>
-            <tbody>${m.itens.map((it) => linhaMatriz(it, fornecedores, m.logica, vencedorCentral)).join("")}</tbody>
+            <tbody>${m.itens.map((it) => linhaMatriz(it, fornecedores, m.logica, vencedorCentral, recomendados)).join("")}</tbody>
           </table>
         </div>
       </div>
+      <p class="cpr-legenda">💰 melhor preço &nbsp;·&nbsp; 🚚 menor prazo de entrega ${m.logica === "recomendado" ? "&nbsp;·&nbsp; ⭐ recomendado (preço + prazo + pagamento)" : ""}</p>
       <div class="cpr-lista-foot" style="justify-content:space-between">
         <div style="display:flex;gap:8px;">
           <button class="btn" id="cprRecarregar2">↻ Atualizar respostas</button>
@@ -656,16 +749,30 @@ function desenharMatriz(body: HTMLElement, m: MatrizComparacao): void {
   body.querySelector("#cprRecarregar2")!.addEventListener("click", () => {
     void etapaComparando(body);
   });
-  body.querySelector("#cprImportarIA")!.addEventListener("click", () => {
-    if (importarIa) {
-      importarIa({
-        cotacaoId: S.cotacaoId!,
-        fornecedores,
-        titulo: m.cotacao.titulo || ("Cotação " + m.cotacao.numero),
-        onAplicado: () => desenhar(appScope(body)),
+  if (m.logica === "recomendado") {
+    body.querySelectorAll<HTMLInputElement>("[data-peso]").forEach((slider) => {
+      slider.addEventListener("input", () => {
+        const atual = carregarPesos();
+        const chave = slider.dataset.peso as keyof Pesos;
+        atual[chave] = Number(slider.value);
+        salvarPesos(atual);
+        desenharMatriz(body, m);
       });
+    });
+  }
+  body.querySelector("#cprImportarIA")!.addEventListener("click", () => {
+    const opts = {
+      cotacaoId: S.cotacaoId!,
+      fornecedores,
+      titulo: m.cotacao.titulo || ("Cotação " + m.cotacao.numero),
+      onAplicado: () => desenhar(appScope(body)),
+    };
+    if (importarIa) {
+      importarIa(opts);
     } else {
-      toast("Importador IA ainda não está migrado para esta versão.", "error");
+      void import("./importia")
+        .then((mod) => mod.abrir(opts))
+        .catch(() => toast("Importador IA indisponível.", "error"));
     }
   });
   body.querySelector<HTMLButtonElement>("#cprGerarPedidos")!.addEventListener("click", async () => {
@@ -676,7 +783,11 @@ function desenharMatriz(body: HTMLElement, m: MatrizComparacao): void {
       btn.innerHTML = '<span class="spinner"></span> Gerando…';
     }
     try {
-      await api.gerarPedidos(S.cotacaoId!, m.logica);
+      // O backend só entende fracionado/centralizado; "recomendado" gera
+      // pedidos usando a escolha calculada no cliente (fracionado como base
+      // de agrupamento, já que cada item pode ir a um fornecedor diferente).
+      const logicaEnvio = m.logica === "recomendado" ? "fracionado" : m.logica;
+      await api.gerarPedidos(S.cotacaoId!, logicaEnvio);
       S.etapa = 4;
       desenhar(appScope(body));
     } catch (e) {
@@ -690,23 +801,56 @@ function desenharMatriz(body: HTMLElement, m: MatrizComparacao): void {
   });
 }
 
+function blocoPesos(pesos: Pesos): string {
+  return `
+    <div class="cpr-pesos">
+      <span class="cpr-pesos-rot">Priorizar:</span>
+      <label class="cpr-peso"><span>💰 Preço</span>
+        <input type="range" min="0" max="100" step="5" value="${pesos.preco}" data-peso="preco">
+        <b>${pesos.preco}%</b>
+      </label>
+      <label class="cpr-peso"><span>🚚 Prazo</span>
+        <input type="range" min="0" max="100" step="5" value="${pesos.prazo}" data-peso="prazo">
+        <b>${pesos.prazo}%</b>
+      </label>
+      <label class="cpr-peso"><span>💳 Pagamento</span>
+        <input type="range" min="0" max="100" step="5" value="${pesos.pagamento}" data-peso="pagamento">
+        <b>${pesos.pagamento}%</b>
+      </label>
+    </div>`;
+}
+
 function linhaMatriz(
   item: MatrizItem,
   fornecedores: CotacaoFornecedor[],
   logica: string,
-  vencedorCentral: number | null
+  vencedorCentral: number | null,
+  recomendados: Map<number, number>
 ): string {
+  const recomendadoId = recomendados.get(item.cotacao_item_id) ?? null;
   const cells = fornecedores
     .map((f) => {
       const pr = item.precos[String(f.fornecedor_id)];
       if (!pr) return `<td><span class="cpr-x">—</span></td>`;
-      const venceu =
+
+      const ehVencedorPrincipal =
         logica === "centralizado"
           ? vencedorCentral === f.fornecedor_id && pr.disponivel && pr.preco_liquido > 0
-          : item.melhor_id === f.fornecedor_id;
-      const cls = venceu ? " cpr-melhor" : "";
+          : logica === "recomendado"
+            ? recomendadoId === f.fornecedor_id
+            : item.melhor_id === f.fornecedor_id;
+
+      const ehMelhorPreco = item.melhor_id === f.fornecedor_id;
+      const ehMenorPrazo = item.melhor_prazo_id === f.fornecedor_id && item.melhor_prazo_id !== item.melhor_id;
+
+      const badges =
+        (logica === "recomendado" && ehVencedorPrincipal ? '<span class="cpr-mini-badge" title="Recomendado">⭐</span>' : "") +
+        (logica !== "centralizado" && ehMelhorPreco ? '<span class="cpr-mini-badge" title="Melhor preço">💰</span>' : "") +
+        (ehMenorPrazo ? '<span class="cpr-mini-badge" title="Menor prazo de entrega">🚚</span>' : "");
+
+      const cls = ehVencedorPrincipal ? " cpr-melhor" : "";
       return `<td class="cpr-prece${cls}">${pr.disponivel ? "" : "<span class='cpr-esgot'>s/ estoque</span>"}
-        <b>${fmtMoney(pr.preco_liquido)}</b>
+        <b>${fmtMoney(pr.preco_liquido)}</b> ${badges}
         <small>${pr.desconto ? "desconto " + pr.desconto + "%" : ""}${pr.prazo ? " · " + pr.prazo + "d" : ""}</small></td>`;
     })
     .join("");
@@ -719,7 +863,7 @@ async function etapaPedidos(body: HTMLElement): Promise<void> {
   body.innerHTML = `<div class="cpr-panel">${barra("Gerando pedidos…")}</div>`;
   try {
     const pedidos = await api.listarPedidos();
-    const meus = pedidos.filter(() => S.cotacaoId == null || true);
+    const meus = pedidos.filter((p) => p.cotacao_id === S.cotacaoId);
     body.innerHTML = `
       <div class="cpr-panel">
         <h3 class="cpr-titulo">Pedidos gerados — envie para os fornecedores</h3>

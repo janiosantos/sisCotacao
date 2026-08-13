@@ -50,13 +50,15 @@ function usuariosTabela(usuarios: Usuario[]): string {
   return `
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Limite desc.</th><th>Autoriza</th><th>Status</th><th></th></tr></thead>
         <tbody>
           ${usuarios.map((u) => `
             <tr>
               <td>${escapeHtml(u.nome)}</td>
               <td style="font-family:var(--font-mono);font-size:12.5px;">${escapeHtml(u.login)}</td>
               <td><span class="badge">${escapeHtml(u.perfil)}</span></td>
+              <td>${u.perfil === "admin" ? "—" : `${Number(u.desconto_limite_pct || 0)}%`}</td>
+              <td>${u.autoriza_desconto ? "Sim" : "—"}</td>
               <td><span class="badge ${u.ativo ? "badge--fechada" : "badge--cancelada"}">${u.ativo ? "Ativo" : "Inativo"}</span></td>
               <td style="display:flex;gap:6px;justify-content:flex-end;">
                 <button class="btn btn--sm" data-edit="${u.id}">Editar</button>
@@ -82,6 +84,15 @@ function abrirModal($app: HTMLElement, usuario: Usuario | null): void {
            <option value="admin" ${usuario?.perfil === "admin" ? "selected" : ""}>Admin</option>
          </select>
        </div>
+       <div class="field"><label>Limite de desconto (%)</label>
+         <input id="mDescLim" type="number" min="0" step="0.5" value="${usuario?.desconto_limite_pct ?? 0}" title="% máxima de desconto que o usuário pode aplicar sem autorização (0 = não pode descontar)">
+       </div>
+       <div class="field" style="flex-direction:row;align-items:center;gap:10px;">
+         <label style="margin:0;display:flex;gap:8px;align-items:center;cursor:pointer;">
+           <input id="mAutDesc" type="checkbox" ${usuario?.autoriza_desconto ? "checked" : ""} style="width:auto;">
+           Pode autorizar desconto acima da alçada (gerente)
+         </label>
+       </div>
      </div>
      <div class="modal-actions">
        <button class="btn" data-close>Cancelar</button>
@@ -100,6 +111,8 @@ function abrirModal($app: HTMLElement, usuario: Usuario | null): void {
             login: usuario ? usuario.login : modal.querySelector<HTMLInputElement>("#mLogin")!.value.trim(),
             senha: senha.length ? senha : undefined,
             perfil: modal.querySelector<HTMLSelectElement>("#mPerfil")!.value,
+            desconto_limite_pct: Number(modal.querySelector<HTMLInputElement>("#mDescLim")?.value || 0) || 0,
+            autoriza_desconto: !!modal.querySelector<HTMLInputElement>("#mAutDesc")?.checked,
           };
           try {
             if (isEdit && usuario) await api.atualizarUsuario(usuario.id, payload);

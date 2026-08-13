@@ -25,6 +25,7 @@ services:
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
     environment:
       - BACKEND_HOST=backend
       - BACKEND_PORT=8000

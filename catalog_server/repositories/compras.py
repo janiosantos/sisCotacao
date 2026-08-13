@@ -138,8 +138,18 @@ class ComprasRepository:
 
     # ------------------------------------------------------------------
 
-    def submit_proposta(self, token: str, precos: list[dict]) -> bool:
-        """Grava os preços enviados pelo fornecedor e atualiza os status."""
+    def submit_proposta(
+        self,
+        token: str,
+        precos: list[dict],
+        condicao_pagamento: str | None = None,
+        condicao_pagamento_dias: int | None = None,
+    ) -> bool:
+        """Grava os preços enviados pelo fornecedor e atualiza os status.
+
+        `condicao_pagamento` vale para a proposta inteira (não por item):
+        é gravada em `cotacao_fornecedores`, junto do status/data_resposta.
+        """
         with system_conn() as conn:
             row = conn.execute(
                 """SELECT cf.id AS cf_id, cf.fornecedor_id, c.id AS cotacao_id
@@ -176,8 +186,13 @@ class ComprasRepository:
                 )
             conn.execute(
                 "UPDATE cotacao_fornecedores SET status='respondido',"
-                " data_resposta=datetime('now') WHERE id=?",
-                (row["cf_id"],),
+                " data_resposta=datetime('now'), condicao_pagamento=?,"
+                " condicao_pagamento_dias=? WHERE id=?",
+                (
+                    (condicao_pagamento or "").strip() or None,
+                    condicao_pagamento_dias,
+                    row["cf_id"],
+                ),
             )
             inv = conn.execute(
                 "SELECT COUNT(*) n FROM cotacao_fornecedores WHERE cotacao_id=?",
@@ -211,6 +226,7 @@ class ComprasRepository:
             ).fetchall()
             suppliers = conn.execute(
                 """SELECT cf.status AS status, cf.data_resposta,
+                          cf.condicao_pagamento, cf.condicao_pagamento_dias,
                           f.id AS fornecedor_id, f.nome
                    FROM cotacao_fornecedores cf JOIN fornecedores f ON f.id=cf.fornecedor_id
                    WHERE cf.cotacao_id=? ORDER BY f.nome""",
@@ -383,10 +399,14 @@ class ComprasRepository:
         with system_conn() as conn:
             p = conn.execute(
                 """SELECT p.*, f.nome AS fornecedor, f.whatsapp, f.email, f.cnpj_cpf,
-                          f.razao_social, c.numero AS cotacao_numero, c.titulo AS cotacao_titulo
+                          f.razao_social, f.representante,
+                          c.numero AS cotacao_numero, c.titulo AS cotacao_titulo,
+                          cf.condicao_pagamento, cf.condicao_pagamento_dias
                    FROM pedidos_compra p
                    JOIN fornecedores f ON f.id=p.fornecedor_id
                    JOIN cotacoes c ON c.id=p.cotacao_id
+                   LEFT JOIN cotacao_fornecedores cf
+                          ON cf.cotacao_id=p.cotacao_id AND cf.fornecedor_id=p.fornecedor_id
                    WHERE p.id=?""",
                 (pedido_id,),
             ).fetchone()

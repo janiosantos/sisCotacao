@@ -127,18 +127,74 @@ class IbptRepository:
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
-    def upsert(self, ncm: str, descricao: str = "", aliquota_federal: float = 0, aliquota_estadual: float = 0, aliquota_municipal: float = 0) -> int:
+    def upsert(
+        self,
+        ncm: str,
+        descricao: str = "",
+        aliquota_federal: float = 0,
+        aliquota_estadual: float = 0,
+        aliquota_municipal: float = 0,
+        fonte: str = "",
+        vigencia_inicio: str | None = None,
+        vigencia_fim: str | None = None,
+    ) -> int:
         with system_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO ibpt (ncm, descricao, aliquota_federal, aliquota_estadual, aliquota_municipal)"
-                " VALUES (?,?,?,?,?) ON CONFLICT(ncm) DO UPDATE SET"
+                "INSERT INTO ibpt (ncm, descricao, aliquota_federal, aliquota_estadual, aliquota_municipal,"
+                " fonte, vigencia_inicio, vigencia_fim)"
+                " VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(ncm) DO UPDATE SET"
                 " descricao=excluded.descricao, aliquota_federal=excluded.aliquota_federal,"
-                " aliquota_estadual=excluded.aliquota_estadual, aliquota_municipal=excluded.aliquota_municipal",
-                (ncm.strip(), descricao.strip(), aliquota_federal, aliquota_estadual, aliquota_municipal),
+                " aliquota_estadual=excluded.aliquota_estadual, aliquota_municipal=excluded.aliquota_municipal,"
+                " fonte=excluded.fonte, vigencia_inicio=excluded.vigencia_inicio, vigencia_fim=excluded.vigencia_fim",
+                (ncm.strip(), descricao.strip(), aliquota_federal, aliquota_estadual, aliquota_municipal,
+                 fonte.strip(), vigencia_inicio, vigencia_fim),
             )
             return cur.lastrowid
+
+    def list_sugestoes(
+        self,
+        status: str | None = None,
+        q: str | None = None,
+        confianca_min: float | None = None,
+        limit: int = 200,
+    ) -> list[dict]:
+        sql = (
+            "SELECT s.*, v.sku, p.nome AS produto_nome, p.marca"
+            " FROM ibpt_sugestoes s"
+            " JOIN variantes v ON v.id = s.variante_id"
+            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+        )
+        conds, args = [], []
+        if status and status in ("pendente", "aplicada", "rejeitada"):
+            conds.append("s.status=?")
+            args.append(status)
+        if q:
+            like = f"%{q}%"
+            conds.append("(p.nome LIKE ? OR v.sku LIKE ? OR s.ncm LIKE ?)")
+            args += [like, like, like]
+        if confianca_min is not None:
+            conds.append("s.confianca >= ?")
+            args.append(confianca_min)
+        if conds:
+            sql += " WHERE " + " AND ".join(conds)
+        sql += " ORDER BY s.confianca DESC, p.nome LIMIT ?"
+        args.append(limit)
+        with system_conn() as conn:
+            return [dict(r) for r in conn.execute(sql, args).fetchall()]
+
+    def set_sugestao_status(self, sugestao_id: int, status: str) -> bool:
+        if status not in ("aplicada", "rejeitada"):
+            return False
+        with system_conn() as conn:
+            cur = conn.execute(
+                "UPDATE ibpt_sugestoes SET status=?, aplicado_em=datetime('now')"
+                " WHERE id=? AND status='pendente'",
+                (status, sugestao_id),
+            )
+            return cur.rowcount > 0
 
 
 fornecedor_preferencial_repo = FornecedorPreferencialRepository()
 tolerancia_repo = ToleranciaRepository()
+
 ibpt_repo = IbptRepository()

@@ -19,6 +19,9 @@ export interface ProdutoResumo {
   color?: string;
   package_label?: string;
   classe_abc?: string;
+  unidade_venda?: string;
+  embalagem_qtd?: number | null;
+  ncm?: string;
 }
 
 export interface Atributo {
@@ -127,6 +130,8 @@ export interface Cliente {
   limite_credito: number;
   observacoes: string | null;
   ativo: number | boolean;
+  contribuinte?: string;
+  ie?: string;
 }
 
 export interface ClientePayload {
@@ -143,6 +148,8 @@ export interface ClientePayload {
   vendedor_id?: number | null;
   limite_credito?: number;
   observacoes?: string | null;
+  contribuinte?: string;
+  ie?: string;
 }
 
 export interface ClienteEndereco {
@@ -192,6 +199,8 @@ export interface Usuario {
   login: string;
   perfil: string;
   ativo: number | boolean;
+  desconto_limite_pct?: number;
+  autoriza_desconto?: number | boolean;
   criado_em: string;
 }
 
@@ -200,6 +209,8 @@ export interface UsuarioPayload {
   login: string;
   senha?: string;
   perfil: string;
+  desconto_limite_pct?: number;
+  autoriza_desconto?: boolean;
 }
 
 export interface UsuarioAtual extends Usuario {
@@ -260,6 +271,9 @@ export interface CotacaoFornecedor {
   nome: string;
   whatsapp: string | null;
   email: string | null;
+  data_resposta?: string | null;
+  condicao_pagamento?: string | null;
+  condicao_pagamento_dias?: number | null;
 }
 
 export interface Preco {
@@ -365,6 +379,8 @@ export interface MatrizItem {
   precos: Record<string, MatrizPreco>;
   melhor_id: number | null;
   melhor_preco: number | null;
+  melhor_prazo_id: number | null;
+  melhor_prazo: number | null;
 }
 
 export interface MatrizCentral {
@@ -513,6 +529,8 @@ export interface Familia {
   descricao: string;
   ativo: number;
   criado_em: string;
+  ncm_padrao?: string;
+  unidade_padrao?: string;
   atributos: FamiliaAtributo[];
 }
 
@@ -527,6 +545,8 @@ export interface FamiliaAtributoPayload {
 export interface FamiliaPayload {
   nome: string;
   descricao: string;
+  ncm_padrao?: string;
+  unidade_padrao?: string;
   atributos: FamiliaAtributoPayload[];
 }
 
@@ -554,6 +574,14 @@ export interface VarianteCadastro {
   observacao: string;
   ativo: number;
   criado_em: string;
+  peso?: number | null;
+  dimensoes?: string;
+  unidade_venda?: string;
+  embalagem?: number | null;
+  fator_conversao?: number | null;
+  localizacao?: string;
+  ncm?: string;
+  unidade_tributavel?: string;
   atributos: Record<string, string>;
   atributos_nomes?: Record<string, string>;
 }
@@ -602,6 +630,14 @@ export interface VarianteCadastroPayload {
   preco: number;
   preco_promocional: number | null;
   observacao: string;
+  peso?: number | null;
+  dimensoes?: string;
+  unidade_venda?: string;
+  embalagem?: number | null;
+  fator_conversao?: number | null;
+  localizacao?: string;
+  ncm?: string;
+  unidade_tributavel?: string;
   atributos: Record<string, unknown>;
 }
 
@@ -677,13 +713,17 @@ async function request<T>(method: Metodo, path: string, body?: unknown): Promise
   const res = await fetch(url, opts);
   if (!res.ok) {
     let detail = res.statusText;
+    let code: string | undefined;
     try {
       const j = await res.json();
       detail = j.error || detail;
+      code = j.code;
     } catch {
       /* resposta não-JSON */
     }
-    throw new Error(detail);
+    const err = new Error(detail) as Error & { code?: string };
+    if (code) err.code = code;
+    throw err;
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
@@ -920,8 +960,8 @@ export const api = {
     request<{ ok: boolean }>("PATCH", `/api/plano-contas/${id}/ativo` + qs({ ativo })),
 
   // orçamentos de venda (PDV)
-  listarOrcamentos: (status = "") =>
-    request<OrcamentoLista[]>("GET", "/api/orcamentos" + qs({ status })),
+  listarOrcamentos: (status = "", somente_meus = false) =>
+    request<OrcamentoLista[]>("GET", "/api/orcamentos" + qs({ status, somente_meus: somente_meus ? "1" : undefined })),
   criarOrcamento: (payload: OrcamentoPayload) =>
     request<{ id: number; numero: string }>("POST", "/api/orcamentos", payload),
   detalharOrcamento: (id: number) =>
@@ -931,6 +971,12 @@ export const api = {
   substituirItensOrcamento: (id: number, itens: OrcamentoItemPayload[]) =>
     request<{ ok: boolean }>("PUT", `/api/orcamentos/${id}/itens`, { itens }),
   excluirOrcamento: (id: number) => request<{ ok: boolean }>("DELETE", `/api/orcamentos/${id}`),
+  autorizarDescontoOrcamento: (id: number, creds: { login: string; senha: string }) =>
+    request<{ ok: boolean; autorizado_por?: string; ja_autorizado?: boolean }>(
+      "POST",
+      `/api/orcamentos/${id}/autorizar-desconto`,
+      creds
+    ),
 
   // retaguarda de impressão (PDV → ESC/POS direto à impressora)
   imprimirOrcamento: (id: number) =>
@@ -987,6 +1033,35 @@ export const api = {
     request<{ ok: boolean }>("DELETE", `/api/tabelas-preco/${id}/itens` + qs({ variante_id: varianteId })),
   gerarPrecosTabela: (id: number, data?: Record<string, unknown>) =>
     request<{ gerados: number }>("POST", `/api/tabelas-preco/${id}/gerar`, data || {}),
+  calcularPreco: (varianteId: number, params: Record<string, unknown> = {}) =>
+    request<CalculoPreco>("GET", `/api/precos/calcular/${varianteId}` + qs(params)),
+  precoEfetivo: (varianteId: number, canal?: string) =>
+    request<{ preco: number; origem: string; canal: string }>("GET", `/api/precos/efetivo/${varianteId}` + qs({ canal: canal || "" })),
+  previaReajusteTabela: (id: number, data: Record<string, unknown> = {}) =>
+    request<PreviaReajuste>("POST", `/api/tabelas-preco/${id}/previa`, data),
+  reajustarTabela: (id: number, data: Record<string, unknown>) =>
+    request<ReajusteResultado>("POST", `/api/tabelas-preco/${id}/reajustar`, data),
+  listarHistoricoPrecos: (params: Record<string, unknown> = {}) =>
+    request<HistoricoPrecoItem[]>("GET", "/api/precos/historico" + qs(params)),
+  margemVendas: (params: Record<string, unknown> = {}) =>
+    request<MargemVenda[]>("GET", "/api/relatorios/margem-vendas" + qs(params)),
+  requestDashboard: () => request<DashboardData>("GET", "/api/dashboard"),
+  // loja (PDV/estoque/compras/pós-venda)
+  lojaConfig: () => request<{ bloquear_venda_sem_estoque: boolean }>("GET", "/api/loja/config"),
+  setLojaConfig: (data: Record<string, unknown>) => request<{ bloquear_venda_sem_estoque: boolean }>("PUT", "/api/loja/config", data),
+  lojaSaldo: (varianteId: number) => request<{ saldos: unknown[]; disponivel: number }>("GET", `/api/loja/saldo/${varianteId}`),
+  listarInventarios: () => request<unknown[]>("GET", "/api/loja/inventarios"),
+  criarInventario: (data: Record<string, unknown>) => request<{ id: number }>("POST", "/api/loja/inventarios", data),
+  itensInventario: (id: number) => request<unknown[]>("GET", `/api/loja/inventarios/${id}/itens`),
+  contarInventario: (invId: number, itemId: number, quantidade: number) =>
+    request<{ ok: boolean }>("PATCH", `/api/loja/inventarios/${invId}/itens/${itemId}`, { quantidade_contada: quantidade }),
+  finalizarInventario: (id: number) => request<{ ajustados: number; itens: number }>("POST", `/api/loja/inventarios/${id}/finalizar`),
+  reposicaoSugerida: () => request<unknown[]>("GET", "/api/loja/reposicao"),
+  listarDevolucoes: () => request<unknown[]>("GET", "/api/loja/devolucoes"),
+  registrarDevolucao: (data: Record<string, unknown>) => request<{ id: number }>("POST", "/api/loja/devolucoes", data),
+  alterarStatusDevolucao: (id: number, status: string) =>
+    request<{ ok: boolean }>("PATCH", `/api/loja/devolucoes/${id}`, { status }),
+  comissoes: (params: Record<string, unknown> = {}) => request<unknown[]>("GET", "/api/loja/comissoes" + qs(params)),
   listarPromocoes: (ativo?: boolean) =>
     request<Promocao[]>("GET", "/api/promocoes" + qs({ ativo: ativo !== undefined ? String(ativo) : "" })),
   detalharPromocao: (id: number) => request<Promocao>("GET", `/api/promocoes/${id}`),
@@ -1039,6 +1114,14 @@ export const api = {
     request<{ ok: boolean }>("PUT", `/api/fiscal/config/${varianteId}`, data),
   gerarFiscalConfig: (cfop?: string, cst?: string) =>
     request<{ gerados: number }>("POST", "/api/fiscal/config/gerar", { cfop: cfop || "5.102", cst_icms: cst || "00" }),
+  listarCest: (ncm?: string) =>
+    request<CestItem[]>("GET", "/api/fiscal/cest" + qs({ ncm: ncm || "" })),
+  listarCsosn: () => request<CsosnItem[]>("GET", "/api/fiscal/csosn"),
+  listarBeneficiosFiscais: () => request<BeneficioFiscalItem[]>("GET", "/api/fiscal/beneficios"),
+  listarHistoricoFiscal: (params: Record<string, unknown> = {}) =>
+    request<HistoricoFiscalItem[]>("GET", "/api/fiscal/historico" + qs(params)),
+  simularFiscal: (data: Record<string, unknown>) =>
+    request<FiscalSimulacao>("POST", "/api/fiscal/simular", data),
   getEmitente: () => request<Emitente>("GET", "/api/emitente"),
   upsertEmitente: (data: Record<string, unknown>) => request<{ id: number }>("PUT", "/api/emitente", data),
   listarNfeSaida: (status?: string) =>
@@ -1107,6 +1190,14 @@ export const api = {
     request<IbptItem[]>("GET", "/api/ibpt" + qs(params)),
   upsertIbpt: (data: { ncm: string; descricao?: string; aliquota_federal?: number; aliquota_estadual?: number; aliquota_municipal?: number }) =>
     request<{ id: number }>("POST", "/api/ibpt", data),
+  listarSugestoesIbpt: (params: Record<string, unknown> = {}) =>
+    request<SugestaoIbpt[]>("GET", "/api/ibpt/sugestoes" + qs(params)),
+  gerarSugestoesIbpt: (data: Record<string, unknown> = {}) =>
+    request<{ sugestoes: number; confianca_min: number; total_produtos: number }>("POST", "/api/ibpt/sugestoes/gerar", data),
+  aplicarSugestoesIbpt: (data: Record<string, unknown> = {}) =>
+    request<{ aplicadas: number }>("POST", "/api/ibpt/sugestoes/aplicar", data),
+  revisarSugestaoIbpt: (id: number, status: "aplicada" | "rejeitada") =>
+    request<{ ok: boolean }>("PATCH", `/api/ibpt/sugestoes/${id}`, { status }),
   listarPoliticaDescontos: () => request<DescontoRegra[]>("GET", "/api/politica-descontos"),
   criarPoliticaDesconto: (data: { nome: string; tipo: string; valor_maximo: number; valor_minimo?: number; perfil?: string }) =>
     request<{ id: number }>("POST", "/api/politica-descontos", data),
@@ -1180,6 +1271,18 @@ export interface OrcamentoLista {
   criado_em: string;
   observacoes: string;
   n_itens: number;
+  usuario_id?: number | null;
+  desconto_autorizado?: number | boolean;
+  desconto_autorizado_por?: number | null;
+  desconto_autorizado_em?: string | null;
+  desconto_autorizado_nome?: string | null;
+  condicao_pagamento_id?: number | null;
+  cliente_id?: number | null;
+  cliente_doc?: string | null;
+  uf_destino?: string | null;
+  tipo_cliente?: string | null;
+  contribuinte?: string | null;
+  ie?: string | null;
 }
 
 export interface OrcamentoDetalhe extends OrcamentoLista {
@@ -1212,6 +1315,8 @@ export interface OrcamentoPayload {
   desconto?: number;
   itens: OrcamentoItemPayload[];
   condicao_pagamento_id?: number;
+  usuario_id?: number;
+  cliente_id?: number;
 }
 
 export interface ProdutoSubcategoria {
@@ -1273,6 +1378,17 @@ export interface SaldoItem {
   preco: number;
   produto_nome: string;
   marca: string;
+  familia_id?: number | null;
+  familia_nome?: string;
+  unidade_venda?: string;
+  embalagem?: number | null;
+  fator_conversao?: number | null;
+  ncm?: string;
+  unidade_tributavel?: string;
+  localizacao?: string;
+  estoque_minimo?: number;
+  estoque_maximo?: number;
+  situacao?: string;
 }
 
 export interface MovimentoPayload {
@@ -1567,6 +1683,18 @@ export interface FiscalConfigItem {
   aliquota_pis: number;
   aliquota_cofins: number;
   aliquota_ipi: number;
+  origem: number;
+  cest: string;
+  csosn: string;
+  aliquota_icms_st: number;
+  mva: number;
+  base_reducao: number;
+  aliquota_interestadual: number;
+  aliquota_fecp: number;
+  credito_icms: number;
+  beneficio_id: number | null;
+  vigencia_inicio: string | null;
+  vigencia_fim: string | null;
   sku: string;
   preco: number;
   produto_nome: string;
@@ -1687,6 +1815,20 @@ export interface IbptItem {
   aliquota_municipal: number;
 }
 
+export interface SugestaoIbpt {
+  id: number;
+  variante_id: number;
+  ncm: string;
+  descricao: string;
+  confianca: number;
+  status: "pendente" | "aplicada" | "rejeitada";
+  criado_em: string;
+  aplicado_em: string | null;
+  sku: string;
+  produto_nome: string;
+  marca: string;
+}
+
 export interface FiscalConfigPayload {
   ncm?: string;
   cfop?: string;
@@ -1697,6 +1839,241 @@ export interface FiscalConfigPayload {
   aliquota_pis?: number;
   aliquota_cofins?: number;
   aliquota_ipi?: number;
+  origem?: number;
+  cest?: string;
+  csosn?: string;
+  aliquota_icms_st?: number;
+  mva?: number;
+  base_reducao?: number;
+  aliquota_interestadual?: number;
+  aliquota_fecp?: number;
+  credito_icms?: number;
+  beneficio_id?: number | null;
+  vigencia_inicio?: string | null;
+  vigencia_fim?: string | null;
+}
+
+export interface CestItem {
+  codigo: string;
+  ncm_prefix: string;
+  descricao: string;
+  vigencia_inicio: string | null;
+  vigencia_fim: string | null;
+  ativo: number | boolean;
+}
+
+export interface CsosnItem {
+  codigo: string;
+  descricao: string;
+}
+
+export interface BeneficioFiscalItem {
+  id: number;
+  codigo: string;
+  descricao: string;
+  tipo: string;
+  valor_default: number;
+  vigencia_inicio: string | null;
+  vigencia_fim: string | null;
+  ativo: number | boolean;
+}
+
+export interface CalculoPrecoFiscal {
+  regime: string;
+  ncm: string;
+  cest: string;
+  csosn: string;
+  aliquota_icms: number;
+  icms_st: { aplica: boolean; aliquota: number; mva: number; base_reducao: number };
+  difal: { aplica: boolean; uf_origem: string; uf_dest: string | null; aliquota_interestadual: number; aliquota_fecp: number };
+  creditos: { icms: number; pis: number; cofins: number; ipi: number; total_pct: number };
+  carga: { icms: number; pis: number; cofins: number; ipi: number; total_pct: number };
+  beneficio: { codigo: string; descricao: string; tipo: string; valor: number } | null;
+  vigencia: { config: boolean | null; inicio: string | null; fim: string | null };
+  ibpt: { ncm: string; federal: number; estadual: number; municipal: number; vigente: boolean | null } | null;
+}
+
+export interface CalculoPreco {
+  variante_id: number;
+  canal: string | null;
+  tabela_id: number | null;
+  tabela_nome: string | null;
+  custo_base: number | null;
+  custo_liquido: number | null;
+  regime: string | null;
+  despesas_pct: { comissao: number; despesas: number; taxas: number; total: number };
+  preco_minimo: number | null;
+  preco_sugerido: number | null;
+  margem_efetiva_pct: number | null;
+  markup_efetivo_pct: number | null;
+  observacao: string | null;
+  fiscal: CalculoPrecoFiscal | null;
+}
+
+export interface ItemPreviaReajuste {
+  variante_id: number;
+  sku: string;
+  produto_nome: string;
+  marca: string;
+  preco_atual: number;
+  custo_base: number | null;
+  custo_liquido: number | null;
+  preco_minimo: number | null;
+  preco_sugerido: number | null;
+  margem_efetiva_pct: number | null;
+  observacao: string | null;
+}
+
+export interface PreviaReajuste {
+  tabela_id: number;
+  margem: number;
+  markup: number;
+  total: number;
+  confirmado?: boolean;
+  itens: ItemPreviaReajuste[];
+}
+
+export interface ReajusteResultado {
+  tabela_id: number;
+  confirmado: boolean;
+  aplicados: number;
+  sem_custo: number;
+  total: number;
+}
+
+export interface HistoricoPrecoItem {
+  id: number;
+  tabela_id: number;
+  variante_id: number;
+  preco_anterior: number;
+  preco_novo: number;
+  margem_pct: number | null;
+  markup_pct: number | null;
+  tipo: string;
+  origem: string;
+  usuario_id: number | null;
+  criado_em: string;
+  sku: string;
+  produto_nome: string;
+  marca: string;
+  tabela_nome: string;
+  usuario_nome: string | null;
+}
+
+export interface HistoricoFiscalItem {
+  id: number;
+  variante_id: number;
+  tipo: string;
+  ncm: string;
+  cfop: string | null;
+  cst_icms: string | null;
+  cst_pis: string | null;
+  cst_cofins: string | null;
+  aliquota_icms: number;
+  aliquota_pis: number;
+  aliquota_cofins: number;
+  aliquota_ipi: number;
+  origem: number;
+  cest: string;
+  csosn: string;
+  aliquota_icms_st: number;
+  mva: number;
+  base_reducao: number;
+  aliquota_interestadual: number;
+  aliquota_fecp: number;
+  credito_icms: number;
+  beneficio_id: number | null;
+  vigencia_inicio: string | null;
+  vigencia_fim: string | null;
+  usuario_id: number | null;
+  criado_em: string;
+  sku: string;
+  produto_nome: string;
+  marca: string;
+  usuario_nome: string | null;
+}
+
+export interface MargemVenda {
+  variante_id: number;
+  produto_nome: string;
+  sku: string;
+  n_itens: number;
+  receita: number;
+  custo: number;
+  margem: number;
+  margem_pct: number | null;
+}
+
+export interface DashboardData {
+  resumo: {
+    hoje: string;
+    vendas_hoje: { n: number; total: number };
+    vendas_mes: { n: number; total: number };
+    receber_a_vencer: number;
+    receber_vencidas: number;
+    pagar_a_vencer: number;
+    estoque_baixo: number;
+    valor_estoque: number;
+  };
+  estoque_baixo: { variante_id: number; nome: string; sku: string; quantidade: number; estoque_minimo: number; deposito: string }[];
+  top_vendas: { nome: string; sku: string; qtd: number; receita: number }[];
+}
+
+export interface ProblemaFiscal {
+  tipo: "ERROR" | "WARNING" | "INFO";
+  campo: string;
+  mensagem: string;
+}
+
+export interface PassoDecisao {
+  passo: string;
+  detalhe: string;
+}
+
+export interface FiscalResultado {
+  status: string;
+  operacao: string;
+  data: string;
+  regime: string;
+  ncm: string;
+  cest: string;
+  cfop: string;
+  origem: number;
+  cst_icms: string;
+  csosn: string;
+  cst_pis: string;
+  cst_cofins: string;
+  cst_ibs: string;
+  cst_cbs: string;
+  aliquota_icms: number;
+  base_icms: number;
+  valor_icms: number;
+  modalidade_st: string;
+  base_icms_st: number;
+  aliquota_icms_st: number;
+  valor_icms_st: number;
+  aliquota_pis: number;
+  valor_pis: number;
+  aliquota_cofins: number;
+  valor_cofins: number;
+  aliquota_ibs: number;
+  valor_ibs: number;
+  aliquota_cbs: number;
+  valor_cbs: number;
+  memoria: Record<string, unknown>;
+  memoria_produto: Record<string, unknown> | null;
+  difal: { aplica: boolean; uf_origem: string; uf_destino: string | null };
+  piscofins: Record<string, unknown>;
+  ibs_cbs: Record<string, unknown>;
+  decisao: PassoDecisao[];
+  problemas: ProblemaFiscal[];
+  status_validacao: string;
+}
+
+export interface FiscalSimulacao {
+  resultado: FiscalResultado;
+  status_validacao: string;
+  problemas: ProblemaFiscal[];
 }
 
 // ------------------------------------------------------------------

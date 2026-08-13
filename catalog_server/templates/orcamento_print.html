@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Orçamento {{ orc.numero }}</title>
+<style>
+  :root{
+    --verde:#2E7D46;
+    --verde-escuro:#1F5C33;
+    --tinta:#1f2430;
+    --tinta-suave:#5b655c;
+    --linha:#d7dace;
+    --fundo-suave:#f6f7f3;
+  }
+  @page{ margin:16mm 14mm; }
+  *{ box-sizing:border-box; }
+  body{
+    font-family:'Segoe UI',Arial,sans-serif; color:var(--tinta); font-size:12.5px; margin:0;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; background:#fff;
+  }
+  .folha{ max-width:900px; margin:0 auto; padding:20px; }
+
+  .toolbar{ display:flex; justify-content:flex-end; gap:8px; margin-bottom:14px; }
+  .toolbar button{ padding:8px 16px; border-radius:6px; border:1px solid var(--linha); background:#fff; font-size:13px; cursor:pointer; }
+  .toolbar button.primary{ background:var(--verde); color:#fff; border-color:var(--verde); font-weight:600; }
+  @media print{ .toolbar{ display:none; } .folha{ padding:0; } }
+
+  .letterhead{ display:flex; justify-content:space-between; align-items:flex-start;
+    border-bottom:3px solid var(--verde); padding-bottom:14px; margin-bottom:18px; }
+  .empresa .nome{ font-size:17px; font-weight:800; color:var(--verde-escuro); }
+  .empresa .linha{ font-size:11px; color:var(--tinta-suave); margin-top:2px; }
+  .doc-info{ text-align:right; }
+  .doc-info .titulo{ font-size:20px; font-weight:800; letter-spacing:.03em; color:var(--tinta); text-transform:uppercase; }
+  .doc-info .numero{ font-size:14px; font-weight:700; color:var(--verde); margin-top:2px; }
+  .doc-info .data{ font-size:11px; color:var(--tinta-suave); margin-top:2px; }
+  .badge{ display:inline-block; margin-top:6px; padding:3px 10px; border-radius:20px; font-size:10.5px;
+    font-weight:700; text-transform:uppercase; letter-spacing:.03em; background:#eceef0; color:#556; }
+  .badge-ativo{ background:#e4ecff; color:#2851b8; }
+  .badge-liberado{ background:#e0f4e7; color:var(--verde-escuro); }
+  .badge-faturado{ background:#e0f4e7; color:var(--verde-escuro); }
+  .badge-cancelado{ background:#fde8e8; color:#a33; }
+
+  .painel{ display:flex; gap:16px; margin-bottom:18px; }
+  .caixa{ flex:1; background:var(--fundo-suave); border:1px solid var(--linha); border-radius:8px; padding:12px 14px; }
+  .caixa h4{ margin:0 0 8px; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--tinta-suave); }
+  .caixa .linha-info{ font-size:12.5px; margin-bottom:3px; }
+  .caixa .linha-info b{ color:var(--tinta); }
+  .caixa .linha-info span.rot{ color:var(--tinta-suave); display:inline-block; min-width:96px; }
+
+  table{ width:100%; border-collapse:collapse; margin-bottom:4px; }
+  thead th{ background:var(--verde); color:#fff; font-size:10.5px; text-transform:uppercase;
+    letter-spacing:.04em; padding:9px 10px; text-align:left; }
+  thead th.num{ text-align:right; }
+  tbody td{ border-bottom:1px solid var(--linha); padding:9px 10px; vertical-align:top; }
+  tbody tr:nth-child(even){ background:var(--fundo-suave); }
+  td.num{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.sku{ font-family:Consolas,monospace; font-size:11px; color:var(--tinta-suave); margin-top:2px; }
+
+  .totais{ display:flex; justify-content:flex-end; margin-top:10px; }
+  .totais table{ width:280px; }
+  .totais td{ border:none; padding:4px 6px; }
+  .totais .rot{ color:var(--tinta-suave); }
+  .totais .total-final td{ border-top:2px solid var(--verde); font-size:16px; font-weight:800;
+    color:var(--verde-escuro); padding-top:8px; }
+
+  .obs{ margin-top:18px; padding:10px 14px; background:var(--fundo-suave); border-left:3px solid var(--verde);
+    border-radius:4px; font-size:12px; }
+  .obs h4{ margin:0 0 4px; font-size:10.5px; text-transform:uppercase; color:var(--tinta-suave); }
+
+  .assinaturas{ display:flex; gap:40px; margin-top:50px; }
+  .assinatura{ flex:1; text-align:center; }
+  .assinatura .linha-ass{ border-top:1px solid var(--tinta); margin-bottom:6px; padding-top:34px; }
+  .assinatura small{ color:var(--tinta-suave); }
+
+  .rodape{ margin-top:30px; padding-top:10px; border-top:1px solid var(--linha); font-size:10.5px;
+    color:var(--tinta-suave); display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+  <div class="folha">
+    <div class="toolbar">
+      <button onclick="window.close()">Fechar</button>
+      <button class="primary" onclick="window.print()">Imprimir / Salvar PDF</button>
+    </div>
+
+    <div class="letterhead">
+      <div class="empresa">
+        {% if emitente %}
+          <div class="nome">{{ emitente.nome_fantasia or emitente.razao_social }}</div>
+          {% if emitente.razao_social and emitente.nome_fantasia and emitente.razao_social != emitente.nome_fantasia %}
+            <div class="linha">{{ emitente.razao_social }}</div>
+          {% endif %}
+          {% if emitente.cnpj %}<div class="linha">CNPJ {{ emitente.cnpj }}</div>{% endif %}
+          {% if emitente.logradouro %}
+            <div class="linha">{{ emitente.logradouro }}{% if emitente.numero %}, {{ emitente.numero }}{% endif %}{% if emitente.bairro %} — {{ emitente.bairro }}{% endif %}</div>
+          {% endif %}
+          {% if emitente.municipio %}
+            <div class="linha">{{ emitente.municipio }}{% if emitente.uf %}/{{ emitente.uf }}{% endif %}{% if emitente.cep %} · CEP {{ emitente.cep }}{% endif %}</div>
+          {% endif %}
+        {% else %}
+          <div class="nome">Orçamento de Venda</div>
+        {% endif %}
+      </div>
+      <div class="doc-info">
+        <div class="titulo">Orçamento</div>
+        <div class="numero">Nº {{ orc.numero }}</div>
+        <div class="data">Emitido em {{ orc.criado_em }}{% if validade %} · Válido até {{ validade }}{% endif %}</div>
+        <span class="badge badge-{{ orc.status }}">{{ status_label }}</span>
+      </div>
+    </div>
+
+    <div class="painel">
+      <div class="caixa">
+        <h4>Cliente</h4>
+        <div class="linha-info"><b>{{ orc.cliente or "Consumidor final" }}</b></div>
+        {% if orc.contato %}<div class="linha-info"><span class="rot">Contato</span>{{ orc.contato }}</div>{% endif %}
+      </div>
+      <div class="caixa">
+        <h4>Condições</h4>
+        <div class="linha-info"><span class="rot">Validade</span>{{ orc.validade_dias }} dia(s)</div>
+        <div class="linha-info"><span class="rot">Pagamento</span>{{ condicao_pagamento or "A combinar" }}</div>
+        <div class="linha-info"><span class="rot">Itens</span>{{ orc.itens|length }}</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:28px">#</th>
+          <th>Produto</th>
+          <th class="num" style="width:60px">Qtd</th>
+          <th class="num" style="width:100px">Preço unit.</th>
+          <th class="num" style="width:60px">Desc.</th>
+          <th class="num" style="width:110px">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in orc.itens %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>
+            <b>{{ it.nome }}</b>
+            {% if it.sku or it.marca or it.especificacao %}<div class="sku">{{ it.sku }}{% if it.marca %} · {{ it.marca }}{% endif %}{% if it.especificacao %} · {{ it.especificacao }}{% endif %}</div>{% endif %}
+          </td>
+          <td class="num">{{ it.quantidade|qty }}</td>
+          <td class="num">{{ it.preco_unitario|brl }}</td>
+          <td class="num">{% if it.desconto_percentual %}-{{ (it.preco_unitario * it.quantidade * (it.desconto_percentual / 100))|brl }}{% else %}—{% endif %}</td>
+          <td class="num">{{ it.subtotal|brl }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="totais">
+      <table>
+        <tr><td class="rot">Subtotal</td><td class="num">{{ desc_resumo.base|brl }}</td></tr>
+        {% if desc_resumo.desconto_total %}
+        <tr><td class="rot">Desconto ({{ desc_resumo.desconto_pct|qty }}%)</td><td class="num">-{{ desc_resumo.desconto_total|brl }}</td></tr>
+        {% endif %}
+        {% if orc.frete %}<tr><td class="rot">Frete</td><td class="num">{{ orc.frete|brl }}</td></tr>{% endif %}
+        {% if orc.seguro %}<tr><td class="rot">Seguro</td><td class="num">{{ orc.seguro|brl }}</td></tr>{% endif %}
+        {% if orc.despesas_acessorias %}<tr><td class="rot">Despesas acessórias</td><td class="num">{{ orc.despesas_acessorias|brl }}</td></tr>{% endif %}
+        <tr class="total-final"><td>Total</td><td class="num">{{ orc.total|brl }}</td></tr>
+      </table>
+    </div>
+
+    {% if orc.observacoes %}
+    <div class="obs">
+      <h4>Observações</h4>
+      {{ orc.observacoes }}
+    </div>
+    {% endif %}
+
+    <div class="assinaturas">
+      <div class="assinatura"><div class="linha-ass"></div><small>Vendedor — data</small></div>
+      <div class="assinatura"><div class="linha-ass"></div><small>Cliente — de acordo</small></div>
+    </div>
+
+    <div class="rodape">
+      <span>Documento gerado automaticamente pelo sistema de cotações.</span>
+      <span>{{ orc.numero }} · {{ orc.itens|length }} item(ns)</span>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function(){ setTimeout(function(){ window.print(); }, 200); };
+  </script>
+</body>
+</html>

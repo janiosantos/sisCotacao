@@ -19,6 +19,29 @@ def _calc_item(preco: float, quantidade: float, desconto: float) -> float:
     return max(0.0, preco * quantidade * (1 - (desconto / 100.0)))
 
 
+def resumo_desconto(orc: dict) -> dict:
+    """Calcula o desconto total do orçamento (itens + desconto geral).
+
+    Retorna a base (soma dos preços cheios), o total descontado em R$ e o
+    percentual sobre a base.
+    """
+    base = sum(
+        float(it.get("preco_unitario") or 0) * float(it.get("quantidade") or 0)
+        for it in (orc.get("itens") or [])
+    )
+    itens_liquido = sum(
+        float(it.get("subtotal") or 0)
+        for it in (orc.get("itens") or [])
+    )
+    desconto_total = max(0.0, base - itens_liquido + float(orc.get("desconto") or 0))
+    pct = (desconto_total / base * 100.0) if base > 0 else 0.0
+    return {
+        "base": round(base, 2),
+        "desconto_total": round(desconto_total, 2),
+        "desconto_pct": round(pct, 2),
+    }
+
+
 class OrcamentoRepository:
 
     # ------------------------------------------------------------------
@@ -36,6 +59,14 @@ class OrcamentoRepository:
         despesas_acessorias: float = 0.0,
         status: str = "rascunho",
         condicao_pagamento_id: int | None = None,
+        usuario_id: int | None = None,
+        cliente_id: int | None = None,
+        cliente_doc: str | None = None,
+        uf_destino: str | None = None,
+        tipo_cliente: str | None = None,
+        contribuinte: str | None = None,
+        ie: str | None = None,
+        modelo_documento: str | None = None,
     ) -> tuple[int, str]:
         """Cria o orçamento com seus itens e calcula subtotal/total."""
         itens = itens or []
@@ -61,8 +92,10 @@ class OrcamentoRepository:
                     (numero, cliente, contato, validade_dias, observacoes,
                      status, desconto, subtotal, total,
                      frete, seguro, despesas_acessorias,
-                     total_liquido, condicao_pagamento_id)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     total_liquido, condicao_pagamento_id, usuario_id,
+                     cliente_id, cliente_doc, uf_destino, tipo_cliente,
+                     contribuinte, ie, modelo_documento)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     numero,
@@ -79,6 +112,14 @@ class OrcamentoRepository:
                     desp,
                     total,
                     condicao_pagamento_id,
+                    usuario_id,
+                    cliente_id,
+                    cliente_doc,
+                    (uf_destino or "").strip().upper() or None,
+                    tipo_cliente,
+                    contribuinte,
+                    ie,
+                    modelo_documento,
                 ),
             )
             orcamento_id = cur.lastrowid
@@ -111,17 +152,25 @@ class OrcamentoRepository:
 
     # ------------------------------------------------------------------
 
-    def listar(self, status: str = "") -> list[dict]:
+    def listar(self, status: str = "", usuario_id: int | None = None) -> list[dict]:
         sql = """
             SELECT o.id, o.numero, o.cliente, o.contato, o.status, o.desconto,
                    o.subtotal, o.total, o.validade_dias, o.criado_em, o.observacoes,
+                   o.usuario_id, o.desconto_autorizado, o.desconto_autorizado_por,
+                   o.desconto_autorizado_em,
                    (SELECT COUNT(*) FROM orcamento_itens oi WHERE oi.orcamento_id=o.id) AS n_itens
             FROM orcamentos o
         """
         params: list = []
+        conds: list = []
         if status and status in STATUS_LIST:
-            sql += " WHERE o.status=?"
+            conds.append("o.status=?")
             params.append(status)
+        if usuario_id is not None:
+            conds.append("o.usuario_id=?")
+            params.append(usuario_id)
+        if conds:
+            sql += " WHERE " + " AND ".join(conds)
         sql += " ORDER BY o.id DESC"
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, params).fetchall()]
@@ -139,7 +188,16 @@ class OrcamentoRepository:
                 "SELECT * FROM orcamento_itens WHERE orcamento_id=? ORDER BY id",
                 (orcamento_id,),
             ).fetchall()
-            return {**dict(cab), "itens": [dict(r) for r in itens]}
+            d = {**dict(cab), "itens": [dict(r) for r in itens]}
+            if d.get("desconto_autorizado_por"):
+                u = conn.execute(
+                    "SELECT nome FROM usuarios WHERE id=?",
+                    (d["desconto_autorizado_por"],),
+                ).fetchone()
+                d["desconto_autorizado_nome"] = (u["nome"] if u else None)
+            else:
+                d["desconto_autorizado_nome"] = None
+            return d
 
     # ------------------------------------------------------------------
 
@@ -152,6 +210,7 @@ class OrcamentoRepository:
         observacoes: str | None = None,
         status: str | None = None,
         desconto: float | None = None,
+        condicao_pagamento_id: int | None = None,
     ) -> bool:
         fields, params = [], []
         for key, val in (
@@ -161,6 +220,7 @@ class OrcamentoRepository:
             ("observacoes", observacoes),
             ("status", status),
             ("desconto", desconto),
+            ("condicao_pagamento_id", condicao_pagamento_id),
         ):
             if val is not None:
                 fields.append(f"{key}=?")
@@ -230,6 +290,19 @@ class OrcamentoRepository:
     def excluir(self, orcamento_id: int) -> bool:
         with system_conn() as conn:
             cur = conn.execute("DELETE FROM orcamentos WHERE id=?", (orcamento_id,))
+            return cur.rowcount > 0
+
+    # ------------------------------------------------------------------
+
+    def autorizar_desconto(self, orcamento_id: int, usuario_id: int) -> bool:
+        """Registra a aprovação de desconto acima da alçada do vendedor."""
+        with system_conn() as conn:
+            cur = conn.execute(
+                "UPDATE orcamentos SET desconto_autorizado=1,"
+                " desconto_autorizado_por=?, desconto_autorizado_em=datetime('now')"
+                " WHERE id=? AND desconto_autorizado=0",
+                (usuario_id, orcamento_id),
+            )
             return cur.rowcount > 0
 
     # ------------------------------------------------------------------

@@ -1,0 +1,48 @@
+<!-- footer.html -->
+<script>
+  // Monitor de novos recibos: na lista, recarrega quando surge recibo novo;
+  // no detalhe (/recus/<id>), redireciona para o recibo mais recente.
+  (function () {
+    var INTERVALO = 5000;
+
+    function idAtual() {
+      var m = location.pathname.match(/^\/recus\/(\d+)/);
+      return m ? parseInt(m[1], 10) : null;
+    }
+
+    async function monitorar() {
+      try {
+        var resp = await fetch("/recus", { cache: "no-store" });
+        var div = document.createElement("div");
+        div.innerHTML = await resp.text();
+        var links = div.querySelectorAll("#receiptlist li a");
+        var ids = [];
+        links.forEach(function (a) {
+          var m = a.getAttribute("href").match(/\/recus\/(\d+)/);
+          if (m) ids.push(parseInt(m[1], 10));
+        });
+        if (!ids.length) return;
+
+        var maisNovo = Math.max.apply(null, ids);
+        var atual = idAtual();
+
+        if (atual !== null && maisNovo > atual) {
+          // tela de detalhe: pula para o recibo mais recente
+          window.location.href = "/recus/" + maisNovo;
+        } else if (atual === null) {
+          // tela de lista: recarrega apenas quando o nº de recibos cresce
+          var contagemAtual = document.querySelectorAll("#receiptlist li").length;
+          if (links.length > contagemAtual) window.location.reload();
+        }
+      } catch (e) { /* conexao indisponivel: tenta de novo no proximo ciclo */ }
+    }
+
+    setInterval(monitorar, INTERVALO);
+  })();
+</script>
+
+<div id="footer" style="flex:1; width: 100%; text-align: center; max-height: 4em;">
+    <hr>
+    <p><a href="/">{{ _("Accueil")}}</a> <a href="/recus">{{ _("Liste reçus")}}</a></p>
+
+</div>

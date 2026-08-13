@@ -1,5 +1,5 @@
 import "../styles/estoque.css";
-import { api, type Deposito, type LotePayload, type MovimentoPayload } from "../api/client";
+import { api, type Deposito, type Familia, type LotePayload, type MovimentoPayload } from "../api/client";
 import { escapeHtml, fmtDate, fmtMoney } from "../ui/format";
 import { closeModal, openModal, toast } from "../ui/dom";
 
@@ -28,6 +28,7 @@ function paint(): void {
       <button class="tab-btn ${abaAtiva === "movimentos" ? "is-active" : ""}" data-aba="movimentos">Movimentos</button>
       <button class="tab-btn ${abaAtiva === "lotes" ? "is-active" : ""}" data-aba="lotes">Lotes</button>
       <button class="tab-btn ${abaAtiva === "expedicao" ? "is-active" : ""}" data-aba="expedicao">Expedição</button>
+      <button class="tab-btn ${abaAtiva === "inventario" ? "is-active" : ""}" data-aba="inventario">Inventário</button>
     </div>
     <div id="estqContent" class="estq-content"></div>
   `;
@@ -54,6 +55,7 @@ async function carregarAba(): Promise<void> {
   else if (abaAtiva === "movimentos") await renderMovimentos($ct);
   else if (abaAtiva === "lotes") await renderLotes($ct);
   else if (abaAtiva === "expedicao") await renderExpedicao($ct);
+  else if (abaAtiva === "inventario") await renderInventario($ct);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -61,18 +63,24 @@ async function carregarAba(): Promise<void> {
 // ──────────────────────────────────────────────────────────
 
 async function renderSaldo($ct: HTMLElement): Promise<void> {
+  let familias: Familia[] = [];
+  try { familias = await api.listarFamilias(); } catch { familias = []; }
+  const famOpts = familias.map((f) => `<option value="${f.id}">${escapeHtml(f.nome)}</option>`).join("");
   const depOpts = depositos.map((d) => `<option value="${d.id}">${escapeHtml(d.nome)}</option>`).join("");
   $ct.innerHTML = `
     <div class="estq-filtros">
       <div class="field"><label>Depósito</label>
         <select id="filtroDep">${depOpts}</select>
       </div>
+      <div class="field"><label>Família</label>
+        <select id="filtroFamilia"><option value="">Todas</option>${famOpts}</select>
+      </div>
       <div class="field"><label>Busca</label><input id="filtroQ" placeholder="Produto, SKU, marca…" autocomplete="off"></div>
       <button class="btn btn--accent" id="btnFiltrar">Filtrar</button>
     </div>
     <div class="table-wrap"><table class="data-table" id="tblSaldo">
-      <thead><tr><th>Produto</th><th>SKU</th><th>Depósito</th><th>Qtd.</th><th>Preço</th><th>Atualizado</th></tr></thead>
-      <tbody id="tblSaldoBody"><tr><td colspan="6" class="pdv-sem-res">Carregando…</td></tr></tbody>
+      <thead><tr><th>Produto</th><th>SKU</th><th>Família</th><th>Depósito</th><th>Unid.</th><th>Emb.</th><th>Qtd.</th><th>Preço</th><th>NCM</th><th>Localização</th><th>Atualizado</th></tr></thead>
+      <tbody id="tblSaldoBody"><tr><td colspan="11" class="pdv-sem-res">Carregando…</td></tr></tbody>
     </table></div>
   `;
   $ct.querySelector<HTMLElement>("#btnFiltrar")!.addEventListener("click", () => void buscarSaldo());
@@ -86,11 +94,12 @@ async function buscarSaldo(): Promise<void> {
   const $body = currentApp?.querySelector<HTMLElement>("#tblSaldoBody");
   if (!$body) return;
   const deposito_id = (currentApp?.querySelector<HTMLSelectElement>("#filtroDep")?.value || "").trim();
+  const familia_id = (currentApp?.querySelector<HTMLSelectElement>("#filtroFamilia")?.value || "").trim();
   const q = (currentApp?.querySelector<HTMLInputElement>("#filtroQ")?.value || "").trim();
   try {
-    const res = await api.saldoEstoque({ deposito_id: deposito_id || undefined, q: q || undefined });
+    const res = await api.saldoEstoque({ deposito_id: deposito_id || undefined, familia_id: familia_id || undefined, q: q || undefined });
     if (!res.length) {
-      $body.innerHTML = `<tr><td colspan="6" class="pdv-sem-res">Nenhum saldo encontrado</td></tr>`;
+      $body.innerHTML = `<tr><td colspan="11" class="pdv-sem-res">Nenhum saldo encontrado</td></tr>`;
       return;
     }
     $body.innerHTML = res
@@ -99,15 +108,20 @@ async function buscarSaldo(): Promise<void> {
         <tr>
           <td><strong>${escapeHtml(s.produto_nome)}</strong>${s.marca ? `<div style="font-size:11px;color:var(--ink-faint);">${escapeHtml(s.marca)}</div>` : ""}</td>
           <td style="font-family:var(--font-mono);font-size:12px;">${escapeHtml(s.sku)}</td>
+          <td style="font-size:12px;color:var(--ink-soft);">${escapeHtml(s.familia_nome || "—")}</td>
           <td>${escapeHtml(s.deposito_nome)}</td>
+          <td style="font-size:12px;">${escapeHtml(s.unidade_venda || "UN")}</td>
+          <td style="font-size:12px;">${s.embalagem ? `${s.embalagem}/cx` : "—"}</td>
           <td><strong>${s.quantidade}</strong></td>
           <td>${fmtMoney(s.preco)}</td>
+          <td style="font-family:var(--font-mono);font-size:11px;">${escapeHtml(s.ncm || "—")}</td>
+          <td style="font-size:11px;color:var(--ink-soft);">${escapeHtml(s.localizacao || "—")}</td>
           <td style="font-size:12px;color:var(--ink-soft);">${fmtDate(s.atualizado_em)}</td>
         </tr>`
       )
       .join("");
   } catch {
-    $body.innerHTML = `<tr><td colspan="6" class="pdv-sem-res">Erro ao carregar saldo</td></tr>`;
+    $body.innerHTML = `<tr><td colspan="11" class="pdv-sem-res">Erro ao carregar saldo</td></tr>`;
   }
 }
 
@@ -436,6 +450,114 @@ function abrirModalLote(_lote: LotePayload | null): void {
             await carregarTabelaLotes();
           } catch (e) { toast("Erro: " + (e as Error).message, "error"); }
         };
+      },
+    }
+  );
+}
+
+// ──────────────────────────────────────────────────────────
+//  Inventário (contagem física + ajuste)
+// ──────────────────────────────────────────────────────────
+
+async function renderInventario($ct: HTMLElement): Promise<void> {
+  $ct.innerHTML = `
+    <div class="estq-filtros" style="align-items:flex-end;">
+      <div class="field"><label>Nome do inventário</label><input id="invNome" placeholder="Ex.: Contagem mensal"></div>
+      <div class="field"><label>Depósito</label>
+        <select id="invDep"><option value="">Todos</option>${depositos.map((d) => `<option value="${d.id}">${escapeHtml(d.nome)}</option>`).join("")}</select>
+      </div>
+      <button class="btn btn--accent" id="invNovo">+ Novo inventário</button>
+    </div>
+    <div id="invList"></div>
+  `;
+  $ct.querySelector<HTMLElement>("#invNovo")!.addEventListener("click", async () => {
+    const nome = $ct.querySelector<HTMLInputElement>("#invNome")?.value.trim();
+    if (!nome) { toast("Informe o nome", "error"); return; }
+    const dep = parseInt($ct.querySelector<HTMLSelectElement>("#invDep")?.value || "", 10) || undefined;
+    try {
+      await api.criarInventario({ nome, deposito_id: dep });
+      toast("Inventário criado", "success");
+      await carregarInventarios($ct);
+    } catch (e) { toast("Erro: " + (e as Error).message, "error"); }
+  });
+  await carregarInventarios($ct);
+}
+
+async function carregarInventarios($ct: HTMLElement): Promise<void> {
+  const $box = $ct.querySelector<HTMLElement>("#invList");
+  if (!$box) return;
+  try {
+    const invs = await api.listarInventarios() as { id: number; nome: string; data: string; status: string; deposito_nome: string | null }[];
+    if (!invs.length) { $box.innerHTML = `<p class="pdv-sem-res">Nenhum inventário</p>`; return; }
+    $box.innerHTML = `<div class="table-wrap"><table class="data-table">
+      <thead><tr><th>Nome</th><th>Data</th><th>Depósito</th><th>Status</th><th></th></tr></thead>
+      <tbody>${invs.map((i) => `
+        <tr>
+          <td><strong>${escapeHtml(i.nome)}</strong></td>
+          <td>${fmtDate(i.data)}</td>
+          <td>${escapeHtml(i.deposito_nome || "Todos")}</td>
+          <td><span class="badge badge--${i.status === "finalizado" ? "ok" : "muted"}">${i.status}</span></td>
+          <td class="cell-actions">${i.status === "aberto" ? `
+            <button class="btn btn--sm" data-contar="${i.id}">Contar</button>
+            <button class="btn btn--sm btn--accent" data-finalizar="${i.id}">Finalizar</button>` : ""}
+          </td>
+        </tr>`).join("")}</tbody></table></div>`;
+    $box.querySelectorAll<HTMLElement>("[data-contar]").forEach((b) => {
+      b.addEventListener("click", () => abrirContagem(Number(b.dataset.contar)));
+    });
+    $box.querySelectorAll<HTMLElement>("[data-finalizar]").forEach((b) => {
+      b.addEventListener("click", async () => {
+        try {
+          const r = await api.finalizarInventario(Number(b.dataset.finalizar));
+          toast(`Inventário finalizado (${r.ajustados} ajustes)`, "success");
+          await carregarInventarios($ct);
+        } catch (e) { toast("Erro: " + (e as Error).message, "error"); }
+      });
+    });
+  } catch { $box.innerHTML = `<p class="pdv-sem-res">Erro</p>`; }
+}
+
+async function abrirContagem(invId: number): Promise<void> {
+  let termo = "";
+  openModal(
+    `<div class="modal-head"><h3>Contagem — Inventário #${invId}</h3><button class="icon-btn" data-close>×</button></div>
+     <div class="field" style="margin-bottom:8px;"><input id="ctBusca" placeholder="Buscar produto/SKU…" autocomplete="off"></div>
+     <div class="table-wrap" style="max-height:420px;overflow:auto;">
+       <table class="data-table"><thead><tr><th>Produto</th><th>Localização</th><th>Sistema</th><th>Contado</th><th></th></tr></thead>
+       <tbody id="ctBody"><tr><td colspan="5" class="pdv-sem-res">Carregando…</td></tr></tbody>
+     </table></div>
+     <div class="modal-actions"><button class="btn" data-close>Fechar</button></div>`,
+    {
+      onMount(m) {
+        m.querySelectorAll("[data-close]").forEach((b) => ((b as HTMLElement).onclick = closeModal));
+        const $busca = m.querySelector<HTMLInputElement>("#ctBusca")!;
+        const carregar = async () => {
+          try {
+            const itens = await api.itensInventario(invId) as { id: number; variante_id: number; produto_nome: string; sku: string; localizacao: string; quantidade_sistema: number; quantidade_contada: number | null }[];
+            const $body = m.querySelector<HTMLElement>("#ctBody")!;
+            const filtrados = termo ? itens.filter((i) => (i.produto_nome + " " + i.sku).toLowerCase().includes(termo.toLowerCase())) : itens;
+            $body.innerHTML = filtrados.slice(0, 100).map((i) => `
+              <tr>
+                <td><strong>${escapeHtml(i.produto_nome)}</strong>${i.sku ? `<div style="font-size:11px;color:var(--ink-faint);font-family:var(--font-mono);">${escapeHtml(i.sku)}</div>` : ""}</td>
+                <td style="font-size:11px;">${escapeHtml(i.localizacao || "—")}</td>
+                <td class="num">${i.quantidade_sistema}</td>
+                <td><input type="number" step="any" class="ct-qtd" data-item="${i.id}" value="${i.quantidade_contada ?? i.quantidade_sistema}" style="width:90px;"></td>
+                <td><button class="btn btn--sm" data-salvar="${i.id}">Salvar</button></td>
+              </tr>`).join("");
+            $body.querySelectorAll<HTMLElement>("[data-salvar]").forEach((b) => {
+              b.addEventListener("click", async () => {
+                const itemId = Number(b.dataset.salvar);
+                const input = $body.querySelector<HTMLInputElement>(`.ct-qtd[data-item="${itemId}"]`);
+                try {
+                  await api.contarInventario(invId, itemId, parseFloat(input?.value || "0"));
+                  toast("Contagem salva", "success");
+                } catch (e) { toast("Erro: " + (e as Error).message, "error"); }
+              });
+            });
+          } catch { /* silêncio */ }
+        };
+        $busca.addEventListener("input", () => { termo = $busca.value.trim(); void carregar(); });
+        void carregar();
       },
     }
   );

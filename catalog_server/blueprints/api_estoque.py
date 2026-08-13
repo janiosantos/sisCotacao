@@ -59,9 +59,12 @@ def alternar_ativo_deposito(deposito_id: int):
 def consultar_saldo():
     deposito_id = request.args.get("deposito_id", type=int)
     variante_id = request.args.get("variante_id", type=int)
+    familia_id = request.args.get("familia_id", type=int)
     q = request.args.get("q", "").strip()
     termo = q if q else None
-    return jsonify(estoque_repo.saldo(deposito_id=deposito_id, variante_id=variante_id, termo=termo))
+    return jsonify(estoque_repo.saldo(
+        deposito_id=deposito_id, variante_id=variante_id, termo=termo, familia_id=familia_id
+    ))
 
 
 # ─── Movimento ─────────────────────────────────────────────

@@ -22,6 +22,7 @@ function paint(): void {
     <div class="tab-bar">
       <button class="tab-btn ${abaAtiva === "acompanhamento" ? "is-active" : ""}" data-aba="acompanhamento">Acompanhamento</button>
       <button class="tab-btn ${abaAtiva === "garantia" ? "is-active" : ""}" data-aba="garantia">Garantia</button>
+      <button class="tab-btn ${abaAtiva === "devolucao" ? "is-active" : ""}" data-aba="devolucao">Devolução / Troca</button>
     </div>
     <div id="posContent" class="estq-content"></div>
   `;
@@ -39,6 +40,7 @@ async function carregarAba(): Promise<void> {
   if (!$ct) return;
   if (abaAtiva === "acompanhamento") await renderAcompanhamento($ct);
   else if (abaAtiva === "garantia") await renderGarantia($ct);
+  else if (abaAtiva === "devolucao") await renderDevolucao($ct);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -217,4 +219,61 @@ function abrirModalGarantia(_g: Garantia | null): void {
       },
     }
   );
+}
+
+// ──────────────────────────────────────────────────────────
+//  Devolução / Troca
+// ──────────────────────────────────────────────────────────
+
+async function renderDevolucao($ct: HTMLElement): Promise<void> {
+  $ct.innerHTML = `
+    <div class="estq-filtros" style="align-items:flex-end;flex-wrap:wrap;">
+      <div class="field"><label>Orçamento (ID)</label><input id="dvOrc" type="number" placeholder="opcional"></div>
+      <div class="field"><label>Variante (ID)</label><input id="dvVar" type="number"></div>
+      <div class="field"><label>Quantidade</label><input id="dvQtd" type="number" step="any" value="1"></div>
+      <div class="field"><label>Tipo</label>
+        <select id="dvTipo"><option value="devolucao">Devolução</option><option value="troca">Troca</option></select>
+      </div>
+      <div class="field"><label>Motivo</label><input id="dvMotivo" placeholder="Motivo"></div>
+      <button class="btn btn--accent" id="dvRegistrar">Registrar devolução</button>
+    </div>
+    <div id="dvList"></div>
+  `;
+  $ct.querySelector<HTMLElement>("#dvRegistrar")!.addEventListener("click", async () => {
+    const variante_id = parseInt($ct.querySelector<HTMLInputElement>("#dvVar")?.value || "", 10);
+    const quantidade = parseFloat($ct.querySelector<HTMLInputElement>("#dvQtd")?.value || "0");
+    if (!variante_id || quantidade <= 0) { toast("Informe variante e quantidade", "error"); return; }
+    try {
+      await api.registrarDevolucao({
+        orcamento_id: parseInt($ct.querySelector<HTMLInputElement>("#dvOrc")?.value || "", 10) || undefined,
+        variante_id,
+        quantidade,
+        tipo: $ct.querySelector<HTMLSelectElement>("#dvTipo")?.value || "devolucao",
+        motivo: $ct.querySelector<HTMLInputElement>("#dvMotivo")?.value.trim() || "",
+      });
+      toast("Devolução registrada (estoque atualizado)", "success");
+      await carregarDevolucoes($ct);
+    } catch (e) { toast("Erro: " + (e as Error).message, "error"); }
+  });
+  await carregarDevolucoes($ct);
+}
+
+async function carregarDevolucoes($ct: HTMLElement): Promise<void> {
+  const $box = $ct.querySelector<HTMLElement>("#dvList");
+  if (!$box) return;
+  try {
+    const devs = await api.listarDevolucoes() as { id: number; orcamento_id: number | null; produto_nome: string; sku: string; quantidade: number; motivo: string; tipo: string; status: string; criado_em: string }[];
+    if (!devs.length) { $box.innerHTML = `<p class="pdv-sem-res">Nenhuma devolução</p>`; return; }
+    $box.innerHTML = `<div class="table-wrap"><table class="data-table">
+      <thead><tr><th>Produto</th><th>Qtd</th><th>Tipo</th><th>Motivo</th><th>Status</th><th>Data</th></tr></thead>
+      <tbody>${devs.map((d) => `
+        <tr>
+          <td><strong>${escapeHtml(d.produto_nome)}</strong>${d.sku ? `<div style="font-size:11px;color:var(--ink-faint);font-family:var(--font-mono);">${escapeHtml(d.sku)}</div>` : ""}</td>
+          <td class="num">${d.quantidade}</td>
+          <td><span class="badge badge--muted">${d.tipo}</span></td>
+          <td>${escapeHtml(d.motivo || "—")}</td>
+          <td><span class="badge badge--${d.status === "estornada" ? "ok" : "muted"}">${d.status}</span></td>
+          <td>${fmtDate(d.criado_em)}</td>
+        </tr>`).join("")}</tbody></table></div>`;
+  } catch { $box.innerHTML = `<p class="pdv-sem-res">Erro</p>`; }
 }

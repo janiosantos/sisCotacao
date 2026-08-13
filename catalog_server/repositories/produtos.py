@@ -66,21 +66,21 @@ class ProdutoRepository:
             f["atributos"] = _list_atributos(conn, familia_id)
             return f
 
-    def create_familia(self, nome: str, descricao: str, atributos: list[dict]) -> int:
+    def create_familia(self, nome: str, descricao: str, atributos: list[dict], ncm_padrao: str = "", unidade_padrao: str = "") -> int:
         with system_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO familias (nome, descricao) VALUES (?,?)",
-                (nome, descricao or ""),
+                "INSERT INTO familias (nome, descricao, ncm_padrao, unidade_padrao) VALUES (?,?,?,?)",
+                (nome, descricao or "", ncm_padrao or "", unidade_padrao or "UN"),
             )
             familia_id = cur.lastrowid
             self._replace_atributos(conn, familia_id, atributos)
             return familia_id
 
-    def update_familia(self, familia_id: int, nome: str, descricao: str, atributos: list[dict]) -> bool:
+    def update_familia(self, familia_id: int, nome: str, descricao: str, atributos: list[dict], ncm_padrao: str = "", unidade_padrao: str = "") -> bool:
         with system_conn() as conn:
             cur = conn.execute(
-                "UPDATE familias SET nome=?, descricao=? WHERE id=?",
-                (nome, descricao or "", familia_id),
+                "UPDATE familias SET nome=?, descricao=?, ncm_padrao=?, unidade_padrao=? WHERE id=?",
+                (nome, descricao or "", ncm_padrao or "", unidade_padrao or "UN", familia_id),
             )
             if cur.rowcount == 0:
                 return False
@@ -488,6 +488,13 @@ class ProdutoRepository:
 
     def _replace_variantes(self, conn, produto_id: int, variantes: list[dict]) -> dict:
         resultado = {"excluidas": 0, "desativadas": 0}
+        row = conn.execute(
+            "SELECT f.ncm_padrao, f.unidade_padrao FROM produtos_cadastro p"
+            " LEFT JOIN familias f ON f.id=p.familia_id WHERE p.id=?",
+            (produto_id,),
+        ).fetchone()
+        ncm_padrao = (row["ncm_padrao"] or "").strip() if row else ""
+        unidade_padrao = (row["unidade_padrao"] or "UN").strip() if row else "UN"
         existing = {
             r["id"]
             for r in conn.execute(
@@ -499,26 +506,41 @@ class ProdutoRepository:
             preco = _to_float(v.get("preco"))
             prom = _to_float(v.get("preco_promocional"))
             attrs = v.get("atributos") or {}
+            ncm = (v.get("ncm") or "").strip()
+            unidade_tributavel = (v.get("unidade_tributavel") or "").strip()
+            unidade_venda = (v.get("unidade_venda") or unidade_padrao or "UN").strip()
             vid = v.get("id")
             if vid in existing:
                 submitted.add(vid)
                 conn.execute(
                     "UPDATE variantes SET sku=?, ean=?, preco=?, preco_promocional=?,"
-                    " observacao=? WHERE id=? AND produto_id=?",
+                    " observacao=?, peso=?, dimensoes=?, unidade_venda=?, embalagem=?,"
+                    " fator_conversao=?, localizacao=?, unidade_tributavel=?,"
+                    " ncm=COALESCE(NULLIF(?, ''), ncm) WHERE id=? AND produto_id=?",
                     (
                         v.get("sku") or "",
                         v.get("ean") or "",
                         preco or 0,
                         prom,
                         v.get("observacao") or "",
+                        _to_float(v.get("peso")) or 0,
+                        v.get("dimensoes") or "",
+                        unidade_venda,
+                        _to_float(v.get("embalagem")) or 1,
+                        _to_float(v.get("fator_conversao")) or 1,
+                        v.get("localizacao") or "",
+                        unidade_tributavel,
+                        ncm,
                         vid,
                         produto_id,
                     ),
                 )
             else:
                 cur = conn.execute(
-                    "INSERT INTO variantes (produto_id, sku, ean, preco, preco_promocional, observacao)"
-                    " VALUES (?,?,?,?,?,?)",
+                    "INSERT INTO variantes (produto_id, sku, ean, preco, preco_promocional, observacao,"
+                    " peso, dimensoes, unidade_venda, embalagem, fator_conversao, localizacao,"
+                    " unidade_tributavel, ncm)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         produto_id,
                         v.get("sku") or "",
@@ -526,10 +548,19 @@ class ProdutoRepository:
                         preco or 0,
                         prom,
                         v.get("observacao") or "",
+                        _to_float(v.get("peso")) or 0,
+                        v.get("dimensoes") or "",
+                        unidade_venda,
+                        _to_float(v.get("embalagem")) or 1,
+                        _to_float(v.get("fator_conversao")) or 1,
+                        v.get("localizacao") or "",
+                        unidade_tributavel,
+                        ncm or ncm_padrao,
                     ),
                 )
                 vid = cur.lastrowid
                 submitted.add(vid)
+            self._sync_ncm(conn, vid, ncm or ncm_padrao)
             conn.execute("DELETE FROM variante_atributos WHERE variante_id=?", (vid,))
             for aid, valor in attrs.items():
                 if valor in (None, ""):
@@ -541,6 +572,26 @@ class ProdutoRepository:
         for vid in existing - submitted:
             resultado[self._regra_remover_variante(conn, vid)] += 1
         return resultado
+
+    @staticmethod
+    def _sync_ncm(conn, variante_id: int, ncm: str) -> None:
+        """Mantém `fiscal_config.ncm` coerente com a variante (preenche quando vazio)."""
+        ncm = (ncm or "").strip()
+        if not ncm:
+            return
+        row = conn.execute(
+            "SELECT 1 FROM fiscal_config WHERE variante_id=?", (variante_id,)
+        ).fetchone()
+        if row:
+            conn.execute(
+                "UPDATE fiscal_config SET ncm=? WHERE variante_id=? AND (ncm IS NULL OR ncm='')",
+                (ncm, variante_id),
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO fiscal_config (variante_id, ncm) VALUES (?,?)",
+                (variante_id, ncm),
+            )
 
     # ------------------------------------------------------------------
     # Imagens

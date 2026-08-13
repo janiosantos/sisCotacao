@@ -100,6 +100,16 @@ async function abrirModal($app: HTMLElement, cliente: Cliente | null, vendedores
         <div class="field"><label>Nome *</label><input id="mNome" value="${escapeHtml(cliente?.nome || "")}"></div>
         <div class="field"><label>CPF/CNPJ</label><input id="mDoc" value="${escapeHtml(cliente?.doc || "")}"></div>
         <div style="display:flex;gap:10px;">
+          <div class="field" style="flex:1;"><label>Condição de contribuinte</label>
+            <select id="mContribuinte">
+              <option value="">Não definido</option>
+              <option value="contribuinte" ${cliente?.contribuinte === "contribuinte" ? "selected" : ""}>Contribuinte ICMS</option>
+              <option value="nao_contribuinte" ${cliente?.contribuinte === "nao_contribuinte" ? "selected" : ""}>Não contribuinte</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;"><label>Inscrição Estadual</label><input id="mIe" value="${escapeHtml(cliente?.ie || "")}" autocomplete="off"></div>
+        </div>
+        <div style="display:flex;gap:10px;">
           <div class="field" style="flex:1;"><label>E-mail</label><input id="mEmail" value="${escapeHtml(cliente?.email || "")}"></div>
           <div class="field" style="flex:1;"><label>WhatsApp</label><input id="mWhats" value="${escapeHtml(cliente?.whatsapp || "")}"></div>
         </div>
@@ -171,6 +181,8 @@ async function abrirModal($app: HTMLElement, cliente: Cliente | null, vendedores
       vendedor_id: Number(modal.querySelector<HTMLSelectElement>("#mVendedor")?.value) || null,
       limite_credito: Number(modal.querySelector<HTMLInputElement>("#mLimite")?.value) || 0,
       observacoes: modal.querySelector<HTMLTextAreaElement>("#mObs")?.value.trim() || null,
+      contribuinte: modal.querySelector<HTMLSelectElement>("#mContribuinte")?.value || undefined,
+      ie: modal.querySelector<HTMLInputElement>("#mIe")?.value.trim() || undefined,
     };
     try {
       if (isEdit && cliente) await api.atualizarCliente(cliente.id, payload);

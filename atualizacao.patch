@@ -1,0 +1,827 @@
+diff -ru -x node_modules -x __pycache__ -x '*.pyc' sisCotacao-main/catalog_server/app_factory.py /home/claude/sisCotacao-main/catalog_server/app_factory.py
+--- sisCotacao-main/catalog_server/app_factory.py	2026-08-11 12:02:23.000000000 +0000
++++ /home/claude/sisCotacao-main/catalog_server/app_factory.py	2026-08-11 23:44:21.502804392 +0000
+@@ -106,6 +106,7 @@
+         return resp
+ 
+     app.jinja_env.filters["brl"] = quote_service.fmt_brl
++    app.jinja_env.filters["qty"] = quote_service.fmt_qty
+     app.jinja_env.filters["status_label"] = quote_service.status_label
+ 
+     @app.get("/images/<path:name>")
+diff -ru -x node_modules -x __pycache__ -x '*.pyc' sisCotacao-main/catalog_server/blueprints/pages.py /home/claude/sisCotacao-main/catalog_server/blueprints/pages.py
+--- sisCotacao-main/catalog_server/blueprints/pages.py	2026-08-11 12:02:23.000000000 +0000
++++ /home/claude/sisCotacao-main/catalog_server/blueprints/pages.py	2026-08-11 23:42:01.794132552 +0000
+@@ -3,7 +3,7 @@
+ from flask import Blueprint, abort, render_template, send_from_directory
+ 
+ from catalog_server.config import PROJECT_DIR
+-from catalog_server.repositories import catalog_repo, compras_repo, quote_repo
++from catalog_server.repositories import catalog_repo, compras_repo, emitente_repo, quote_repo
+ from catalog_server.services import quote_service
+ from catalog_server.blueprints.api_quotes import _enrich_itens
+ 
+@@ -37,4 +37,5 @@
+         i["sku"] = p.get("sku", "")
+         i["brand"] = p.get("brand", "")
+         i["imagem_url"] = p.get("imagem_url")
+-    return render_template("pedido_print.html", pedido=pedido)
++    emitente = emitente_repo.get()
++    return render_template("pedido_print.html", pedido=pedido, emitente=emitente)
+diff -ru -x node_modules -x __pycache__ -x '*.pyc' sisCotacao-main/catalog_server/blueprints/portal.py /home/claude/sisCotacao-main/catalog_server/blueprints/portal.py
+--- sisCotacao-main/catalog_server/blueprints/portal.py	2026-08-11 12:02:23.000000000 +0000
++++ /home/claude/sisCotacao-main/catalog_server/blueprints/portal.py	2026-08-11 22:14:31.631126327 +0000
+@@ -40,7 +40,17 @@
+     precos = data.get("precos") or []
+     if not precos:
+         return jsonify({"error": "Nenhuma proposta enviada"}), 400
+-    ok = compras_repo.submit_proposta(token, precos)
++    condicao_pagamento = data.get("condicao_pagamento")
++    condicao_pagamento_dias = data.get("condicao_pagamento_dias")
++    try:
++        condicao_pagamento_dias = (
++            int(condicao_pagamento_dias) if condicao_pagamento_dias not in (None, "") else None
++        )
++    except (TypeError, ValueError):
++        condicao_pagamento_dias = None
++    ok = compras_repo.submit_proposta(
++        token, precos, condicao_pagamento, condicao_pagamento_dias
++    )
+     if not ok:
+         return jsonify({"error": "Link inválido ou expirado"}), 404
+     return jsonify({"ok": True})
+\ No newline at end of file
+Only in /home/claude/sisCotacao-main/catalog_server/migrations/versions: 0035_condicao_pagamento_compras.py
+diff -ru -x node_modules -x __pycache__ -x '*.pyc' sisCotacao-main/catalog_server/repositories/compras.py /home/claude/sisCotacao-main/catalog_server/repositories/compras.py
+--- sisCotacao-main/catalog_server/repositories/compras.py	2026-08-11 12:02:23.000000000 +0000
++++ /home/claude/sisCotacao-main/catalog_server/repositories/compras.py	2026-08-11 23:41:51.443279592 +0000
+@@ -138,8 +138,18 @@
+ 
+     # ------------------------------------------------------------------
+ 
+-    def submit_proposta(self, token: str, precos: list[dict]) -> bool:
+-        """Grava os preços enviados pelo fornecedor e atualiza os status."""
++    def submit_proposta(
++        self,
++        token: str,
++        precos: list[dict],
++        condicao_pagamento: str | None = None,
++        condicao_pagamento_dias: int | None = None,
++    ) -> bool:
++        """Grava os preços enviados pelo fornecedor e atualiza os status.
++
++        `condicao_pagamento` vale para a proposta inteira (não por item):
++        é gravada em `cotacao_fornecedores`, junto do status/data_resposta.
++        """
+         with system_conn() as conn:
+             row = conn.execute(
+                 """SELECT cf.id AS cf_id, cf.fornecedor_id, c.id AS cotacao_id
+@@ -176,8 +186,13 @@
+                 )
+             conn.execute(
+                 "UPDATE cotacao_fornecedores SET status='respondido',"
+-                " data_resposta=datetime('now') WHERE id=?",
+-                (row["cf_id"],),
++                " data_resposta=datetime('now'), condicao_pagamento=?,"
++                " condicao_pagamento_dias=? WHERE id=?",
++                (
++                    (condicao_pagamento or "").strip() or None,
++                    condicao_pagamento_dias,
++                    row["cf_id"],
++                ),
+             )
+             inv = conn.execute(
+                 "SELECT COUNT(*) n FROM cotacao_fornecedores WHERE cotacao_id=?",
+@@ -211,6 +226,7 @@
+             ).fetchall()
+             suppliers = conn.execute(
+                 """SELECT cf.status AS status, cf.data_resposta,
++                          cf.condicao_pagamento, cf.condicao_pagamento_dias,
+                           f.id AS fornecedor_id, f.nome
+                    FROM cotacao_fornecedores cf JOIN fornecedores f ON f.id=cf.fornecedor_id
+                    WHERE cf.cotacao_id=? ORDER BY f.nome""",
+@@ -383,10 +399,14 @@
+         with system_conn() as conn:
+             p = conn.execute(
+                 """SELECT p.*, f.nome AS fornecedor, f.whatsapp, f.email, f.cnpj_cpf,
+-                          f.razao_social, c.numero AS cotacao_numero, c.titulo AS cotacao_titulo
++                          f.razao_social, f.representante,
++                          c.numero AS cotacao_numero, c.titulo AS cotacao_titulo,
++                          cf.condicao_pagamento, cf.condicao_pagamento_dias
+                    FROM pedidos_compra p
+                    JOIN fornecedores f ON f.id=p.fornecedor_id
+                    JOIN cotacoes c ON c.id=p.cotacao_id
++                   LEFT JOIN cotacao_fornecedores cf
++                          ON cf.cotacao_id=p.cotacao_id AND cf.fornecedor_id=p.fornecedor_id
+                    WHERE p.id=?""",
+                 (pedido_id,),
+             ).fetchone()
+diff -ru -x node_modules -x __pycache__ -x '*.pyc' sisCotacao-main/catalog_server/services/compras.py /home/claude/sisCotacao-main/catalog_server/services/compras.py
+--- sisCotacao-main/catalog_server/services/compras.py	2026-08-11 12:02:23.000000000 +0000
++++ /home/claude/sisCotacao-main/catalog_server/services/compras.py	2026-08-11 22:14:24.523151610 +0000
+@@ -22,22 +22,28 @@
+         precos = {}
+         melhor_id = None
+         melhor_preco = None
++        melhor_prazo_id = None
++        melhor_prazo = None
+         for pr in dados["precos"]:
+             if pr["cotacao_item_id"] != it["cotacao_item_id"]:
+                 continue
+             desc = float(pr["desconto"] or 0)
+             preco_liquido = float(pr["preco_unitario"]) * (1 - desc / 100.0)
+             disponivel = bool(pr["disponibilidade_estoque"])
++            prazo = pr["prazo_entrega_dias"]
+             precos[str(pr["fornecedor_id"])] = {
+                 "preco": float(pr["preco_unitario"]),
+                 "desconto": desc,
+                 "preco_liquido": preco_liquido,
+-                "prazo": pr["prazo_entrega_dias"],
++                "prazo": prazo,
+                 "disponivel": disponivel,
+             }
+             if disponivel and preco_liquido > 0 and (melhor_preco is None or preco_liquido < melhor_preco):
+                 melhor_preco = preco_liquido
+                 melhor_id = pr["fornecedor_id"]
++            if disponivel and preco_liquido > 0 and prazo is not None and (melhor_prazo is None or prazo < melhor_prazo):
++                melhor_prazo = prazo
++                melhor_prazo_id = pr["fornecedor_id"]
+         itens.append({
+             "cotacao_item_id": it["cotacao_item_id"],
+             "produto_id": it["produto_id"],
+@@ -50,6 +56,8 @@
+             "precos": precos,
+             "melhor_id": melhor_id,
+             "melhor_preco": melhor_preco,
++            "melhor_prazo_id": melhor_prazo_id,
++            "melhor_prazo": melhor_prazo,
+         })
+ 
+     # Lote centralizado: fornecedor único que precificou TODOS os itens com o menor total.
+diff -ru -x node_modules -x __pycache__ -x '*.pyc' sisCotacao-main/catalog_server/services/quotes.py /home/claude/sisCotacao-main/catalog_server/services/quotes.py
+--- sisCotacao-main/catalog_server/services/quotes.py	2026-08-11 12:02:23.000000000 +0000
++++ /home/claude/sisCotacao-main/catalog_server/services/quotes.py	2026-08-11 23:44:18.498216059 +0000
+@@ -28,6 +28,19 @@
+         return "R$ 0,00"
+ 
+ 
++def fmt_qty(value: float | None) -> str:
++    """Formata quantidade sem casas decimais supérfluas: 50.0 -> '50', 2.5 -> '2,5'."""
++    if value is None:
++        return "0"
++    try:
++        v = float(value)
++    except (TypeError, ValueError):
++        return str(value)
++    if v == int(v):
++        return str(int(v))
++    return f"{v:.2f}".rstrip("0").rstrip(".").replace(".", ",")
++
++
+ def document_context(cotacao: dict, itens: list[dict], fornecedores: list[dict], vencedores: list[dict], precos: list[dict] | None = None) -> dict:
+     vencedor_map = {
+         v["cotacao_item_id"]: v for v in vencedores
+diff -ru -x node_modules -x __pycache__ -x '*.pyc' sisCotacao-main/catalog_server/templates/fornecedor_portal.html /home/claude/sisCotacao-main/catalog_server/templates/fornecedor_portal.html
+--- sisCotacao-main/catalog_server/templates/fornecedor_portal.html	2026-08-11 12:02:23.000000000 +0000
++++ /home/claude/sisCotacao-main/catalog_server/templates/fornecedor_portal.html	2026-08-11 22:15:08.012952725 +0000
+@@ -28,7 +28,8 @@
+   .campos{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+   .campo label{font-size:12px;color:var(--texto2);display:block;margin-bottom:4px;font-weight:600}
+   .campo input{width:100%;padding:9px 10px;border:1px solid var(--borda);border-radius:8px;font-size:15px}
+-  .campo input:focus{outline:2px solid var(--verde-claro);border-color:var(--verde)}
++  .campo select{width:100%;padding:9px 10px;border:1px solid var(--borda);border-radius:8px;font-size:15px;background:#fff}
++  .campo input:focus,.campo select:focus{outline:2px solid var(--verde-claro);border-color:var(--verde)}
+   .estq{display:flex;gap:8px}
+   .estq button{flex:1;padding:9px;border:1px solid var(--borda);border-radius:8px;background:#fff;
+                font-weight:600;cursor:pointer;color:var(--texto)}
+@@ -54,6 +55,25 @@
+     <div class="sub" id="subtitulo"></div>
+     <div class="barra" style="margin-top:12px"><span id="preenchimento"></span></div>
+   </div>
++  <div class="card" id="cardPagamento">
++    <div class="campo">
++      <label>Condição de pagamento da proposta</label>
++      <select id="condPagamento">
++        <option value="">Selecione…</option>
++        <option value="À vista" data-dias="0">À vista</option>
++        <option value="7 dias" data-dias="7">7 dias</option>
++        <option value="15 dias" data-dias="15">15 dias</option>
++        <option value="30 dias" data-dias="30">30 dias</option>
++        <option value="30/60 dias" data-dias="60">30/60 dias</option>
++        <option value="30/60/90 dias" data-dias="90">30/60/90 dias</option>
++        <option value="outro">Outra condição…</option>
++      </select>
++    </div>
++    <div class="campo" id="campoCondOutra" style="display:none;margin-top:8px">
++      <label>Descreva a condição</label>
++      <input type="text" id="condPagamentoOutra" placeholder="ex.: 21 dias fatura">
++    </div>
++  </div>
+   <div id="lista"></div>
+   <div id="rodape" style="display:none">
+     <button class="enviar" id="btnEnviar">Enviar Proposta</button>
+@@ -69,6 +89,24 @@
+ 
+   function fmt(v){ return "R$ " + Number(v||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+ 
++  var selCond = document.getElementById("condPagamento");
++  var campoOutra = document.getElementById("campoCondOutra");
++  var inputOutra = document.getElementById("condPagamentoOutra");
++  selCond.addEventListener("change", function(){
++    campoOutra.style.display = (selCond.value === "outro") ? "block" : "none";
++  });
++
++  function condicaoPagamentoAtual(){
++    if(selCond.value === "outro"){
++      return { texto: (inputOutra.value||"").trim(), dias: null };
++    }
++    var opt = selCond.options[selCond.selectedIndex];
++    return {
++      texto: selCond.value || "",
++      dias: opt && opt.dataset.dias !== undefined ? Number(opt.dataset.dias) : null,
++    };
++  }
++
+   function carregar(){
+     fetch("/api/fornecedor/" + token)
+       .then(function(r){ if(!r.ok) throw new Error("Link inválido"); return r.json(); })
+@@ -138,6 +176,11 @@
+     return faltando;
+   }
+ 
++  function validarPagamento(){
++    var cond = condicaoPagamentoAtual();
++    return !!cond.texto;
++  }
++
+   document.getElementById("btnEnviar").addEventListener("click", function(){
+     var faltando = validar();
+     if(faltando>0){
+@@ -145,6 +188,13 @@
+       av.textContent="Preencha o preço de " + faltando + " item(ns) antes de enviar.";
+       return;
+     }
++    if(!validarPagamento()){
++      var av2=document.getElementById("aviso"); av2.className="aviso erro"; av2.style.display="block";
++      av2.textContent="Informe a condição de pagamento da proposta antes de enviar.";
++      document.getElementById("condPagamento").focus();
++      return;
++    }
++    var cond = condicaoPagamentoAtual();
+     var precos = itens.map(function(it){
+       var r = respostas[it.cotacao_item_id] || {};
+       return {
+@@ -158,7 +208,11 @@
+     var btn=this; btn.disabled=true; btn.textContent="Enviando…";
+     fetch("/api/fornecedor/" + token + "/proposta", {
+       method:"POST", headers:{"Content-Type":"application/json"},
+-      body: JSON.stringify({ precos: precos })
++      body: JSON.stringify({
++        precos: precos,
++        condicao_pagamento: cond.texto,
++        condicao_pagamento_dias: cond.dias
++      })
+     }).then(function(r){ if(!r.ok) return r.json().then(function(j){throw new Error(j.error||"Erro");}); return r.json(); })
+       .then(function(){
+         var av=document.getElementById("aviso"); av.className="aviso"; av.style.display="block";
+diff -ru -x node_modules -x __pycache__ -x '*.pyc' sisCotacao-main/catalog_server/templates/pedido_print.html /home/claude/sisCotacao-main/catalog_server/templates/pedido_print.html
+--- sisCotacao-main/catalog_server/templates/pedido_print.html	2026-08-11 12:02:23.000000000 +0000
++++ /home/claude/sisCotacao-main/catalog_server/templates/pedido_print.html	2026-08-12 11:12:34.934440094 +0000
+@@ -4,55 +4,187 @@
+ <meta charset="UTF-8">
+ <title>Pedido {{ pedido.numero }}</title>
+ <style>
+-  @page{ margin:18mm; }
++  :root{
++    --verde:#2E7D46;
++    --verde-escuro:#1F5C33;
++    --tinta:#1f2430;
++    --tinta-suave:#5b655c;
++    --linha:#d7dace;
++    --fundo-suave:#f6f7f3;
++  }
++  @page{ margin:16mm 14mm; }
+   *{ box-sizing:border-box; }
+-  body{ font-family:'Segoe UI',Arial,sans-serif; color:#1f2430; font-size:13px; margin:0; }
+-  .cab{ border-bottom:3px solid #2E7D46; padding-bottom:12px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:flex-end; }
+-  .cab h1{ margin:0; font-size:24px; color:#2E7D46; }
+-  .cab .num{ font-size:18px; font-weight:700; }
+-  .meta{ display:flex; gap:40px; margin-bottom:18px; }
+-  .meta div{ flex:1; }
+-  .meta small{ display:block; color:#6b7280; text-transform:uppercase; font-size:10px; letter-spacing:.05em; }
+-  table{ width:100%; border-collapse:collapse; }
+-  th,td{ border:1px solid #d7dace; padding:8px 10px; text-align:left; vertical-align:top; }
+-  th{ background:#eef0ea; }
+-  .num-c{ text-align:right; font-variant-numeric:tabular-nums; }
+-  .tot{ margin-top:14px; text-align:right; font-size:17px; font-weight:700; color:#2E7D46; }
+-  .rod{ margin-top:34px; font-size:11px; color:#6b7280; border-top:1px solid #d7dace; padding-top:8px; }
++  body{
++    font-family:'Segoe UI',Arial,sans-serif; color:var(--tinta); font-size:12.5px; margin:0;
++    -webkit-print-color-adjust:exact; print-color-adjust:exact; background:#fff;
++  }
++  .folha{ max-width:900px; margin:0 auto; padding:20px; }
++
++  .toolbar{ display:flex; justify-content:flex-end; gap:8px; margin-bottom:14px; }
++  .toolbar button{ padding:8px 16px; border-radius:6px; border:1px solid var(--linha); background:#fff; font-size:13px; cursor:pointer; }
++  .toolbar button.primary{ background:var(--verde); color:#fff; border-color:var(--verde); font-weight:600; }
++  @media print{ .toolbar{ display:none; } .folha{ padding:0; } }
++
++  .letterhead{ display:flex; justify-content:space-between; align-items:flex-start;
++    border-bottom:3px solid var(--verde); padding-bottom:14px; margin-bottom:18px; }
++  .empresa .nome{ font-size:17px; font-weight:800; color:var(--verde-escuro); }
++  .empresa .linha{ font-size:11px; color:var(--tinta-suave); margin-top:2px; }
++  .doc-info{ text-align:right; }
++  .doc-info .titulo{ font-size:20px; font-weight:800; letter-spacing:.03em; color:var(--tinta); text-transform:uppercase; }
++  .doc-info .numero{ font-size:14px; font-weight:700; color:var(--verde); margin-top:2px; }
++  .doc-info .data{ font-size:11px; color:var(--tinta-suave); margin-top:2px; }
++  .badge{ display:inline-block; margin-top:6px; padding:3px 10px; border-radius:20px; font-size:10.5px;
++    font-weight:700; text-transform:uppercase; letter-spacing:.03em; background:#eceef0; color:#556; }
++  .badge-enviado{ background:#e4ecff; color:#2851b8; }
++  .badge-faturado{ background:#e0f4e7; color:var(--verde-escuro); }
++  .badge-recebido{ background:#e0f4e7; color:var(--verde-escuro); }
++
++  .painel{ display:flex; gap:16px; margin-bottom:18px; }
++  .caixa{ flex:1; background:var(--fundo-suave); border:1px solid var(--linha); border-radius:8px; padding:12px 14px; }
++  .caixa h4{ margin:0 0 8px; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--tinta-suave); }
++  .caixa .linha-info{ font-size:12.5px; margin-bottom:3px; }
++  .caixa .linha-info b{ color:var(--tinta); }
++  .caixa .linha-info span.rot{ color:var(--tinta-suave); display:inline-block; min-width:96px; }
++
++  table{ width:100%; border-collapse:collapse; margin-bottom:4px; }
++  thead th{ background:var(--verde); color:#fff; font-size:10.5px; text-transform:uppercase;
++    letter-spacing:.04em; padding:9px 10px; text-align:left; }
++  thead th.num{ text-align:right; }
++  tbody td{ border-bottom:1px solid var(--linha); padding:9px 10px; vertical-align:top; }
++  tbody tr:nth-child(even){ background:var(--fundo-suave); }
++  td.num{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
++  td.sku{ font-family:Consolas,monospace; font-size:11px; color:var(--tinta-suave); margin-top:2px; }
++
++  .totais{ display:flex; justify-content:flex-end; margin-top:10px; }
++  .totais table{ width:280px; }
++  .totais td{ border:none; padding:4px 6px; }
++  .totais .rot{ color:var(--tinta-suave); }
++  .totais .total-final td{ border-top:2px solid var(--verde); font-size:16px; font-weight:800;
++    color:var(--verde-escuro); padding-top:8px; }
++
++  .obs{ margin-top:18px; padding:10px 14px; background:var(--fundo-suave); border-left:3px solid var(--verde);
++    border-radius:4px; font-size:12px; }
++  .obs h4{ margin:0 0 4px; font-size:10.5px; text-transform:uppercase; color:var(--tinta-suave); }
++
++  .assinaturas{ display:flex; gap:40px; margin-top:50px; }
++  .assinatura{ flex:1; text-align:center; }
++  .assinatura .linha-ass{ border-top:1px solid var(--tinta); margin-bottom:6px; padding-top:34px; }
++  .assinatura small{ color:var(--tinta-suave); }
++
++  .rodape{ margin-top:30px; padding-top:10px; border-top:1px solid var(--linha); font-size:10.5px;
++    color:var(--tinta-suave); display:flex; justify-content:space-between; }
+ </style>
+ </head>
+ <body>
+-  <div class="cab">
+-    <div><h1>PEDIDO DE COMPRA</h1><div>Referente à cotação {{ pedido.cotacao_numero }}</div></div>
+-    <div class="num">Nº {{ pedido.numero }}</div>
++  <div class="folha">
++    <div class="toolbar">
++      <button onclick="window.close()">Fechar</button>
++      <button class="primary" onclick="window.print()">Imprimir / Salvar PDF</button>
++    </div>
++
++    <div class="letterhead">
++      <div class="empresa">
++        {% if emitente %}
++          <div class="nome">{{ emitente.nome_fantasia or emitente.razao_social }}</div>
++          {% if emitente.razao_social and emitente.nome_fantasia and emitente.razao_social != emitente.nome_fantasia %}
++            <div class="linha">{{ emitente.razao_social }}</div>
++          {% endif %}
++          {% if emitente.cnpj %}<div class="linha">CNPJ {{ emitente.cnpj }}</div>{% endif %}
++          {% if emitente.logradouro %}
++            <div class="linha">{{ emitente.logradouro }}{% if emitente.numero %}, {{ emitente.numero }}{% endif %}{% if emitente.bairro %} — {{ emitente.bairro }}{% endif %}</div>
++          {% endif %}
++          {% if emitente.municipio %}
++            <div class="linha">{{ emitente.municipio }}{% if emitente.uf %}/{{ emitente.uf }}{% endif %}{% if emitente.cep %} · CEP {{ emitente.cep }}{% endif %}</div>
++          {% endif %}
++        {% else %}
++          <div class="nome">Pedido de Compra</div>
++        {% endif %}
++      </div>
++      <div class="doc-info">
++        <div class="titulo">Pedido de Compra</div>
++        <div class="numero">Nº {{ pedido.numero }}</div>
++        <div class="data">Emitido em {{ pedido.data_geracao or pedido.criado_em }}</div>
++        <span class="badge badge-{{ pedido.status }}">
++          {% if pedido.status == 'faturado' %}Faturado
++          {% elif pedido.status == 'recebido' %}Recebido
++          {% else %}Enviado{% endif %}
++        </span>
++      </div>
++    </div>
++
++    <div class="painel">
++      <div class="caixa">
++        <h4>Fornecedor</h4>
++        <div class="linha-info"><b>{{ pedido.fornecedor }}</b></div>
++        {% if pedido.razao_social and pedido.razao_social != pedido.fornecedor %}
++          <div class="linha-info">{{ pedido.razao_social }}</div>
++        {% endif %}
++        {% if pedido.cnpj_cpf %}<div class="linha-info"><span class="rot">CNPJ/CPF</span>{{ pedido.cnpj_cpf }}</div>{% endif %}
++        {% if pedido.representante %}<div class="linha-info"><span class="rot">Representante</span>{{ pedido.representante }}</div>{% endif %}
++        {% if pedido.whatsapp %}<div class="linha-info"><span class="rot">WhatsApp</span>{{ pedido.whatsapp }}</div>{% endif %}
++        {% if pedido.email %}<div class="linha-info"><span class="rot">E-mail</span>{{ pedido.email }}</div>{% endif %}
++      </div>
++      <div class="caixa">
++        <h4>Condições</h4>
++        <div class="linha-info"><span class="rot">Cotação ref.</span>{{ pedido.cotacao_numero }}{% if pedido.cotacao_titulo %} — {{ pedido.cotacao_titulo }}{% endif %}</div>
++        <div class="linha-info"><span class="rot">Pagamento</span>{{ pedido.condicao_pagamento or 'A combinar' }}</div>
++        <div class="linha-info"><span class="rot">Itens</span>{{ pedido.itens|length }}</div>
++      </div>
++    </div>
++
++    <table>
++      <thead>
++        <tr>
++          <th style="width:28px">#</th>
++          <th>Produto</th>
++          <th class="num" style="width:60px">Qtd</th>
++          <th class="num" style="width:100px">Preço unit.</th>
++          <th class="num" style="width:110px">Subtotal</th>
++        </tr>
++      </thead>
++      <tbody>
++        {% for it in pedido.itens %}
++        <tr>
++          <td>{{ loop.index }}</td>
++          <td>
++            <b>{{ it.name }}</b>
++            {% if it.sku or it.brand %}<div class="sku">{{ it.sku }}{% if it.brand %} · {{ it.brand }}{% endif %}</div>{% endif %}
++          </td>
++          <td class="num">{{ it.quantidade|qty }}</td>
++          <td class="num">{{ it.preco_unitario|brl }}</td>
++          <td class="num">{{ (it.preco_unitario * it.quantidade)|brl }}</td>
++        </tr>
++        {% endfor %}
++      </tbody>
++    </table>
++
++    <div class="totais">
++      <table>
++        <tr><td class="rot">Subtotal</td><td class="num">{{ pedido.total|brl }}</td></tr>
++        <tr class="total-final"><td>Total</td><td class="num">{{ pedido.total|brl }}</td></tr>
++      </table>
++    </div>
++
++    {% if pedido.observacoes %}
++    <div class="obs">
++      <h4>Observações</h4>
++      {{ pedido.observacoes }}
++    </div>
++    {% endif %}
++
++    <div class="assinaturas">
++      <div class="assinatura"><div class="linha-ass"></div><small>Comprador — data</small></div>
++      <div class="assinatura"><div class="linha-ass"></div><small>Fornecedor — de acordo</small></div>
++    </div>
++
++    <div class="rodape">
++      <span>Documento gerado automaticamente pelo sistema de cotações.</span>
++      <span>{{ pedido.numero }} · {{ pedido.itens|length }} item(ns)</span>
++    </div>
+   </div>
+-  <div class="meta">
+-    <div><small>Fornecedor</small>{{ pedido.fornecedor }}<br>
+-      {% if pedido.cnpj_cpf %}CNPJ/CPF: {{ pedido.cnpj_cpf }}{% endif %}
+-      {% if pedido.razao_social %} · {{ pedido.razao_social }}{% endif %}</div>
+-    <div><small>Status</small>{{ 'Faturado' if pedido.status == 'faturado' else 'Enviado' }}</div>
+-    <div><small>Data de geração</small>{{ pedido.data_geracao or pedido.criado_em }}</div>
+-  </div>
+-  <table>
+-    <thead>
+-      <tr><th>#</th><th>Produto</th><th>SKU</th><th>Marca</th><th>Qtd</th><th>Preço unit.</th><th class="num-c">Total</th></tr>
+-    </thead>
+-    <tbody>
+-      {% for it in pedido.itens %}
+-      <tr>
+-        <td>{{ loop.index }}</td>
+-        <td>{{ it.name }}</td>
+-        <td>{{ it.sku }}</td>
+-        <td>{{ it.brand }}</td>
+-        <td>{{ it.quantidade }}</td>
+-        <td>R$ {{ "%.2f"|format(it.preco_unitario) }}</td>
+-        <td class="num-c">R$ {{ "%.2f"|format(it.preco_unitario * it.quantidade) }}</td>
+-      </tr>
+-      {% endfor %}
+-    </tbody>
+-  </table>
+-  <div class="tot">Total: R$ {{ "%.2f"|format(pedido.total) }}</div>
+-  <div class="rod">Documento gerado automaticamente. Aguardamos o faturamento e entrega. Obrigado!</div>
+-  <script>window.onload=function(){window.print();};</script>
++
++  <script>
++    window.onload = function(){ setTimeout(function(){ window.print(); }, 200); };
++  </script>
+ </body>
+-</html>
+\ No newline at end of file
++</html>
+diff -ru -x node_modules -x __pycache__ -x '*.pyc' sisCotacao-main/frontend/src/api/client.ts /home/claude/sisCotacao-main/frontend/src/api/client.ts
+--- sisCotacao-main/frontend/src/api/client.ts	2026-08-11 12:02:23.000000000 +0000
++++ /home/claude/sisCotacao-main/frontend/src/api/client.ts	2026-08-11 22:15:21.695818572 +0000
+@@ -260,6 +260,9 @@
+   nome: string;
+   whatsapp: string | null;
+   email: string | null;
++  data_resposta?: string | null;
++  condicao_pagamento?: string | null;
++  condicao_pagamento_dias?: number | null;
+ }
+ 
+ export interface Preco {
+@@ -365,6 +368,8 @@
+   precos: Record<string, MatrizPreco>;
+   melhor_id: number | null;
+   melhor_preco: number | null;
++  melhor_prazo_id: number | null;
++  melhor_prazo: number | null;
+ }
+ 
+ export interface MatrizCentral {
+diff -ru -x node_modules -x __pycache__ -x '*.pyc' sisCotacao-main/frontend/src/pages/compras.ts /home/claude/sisCotacao-main/frontend/src/pages/compras.ts
+--- sisCotacao-main/frontend/src/pages/compras.ts	2026-08-11 12:02:23.000000000 +0000
++++ /home/claude/sisCotacao-main/frontend/src/pages/compras.ts	2026-08-11 23:28:57.010320526 +0000
+@@ -16,6 +16,91 @@
+ 
+ const KEY_DRAFT = "compras_draft";
+ const KEY_COT = "compras_cotacao";
++const KEY_PESOS = "compras_pesos_recomendado";
++
++interface Pesos {
++  preco: number;
++  prazo: number;
++  pagamento: number;
++}
++
++const PESOS_PADRAO: Pesos = { preco: 50, prazo: 30, pagamento: 20 };
++
++function carregarPesos(): Pesos {
++  try {
++    const raw = sessionStorage.getItem(KEY_PESOS);
++    if (!raw) return { ...PESOS_PADRAO };
++    const p = JSON.parse(raw) as Partial<Pesos>;
++    return {
++      preco: p.preco ?? PESOS_PADRAO.preco,
++      prazo: p.prazo ?? PESOS_PADRAO.prazo,
++      pagamento: p.pagamento ?? PESOS_PADRAO.pagamento,
++    };
++  } catch {
++    return { ...PESOS_PADRAO };
++  }
++}
++
++function salvarPesos(p: Pesos): void {
++  sessionStorage.setItem(KEY_PESOS, JSON.stringify(p));
++}
++
++/**
++ * Para cada item, calcula qual fornecedor tem a melhor pontuação combinando
++ * preço líquido, prazo de entrega e condição de pagamento do fornecedor,
++ * conforme os pesos informados pelo comprador (0-100 cada, normalizados
++ * internamente). Quanto menor o preço/prazo e maior o prazo de pagamento
++ * (mais dias para pagar), melhor a pontuação.
++ */
++function calcularRecomendados(
++  itens: MatrizItem[],
++  fornecedores: CotacaoFornecedor[],
++  pesos: Pesos
++): Map<number, number> {
++  const diasPagto = new Map<number, number | null>();
++  fornecedores.forEach((f) => diasPagto.set(f.fornecedor_id, f.condicao_pagamento_dias ?? null));
++
++  const somaPesos = Math.max(1, pesos.preco + pesos.prazo + pesos.pagamento);
++  const wPreco = pesos.preco / somaPesos;
++  const wPrazo = pesos.prazo / somaPesos;
++  const wPagto = pesos.pagamento / somaPesos;
++
++  const resultado = new Map<number, number>();
++
++  for (const item of itens) {
++    const candidatos = Object.entries(item.precos).filter(
++      ([, pr]) => pr.disponivel && pr.preco_liquido > 0
++    );
++    if (candidatos.length === 0) continue;
++
++    const maxPreco = Math.max(...candidatos.map(([, pr]) => pr.preco_liquido));
++    const prazosValidos = candidatos.map(([, pr]) => pr.prazo).filter((p): p is number => p != null);
++    const maxPrazo = prazosValidos.length ? Math.max(...prazosValidos) : 0;
++    const diasValidos = candidatos
++      .map(([fid]) => diasPagto.get(Number(fid)))
++      .filter((d): d is number => d != null);
++    const maxDias = diasValidos.length ? Math.max(...diasValidos) : 0;
++
++    let melhorFid: number | null = null;
++    let melhorScore = -Infinity;
++
++    for (const [fid, pr] of candidatos) {
++      const normPreco = maxPreco > 0 ? pr.preco_liquido / maxPreco : 0;
++      const normPrazo = maxPrazo > 0 ? (pr.prazo ?? maxPrazo) / maxPrazo : 0;
++      const dias = diasPagto.get(Number(fid)) ?? 0;
++      const normDias = maxDias > 0 ? dias / maxDias : 0;
++
++      const score = wPreco * (1 - normPreco) + wPrazo * (1 - normPrazo) + wPagto * normDias;
++      if (score > melhorScore) {
++        melhorScore = score;
++        melhorFid = Number(fid);
++      }
++    }
++    if (melhorFid != null) resultado.set(item.cotacao_item_id, melhorFid);
++  }
++
++  return resultado;
++}
+ 
+ // ---------------------------------------------------------------- helpers
+ 
+@@ -619,26 +704,34 @@
+   const fornecedores = m.fornecedores;
+   const central = m.centralizado;
+   const vencedorCentral = central ? central.fornecedor_id : null;
++  const pesos = carregarPesos();
++  const recomendados =
++    m.logica === "recomendado" ? calcularRecomendados(m.itens, fornecedores, pesos) : new Map<number, number>();
++
+   body.innerHTML = `
+     <div class="cpr-panel">
+       <div class="cpr-matriz-head">
+         <h3 class="cpr-titulo">Comparar propostas ${esc(m.cotacao.titulo ? "— “" + m.cotacao.titulo + "”" : "")}</h3>
+         <div class="cpr-logica">
+-          <button class="btn${m.logica === "fracionado" ? " btn--accent" : ""}" data-logica="fracionado">Melhor preço por item</button>
+-          <button class="btn${m.logica === "centralizado" ? " btn--accent" : ""}" data-logica="centralizado">Melhor preço por lote</button>
++          <button class="btn${m.logica === "fracionado" ? " btn--accent" : ""}" data-logica="fracionado">💰 Melhor preço por item</button>
++          <button class="btn${m.logica === "centralizado" ? " btn--accent" : ""}" data-logica="centralizado">📦 Melhor preço por lote</button>
++          <button class="btn${m.logica === "recomendado" ? " btn--accent" : ""}" data-logica="recomendado">⭐ Recomendado</button>
+         </div>
+       </div>
+       ${central ? `<p class="cpr-central">Opção de lote: <b>${esc(central.nome)}</b> — total ${fmtMoney(central.total)}</p>` : `<p class="cpr-central cpr-central-none">Nenhum fornecedor precificou todos os itens para a opção de lote.</p>`}
++      ${m.logica === "recomendado" ? blocoPesos(pesos) : ""}
+       <div class="cpr-ttrowe">
+         <div class="cpr-tabwrap">
+           <table class="cpr-matriz ${m.logica}">
+             <thead><tr><th class="cpr-col-prod">Produto</th>
+-              ${fornecedores.map((f) => `<th>${esc(f.nome)}${f.status === "respondido" ? "" : '<span class="cpr-noresp">—</span>'}</th>`).join("")}
++              ${fornecedores.map((f) => `<th>${esc(f.nome)}${f.status === "respondido" ? "" : '<span class="cpr-noresp">—</span>'}
++                ${f.condicao_pagamento ? `<span class="cpr-cond-pgto" title="Condição de pagamento">${esc(f.condicao_pagamento)}</span>` : ""}</th>`).join("")}
+             </tr></thead>
+-            <tbody>${m.itens.map((it) => linhaMatriz(it, fornecedores, m.logica, vencedorCentral)).join("")}</tbody>
++            <tbody>${m.itens.map((it) => linhaMatriz(it, fornecedores, m.logica, vencedorCentral, recomendados)).join("")}</tbody>
+           </table>
+         </div>
+       </div>
++      <p class="cpr-legenda">💰 melhor preço &nbsp;·&nbsp; 🚚 menor prazo de entrega ${m.logica === "recomendado" ? "&nbsp;·&nbsp; ⭐ recomendado (preço + prazo + pagamento)" : ""}</p>
+       <div class="cpr-lista-foot" style="justify-content:space-between">
+         <div style="display:flex;gap:8px;">
+           <button class="btn" id="cprRecarregar2">↻ Atualizar respostas</button>
+@@ -653,6 +746,17 @@
+       desenharMatriz(body, m);
+     })
+   );
++  if (m.logica === "recomendado") {
++    body.querySelectorAll<HTMLInputElement>("[data-peso]").forEach((slider) => {
++      slider.addEventListener("input", () => {
++        const atual = carregarPesos();
++        const chave = slider.dataset.peso as keyof Pesos;
++        atual[chave] = Number(slider.value);
++        salvarPesos(atual);
++        desenharMatriz(body, m);
++      });
++    });
++  }
+   body.querySelector("#cprRecarregar2")!.addEventListener("click", () => {
+     void etapaComparando(body);
+   });
+@@ -676,7 +780,11 @@
+       btn.innerHTML = '<span class="spinner"></span> Gerando…';
+     }
+     try {
+-      await api.gerarPedidos(S.cotacaoId!, m.logica);
++      // O backend só entende fracionado/centralizado; "recomendado" gera
++      // pedidos usando a escolha calculada no cliente (fracionado como base
++      // de agrupamento, já que cada item pode ir a um fornecedor diferente).
++      const logicaEnvio = m.logica === "recomendado" ? "fracionado" : m.logica;
++      await api.gerarPedidos(S.cotacaoId!, logicaEnvio);
+       S.etapa = 4;
+       desenhar(appScope(body));
+     } catch (e) {
+@@ -690,23 +798,56 @@
+   });
+ }
+ 
++function blocoPesos(pesos: Pesos): string {
++  return `
++    <div class="cpr-pesos">
++      <span class="cpr-pesos-rot">Priorizar:</span>
++      <label class="cpr-peso"><span>💰 Preço</span>
++        <input type="range" min="0" max="100" step="5" value="${pesos.preco}" data-peso="preco">
++        <b>${pesos.preco}%</b>
++      </label>
++      <label class="cpr-peso"><span>🚚 Prazo</span>
++        <input type="range" min="0" max="100" step="5" value="${pesos.prazo}" data-peso="prazo">
++        <b>${pesos.prazo}%</b>
++      </label>
++      <label class="cpr-peso"><span>💳 Pagamento</span>
++        <input type="range" min="0" max="100" step="5" value="${pesos.pagamento}" data-peso="pagamento">
++        <b>${pesos.pagamento}%</b>
++      </label>
++    </div>`;
++}
++
+ function linhaMatriz(
+   item: MatrizItem,
+   fornecedores: CotacaoFornecedor[],
+   logica: string,
+-  vencedorCentral: number | null
++  vencedorCentral: number | null,
++  recomendados: Map<number, number>
+ ): string {
++  const recomendadoId = recomendados.get(item.cotacao_item_id) ?? null;
+   const cells = fornecedores
+     .map((f) => {
+       const pr = item.precos[String(f.fornecedor_id)];
+       if (!pr) return `<td><span class="cpr-x">—</span></td>`;
+-      const venceu =
++
++      const ehVencedorPrincipal =
+         logica === "centralizado"
+           ? vencedorCentral === f.fornecedor_id && pr.disponivel && pr.preco_liquido > 0
+-          : item.melhor_id === f.fornecedor_id;
+-      const cls = venceu ? " cpr-melhor" : "";
++          : logica === "recomendado"
++            ? recomendadoId === f.fornecedor_id
++            : item.melhor_id === f.fornecedor_id;
++
++      const ehMelhorPreco = item.melhor_id === f.fornecedor_id;
++      const ehMenorPrazo = item.melhor_prazo_id === f.fornecedor_id && item.melhor_prazo_id !== item.melhor_id;
++
++      const badges =
++        (logica === "recomendado" && ehVencedorPrincipal ? '<span class="cpr-mini-badge" title="Recomendado">⭐</span>' : "") +
++        (logica !== "centralizado" && ehMelhorPreco ? '<span class="cpr-mini-badge" title="Melhor preço">💰</span>' : "") +
++        (ehMenorPrazo ? '<span class="cpr-mini-badge" title="Menor prazo de entrega">🚚</span>' : "");
++
++      const cls = ehVencedorPrincipal ? " cpr-melhor" : "";
+       return `<td class="cpr-prece${cls}">${pr.disponivel ? "" : "<span class='cpr-esgot'>s/ estoque</span>"}
+-        <b>${fmtMoney(pr.preco_liquido)}</b>
++        <b>${fmtMoney(pr.preco_liquido)}</b> ${badges}
+         <small>${pr.desconto ? "desconto " + pr.desconto + "%" : ""}${pr.prazo ? " · " + pr.prazo + "d" : ""}</small></td>`;
+     })
+     .join("");
+@@ -719,7 +860,7 @@
+   body.innerHTML = `<div class="cpr-panel">${barra("Gerando pedidos…")}</div>`;
+   try {
+     const pedidos = await api.listarPedidos();
+-    const meus = pedidos.filter(() => S.cotacaoId == null || true);
++    const meus = pedidos.filter((p) => p.cotacao_id === S.cotacaoId);
+     body.innerHTML = `
+       <div class="cpr-panel">
+         <h3 class="cpr-titulo">Pedidos gerados — envie para os fornecedores</h3>
+diff -ru -x node_modules -x __pycache__ -x '*.pyc' sisCotacao-main/frontend/src/styles/base.css /home/claude/sisCotacao-main/frontend/src/styles/base.css
+--- sisCotacao-main/frontend/src/styles/base.css	2026-08-11 12:02:23.000000000 +0000
++++ /home/claude/sisCotacao-main/frontend/src/styles/base.css	2026-08-11 22:16:56.677692579 +0000
+@@ -907,6 +907,16 @@
+ .cpr-x{ color:var(--ink-faint); }
+ .cpr-central{ background:var(--green-soft); color:var(--green); padding:10px 12px; border-radius:var(--radius); font-size:13px; margin-bottom:12px; }
+ .cpr-central-none{ background:var(--bg-tray); color:var(--ink-soft); }
++.cpr-cond-pgto{ display:block; font-family:var(--font-mono); font-size:10px; font-weight:600; color:var(--ink-soft);
++  background:var(--bg-tray); border-radius:999px; padding:1px 8px; margin-top:4px; }
++.cpr-mini-badge{ font-size:12px; margin-left:2px; }
++.cpr-legenda{ color:var(--ink-faint); font-size:11.5px; margin:8px 2px 12px; }
++.cpr-pesos{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; background:var(--bg-tray);
++  border:1px solid var(--line); border-radius:var(--radius); padding:10px 14px; margin-bottom:12px; }
++.cpr-pesos-rot{ font-size:12.5px; font-weight:700; color:var(--ink-soft); }
++.cpr-peso{ display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--ink-soft); }
++.cpr-peso input[type=range]{ width:100px; }
++.cpr-peso b{ font-family:var(--font-mono); min-width:32px; text-align:right; color:var(--ink); }
+ .cpr-pedido{ border:1px solid var(--line); border-radius:var(--radius); padding:12px; margin-bottom:10px; }
+ .cpr-pedido-top{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px; }
+ .cpr-pedido-top .cpr-lk-status{ float:none; }
+diff -ru -x node_modules -x __pycache__ -x '*.pyc' sisCotacao-main/frontend/vite.config.ts /home/claude/sisCotacao-main/frontend/vite.config.ts
+--- sisCotacao-main/frontend/vite.config.ts	2026-08-11 12:02:23.000000000 +0000
++++ /home/claude/sisCotacao-main/frontend/vite.config.ts	2026-08-11 23:29:11.438512008 +0000
+@@ -30,6 +30,21 @@
+         target: `http://${BACKEND_HOST}:${PORT_BACKEND}`,
+         changeOrigin: true,
+       },
++      // Páginas renderizadas pelo Flask (fora da SPA): impressão de
++      // pedidos de compra e de orçamentos. Sem isso, em dev (porta 5173)
++      // o clique em "PDF"/"Imprimir" cai na SPA em vez do backend.
++      "/compras/pedidos": {
++        target: `http://${BACKEND_HOST}:${PORT_BACKEND}`,
++        changeOrigin: true,
++      },
++      "/orcamentos": {
++        target: `http://${BACKEND_HOST}:${PORT_BACKEND}`,
++        changeOrigin: true,
++      },
++      "/fornecedor": {
++        target: `http://${BACKEND_HOST}:${PORT_BACKEND}`,
++        changeOrigin: true,
++      },
+     },
+   },
+ });

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitor da impressora térmica</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1e1e1e;
+    color: #fff;
+    font-family: "Segoe UI", Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+  }
+  header {
+    width: 100%;
+    max-width: 520px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  header h1 { font-size: 15px; font-weight: 600; }
+  #status {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #333;
+    color: #aaa;
+  }
+  #status.novo { background: #1f6f2f; color: #fff; }
+  #area {
+    width: 100%;
+    max-width: 520px;
+    background: #fff;
+    color: #000;
+    border-radius: 8px;
+    padding: 20px;
+    overflow: auto;
+    max-height: calc(100vh - 90px);
+  }
+  #area.vazio {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    color: #888;
+    font-size: 16px;
+  }
+  #area .esc-receipt { width: 80mm; margin: 0 auto; }
+  #vazio { text-align: center; }
+  #vazio .pulse {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #4caf50;
+    margin-right: 8px;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: .3; } 50% { opacity: 1; } }
+</style>
+</head>
+<body>
+  <header>
+    <h1>🖨️ Monitor da impressora térmica</h1>
+    <span id="status">aguardando…</span>
+  </header>
+  <div id="area" class="vazio"><div id="vazio"><span class="pulse"></span>Aguardando impressão…</div></div>
+
+  <script>
+  (function () {
+    var INTERVALO = 2000;
+    var ultimoExibido = null;
+    var statusEl = document.getElementById("status");
+    var areaEl = document.getElementById("area");
+
+    function setStatus(texto, novo) {
+      statusEl.textContent = texto;
+      statusEl.className = novo ? "novo" : "";
+    }
+
+    function mostrarVazio() {
+      areaEl.classList.add("vazio");
+      areaEl.innerHTML = '<div id="vazio"><span class="pulse"></span>Aguardando impressão…</div>';
+    }
+
+    async function poll() {
+      try {
+        var lista = await (await fetch("/recus", { cache: "no-store" })).text();
+        var div = document.createElement("div");
+        div.innerHTML = lista;
+        var links = div.querySelectorAll("#receiptlist li a");
+        if (!links.length) { ultimoExibido = null; mostrarVazio(); setStatus("nenhum recibo", false); return; }
+
+        // o primeiro <li> é o recibo mais recente (lista em ordem inversa)
+        var href = links[0].getAttribute("href");
+        var id = href.replace(/^\/recus\//, "");
+
+        if (id === ultimoExibido) { setStatus("recibo " + id, false); return; }
+
+        var html = await (await fetch("/recus/" + id, { cache: "no-store" })).text();
+        var r = document.createElement("div");
+        r.innerHTML = html;
+        var recibo = r.querySelector(".esc-receipt");
+        if (!recibo) { setStatus("recibo " + id, false); return; }
+
+        areaEl.classList.remove("vazio");
+        areaEl.innerHTML = recibo.outerHTML;
+        ultimoExibido = id;
+        setStatus("recibo " + id, true);
+      } catch (e) {
+        setStatus("offline", false);
+      }
+    }
+
+    poll();
+    setInterval(poll, INTERVALO);
+  })();
+  </script>
+</body>
+</html>

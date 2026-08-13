@@ -279,3 +279,43 @@ class RevisaoRepository:
 
 
 revisao_repo = RevisaoRepository()
+
+
+class PrecoHistoricoRepository:
+
+    def list(
+        self,
+        tabela_id: int | None = None,
+        variante_id: int | None = None,
+        termo: str | None = None,
+        limit: int = 200,
+    ) -> list[dict]:
+        sql = (
+            "SELECT h.*, v.sku, p.nome AS produto_nome, p.marca, t.nome AS tabela_nome,"
+            " u.nome AS usuario_nome"
+            " FROM preco_historico h"
+            " JOIN variantes v ON v.id = h.variante_id"
+            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " JOIN tabelas_preco t ON t.id = h.tabela_id"
+            " LEFT JOIN usuarios u ON u.id = h.usuario_id"
+        )
+        conds, args = [], []
+        if tabela_id:
+            conds.append("h.tabela_id=?")
+            args.append(tabela_id)
+        if variante_id:
+            conds.append("h.variante_id=?")
+            args.append(variante_id)
+        if termo:
+            like = f"%{termo}%"
+            conds.append("(p.nome LIKE ? OR v.sku LIKE ? OR t.nome LIKE ?)")
+            args += [like, like, like]
+        if conds:
+            sql += " WHERE " + " AND ".join(conds)
+        sql += " ORDER BY h.id DESC LIMIT ?"
+        args.append(limit)
+        with system_conn() as conn:
+            return [dict(r) for r in conn.execute(sql, args).fetchall()]
+
+
+preco_historico_repo = PrecoHistoricoRepository()

@@ -12,3 +12,23 @@
 .fin-saldo-label{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); }
 .fin-saldo-valor{ font-size:24px; font-weight:700; color:var(--accent-ink); font-variant-numeric:tabular-nums; }
 .fin-acoes-caixa{ display:flex; gap:8px; flex-wrap:wrap; }
+
+/* Simulador de preço */
+.sim-sug{ display:flex; flex-direction:column; gap:6px; margin-top:8px; max-width:560px; }
+.sim-sug-item{ display:flex; justify-content:space-between; gap:12px; text-align:left; padding:9px 12px; border:1px solid var(--line); border-radius:var(--radius); background:var(--bg-panel); cursor:pointer; font-size:13px; }
+.sim-sug-item:hover{ border-color:var(--accent); background:var(--accent-soft); }
+.sim-sel{ margin:10px 0 0; font-size:13px; color:var(--ink-soft); }
+.sim-card{ margin-top:14px; padding:16px; border:1px solid var(--line); border-radius:var(--radius-lg); background:var(--bg-panel); max-width:640px; }
+.sim-destaque td{ font-size:15px; }
+.sim-obs{ font-size:12.5px; color:#b3541e; margin:8px 0 0; }
+.sim-fiscal{ margin-top:12px; }
+.sim-fiscal summary{ cursor:pointer; font-size:12.5px; color:var(--ink-soft); font-weight:600; }
+.sim-fiscal-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:8px 16px; margin-top:10px; font-size:12.5px; }
+.sim-fiscal-grid div span{ display:block; color:var(--ink-faint); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+.sim-fiscal-grid div b{ color:var(--ink); }
+.sim-probs{ list-style:none; margin:6px 0 0; padding:0; display:flex; flex-direction:column; gap:4px; font-size:12.5px; }
+.sim-prob-err{ color:#a33; }
+.sim-prob-warn{ color:#b3541e; }
+.sim-prob-info{ color:var(--ink-soft); }
+.sim-dec{ list-style:none; margin:8px 0 0; padding:0; display:flex; flex-direction:column; gap:5px; font-size:12.5px; }
+.sim-dec li b{ color:var(--ink); }

@@ -2,6 +2,7 @@ import "../styles/pdv.css";
 import { api, type Cliente, type OrcamentoItemPayload, type ProdutoResumo } from "../api/client";
 import { escapeHtml, fmtDate, fmtMoney } from "../ui/format";
 import { closeModal, confirmDialog, openModal, toast } from "../ui/dom";
+import { usuarioCorrente } from "./login";
 
 interface LinhaPdv {
   produto_id: number | null;
@@ -9,9 +10,12 @@ interface LinhaPdv {
   nome: string;
   marca: string;
   especificacao: string;
+  unidade: string;
+  ncm: string;
   quantidade: number;
   preco_unitario: number;
   desconto_percentual: number;
+  desconto_modo: "pct" | "valor";
   subtotal: number;
 }
 
@@ -27,10 +31,23 @@ let clientesSug: Cliente[] = [];
 let focoCliente = -1;
 
 let vCliente = "";
+let vClienteId: number | null = null;
 let vContato = "";
 let vValidade = String(VALIDADE_PADRAO);
 let vObs = "";
 let vDesconto = "";
+let vDescModo: "pct" | "valor" = "valor";
+let editandoId: number | null = null;
+let editandoNumero = "";
+
+// Quando o PDV é montado dentro do shell legacy (PdvPage), o cabeçalho
+// próprio (.page-head) é omitido — o título/sidebar vêm do chrome externo.
+let ocultarCabecalho = false;
+export function setOcultarCabecalho(v: boolean): void {
+  ocultarCabecalho = v;
+}
+
+const STATUS_EDITAVEIS = new Set(["rascunho", "ativo", "em_analise", "liberado"]);
 
 export async function render($app: HTMLElement): Promise<void> {
   currentApp = $app;
@@ -73,7 +90,7 @@ function sugestoesHtml(): string {
         <span class="pdv-sug-corpo">
           <span class="pdv-sug-nome">${qtdDigitada > 1 ? `<span class="pdv-badge-qtd">${qtdDigitada}x</span> ` : ""}${escapeHtml(p.name)}</span>
           ${p.spec ? `<span class="pdv-sug-spec">${escapeHtml(p.spec)}</span>` : ""}
-          <span class="pdv-sug-meta">${escapeHtml(p.sku || "")}${p.brand ? " · " + escapeHtml(p.brand) : ""}</span>
+          <span class="pdv-sug-meta">${escapeHtml(p.sku || "")}${p.brand ? " · " + escapeHtml(p.brand) : ""}${p.unidade_venda ? " · " + escapeHtml(p.unidade_venda) : ""}${p.embalagem_qtd ? " · " + p.embalagem_qtd + "/cx" : ""}${p.ncm ? " · NCM " + escapeHtml(p.ncm) : ""}</span>
         </span>
         <span class="pdv-sug-preco">${fmtMoney(p.price)}</span>
       </button>`
@@ -81,17 +98,41 @@ function sugestoesHtml(): string {
     .join("");
 }
 
+function fmtNum(n: number): string {
+  return String(Math.round(n * 100) / 100).replace(".", ",");
+}
+
+function fmtNum2(n: number): string {
+  return n.toFixed(2).replace(".", ",");
+}
+
+function fmtDescInput(l: LinhaPdv, v: number): string {
+  return l.desconto_modo === "valor" ? fmtNum2(v) : fmtNum(v);
+}
+
+function descExibicao(l: LinhaPdv): number {
+  if (l.desconto_modo === "pct") return l.desconto_percentual;
+  return (l.preco_unitario * l.quantidade) * (l.desconto_percentual / 100);
+}
+
 function renderLinha(l: LinhaPdv, i: number): string {
   return `
     <tr>
+      <td class="pdv-idx">${i + 1}</td>
       <td class="pdv-prod">
-        <div>
+        <div class="pdv-prod-in">
           <div class="pdv-nome">${escapeHtml(l.nome)}</div>
-          <div class="pdv-meta">${escapeHtml([l.sku, l.marca, l.especificacao].filter(Boolean).join(" · "))}</div>
+          <div class="pdv-meta">${escapeHtml([l.sku, l.marca, l.especificacao, l.unidade ? "un. " + l.unidade : "", l.ncm ? "NCM " + l.ncm : ""].filter(Boolean).join(" · "))}</div>
         </div>
       </td>
-      <td><input class="pdv-qtd" type="number" min="0" step="any" data-i="${i}" value="${l.quantidade}" inputmode="decimal" title="Quantidade — ENTER confirma"></td>
-      <td class="pdv-sub-val"><strong>${fmtMoney(l.preco_unitario)}</strong></td>
+      <td class="pdv-cell-num"><input class="pdv-qtd" type="number" min="0" step="any" data-i="${i}" value="${l.quantidade}" inputmode="decimal" title="Quantidade — ENTER confirma"></td>
+      <td class="pdv-cell-num pdv-preco"><strong>${fmtMoney(l.preco_unitario)}</strong></td>
+      <td class="pdv-cell-num pdv-desc-cell">
+        <span class="pdv-desc-inline">
+          <input class="pdv-desc" type="text" inputmode="decimal" data-i="${i}" value="${fmtDescInput(l, descExibicao(l))}" title="Desconto — P = %, R = R$ · ENTER confirma">
+          <span class="pdv-desc-modo pdv-desc-modo--row" data-modo-i="${i}">${l.desconto_modo === "pct" ? "%" : "R$"}</span>
+        </span>
+      </td>
       <td class="pdv-sub"><strong>${fmtMoney(l.subtotal)}</strong></td>
       <td class="pdv-rm-td"><button type="button" class="icon-btn pdv-rm" data-i="${i}" title="Remover item">×</button></td>
     </tr>`;
@@ -100,9 +141,7 @@ function renderLinha(l: LinhaPdv, i: number): string {
 function renderHtml(): string {
   const linhasHtml = linhas.map((l, i) => renderLinha(l, i)).join("");
 
-  const d = parseNum(vDesconto);
-  const subtotal = linhas.reduce((s, l) => s + l.subtotal, 0);
-  const total = Math.max(0, subtotal - d);
+  const c = calculosPdv();
 
   return `
     <div class="pdv-layout">
@@ -135,20 +174,29 @@ function renderHtml(): string {
         ${linhas.length === 0
           ? `<div class="pdv-vazio"><p>Nenhum item ainda.</p><p class="pdv-vazio-sub">Digite um produto na busca e tecle ENTER para adicionar.</p></div>`
           : `<div class="table-wrap"><table class="pdv-table">
-              <thead><tr><th>Produto</th><th class="pdv-col-qtd">Qtd.</th><th>Preço unit.</th><th>Subtotal</th><th></th></tr></thead>
+              <thead><tr>
+                <th class="pdv-col-idx">#</th>
+                <th>Produto</th>
+                <th class="pdv-col-qtd">Qtd</th>
+                <th class="pdv-col-preco">Preço unit.</th>
+                <th class="pdv-col-desc">Desconto</th>
+                <th class="pdv-col-sub">Subtotal</th>
+                <th></th>
+              </tr></thead>
               <tbody>${linhasHtml}</tbody>
             </table></div>`}
       </section>
 
       <div class="pdv-footer">
         <div class="pdv-extra">
-          <div class="field pdv-campo pdv-campo--desc" style="width:130px;">
-            <label class="pdv-rotulo">Desconto (R$)</label>
-            <input id="pdvDesconto" type="text" inputmode="decimal" data-next="pdvObs" placeholder="0,00" value="${escapeHtml(vDesconto)}">
+          <div class="field pdv-campo pdv-campo--desc" style="width:170px;">
+            <label class="pdv-rotulo">Desconto <span class="pdv-desc-modo" id="pdvDescModoBadge">R$</span></label>
+            <input id="pdvDesconto" type="text" inputmode="decimal" data-next="pdvCondicao" placeholder="0,00" value="${escapeHtml(vDesconto ? fmtNum2(parseNum(vDesconto)) : "")}">
+            <small class="pdv-desc-hint"><kbd>P</kbd> = % &nbsp;·&nbsp; <kbd>R</kbd> = R$</small>
           </div>
           <div class="field pdv-campo" style="width:180px;">
             <label class="pdv-rotulo">Condição de pagamento</label>
-            <select id="pdvCondicao"><option value="">Selecione</option></select>
+            <select id="pdvCondicao" data-next="pdvObs"><option value="">Selecione</option></select>
           </div>
           <div class="field pdv-campo pdv-campo--obs">
             <label class="pdv-rotulo">Observações</label>
@@ -156,16 +204,19 @@ function renderHtml(): string {
           </div>
         </div>
         <div class="pdv-totais">
-          <div class="pdv-total-linha"><span>Subtotal</span><strong id="pdvSubtotal">${fmtMoney(subtotal)}</strong></div>
-          <div class="pdv-total-linha"><span>Desconto</span><strong id="pdvDescontoV">${fmtMoney(d)}</strong></div>
-          <div class="pdv-total-linha pdv-total-linha--final"><span>Total</span><strong id="pdvTotal">${fmtMoney(total)}</strong></div>
+          <div class="pdv-total-linha"><span>Subtotal</span><strong id="pdvSubtotal">${fmtMoney(c.base)}</strong></div>
+          <div class="pdv-total-linha"><span id="pdvDescRotulo">${c.descontoTotal > 0 ? `Desconto (${fmtNum(c.pct)}%)` : "Desconto"}</span><strong id="pdvDescontoV">${c.descontoTotal > 0 ? "-" + fmtMoney(c.descontoTotal) : fmtMoney(0)}</strong></div>
+          <div class="pdv-total-linha pdv-total-linha--final"><span>Total</span><strong id="pdvTotal">${fmtMoney(c.total)}</strong></div>
         </div>
+        <div id="pdvDescResumo" class="pdv-desc-wrap">${resumoDescontoHtml()}</div>
       </div>
 
       <div class="pdv-acoes">
+        ${editandoId ? `<button type="button" class="btn btn--ghost" id="pdvCancelarEdit">Cancelar edição</button>` : ""}
         <button type="button" class="btn btn--ghost" id="pdvLimpar">Limpar <kbd>F5</kbd></button>
         <button type="button" class="btn btn--ghost" id="pdvSalvarParcial">Salvar rascunho <kbd>F4</kbd></button>
-        <button type="button" class="btn btn--accent" id="pdvSalvar" ${linhas.length === 0 ? "disabled" : ""}>Salvar orçamento</button>
+        <button type="button" class="btn btn--ghost" id="pdvVisualizar" ${linhas.length === 0 ? "disabled" : ""}>Visualizar / Imprimir</button>
+        <button type="button" class="btn btn--accent" id="pdvSalvar" ${linhas.length === 0 ? "disabled" : ""}>${editandoId ? "Salvar alterações" : "Salvar orçamento"}</button>
       </div>
 
       <div class="pdv-at">
@@ -186,14 +237,16 @@ function renderHtml(): string {
 function paint(): void {
   if (!currentApp) return;
   currentApp.innerHTML = `
-    <div class="page-head">
+    ${ocultarCabecalho
+      ? ""
+      : `<div class="page-head">
       <div>
-        <h1 class="page-title">PDV · Orçamentos</h1>
+        <h1 class="page-title">PDV · Orçamentos${editandoId ? ` <span class="badge badge--ativo">Editando ${escapeHtml(editandoNumero)}</span>` : ""}</h1>
         <p class="page-sub">Teclado: n<b>*</b>produto + ENTER adiciona; F1 a F9 comandam a tela.</p>
       </div>
       <button class="btn btn--ghost" id="btnAbrirLista">Ver orçamentos salvos</button>
       <button class="btn btn--ghost" id="btnConfigImp">Config impressora</button>
-    </div>
+    </div>`}
     ${renderHtml()}
     <div id="pdvRecentes"></div>
   `;
@@ -259,10 +312,36 @@ function bind(): void {
   guardar("pdvContato", (v) => (vContato = v));
   guardar("pdvValidade", (v) => (vValidade = v || String(VALIDADE_PADRAO)));
   guardar("pdvObs", (v) => (vObs = v));
-  guardar("pdvDesconto", (v) => {
-    vDesconto = v;
-    atualizarTotais();
-  });
+  const $desc = $app.querySelector<HTMLInputElement>("#pdvDesconto");
+  if ($desc) {
+    $desc.addEventListener("input", () => {
+      let raw = $desc.value;
+      if (/%/.test(raw)) {
+        vDescModo = "pct";
+        raw = raw.replace(/%/g, "").trim();
+        $desc.value = raw;
+        const b = $app.querySelector<HTMLElement>("#pdvDescModoBadge");
+        if (b) b.textContent = "%";
+      }
+      vDesconto = raw;
+      atualizarTotais();
+    });
+    $desc.addEventListener("blur", () => {
+      if ($desc.value.trim() === "") {
+        vDesconto = "";
+        $desc.value = "";
+      } else {
+        vDesconto = fmtNum2(parseNum($desc.value));
+        $desc.value = vDesconto;
+      }
+      atualizarTotais();
+    });
+    $desc.addEventListener("keydown", (e) => {
+      const k = e.key.toLowerCase();
+      if (k === "p") { e.preventDefault(); setDescModo("pct"); }
+      else if (k === "r") { e.preventDefault(); setDescModo("valor"); }
+    });
+  }
 
   // ── Busca produto ──
   const $busca = $app.querySelector<HTMLInputElement>("#pdvBusca")!;
@@ -272,9 +351,24 @@ function bind(): void {
     timer = setTimeout(() => void buscar($busca.value), 180);
   });
   $busca.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      limparSugestoes();
+      const qtds = currentApp?.querySelectorAll<HTMLInputElement>(".pdv-qtd") || [];
+      if (qtds.length) {
+        const ult = qtds[qtds.length - 1];
+        ult.focus();
+        ult.select();
+      }
+      return;
+    }
     if (e.key === "Enter") {
       e.preventDefault();
-      confirmarSugestao();
+      if (sugestoes.length > 0) {
+        confirmarSugestao();
+      } else {
+        focoCampo("pdvDesconto");
+      }
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       moverFoco(1);
@@ -299,14 +393,60 @@ function bind(): void {
     });
   });
 
-  // ── Qtd na tabela ──
+  // ── Qtd / desconto na tabela ──
   $app.querySelectorAll<HTMLInputElement>(".pdv-qtd").forEach((i) => {
     i.addEventListener("change", () => recalcular(Number(i.dataset.i)));
     i.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const idx = Number(i.dataset.i);
+        if (e.key === "ArrowUp" && idx === 0) {
+          focoCampo("pdvBusca");
+        } else {
+          moverFocoLinha(idx, e.key === "ArrowDown" ? 1 : -1, ".pdv-qtd");
+        }
+        return;
+      }
       if (e.key === "Enter") {
         e.preventDefault();
         recalcular(Number(i.dataset.i));
+        moverFocoLinha(Number(i.dataset.i), 0, ".pdv-desc");
+      }
+    });
+  });
+  $app.querySelectorAll<HTMLInputElement>(".pdv-desc").forEach((i) => {
+    i.addEventListener("change", () => recalcular(Number(i.dataset.i)));
+    i.addEventListener("keydown", (e) => {
+      const k = e.key.toLowerCase();
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const idx = Number(i.dataset.i);
+        if (e.key === "ArrowUp" && idx === 0) {
+          focoCampo("pdvBusca");
+        } else {
+          moverFocoLinha(idx, e.key === "ArrowDown" ? 1 : -1, ".pdv-desc");
+        }
+        return;
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
         focoCampo("pdvBusca");
+        return;
+      }
+      if (k === "p" || k === "r") {
+        e.preventDefault();
+        alternarModoItem(Number(i.dataset.i), k === "p" ? "pct" : "valor");
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        recalcular(Number(i.dataset.i));
+        const idx = Number(i.dataset.i);
+        if (idx >= linhas.length - 1) {
+          focoCampo("pdvBusca");
+        } else {
+          moverFocoLinha(idx, 1, ".pdv-qtd");
+        }
       }
     });
   });
@@ -321,23 +461,33 @@ function bind(): void {
     });
   });
 
-  $app.querySelector<HTMLInputElement>("#pdvDesconto")?.addEventListener("input", () => atualizarTotais());
-
   $app.querySelector<HTMLElement>("#pdvLimpar")!.addEventListener("click", async () => {
     if (!linhas.length) return;
     if (!(await confirmDialog("Limpar todos os itens?"))) return;
     linhas = [];
+    vClienteId = null;
     limparSugestoes();
     paint();
   });
 
+  $app.querySelector<HTMLElement>("#pdvCancelarEdit")?.addEventListener("click", () => {
+    editandoId = null;
+    editandoNumero = "";
+    linhas = [];
+    vDesconto = "";
+    vObs = "";
+    paint();
+    void carregarRecentes($app);
+  });
+
   $app.querySelector<HTMLElement>("#pdvSalvar")!.addEventListener("click", () => void salvar(false, true));
   $app.querySelector<HTMLElement>("#pdvSalvarParcial")!.addEventListener("click", () => void salvar(false, false));
+  $app.querySelector<HTMLElement>("#pdvVisualizar")!.addEventListener("click", () => void visualizarImprimir());
 
-  $app.querySelector<HTMLElement>("#btnAbrirLista")!.addEventListener("click", () => {
+  $app.querySelector<HTMLElement>("#btnAbrirLista")?.addEventListener("click", () => {
     location.hash = "#/orcamentos";
   });
-  $app.querySelector<HTMLElement>("#btnConfigImp")!.addEventListener("click", () => void abrirConfigImpressora());
+  $app.querySelector<HTMLElement>("#btnConfigImp")?.addEventListener("click", () => void abrirConfigImpressora());
 }
 
 // ──────────────────────────────────────────────────────────
@@ -406,6 +556,7 @@ function confirmarCliente(): void {
 
 function selecionarCliente(c: Cliente): void {
   vCliente = c.nome;
+  vClienteId = c.id;
   if (!vContato && c.whatsapp) vContato = c.whatsapp;
   fecharClienteSug();
   paint();
@@ -525,6 +676,17 @@ function moverFoco(delta: number): void {
   }
 }
 
+function moverFocoLinha(atual: number, delta: number, sel: string): void {
+  if (!currentApp) return;
+  const campos = currentApp.querySelectorAll<HTMLInputElement>(sel);
+  const alvo = Math.min(campos.length - 1, Math.max(0, atual + delta));
+  const el = campos[alvo];
+  if (el) {
+    el.focus();
+    el.select();
+  }
+}
+
 function confirmarSugestao(): void {
   if (!sugestoes.length) return;
   const idx = focoLista >= 0 ? focoLista : 0;
@@ -544,9 +706,12 @@ function adicionar(p: ProdutoResumo): void {
       nome: p.name || "",
       marca: p.brand || "",
       especificacao: p.spec || "",
+      unidade: p.unidade_venda || "",
+      ncm: p.ncm || "",
       quantidade: qtd,
       preco_unitario: p.price || 0,
       desconto_percentual: 0,
+      desconto_modo: "pct",
       subtotal: (p.price || 0) * qtd,
     });
   }
@@ -556,6 +721,27 @@ function adicionar(p: ProdutoResumo): void {
   if ($busca) $busca.value = "";
   paint();
   setTimeout(() => focoCampo("pdvBusca"), 0);
+  void aplicarPrecoEfetivo(p.id);
+}
+
+async function aplicarPrecoEfetivo(varianteId: number): Promise<void> {
+  try {
+    const ef = await api.precoEfetivo(varianteId);
+    const idx = linhas.findIndex((l) => l.produto_id === varianteId);
+    if (idx < 0 || !currentApp) return;
+    const l = linhas[idx];
+    if (!ef || !(ef.preco > 0) || ef.preco === l.preco_unitario) return;
+    l.preco_unitario = ef.preco;
+    l.subtotal = l.preco_unitario * l.quantidade * (1 - l.desconto_percentual / 100);
+    const tr = currentApp.querySelector<HTMLInputElement>(`.pdv-qtd[data-i="${idx}"]`)?.closest("tr");
+    if (tr) {
+      const $preco = tr.querySelector<HTMLElement>(".pdv-preco strong");
+      if ($preco) $preco.textContent = fmtMoney(l.preco_unitario);
+      const $sub = tr.querySelector<HTMLElement>(".pdv-sub strong");
+      if ($sub) $sub.textContent = fmtMoney(l.subtotal);
+    }
+    atualizarTotais();
+  } catch { /* mantém o preço base */ }
 }
 
 // ──────────────────────────────────────────────────────────
@@ -567,29 +753,115 @@ function parseNum(v: string): number {
   return isNaN(n) ? 0 : n;
 }
 
+function calculosPdv(): {
+  base: number;
+  subtotal: number;
+  descontoItens: number;
+  descontoGeral: number;
+  descontoTotal: number;
+  pct: number;
+  total: number;
+} {
+  const base = linhas.reduce((s, l) => s + l.preco_unitario * l.quantidade, 0);
+  const subtotal = linhas.reduce((s, l) => s + l.subtotal, 0);
+  const descontoGeral = vDescModo === "pct" ? subtotal * (parseNum(vDesconto) / 100) : parseNum(vDesconto);
+  const descontoItens = Math.max(0, base - subtotal);
+  const descontoTotal = Math.max(0, descontoItens + descontoGeral);
+  const pct = base > 0 ? (descontoTotal / base) * 100 : 0;
+  return {
+    base,
+    subtotal,
+    descontoItens,
+    descontoGeral,
+    descontoTotal,
+    pct,
+    total: Math.max(0, subtotal - descontoGeral),
+  };
+}
+
+function limiteDescontoUsuario(): number {
+  const u = usuarioCorrente();
+  if (!u) return 100;
+  if (u.perfil === "admin") return 100;
+  return Number(u.desconto_limite_pct ?? 0);
+}
+
+function setDescModo(m: "pct" | "valor"): void {
+  vDescModo = m;
+  const b = currentApp?.querySelector<HTMLElement>("#pdvDescModoBadge");
+  if (b) b.textContent = m === "pct" ? "%" : "R$";
+  const f = currentApp?.querySelector<HTMLInputElement>("#pdvDesconto");
+  if (f) {
+    f.placeholder = m === "pct" ? "0,00 %" : "0,00";
+    f.focus();
+  }
+  atualizarTotais();
+}
+
+function resumoDescontoHtml(): string {
+  const c = calculosPdv();
+  if (c.descontoTotal <= 0) return "";
+  const limite = limiteDescontoUsuario();
+  const acima = c.pct > limite + 1e-9;
+  const linhaLimite = acima
+    ? `<span class="pdv-desc-aviso">Desconto de <b>${c.pct.toFixed(2).replace(".", ",")}%</b> acima do seu limite (${limite}%) — finalizar exigirá autorização do gerente.</span>`
+    : `<span>Desconto de <b>${c.pct.toFixed(2).replace(".", ",")}%</b>${limite < 100 ? ` · limite: ${limite}%` : ""}</span>`;
+  return `
+    <div class="pdv-desc-resumo">
+      <span>Itens: ${fmtMoney(c.descontoItens)}</span>
+      <span>Geral: ${fmtMoney(c.descontoGeral)}${vDescModo === "pct" ? " (% )" : " (R$)"}</span>
+      <span>Total: ${fmtMoney(c.descontoTotal)}</span>
+      ${linhaLimite}
+    </div>`;
+}
+
+function alternarModoItem(idx: number, novo: "pct" | "valor"): void {
+  const l = linhas[idx];
+  if (!l || !currentApp) return;
+  const $input = currentApp.querySelector<HTMLInputElement>(`.pdv-desc[data-i="${idx}"]`);
+  const base = l.preco_unitario * l.quantidade;
+  const raw = parseNum($input?.value || "0");
+  const amt = l.desconto_modo === "pct" ? base * (raw / 100) : raw;
+  l.desconto_modo = novo;
+  const novoRaw = novo === "pct" ? (base > 0 ? (amt / base) * 100 : 0) : amt;
+  if ($input) $input.value = fmtDescInput(l, novoRaw);
+  const b = currentApp.querySelector<HTMLElement>(`.pdv-desc-modo--row[data-modo-i="${idx}"]`);
+  if (b) b.textContent = novo === "pct" ? "%" : "R$";
+  recalcular(idx);
+}
+
 function recalcular(idx: number): void {
   const l = linhas[idx];
   if (!l || !currentApp) return;
   const qtd = parseNum(currentApp.querySelector<HTMLInputElement>(`.pdv-qtd[data-i="${idx}"]`)?.value || "0");
+  const raw = parseNum(currentApp.querySelector<HTMLInputElement>(`.pdv-desc[data-i="${idx}"]`)?.value || "0");
   l.quantidade = Math.max(0, qtd);
-  l.subtotal = l.preco_unitario * l.quantidade;
+  const base = l.preco_unitario * l.quantidade;
+  const pct = l.desconto_modo === "pct" ? raw : (base > 0 ? (raw / base) * 100 : 0);
+  l.desconto_percentual = Math.min(100, Math.max(0, pct));
+  l.subtotal = l.preco_unitario * l.quantidade * (1 - l.desconto_percentual / 100);
   const $cell = currentApp.querySelector<HTMLInputElement>(`.pdv-qtd[data-i="${idx}"]`)?.closest("tr")?.querySelector<HTMLElement>(".pdv-sub");
   if ($cell) $cell.textContent = fmtMoney(l.subtotal);
+  const $desc = currentApp.querySelector<HTMLInputElement>(`.pdv-desc[data-i="${idx}"]`);
+  if ($desc) $desc.value = fmtDescInput(l, descExibicao(l));
   atualizarTotais();
 }
 
 function atualizarTotais(): void {
   if (!currentApp) return;
-  const d = parseNum(vDesconto);
-  const subtotal = linhas.reduce((s, l) => s + l.subtotal, 0);
-  const total = Math.max(0, subtotal - d);
+  const c = calculosPdv();
   const set = (id: string, v: number) => {
     const el = currentApp!.querySelector<HTMLElement>("#" + id);
     if (el) el.textContent = fmtMoney(v);
   };
-  set("pdvSubtotal", subtotal);
-  set("pdvDescontoV", d);
-  set("pdvTotal", total);
+  set("pdvSubtotal", c.base);
+  set("pdvTotal", c.total);
+  const $descRot = currentApp.querySelector<HTMLElement>("#pdvDescRotulo");
+  if ($descRot) $descRot.textContent = c.descontoTotal > 0 ? `Desconto (${fmtNum(c.pct)}%)` : "Desconto";
+  const $descVal = currentApp.querySelector<HTMLElement>("#pdvDescontoV");
+  if ($descVal) $descVal.textContent = c.descontoTotal > 0 ? `-${fmtMoney(c.descontoTotal)}` : fmtMoney(0);
+  const $resumo = currentApp.querySelector<HTMLElement>("#pdvDescResumo");
+  if ($resumo) $resumo.innerHTML = resumoDescontoHtml();
   const salvar = currentApp!.querySelector<HTMLButtonElement>("#pdvSalvar");
   if (salvar) salvar.disabled = linhas.length === 0;
 }
@@ -598,23 +870,23 @@ function atualizarTotais(): void {
 //  Salvar / Finalizar / Visualizar / Imprimir
 // ──────────────────────────────────────────────────────────
 
-async function salvar(finalizado = false, imprimir = true): Promise<void> {
+async function salvar(finalizado = false, imprimir = true): Promise<{ id: number; numero: string } | null> {
   const $app = currentApp;
-  if (!$app) return;
+  if (!$app) return null;
   if (!linhas.length) {
     toast("Adicione ao menos um item", "error");
-    return;
+    return null;
   }
   const cliente = vCliente.trim();
   const contato = vContato.trim();
   const validade = parseInt(vValidade, 10) || VALIDADE_PADRAO;
-  const desconto = parseNum(vDesconto);
+  const desconto = calculosPdv().descontoGeral;
   const obs = vObs.trim();
 
   if (!cliente) {
     toast("Informe o nome do cliente", "error");
     focoCampo("pdvCliente");
-    return;
+    return null;
   }
 
   const itens: OrcamentoItemPayload[] = linhas.map((l) => ({
@@ -631,22 +903,38 @@ async function salvar(finalizado = false, imprimir = true): Promise<void> {
   try {
     const condSel = document.querySelector<HTMLSelectElement>("#pdvCondicao");
     const condId = condSel ? parseInt(condSel.value, 10) || undefined : undefined;
-    const res = await api.criarOrcamento({
-      cliente,
-      contato,
-      validade_dias: validade,
-      observacoes: obs,
-      desconto,
-      itens,
-      condicao_pagamento_id: condId,
-    });
+
+    let res: { id: number; numero: string };
+    if (editandoId != null) {
+      const patch: Record<string, unknown> = { cliente, contato, validade_dias: validade, observacoes: obs, desconto };
+      if (condId !== undefined) patch.condicao_pagamento_id = condId;
+      await api.atualizarOrcamento(editandoId, patch);
+      await api.substituirItensOrcamento(editandoId, itens);
+      res = { id: editandoId, numero: editandoNumero };
+    } else {
+      res = await api.criarOrcamento({
+        cliente,
+        contato,
+        validade_dias: validade,
+        observacoes: obs,
+        desconto,
+        itens,
+        condicao_pagamento_id: condId,
+        cliente_id: vClienteId ?? undefined,
+      });
+    }
     sessionStorage.setItem("pdv_cliente", cliente);
 
     if (finalizado) {
-      await api.atualizarOrcamento(res.id, { status: "faturado" });
-      toast(`${res.numero} finalizado`, "success");
+      const ok = await finalizarOrcamento(res.id);
+      toast(
+        ok
+          ? `${res.numero} finalizado`
+          : `${res.numero} salvo — finalização requer autorização de desconto`,
+        ok ? "success" : "error"
+      );
     } else {
-      toast(`${res.numero} salvo`, "success");
+      toast(editandoId == null ? `${res.numero} salvo` : `${res.numero} atualizado`, "success");
     }
 
     if (imprimir) {
@@ -655,14 +943,18 @@ async function salvar(finalizado = false, imprimir = true): Promise<void> {
       );
     }
 
+    editandoId = null;
+    editandoNumero = "";
     linhas = [];
     vDesconto = "";
     vObs = "";
     paint();
     await carregarRecentes($app);
     focoCampo("pdvCliente");
+    return res;
   } catch (e) {
     toast("Erro: " + (e as Error).message, "error");
+    return null;
   }
 }
 
@@ -672,6 +964,90 @@ async function imprimirPedido(): Promise<void> {
     return;
   }
   await salvar(false, true);
+}
+
+async function finalizarOrcamento(id: number): Promise<boolean> {
+  try {
+    await api.atualizarOrcamento(id, { status: "faturado" });
+    return true;
+  } catch (e) {
+    const err = e as Error & { code?: string };
+    if (err.code === "desconto_exige_autorizacao") {
+      const ok = await solicitarAutorizacaoDesconto(id);
+      if (!ok) return false;
+      try {
+        await api.atualizarOrcamento(id, { status: "faturado" });
+        return true;
+      } catch (e2) {
+        toast("Erro ao finalizar após autorização: " + (e2 as Error).message, "error");
+        return false;
+      }
+    }
+    toast("Erro ao finalizar: " + err.message, "error");
+    return false;
+  }
+}
+
+function solicitarAutorizacaoDesconto(id: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    openModal(
+      `<div class="modal-head"><h3>Autorizar desconto</h3><button class="icon-btn" data-close>×</button></div>
+       <p style="font-size:13px;color:var(--ink-soft);margin:0 0 12px;">O desconto aplicado está acima da alçada do vendedor. Informe as credenciais do gerente para autorizar e finalizar.</p>
+       <div style="display:flex;flex-direction:column;gap:12px;">
+         <div class="field"><label>Login do gerente</label><input id="autLogin" autocomplete="username"></div>
+         <div class="field"><label>Senha</label><input id="autSenha" type="password" autocomplete="current-password"></div>
+       </div>
+       <div class="modal-actions">
+         <button class="btn" data-cancelar>Cancelar</button>
+         <button class="btn btn--accent" id="autConfirmar">Autorizar e finalizar</button>
+       </div>`,
+      {
+        onMount(modal) {
+          const fechar = () => closeModal();
+          modal.querySelectorAll("[data-close]").forEach((b) => ((b as HTMLElement).onclick = fechar));
+          modal.querySelector<HTMLElement>("[data-cancelar]")!.onclick = () => {
+            closeModal();
+            resolve(false);
+          };
+          const $login = modal.querySelector<HTMLInputElement>("#autLogin");
+          const $senha = modal.querySelector<HTMLInputElement>("#autSenha");
+          const $btn = modal.querySelector<HTMLButtonElement>("#autConfirmar")!;
+          const tentar = async () => {
+            const login = ($login?.value || "").trim();
+            const senha = $senha?.value || "";
+            if (!login || !senha) {
+              toast("Informe login e senha do gerente", "error");
+              return;
+            }
+            $btn.disabled = true;
+            $btn.textContent = "Autorizando…";
+            try {
+              await api.autorizarDescontoOrcamento(id, { login, senha });
+              toast("Desconto autorizado", "success");
+              closeModal();
+              resolve(true);
+            } catch (e) {
+              toast("Falha na autorização: " + (e as Error).message, "error");
+              $btn.disabled = false;
+              $btn.textContent = "Autorizar e finalizar";
+            }
+          };
+          $btn.addEventListener("click", () => void tentar());
+          $senha?.addEventListener("keydown", (e) => { if (e.key === "Enter") void tentar(); });
+          setTimeout(() => $login?.focus(), 0);
+        },
+      }
+    );
+  });
+}
+
+async function visualizarImprimir(): Promise<void> {
+  if (!linhas.length) {
+    toast("Adicione itens antes de visualizar", "error");
+    return;
+  }
+  const res = await salvar(false, false);
+  if (res) window.open(`/orcamentos/venda/${res.id}/imprimir`, "_blank");
 }
 
 async function finalizarPedido(): Promise<void> {
@@ -687,9 +1063,7 @@ function visualizarPedido(): void {
     toast("Nenhum item para visualizar", "error");
     return;
   }
-  const d = parseNum(vDesconto);
-  const subtotal = linhas.reduce((s, l) => s + l.subtotal, 0);
-  const total = Math.max(0, subtotal - d);
+  const c = calculosPdv();
   openModal(
     `<div class="modal-head"><h3>Pedido</h3><button class="icon-btn" data-close>×</button></div>
      <p style="margin:-4px 0 12px;font-size:13px;color:var(--ink-soft);">${escapeHtml(vCliente || "—")}${vContato ? " · " + escapeHtml(vContato) : ""}</p>
@@ -708,9 +1082,9 @@ function visualizarPedido(): void {
        </table>
      </div>
      <div style="display:flex;justify-content:flex-end;gap:16px;margin-top:14px;font-size:13.5px;">
-       <div>Subtotal: <strong>${fmtMoney(subtotal)}</strong></div>
-       ${d > 0 ? `<div>Desconto: <strong>${fmtMoney(d)}</strong></div>` : ""}
-       <div>Total: <strong>${fmtMoney(total)}</strong></div>
+       <div>Subtotal: <strong>${fmtMoney(c.base)}</strong></div>
+       ${c.descontoTotal > 0 ? `<div>Desconto (${fmtNum(c.pct)}%): <strong>-${fmtMoney(c.descontoTotal)}</strong></div>` : ""}
+       <div>Total: <strong>${fmtMoney(c.total)}</strong></div>
      </div>
      <div class="modal-actions">
        <button class="btn btn--ghost" data-salvar>Salvar</button>
@@ -738,6 +1112,16 @@ function ligarAtalhos(): void {
   atalhosLigados = true;
   window.addEventListener("keydown", (e) => {
     if (!currentApp || !document.body.contains(currentApp)) return;
+    if (e.ctrlKey && e.key === "F5") {
+      e.preventDefault();
+      abrirBuscaCliente();
+      return;
+    }
+    if (e.ctrlKey && e.key === "F6") {
+      e.preventDefault();
+      focoCampo("pdvBusca");
+      return;
+    }
     const m = e.key?.toUpperCase().match(/^F([1-9])$/);
     if (!m) return;
     e.preventDefault();
@@ -846,6 +1230,7 @@ function abrirBuscaCliente(): void {
         setTimeout(() => $input.focus(), 0);
         function selecionarClienteModal(c: Cliente): void {
           vCliente = c.nome;
+          vClienteId = c.id;
           if (!vContato && c.whatsapp) vContato = c.whatsapp;
           closeModal();
           paint();
@@ -919,7 +1304,7 @@ async function carregarRecentes($app: HTMLElement): Promise<void> {
   if (!$wrap) return;
   let lista;
   try {
-    lista = await api.listarOrcamentos();
+    lista = await api.listarOrcamentos("", true);
   } catch {
     $wrap.innerHTML = "";
     return;
@@ -963,9 +1348,10 @@ async function abrirDetalhe(id: number): Promise<void> {
     toast("Erro: " + (e as Error).message, "error");
     return;
   }
+  const editavel = STATUS_EDITAVEIS.has(d.status);
   openModal(
     `<div class="modal-head"><h3>${escapeHtml(d.numero)}</h3><button class="icon-btn" data-close>×</button></div>
-     <p style="margin:-4px 0 12px;font-size:13px;color:var(--ink-soft);">${escapeHtml(d.cliente || "Sem cliente")}${d.contato ? " · " + escapeHtml(d.contato) : ""} · criado em ${fmtDate(d.criado_em)}</p>
+     <p style="margin:-4px 0 12px;font-size:13px;color:var(--ink-soft);">${escapeHtml(d.cliente || "Sem cliente")}${d.contato ? " · " + escapeHtml(d.contato) : ""} · criado em ${fmtDate(d.criado_em)}${d.desconto_autorizado ? " · <span class='badge badge--fechada'>desc. autorizado</span>" : ""}</p>
      <div class="table-wrap">
        <table class="data-table">
          <thead><tr><th>Produto</th><th>Qtd.</th><th>Preço</th><th>Subtotal</th></tr></thead>
@@ -986,15 +1372,73 @@ async function abrirDetalhe(id: number): Promise<void> {
        <div>Total: <strong>${fmtMoney(d.total)}</strong></div>
      </div>
      <div class="modal-actions">
+       ${editavel ? `<button class="btn" data-editar>Editar</button>` : ""}
        <button class="btn btn--accent" data-imprimir>Imprimir</button>
        <button class="btn" data-close>Fechar</button>
      </div>`,
     {
       onMount(modal) {
         modal.querySelectorAll("[data-close]").forEach((b) => ((b as HTMLElement).onclick = closeModal));
-        modal.querySelector<HTMLElement>("[data-imprimir]")!.onclick = () =>
-          void api.imprimirOrcamento(id).catch((e) => toast("Impressão falhou: " + (e as Error).message, "error"));
+        modal.querySelector<HTMLElement>("[data-imprimir]")!.onclick = () => {
+          window.open(`/orcamentos/venda/${id}/imprimir`, "_blank");
+        };
+        modal.querySelector<HTMLElement>("[data-editar]")?.addEventListener("click", () => void carregarParaEdicao(id));
       },
     }
   );
 }
+
+async function carregarParaEdicao(id: number): Promise<void> {
+  let d;
+  try {
+    d = await api.detalharOrcamento(id);
+  } catch (e) {
+    toast("Erro: " + (e as Error).message, "error");
+    return;
+  }
+  if (!STATUS_EDITAVEIS.has(d.status)) {
+    toast("Este orçamento está fechado/cancelado e não pode ser editado", "error");
+    return;
+  }
+  closeModal();
+  vCliente = d.cliente || "";
+  vClienteId = d.cliente_id ?? null;
+  vContato = d.contato || "";
+  vValidade = String(d.validade_dias || VALIDADE_PADRAO);
+  vObs = d.observacoes || "";
+  vDesconto = String(d.desconto || "");
+  vDescModo = "valor";
+  linhas = (d.itens || []).map((it) => ({
+    produto_id: it.produto_id ?? null,
+    sku: it.sku || "",
+    nome: it.nome || "",
+    marca: it.marca || "",
+    especificacao: it.especificacao || "",
+    unidade: "",
+    ncm: "",
+    quantidade: it.quantidade,
+    preco_unitario: it.preco_unitario,
+    desconto_percentual: it.desconto_percentual || 0,
+    desconto_modo: "pct",
+    subtotal: it.subtotal ?? it.preco_unitario * it.quantidade,
+  }));
+  editandoId = id;
+  editandoNumero = d.numero || "";
+  paint();
+  const condSel = document.querySelector<HTMLSelectElement>("#pdvCondicao");
+  if (condSel && d.condicao_pagamento_id != null) condSel.value = String(d.condicao_pagamento_id);
+  setTimeout(() => focoCampo("pdvCliente"), 0);
+}
+
+// ------------------------------------------------------------------
+// API pública para o shell legacy (PdvPage): ações da Sidebar e atalhos.
+// ------------------------------------------------------------------
+
+export function pdvAtalho(f: number): Promise<void> {
+  return acaoAtalho(f);
+}
+
+export function pdvBuscaCliente(): void {
+  abrirBuscaCliente();
+}
+

@@ -10,11 +10,15 @@ class EstoqueRepository:
         deposito_id: int | None = None,
         variante_id: int | None = None,
         termo: str | None = None,
+        familia_id: int | None = None,
     ) -> list[dict]:
         sql = (
             "SELECT s.id, s.deposito_id, s.variante_id, s.quantidade, s.reserva,"
             " s.atualizado_em, d.nome AS deposito_nome,"
             " v.sku, v.preco, p.nome AS produto_nome, p.marca,"
+            " p.familia_id, f.nome AS familia_nome,"
+            " v.unidade_venda, v.embalagem, v.fator_conversao, v.ncm,"
+            " v.unidade_tributavel, v.localizacao,"
             " s.estoque_minimo, s.estoque_maximo,"
             " CASE WHEN s.estoque_minimo > 0 AND s.quantidade < s.estoque_minimo THEN 'ruptura'"
             "  WHEN s.estoque_maximo > 0 AND s.quantidade > s.estoque_maximo THEN 'excesso'"
@@ -23,6 +27,7 @@ class EstoqueRepository:
             " JOIN depositos d ON d.id = s.deposito_id"
             " JOIN variantes v ON v.id = s.variante_id"
             " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " LEFT JOIN familias f ON f.id = p.familia_id"
         )
         where: list[str] = []
         args: list = []
@@ -32,6 +37,9 @@ class EstoqueRepository:
         if variante_id is not None:
             where.append("s.variante_id = ?")
             args.append(variante_id)
+        if familia_id is not None:
+            where.append("p.familia_id = ?")
+            args.append(familia_id)
         if termo:
             where.append("(p.nome LIKE ? OR v.sku LIKE ? OR p.marca LIKE ?)")
             like = f"%{termo}%"

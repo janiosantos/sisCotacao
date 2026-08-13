@@ -48,6 +48,14 @@ interface VarianteLocal {
   ean: string;
   preco: string | number;
   prom: string | number;
+  peso: string | number;
+  dimensoes: string;
+  unidade_venda: string;
+  embalagem: string | number;
+  fator_conversao: string | number;
+  localizacao: string;
+  ncm: string;
+  unidade_tributavel: string;
   valores: Record<string, string>;
 }
 
@@ -128,6 +136,7 @@ export async function renderLista($app: HTMLElement): Promise<void> {
         <select id="fSubcategoria"><option value="">Todas</option></select>
       </div>
       <button class="btn btn--outline" id="btnFamilias">Famílias</button>
+      <button class="btn btn--outline" id="btnEtiquetas">Etiquetas</button>
       <button class="btn btn--outline" id="btnNovoUrl">Novo via URL</button>
       <button class="btn btn--accent" id="btnNovo">Novo produto</button>
       <span class="result-count" id="resultCount"></span>
@@ -188,6 +197,7 @@ export async function renderLista($app: HTMLElement): Promise<void> {
   }
   $app.querySelector("#btnFamilias")?.addEventListener("click", () => void abrirModalFamilias($app));
   $app.querySelector("#btnNovoUrl")?.addEventListener("click", () => void abrirModalImportarUrl());
+  $app.querySelector("#btnEtiquetas")?.addEventListener("click", () => abrirModalEtiquetas());
   $app.querySelector("#btnNovo")?.addEventListener("click", () => { location.hash = "#/produtos/novo"; });
 
   void carregar($app, true);
@@ -409,6 +419,10 @@ function abrirModalFamiliaForm(familia: Familia | null): Promise<boolean | { id:
       <div style="display:flex;flex-direction:column;gap:12px;">
         <div class="field"><label>Nome da família *</label><input id="faNome" type="text" value="${escapeHtml(familia ? familia.nome : "")}" placeholder="Ex.: Cabo Flexível, Parafuso, Cola"></div>
         <div class="field"><label>Descrição (opcional)</label><input id="faDesc" type="text" value="${escapeHtml(familia ? familia.descricao : "")}"></div>
+        <div class="field-row">
+          <div class="field" style="flex:1"><label>NCM padrão</label><input id="faNcm" type="text" maxlength="8" placeholder="Ex.: 8536.69.90" value="${escapeHtml(familia ? familia.ncm_padrao || "" : "")}"></div>
+          <div class="field" style="flex:1"><label>Unidade padrão</label><input id="faUnidade" type="text" placeholder="UN, PC, MT, RL…" value="${escapeHtml(familia ? familia.unidade_padrao || "UN" : "UN")}"></div>
+        </div>
         <div class="field">
           <label>Atributos (características das variações)</label>
           <div id="faLista" style="display:flex;flex-direction:column;gap:6px;">${atributosForm.map(rowHtml).join("")}</div>
@@ -465,6 +479,8 @@ function abrirModalFamiliaForm(familia: Familia | null): Promise<boolean | { id:
           const payload: FamiliaPayload = {
             nome,
             descricao: modal.querySelector<HTMLInputElement>("#faDesc")!.value.trim(),
+            ncm_padrao: modal.querySelector<HTMLInputElement>("#faNcm")!.value.trim(),
+            unidade_padrao: modal.querySelector<HTMLInputElement>("#faUnidade")!.value.trim() || "UN",
             atributos: collect(),
           };
           try {
@@ -754,7 +770,22 @@ function carregarAtributosFamilia(familiaId: number | null, produto: ProdutoCada
         const val = v.atributos ? v.atributos[String(a.id)] : undefined;
         if (val) { valores[a.id].add(val); vals[String(a.id)] = val; }
       });
-      variantes.push({ id: v.id, sku: v.sku || "", ean: v.ean || "", preco: v.preco || "", prom: v.preco_promocional || "", valores: vals });
+      variantes.push({
+        id: v.id,
+        sku: v.sku || "",
+        ean: v.ean || "",
+        preco: v.preco || "",
+        prom: v.preco_promocional || "",
+        peso: v.peso || "",
+        dimensoes: v.dimensoes || "",
+        unidade_venda: v.unidade_venda || "",
+        embalagem: v.embalagem || "",
+        fator_conversao: v.fator_conversao || "",
+        localizacao: v.localizacao || "",
+        ncm: v.ncm || "",
+        unidade_tributavel: v.unidade_tributavel || "",
+        valores: vals,
+      });
     });
   }
 }
@@ -839,6 +870,14 @@ function bindEditor($app: HTMLElement, produto: ProdutoCadastro | null): void {
       else if (field === "ean") variantes[idx].ean = t.value;
       else if (field === "preco") variantes[idx].preco = t.value;
       else if (field === "prom") variantes[idx].prom = t.value;
+      else if (field === "peso") variantes[idx].peso = t.value;
+      else if (field === "dimensoes") variantes[idx].dimensoes = t.value;
+      else if (field === "unidade_venda") variantes[idx].unidade_venda = t.value;
+      else if (field === "embalagem") variantes[idx].embalagem = t.value;
+      else if (field === "fator_conversao") variantes[idx].fator_conversao = t.value;
+      else if (field === "localizacao") variantes[idx].localizacao = t.value;
+      else if (field === "ncm") variantes[idx].ncm = t.value;
+      else if (field === "unidade_tributavel") variantes[idx].unidade_tributavel = t.value;
     }
   });
 
@@ -1196,6 +1235,14 @@ function gerarVariacoes($app: HTMLElement): void {
       ean: prev ? prev.ean : "",
       preco: prev ? prev.preco : "",
       prom: prev ? prev.prom : "",
+      peso: prev ? prev.peso : "",
+      dimensoes: prev ? prev.dimensoes : "",
+      unidade_venda: prev ? prev.unidade_venda : "",
+      embalagem: prev ? prev.embalagem : "",
+      fator_conversao: prev ? prev.fator_conversao : "",
+      localizacao: prev ? prev.localizacao : "",
+      ncm: prev ? prev.ncm : "",
+      unidade_tributavel: prev ? prev.unidade_tributavel : "",
       valores: attr,
     };
   });
@@ -1221,23 +1268,32 @@ function renderVariantes($app: HTMLElement): void {
     $wrap.innerHTML = "";
     return;
   }
-  if ($hint) $hint.textContent = `${variantes.length} variação(ões) · atributos: ${atributos.map((a) => a.nome).join(" · ")}. Edite diretamente nas células (SKU, EAN, Preço, Promo).`;
+  if ($hint) $hint.textContent = `${variantes.length} variação(ões) · atributos: ${atributos.map((a) => a.nome).join(" · ")}. Edite diretamente nas células (SKU, EAN, Preço, Promo, Peso, Dimensões, Unid., Emb., Fator, Localização, NCM, Unid. Trib.).`;
   const rows = variantes.map((v, idx) => {
     const label = atributos.map((a) => v.valores[String(a.id)]).filter(Boolean).join(" · ") || "—";
+    const num = (x: string | number) => x !== "" && x != null ? String(x) : "";
     return `
     <tr class="${idx % 2 ? "is-zebra" : ""}">
       <td class="vt-variacao" title="${escapeHtml(label)}">${escapeHtml(label)}</td>
       <td><input data-i="${idx}" data-field="sku" type="text" placeholder="SKU" value="${escapeHtml(v.sku)}"></td>
       <td><input data-i="${idx}" data-field="ean" type="text" placeholder="EAN" value="${escapeHtml(v.ean)}"></td>
-      <td><input data-i="${idx}" data-field="preco" type="number" min="0" step="0.01" placeholder="R$" value="${escapeHtml(v.preco !== "" && v.preco != null ? String(v.preco) : "")}"></td>
-      <td><input data-i="${idx}" data-field="prom" type="number" min="0" step="0.01" placeholder="Promo" value="${escapeHtml(v.prom !== "" && v.prom != null ? String(v.prom) : "")}"></td>
+      <td><input data-i="${idx}" data-field="preco" type="number" min="0" step="0.01" placeholder="R$" value="${escapeHtml(num(v.preco))}"></td>
+      <td><input data-i="${idx}" data-field="prom" type="number" min="0" step="0.01" placeholder="Promo" value="${escapeHtml(num(v.prom))}"></td>
+      <td><input data-i="${idx}" data-field="peso" type="number" min="0" step="0.001" placeholder="kg" value="${escapeHtml(num(v.peso))}"></td>
+      <td><input data-i="${idx}" data-field="dimensoes" type="text" placeholder="CxLxA" value="${escapeHtml(v.dimensoes)}"></td>
+      <td><input data-i="${idx}" data-field="unidade_venda" type="text" placeholder="UN" value="${escapeHtml(v.unidade_venda)}"></td>
+      <td><input data-i="${idx}" data-field="embalagem" type="number" min="0" step="0.01" placeholder="unid/cx" value="${escapeHtml(num(v.embalagem))}"></td>
+      <td><input data-i="${idx}" data-field="fator_conversao" type="number" min="0" step="0.01" placeholder="cx →" value="${escapeHtml(num(v.fator_conversao))}"></td>
+      <td><input data-i="${idx}" data-field="localizacao" type="text" placeholder="Endereço" value="${escapeHtml(v.localizacao)}"></td>
+      <td><input data-i="${idx}" data-field="ncm" type="text" placeholder="NCM" maxlength="8" value="${escapeHtml(v.ncm)}"></td>
+      <td><input data-i="${idx}" data-field="unidade_tributavel" type="text" placeholder="UN" value="${escapeHtml(v.unidade_tributavel)}"></td>
       <td class="vt-del"><button type="button" class="icon-btn" data-rm="${idx}" title="Remover variação">×</button></td>
     </tr>`;
   }).join("");
   $wrap.innerHTML = `
     <table class="vt-grid">
       <thead>
-        <tr><th class="vt-c-variacao">Variação</th><th>SKU</th><th>EAN</th><th>Preço</th><th>Promo.</th><th class="vt-c-del"></th></tr>
+        <tr><th class="vt-c-variacao">Variação</th><th>SKU</th><th>EAN</th><th>Preço</th><th>Promo.</th><th>Peso</th><th>Dimensões</th><th>Unid.</th><th>Emb.</th><th>Fator</th><th>Localização</th><th>NCM</th><th>Unid. Trib.</th><th class="vt-c-del"></th></tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -1312,6 +1368,14 @@ async function salvar($app: HTMLElement, produto: ProdutoCadastro | null): Promi
       preco: v.preco !== "" && v.preco != null ? Number(v.preco) : 0,
       preco_promocional: v.prom !== "" && v.prom != null ? Number(v.prom) : null,
       observacao: "",
+      peso: v.peso !== "" && v.peso != null ? Number(v.peso) : null,
+      dimensoes: v.dimensoes || "",
+      unidade_venda: v.unidade_venda || "UN",
+      embalagem: v.embalagem !== "" && v.embalagem != null ? Number(v.embalagem) : null,
+      fator_conversao: v.fator_conversao !== "" && v.fator_conversao != null ? Number(v.fator_conversao) : null,
+      localizacao: v.localizacao || "",
+      ncm: v.ncm || "",
+      unidade_tributavel: v.unidade_tributavel || "",
       atributos: v.valores,
     })),
   };
@@ -1430,3 +1494,28 @@ function bindImagens($app: HTMLElement, produto: ProdutoCadastro): void {
 }
 
 // ===================================================================
+//  Etiquetas de preço
+// ===================================================================
+
+function abrirModalEtiquetas(): void {
+  openModal(
+    `<div class="modal-head"><h3>Etiquetas de preço</h3><button class="icon-btn" data-close>×</button></div>
+     <p style="font-size:13px;color:var(--ink-soft);margin-bottom:12px;">Informe os IDs das variantes (separados por vírgula) para gerar a folha de etiquetas.</p>
+     <div class="field"><label>IDs das variantes</label><textarea id="etIds" rows="3" placeholder="Ex.: 1, 2, 3, 10"></textarea></div>
+     <div class="modal-actions">
+       <button class="btn btn--accent" id="etGerar">Gerar etiquetas</button>
+       <button class="btn" data-close>Cancelar</button>
+     </div>`,
+    {
+      onMount(m) {
+        m.querySelectorAll("[data-close]").forEach((b) => ((b as HTMLElement).onclick = closeModal));
+        m.querySelector<HTMLElement>("#etGerar")!.onclick = () => {
+          const texto = (m.querySelector<HTMLTextAreaElement>("#etIds")?.value || "").trim();
+          if (!texto) { toast("Informe ao menos um ID", "error"); return; }
+          const ids = texto.split(",").map((s) => s.trim()).filter(Boolean).join(",");
+          window.open(`/etiquetas/imprimir?ids=${ids}`, "_blank");
+        };
+      },
+    }
+  );
+}

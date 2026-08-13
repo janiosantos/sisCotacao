@@ -28,6 +28,19 @@ def fmt_brl(value: float | None) -> str:
         return "R$ 0,00"
 
 
+def fmt_qty(value: float | None) -> str:
+    """Formata quantidade sem casas decimais supérfluas: 50.0 -> '50', 2.5 -> '2,5'."""
+    if value is None:
+        return "0"
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if v == int(v):
+        return str(int(v))
+    return f"{v:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
 def document_context(cotacao: dict, itens: list[dict], fornecedores: list[dict], vencedores: list[dict], precos: list[dict] | None = None) -> dict:
     vencedor_map = {
         v["cotacao_item_id"]: v for v in vencedores

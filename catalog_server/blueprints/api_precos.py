@@ -1,10 +1,37 @@
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 
-from catalog_server.repositories import promocao_repo, revisao_repo, tabela_preco_repo
+from catalog_server.blueprints.api_usuarios import SESSION_KEY
+from catalog_server.repositories import preco_historico_repo, promocao_repo, revisao_repo, tabela_preco_repo
+from catalog_server.services import pricing_engine
 
 api_precos_bp = Blueprint("api_precos", __name__)
+
+
+# ─── Simulação de preço (Motor Fiscal → Custo → Precificação) ──
+
+@api_precos_bp.get("/api/precos/calcular/<int:variante_id>")
+def calcular_preco(variante_id: int):
+    args = request.args
+    margem = float(args["margem"]) if args.get("margem") else None
+    markup = float(args["markup"]) if args.get("markup") else None
+    return jsonify(pricing_engine.calcular_preco(
+        variante_id,
+        canal=args.get("canal"),
+        margem=margem,
+        markup=markup,
+        comissao=float(args.get("comissao") or 0),
+        despesas=float(args.get("despesas") or 0),
+        taxas=float(args.get("taxas") or 0),
+        tabela_id=args.get("tabela_id", type=int),
+        fornecedor_id=args.get("fornecedor_id", type=int),
+    ))
+
+
+@api_precos_bp.get("/api/precos/efetivo/<int:variante_id>")
+def preco_efetivo(variante_id: int):
+    return jsonify(pricing_engine.preco_efetivo(variante_id, canal=request.args.get("canal") or "varejo"))
 
 
 # ─── Tabelas de Preço ──────────────────────────────────────
@@ -97,6 +124,38 @@ def gerar_precos_tabela(tabela_id: int):
     markup = float(data["markup"]) if "markup" in data else None
     count = tabela_preco_repo.gerar_precos(tabela_id, margem=margem, markup=markup)
     return jsonify({"gerados": count})
+
+
+# ─── Reajuste em lote (prévia + aprovação + histórico) ─────
+
+@api_precos_bp.post("/api/tabelas-preco/<int:tabela_id>/previa")
+def previa_tabela(tabela_id: int):
+    data = request.get_json(silent=True) or {}
+    margem = float(data["margem"]) if data.get("margem") is not None else None
+    markup = float(data["markup"]) if data.get("markup") is not None else None
+    return jsonify(pricing_engine.previa_reajuste(
+        tabela_id, margem=margem, markup=markup, termo=data.get("termo"),
+    ))
+
+
+@api_precos_bp.post("/api/tabelas-preco/<int:tabela_id>/reajustar")
+def reajustar_tabela(tabela_id: int):
+    """Aprova e aplica o reajuste. `confirmado: false` apenas retorna a prévia."""
+    data = request.get_json(silent=True) or {}
+    margem = float(data["margem"]) if data.get("margem") is not None else None
+    markup = float(data["markup"]) if data.get("markup") is not None else None
+    confirmado = bool(data.get("confirmado"))
+    if not confirmado:
+        prev = pricing_engine.previa_reajuste(tabela_id, margem=margem, markup=markup)
+        return jsonify({"confirmado": False, **prev})
+    result = pricing_engine.aplicar_reajuste(
+        tabela_id,
+        margem=margem,
+        markup=markup,
+        usuario_id=session.get(SESSION_KEY),
+        origem=data.get("origem") or "motor-precificacao",
+    )
+    return jsonify({"confirmado": True, **result})
 
 
 # ─── Promoções ─────────────────────────────────────────────
@@ -224,3 +283,15 @@ def fechar_revisao(rv_id: int):
 def listar_itens_margem(tabela_id: int):
     q = request.args.get("q", "").strip() or None
     return jsonify(revisao_repo.list_itens_com_margem(tabela_id, termo=q))
+
+
+# ─── Histórico de preços (auditoria) ───────────────────────
+
+@api_precos_bp.get("/api/precos/historico")
+def listar_historico_precos():
+    return jsonify(preco_historico_repo.list(
+        tabela_id=request.args.get("tabela_id", type=int),
+        variante_id=request.args.get("variante_id", type=int),
+        termo=request.args.get("q"),
+        limit=request.args.get("limit", 200, type=int),
+    ))

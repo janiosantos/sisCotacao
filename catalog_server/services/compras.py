@@ -22,22 +22,28 @@ def montar_matriz(cotacao_id: int) -> dict | None:
         precos = {}
         melhor_id = None
         melhor_preco = None
+        melhor_prazo_id = None
+        melhor_prazo = None
         for pr in dados["precos"]:
             if pr["cotacao_item_id"] != it["cotacao_item_id"]:
                 continue
             desc = float(pr["desconto"] or 0)
             preco_liquido = float(pr["preco_unitario"]) * (1 - desc / 100.0)
             disponivel = bool(pr["disponibilidade_estoque"])
+            prazo = pr["prazo_entrega_dias"]
             precos[str(pr["fornecedor_id"])] = {
                 "preco": float(pr["preco_unitario"]),
                 "desconto": desc,
                 "preco_liquido": preco_liquido,
-                "prazo": pr["prazo_entrega_dias"],
+                "prazo": prazo,
                 "disponivel": disponivel,
             }
             if disponivel and preco_liquido > 0 and (melhor_preco is None or preco_liquido < melhor_preco):
                 melhor_preco = preco_liquido
                 melhor_id = pr["fornecedor_id"]
+            if disponivel and preco_liquido > 0 and prazo is not None and (melhor_prazo is None or prazo < melhor_prazo):
+                melhor_prazo = prazo
+                melhor_prazo_id = pr["fornecedor_id"]
         itens.append({
             "cotacao_item_id": it["cotacao_item_id"],
             "produto_id": it["produto_id"],
@@ -50,6 +56,8 @@ def montar_matriz(cotacao_id: int) -> dict | None:
             "precos": precos,
             "melhor_id": melhor_id,
             "melhor_preco": melhor_preco,
+            "melhor_prazo_id": melhor_prazo_id,
+            "melhor_prazo": melhor_prazo,
         })
 
     # Lote centralizado: fornecedor único que precificou TODOS os itens com o menor total.

@@ -8,13 +8,16 @@ from catalog_server.blueprints import (
     api_compras_avancado_bp,
     api_posvenda_bp,
     api_catalog_bp,
+    api_dashboard_bp,
     api_diagnostico_bp,
+    api_loja_bp,
     api_clientes_bp,
     api_compras_bp,
     api_estoque_bp,
     api_financeiro_bp,
     api_fiscal_avancado_bp,
     api_fiscal_bp,
+    api_fiscal_regras_bp,
     api_relatorios_bp,
     api_precos_bp,
     api_ia_bp,
@@ -60,7 +63,9 @@ def create_app() -> Flask:
         app.logger.warning("Falha ao indexar a busca de produtos (FTS).", exc_info=True)
 
     app.register_blueprint(api_catalog_bp)
+    app.register_blueprint(api_dashboard_bp)
     app.register_blueprint(api_diagnostico_bp)
+    app.register_blueprint(api_loja_bp)
     app.register_blueprint(api_produtos_bp)
     app.register_blueprint(api_suppliers_bp)
     app.register_blueprint(api_quotes_bp)
@@ -79,6 +84,7 @@ def create_app() -> Flask:
     app.register_blueprint(api_financeiro_bp)
     app.register_blueprint(api_fiscal_avancado_bp)
     app.register_blueprint(api_fiscal_bp)
+    app.register_blueprint(api_fiscal_regras_bp)
     app.register_blueprint(api_precos_bp)
     app.register_blueprint(api_relatorios_bp)
     app.register_blueprint(portal_bp)
@@ -106,6 +112,7 @@ def create_app() -> Flask:
         return resp
 
     app.jinja_env.filters["brl"] = quote_service.fmt_brl
+    app.jinja_env.filters["qty"] = quote_service.fmt_qty
     app.jinja_env.filters["status_label"] = quote_service.status_label
 
     @app.get("/images/<path:name>")

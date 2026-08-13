@@ -4,55 +4,187 @@
 <meta charset="UTF-8">
 <title>Pedido {{ pedido.numero }}</title>
 <style>
-  @page{ margin:18mm; }
+  :root{
+    --verde:#2E7D46;
+    --verde-escuro:#1F5C33;
+    --tinta:#1f2430;
+    --tinta-suave:#5b655c;
+    --linha:#d7dace;
+    --fundo-suave:#f6f7f3;
+  }
+  @page{ margin:16mm 14mm; }
   *{ box-sizing:border-box; }
-  body{ font-family:'Segoe UI',Arial,sans-serif; color:#1f2430; font-size:13px; margin:0; }
-  .cab{ border-bottom:3px solid #2E7D46; padding-bottom:12px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:flex-end; }
-  .cab h1{ margin:0; font-size:24px; color:#2E7D46; }
-  .cab .num{ font-size:18px; font-weight:700; }
-  .meta{ display:flex; gap:40px; margin-bottom:18px; }
-  .meta div{ flex:1; }
-  .meta small{ display:block; color:#6b7280; text-transform:uppercase; font-size:10px; letter-spacing:.05em; }
-  table{ width:100%; border-collapse:collapse; }
-  th,td{ border:1px solid #d7dace; padding:8px 10px; text-align:left; vertical-align:top; }
-  th{ background:#eef0ea; }
-  .num-c{ text-align:right; font-variant-numeric:tabular-nums; }
-  .tot{ margin-top:14px; text-align:right; font-size:17px; font-weight:700; color:#2E7D46; }
-  .rod{ margin-top:34px; font-size:11px; color:#6b7280; border-top:1px solid #d7dace; padding-top:8px; }
+  body{
+    font-family:'Segoe UI',Arial,sans-serif; color:var(--tinta); font-size:12.5px; margin:0;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; background:#fff;
+  }
+  .folha{ max-width:900px; margin:0 auto; padding:20px; }
+
+  .toolbar{ display:flex; justify-content:flex-end; gap:8px; margin-bottom:14px; }
+  .toolbar button{ padding:8px 16px; border-radius:6px; border:1px solid var(--linha); background:#fff; font-size:13px; cursor:pointer; }
+  .toolbar button.primary{ background:var(--verde); color:#fff; border-color:var(--verde); font-weight:600; }
+  @media print{ .toolbar{ display:none; } .folha{ padding:0; } }
+
+  .letterhead{ display:flex; justify-content:space-between; align-items:flex-start;
+    border-bottom:3px solid var(--verde); padding-bottom:14px; margin-bottom:18px; }
+  .empresa .nome{ font-size:17px; font-weight:800; color:var(--verde-escuro); }
+  .empresa .linha{ font-size:11px; color:var(--tinta-suave); margin-top:2px; }
+  .doc-info{ text-align:right; }
+  .doc-info .titulo{ font-size:20px; font-weight:800; letter-spacing:.03em; color:var(--tinta); text-transform:uppercase; }
+  .doc-info .numero{ font-size:14px; font-weight:700; color:var(--verde); margin-top:2px; }
+  .doc-info .data{ font-size:11px; color:var(--tinta-suave); margin-top:2px; }
+  .badge{ display:inline-block; margin-top:6px; padding:3px 10px; border-radius:20px; font-size:10.5px;
+    font-weight:700; text-transform:uppercase; letter-spacing:.03em; background:#eceef0; color:#556; }
+  .badge-enviado{ background:#e4ecff; color:#2851b8; }
+  .badge-faturado{ background:#e0f4e7; color:var(--verde-escuro); }
+  .badge-recebido{ background:#e0f4e7; color:var(--verde-escuro); }
+
+  .painel{ display:flex; gap:16px; margin-bottom:18px; }
+  .caixa{ flex:1; background:var(--fundo-suave); border:1px solid var(--linha); border-radius:8px; padding:12px 14px; }
+  .caixa h4{ margin:0 0 8px; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--tinta-suave); }
+  .caixa .linha-info{ font-size:12.5px; margin-bottom:3px; }
+  .caixa .linha-info b{ color:var(--tinta); }
+  .caixa .linha-info span.rot{ color:var(--tinta-suave); display:inline-block; min-width:96px; }
+
+  table{ width:100%; border-collapse:collapse; margin-bottom:4px; }
+  thead th{ background:var(--verde); color:#fff; font-size:10.5px; text-transform:uppercase;
+    letter-spacing:.04em; padding:9px 10px; text-align:left; }
+  thead th.num{ text-align:right; }
+  tbody td{ border-bottom:1px solid var(--linha); padding:9px 10px; vertical-align:top; }
+  tbody tr:nth-child(even){ background:var(--fundo-suave); }
+  td.num{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.sku{ font-family:Consolas,monospace; font-size:11px; color:var(--tinta-suave); margin-top:2px; }
+
+  .totais{ display:flex; justify-content:flex-end; margin-top:10px; }
+  .totais table{ width:280px; }
+  .totais td{ border:none; padding:4px 6px; }
+  .totais .rot{ color:var(--tinta-suave); }
+  .totais .total-final td{ border-top:2px solid var(--verde); font-size:16px; font-weight:800;
+    color:var(--verde-escuro); padding-top:8px; }
+
+  .obs{ margin-top:18px; padding:10px 14px; background:var(--fundo-suave); border-left:3px solid var(--verde);
+    border-radius:4px; font-size:12px; }
+  .obs h4{ margin:0 0 4px; font-size:10.5px; text-transform:uppercase; color:var(--tinta-suave); }
+
+  .assinaturas{ display:flex; gap:40px; margin-top:50px; }
+  .assinatura{ flex:1; text-align:center; }
+  .assinatura .linha-ass{ border-top:1px solid var(--tinta); margin-bottom:6px; padding-top:34px; }
+  .assinatura small{ color:var(--tinta-suave); }
+
+  .rodape{ margin-top:30px; padding-top:10px; border-top:1px solid var(--linha); font-size:10.5px;
+    color:var(--tinta-suave); display:flex; justify-content:space-between; }
 </style>
 </head>
 <body>
-  <div class="cab">
-    <div><h1>PEDIDO DE COMPRA</h1><div>Referente à cotação {{ pedido.cotacao_numero }}</div></div>
-    <div class="num">Nº {{ pedido.numero }}</div>
+  <div class="folha">
+    <div class="toolbar">
+      <button onclick="window.close()">Fechar</button>
+      <button class="primary" onclick="window.print()">Imprimir / Salvar PDF</button>
+    </div>
+
+    <div class="letterhead">
+      <div class="empresa">
+        {% if emitente %}
+          <div class="nome">{{ emitente.nome_fantasia or emitente.razao_social }}</div>
+          {% if emitente.razao_social and emitente.nome_fantasia and emitente.razao_social != emitente.nome_fantasia %}
+            <div class="linha">{{ emitente.razao_social }}</div>
+          {% endif %}
+          {% if emitente.cnpj %}<div class="linha">CNPJ {{ emitente.cnpj }}</div>{% endif %}
+          {% if emitente.logradouro %}
+            <div class="linha">{{ emitente.logradouro }}{% if emitente.numero %}, {{ emitente.numero }}{% endif %}{% if emitente.bairro %} — {{ emitente.bairro }}{% endif %}</div>
+          {% endif %}
+          {% if emitente.municipio %}
+            <div class="linha">{{ emitente.municipio }}{% if emitente.uf %}/{{ emitente.uf }}{% endif %}{% if emitente.cep %} · CEP {{ emitente.cep }}{% endif %}</div>
+          {% endif %}
+        {% else %}
+          <div class="nome">Pedido de Compra</div>
+        {% endif %}
+      </div>
+      <div class="doc-info">
+        <div class="titulo">Pedido de Compra</div>
+        <div class="numero">Nº {{ pedido.numero }}</div>
+        <div class="data">Emitido em {{ pedido.data_geracao or pedido.criado_em }}</div>
+        <span class="badge badge-{{ pedido.status }}">
+          {% if pedido.status == 'faturado' %}Faturado
+          {% elif pedido.status == 'recebido' %}Recebido
+          {% else %}Enviado{% endif %}
+        </span>
+      </div>
+    </div>
+
+    <div class="painel">
+      <div class="caixa">
+        <h4>Fornecedor</h4>
+        <div class="linha-info"><b>{{ pedido.fornecedor }}</b></div>
+        {% if pedido.razao_social and pedido.razao_social != pedido.fornecedor %}
+          <div class="linha-info">{{ pedido.razao_social }}</div>
+        {% endif %}
+        {% if pedido.cnpj_cpf %}<div class="linha-info"><span class="rot">CNPJ/CPF</span>{{ pedido.cnpj_cpf }}</div>{% endif %}
+        {% if pedido.representante %}<div class="linha-info"><span class="rot">Representante</span>{{ pedido.representante }}</div>{% endif %}
+        {% if pedido.whatsapp %}<div class="linha-info"><span class="rot">WhatsApp</span>{{ pedido.whatsapp }}</div>{% endif %}
+        {% if pedido.email %}<div class="linha-info"><span class="rot">E-mail</span>{{ pedido.email }}</div>{% endif %}
+      </div>
+      <div class="caixa">
+        <h4>Condições</h4>
+        <div class="linha-info"><span class="rot">Cotação ref.</span>{{ pedido.cotacao_numero }}{% if pedido.cotacao_titulo %} — {{ pedido.cotacao_titulo }}{% endif %}</div>
+        <div class="linha-info"><span class="rot">Pagamento</span>{{ pedido.condicao_pagamento or 'A combinar' }}</div>
+        <div class="linha-info"><span class="rot">Itens</span>{{ pedido.itens|length }}</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:28px">#</th>
+          <th>Produto</th>
+          <th class="num" style="width:60px">Qtd</th>
+          <th class="num" style="width:100px">Preço unit.</th>
+          <th class="num" style="width:110px">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in pedido.itens %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>
+            <b>{{ it.name }}</b>
+            {% if it.sku or it.brand %}<div class="sku">{{ it.sku }}{% if it.brand %} · {{ it.brand }}{% endif %}</div>{% endif %}
+          </td>
+          <td class="num">{{ it.quantidade|qty }}</td>
+          <td class="num">{{ it.preco_unitario|brl }}</td>
+          <td class="num">{{ (it.preco_unitario * it.quantidade)|brl }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="totais">
+      <table>
+        <tr><td class="rot">Subtotal</td><td class="num">{{ pedido.total|brl }}</td></tr>
+        <tr class="total-final"><td>Total</td><td class="num">{{ pedido.total|brl }}</td></tr>
+      </table>
+    </div>
+
+    {% if pedido.observacoes %}
+    <div class="obs">
+      <h4>Observações</h4>
+      {{ pedido.observacoes }}
+    </div>
+    {% endif %}
+
+    <div class="assinaturas">
+      <div class="assinatura"><div class="linha-ass"></div><small>Comprador — data</small></div>
+      <div class="assinatura"><div class="linha-ass"></div><small>Fornecedor — de acordo</small></div>
+    </div>
+
+    <div class="rodape">
+      <span>Documento gerado automaticamente pelo sistema de cotações.</span>
+      <span>{{ pedido.numero }} · {{ pedido.itens|length }} item(ns)</span>
+    </div>
   </div>
-  <div class="meta">
-    <div><small>Fornecedor</small>{{ pedido.fornecedor }}<br>
-      {% if pedido.cnpj_cpf %}CNPJ/CPF: {{ pedido.cnpj_cpf }}{% endif %}
-      {% if pedido.razao_social %} · {{ pedido.razao_social }}{% endif %}</div>
-    <div><small>Status</small>{{ 'Faturado' if pedido.status == 'faturado' else 'Enviado' }}</div>
-    <div><small>Data de geração</small>{{ pedido.data_geracao or pedido.criado_em }}</div>
-  </div>
-  <table>
-    <thead>
-      <tr><th>#</th><th>Produto</th><th>SKU</th><th>Marca</th><th>Qtd</th><th>Preço unit.</th><th class="num-c">Total</th></tr>
-    </thead>
-    <tbody>
-      {% for it in pedido.itens %}
-      <tr>
-        <td>{{ loop.index }}</td>
-        <td>{{ it.name }}</td>
-        <td>{{ it.sku }}</td>
-        <td>{{ it.brand }}</td>
-        <td>{{ it.quantidade }}</td>
-        <td>R$ {{ "%.2f"|format(it.preco_unitario) }}</td>
-        <td class="num-c">R$ {{ "%.2f"|format(it.preco_unitario * it.quantidade) }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <div class="tot">Total: R$ {{ "%.2f"|format(pedido.total) }}</div>
-  <div class="rod">Documento gerado automaticamente. Aguardamos o faturamento e entrega. Obrigado!</div>
-  <script>window.onload=function(){window.print();};</script>
+
+  <script>
+    window.onload = function(){ setTimeout(function(){ window.print(); }, 200); };
+  </script>
 </body>
 </html>

@@ -249,7 +249,8 @@ params + [limit, offset],
                    p.nome, p.marca AS marca_prod, p.familia_id,
                    COALESCE(cat.nome, '') AS categoria,
                    COALESCE(sub.nome, '') AS subcategoria, p.embalagem,
-                   p.classe_abc, p.ordem_abc
+                   p.classe_abc, p.ordem_abc,
+                   v.unidade_venda, v.embalagem AS embalagem_qtd, v.ncm
             {join}
             WHERE {where_sql}
             {_order_abc(ordenar, extra="p.id, v.id")}
@@ -302,7 +303,8 @@ params + [limit, offset],
                    p.nome, p.marca AS marca_prod, p.familia_id,
                    COALESCE(cat.nome, '') AS categoria,
                    COALESCE(sub.nome, '') AS subcategoria, p.embalagem,
-                   p.classe_abc, p.ordem_abc
+                   p.classe_abc, p.ordem_abc,
+                   v.unidade_venda, v.embalagem AS embalagem_qtd, v.ncm
             {join}
             WHERE {where_sql}
             {_order_abc(ordenar, extra="p.id, v.id")}
@@ -776,6 +778,9 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
             "category": row["categoria"] or "",
             "subcategory": row["subcategoria"] or "",
             "classe_abc": row["classe_abc"] or "",
+            "unidade_venda": row["unidade_venda"] or "",
+            "embalagem_qtd": row["embalagem_qtd"],
+            "ncm": row["ncm"] or "",
             "imagem_url": image_url(fns[0]) if fns else None,
             "fornecedores": (suppliers or {}).get(row["id"], []),
         }

@@ -41,7 +41,14 @@ def criar():
         return jsonify({"error": "Perfil inválido"}), 400
     if usuario_repo.get_by_login(login):
         return jsonify({"error": "Login já em uso"}), 409
-    usuario_id = usuario_repo.create(nome, login, generate_password_hash(senha), perfil)
+    usuario_id = usuario_repo.create(
+        nome,
+        login,
+        generate_password_hash(senha),
+        perfil,
+        desconto_limite_pct=float(data.get("desconto_limite_pct") or 0),
+        autoriza_desconto=bool(data.get("autoriza_desconto")),
+    )
     return jsonify({"id": usuario_id}), 201
 
 
@@ -56,7 +63,22 @@ def atualizar(usuario_id: int):
     if perfil not in usuario_repo.PERFIS:
         return jsonify({"error": "Perfil inválido"}), 400
     senha_hash = generate_password_hash(senha) if len(senha) >= 4 else None
-    ok = usuario_repo.update(usuario_id, nome, perfil, senha_hash)
+    ok = usuario_repo.update(
+        usuario_id,
+        nome,
+        perfil,
+        senha_hash,
+        desconto_limite_pct=(
+            float(data["desconto_limite_pct"])
+            if data.get("desconto_limite_pct") is not None
+            else None
+        ),
+        autoriza_desconto=(
+            bool(data["autoriza_desconto"])
+            if data.get("autoriza_desconto") is not None
+            else None
+        ),
+    )
     if not ok:
         return jsonify({"error": "Usuário não encontrado"}), 404
     return jsonify({"ok": True})

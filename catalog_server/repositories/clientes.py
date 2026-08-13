@@ -59,7 +59,7 @@ class ClienteRepository:
             cur = conn.execute(
                 "INSERT INTO clientes (nome, tipo_pessoa, doc, email, telefone,"
                 " whatsapp, endereco, cidade, uf, cep, vendedor_id, limite_credito,"
-                " observacoes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " observacoes, contribuinte, ie, c_municipio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     dados["nome"],
                     dados.get("tipo_pessoa", "f"),
@@ -74,6 +74,9 @@ class ClienteRepository:
                     dados.get("vendedor_id") or None,
                     float(dados.get("limite_credito") or 0),
                     dados.get("observacoes") or None,
+                    dados.get("contribuinte") or "",
+                    dados.get("ie") or "",
+                    dados.get("c_municipio") or "",
                 ),
             )
             return cur.lastrowid
@@ -85,8 +88,8 @@ class ClienteRepository:
             cur = conn.execute(
                 "UPDATE clientes SET nome=?, tipo_pessoa=?, doc=?, email=?,"
                 " telefone=?, whatsapp=?, endereco=?, cidade=?, uf=?, cep=?,"
-                " vendedor_id=?, limite_credito=?, observacoes=?, atualizado_em="
-                " datetime('now') WHERE id=?",
+                " vendedor_id=?, limite_credito=?, observacoes=?, contribuinte=?,"
+                " ie=?, c_municipio=?, atualizado_em=datetime('now') WHERE id=?",
                 (
                     dados["nome"],
                     dados.get("tipo_pessoa", "f"),
@@ -101,6 +104,9 @@ class ClienteRepository:
                     dados.get("vendedor_id") or None,
                     dados.get("limite_credito") or 0,
                     dados.get("observacoes") or None,
+                    dados.get("contribuinte") or "",
+                    dados.get("ie") or "",
+                    dados.get("c_municipio") or "",
                     cliente_id,
                 ),
             )

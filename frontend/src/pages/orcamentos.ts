@@ -69,7 +69,7 @@ function tabela(lista: OrcamentoLista[]): string {
     <div class="table-wrap">
       <table class="data-table">
         <thead><tr>
-          <th>Nº</th><th>Cliente</th><th>Contato</th><th>Status</th><th>Itens</th><th>Total</th><th>Criada em</th><th></th>
+          <th>Nº</th><th>Cliente</th><th>Contato</th><th>Status</th><th>Desconto</th><th>Itens</th><th>Total</th><th>Criada em</th><th></th>
         </tr></thead>
         <tbody>
           ${lista
@@ -80,10 +80,12 @@ function tabela(lista: OrcamentoLista[]): string {
                 <td>${escapeHtml(o.cliente || "—")}</td>
                 <td>${escapeHtml(o.contato || "—")}</td>
                 <td><span class="badge badge--${escapeHtml(o.status)}">${STATUS_LABELS[o.status] || o.status}</span></td>
+                <td>${o.desconto_autorizado ? `<span class="badge badge--fechada" title="Desconto autorizado pelo gerente">Autorizado</span>` : "—"}</td>
                 <td>${o.n_itens}</td>
                 <td><strong>${fmtMoney(o.total)}</strong></td>
                 <td>${fmtDate(o.criado_em)}</td>
                 <td>
+                  <a class="btn btn--sm" target="_blank" href="/orcamentos/venda/${o.id}/imprimir" title="Imprimir / salvar PDF">PDF</a>
                   <button class="btn btn--sm btn--ghost" data-status="${o.id}" title="Alterar status">⚙</button>
                 </td>
               </tr>`
@@ -132,7 +134,11 @@ async function abrirDetalhe(id: number): Promise<void> {
        <div>Desconto: <strong>${fmtMoney(d.desconto)}</strong></div>
        <div>Total: <strong>${fmtMoney(d.total)}</strong></div>
      </div>
+     ${d.desconto_autorizado
+       ? `<p style="font-size:12.5px;color:var(--green);margin:10px 0 0;">✓ Desconto autorizado${d.desconto_autorizado_nome ? ` por ${escapeHtml(d.desconto_autorizado_nome)}` : ""}${d.desconto_autorizado_em ? ` em ${fmtDate(d.desconto_autorizado_em)}` : ""}.</p>`
+       : `<button class="btn btn--ghost" data-autorizar style="margin-top:12px;">Autorizar desconto (gerente)</button>`}
 <div class="modal-actions">
+        <a class="btn" target="_blank" href="/orcamentos/venda/${id}/imprimir">PDF</a>
         <button class="btn btn--accent" data-imprimir>Imprimir</button>
         <button class="btn" data-close>Fechar</button>
         <button class="btn btn--ghost btn--danger" data-excluir>Excluir</button>
@@ -140,8 +146,12 @@ async function abrirDetalhe(id: number): Promise<void> {
     {
       onMount(modal) {
         modal.querySelectorAll("[data-close]").forEach((b) => ((b as HTMLElement).onclick = closeModal));
-        modal.querySelector<HTMLElement>("[data-imprimir]")!.onclick = () =>
-          void api.imprimirOrcamento(id).catch((e) => toast("Impressão falhou: " + (e as Error).message, "error"));
+        modal.querySelector<HTMLElement>("[data-imprimir]")!.onclick = () => {
+          window.open(`/orcamentos/venda/${id}/imprimir`, "_blank");
+        };
+        modal.querySelector<HTMLElement>("[data-autorizar]")?.addEventListener("click", () =>
+          void autorizarDescontoModal(id, () => void abrirDetalhe(id))
+        );
         modal.querySelector<HTMLSelectElement>("#dStatus")!.addEventListener("change", async (e) => {
           const status = (e.target as HTMLSelectElement).value;
           try {
@@ -163,6 +173,52 @@ async function abrirDetalhe(id: number): Promise<void> {
             toast("Erro: " + (e as Error).message, "error");
           }
         };
+      },
+    }
+  );
+}
+
+function autorizarDescontoModal(id: number, onOk: () => void): void {
+  openModal(
+    `<div class="modal-head"><h3>Autorizar desconto</h3><button class="icon-btn" data-close>×</button></div>
+     <p style="font-size:13px;color:var(--ink-soft);margin:0 0 12px;">Informe as credenciais do gerente (admin ou usuário com permissão) para autorizar o desconto deste orçamento.</p>
+     <div style="display:flex;flex-direction:column;gap:12px;">
+       <div class="field"><label>Login do gerente</label><input id="adLogin" autocomplete="username"></div>
+       <div class="field"><label>Senha</label><input id="adSenha" type="password" autocomplete="current-password"></div>
+     </div>
+     <div class="modal-actions">
+       <button class="btn" data-close>Cancelar</button>
+       <button class="btn btn--accent" id="adConfirmar">Autorizar</button>
+     </div>`,
+    {
+      onMount(modal) {
+        modal.querySelectorAll("[data-close]").forEach((b) => ((b as HTMLElement).onclick = closeModal));
+        const $login = modal.querySelector<HTMLInputElement>("#adLogin");
+        const $senha = modal.querySelector<HTMLInputElement>("#adSenha");
+        const $btn = modal.querySelector<HTMLButtonElement>("#adConfirmar")!;
+        const tentar = async () => {
+          const login = ($login?.value || "").trim();
+          const senha = $senha?.value || "";
+          if (!login || !senha) {
+            toast("Informe login e senha do gerente", "error");
+            return;
+          }
+          $btn.disabled = true;
+          $btn.textContent = "Autorizando…";
+          try {
+            await api.autorizarDescontoOrcamento(id, { login, senha });
+            toast("Desconto autorizado", "success");
+            closeModal();
+            onOk();
+          } catch (e) {
+            toast("Falha na autorização: " + (e as Error).message, "error");
+            $btn.disabled = false;
+            $btn.textContent = "Autorizar";
+          }
+        };
+        $btn.addEventListener("click", () => void tentar());
+        $senha?.addEventListener("keydown", (e) => { if (e.key === "Enter") void tentar(); });
+        setTimeout(() => $login?.focus(), 0);
       },
     }
   );

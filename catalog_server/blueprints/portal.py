@@ -40,7 +40,17 @@ def portal_proposta(token: str):
     precos = data.get("precos") or []
     if not precos:
         return jsonify({"error": "Nenhuma proposta enviada"}), 400
-    ok = compras_repo.submit_proposta(token, precos)
+    condicao_pagamento = data.get("condicao_pagamento")
+    condicao_pagamento_dias = data.get("condicao_pagamento_dias")
+    try:
+        condicao_pagamento_dias = (
+            int(condicao_pagamento_dias) if condicao_pagamento_dias not in (None, "") else None
+        )
+    except (TypeError, ValueError):
+        condicao_pagamento_dias = None
+    ok = compras_repo.submit_proposta(
+        token, precos, condicao_pagamento, condicao_pagamento_dias
+    )
     if not ok:
         return jsonify({"error": "Link inválido ou expirado"}), 404
     return jsonify({"ok": True})

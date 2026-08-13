@@ -28,7 +28,8 @@
   .campos{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
   .campo label{font-size:12px;color:var(--texto2);display:block;margin-bottom:4px;font-weight:600}
   .campo input{width:100%;padding:9px 10px;border:1px solid var(--borda);border-radius:8px;font-size:15px}
-  .campo input:focus{outline:2px solid var(--verde-claro);border-color:var(--verde)}
+  .campo select{width:100%;padding:9px 10px;border:1px solid var(--borda);border-radius:8px;font-size:15px;background:#fff}
+  .campo input:focus,.campo select:focus{outline:2px solid var(--verde-claro);border-color:var(--verde)}
   .estq{display:flex;gap:8px}
   .estq button{flex:1;padding:9px;border:1px solid var(--borda);border-radius:8px;background:#fff;
                font-weight:600;cursor:pointer;color:var(--texto)}
@@ -54,6 +55,25 @@
     <div class="sub" id="subtitulo"></div>
     <div class="barra" style="margin-top:12px"><span id="preenchimento"></span></div>
   </div>
+  <div class="card" id="cardPagamento">
+    <div class="campo">
+      <label>Condição de pagamento da proposta</label>
+      <select id="condPagamento">
+        <option value="">Selecione…</option>
+        <option value="À vista" data-dias="0">À vista</option>
+        <option value="7 dias" data-dias="7">7 dias</option>
+        <option value="15 dias" data-dias="15">15 dias</option>
+        <option value="30 dias" data-dias="30">30 dias</option>
+        <option value="30/60 dias" data-dias="60">30/60 dias</option>
+        <option value="30/60/90 dias" data-dias="90">30/60/90 dias</option>
+        <option value="outro">Outra condição…</option>
+      </select>
+    </div>
+    <div class="campo" id="campoCondOutra" style="display:none;margin-top:8px">
+      <label>Descreva a condição</label>
+      <input type="text" id="condPagamentoOutra" placeholder="ex.: 21 dias fatura">
+    </div>
+  </div>
   <div id="lista"></div>
   <div id="rodape" style="display:none">
     <button class="enviar" id="btnEnviar">Enviar Proposta</button>
@@ -68,6 +88,24 @@
   var respostas = {};
 
   function fmt(v){ return "R$ " + Number(v||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+  var selCond = document.getElementById("condPagamento");
+  var campoOutra = document.getElementById("campoCondOutra");
+  var inputOutra = document.getElementById("condPagamentoOutra");
+  selCond.addEventListener("change", function(){
+    campoOutra.style.display = (selCond.value === "outro") ? "block" : "none";
+  });
+
+  function condicaoPagamentoAtual(){
+    if(selCond.value === "outro"){
+      return { texto: (inputOutra.value||"").trim(), dias: null };
+    }
+    var opt = selCond.options[selCond.selectedIndex];
+    return {
+      texto: selCond.value || "",
+      dias: opt && opt.dataset.dias !== undefined ? Number(opt.dataset.dias) : null,
+    };
+  }
 
   function carregar(){
     fetch("/api/fornecedor/" + token)
@@ -138,6 +176,11 @@
     return faltando;
   }
 
+  function validarPagamento(){
+    var cond = condicaoPagamentoAtual();
+    return !!cond.texto;
+  }
+
   document.getElementById("btnEnviar").addEventListener("click", function(){
     var faltando = validar();
     if(faltando>0){
@@ -145,6 +188,13 @@
       av.textContent="Preencha o preço de " + faltando + " item(ns) antes de enviar.";
       return;
     }
+    if(!validarPagamento()){
+      var av2=document.getElementById("aviso"); av2.className="aviso erro"; av2.style.display="block";
+      av2.textContent="Informe a condição de pagamento da proposta antes de enviar.";
+      document.getElementById("condPagamento").focus();
+      return;
+    }
+    var cond = condicaoPagamentoAtual();
     var precos = itens.map(function(it){
       var r = respostas[it.cotacao_item_id] || {};
       return {
@@ -158,7 +208,11 @@
     var btn=this; btn.disabled=true; btn.textContent="Enviando…";
     fetch("/api/fornecedor/" + token + "/proposta", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ precos: precos })
+      body: JSON.stringify({
+        precos: precos,
+        condicao_pagamento: cond.texto,
+        condicao_pagamento_dias: cond.dias
+      })
     }).then(function(r){ if(!r.ok) return r.json().then(function(j){throw new Error(j.error||"Erro");}); return r.json(); })
       .then(function(){
         var av=document.getElementById("aviso"); av.className="aviso"; av.style.display="block";

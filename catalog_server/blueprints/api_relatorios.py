@@ -26,3 +26,10 @@ def dre():
     ini = request.args.get("inicio", "")
     fim = request.args.get("fim", "")
     return jsonify(relatorio_repo.dre_resumido(ini, fim))
+
+
+@api_relatorios_bp.get("/api/relatorios/margem-vendas")
+def margem_vendas():
+    ini = request.args.get("inicio", "")
+    fim = request.args.get("fim", "")
+    return jsonify(relatorio_repo.margem_vendas(ini, fim))

@@ -1,0 +1,27 @@
+# Emulador de impressora térmica ESC/POS (rede) — https://github.com/gilbertfl/escpos-netprinter
+# Substitui o papel por páginas HTML com interface web.
+# Uso: docker compose up -d   (web em http://localhost:8081)
+
+services:
+  escpos:
+    image: gilbertfl/escpos-netprinter:3.2
+    container_name: escpos-emulador
+    ports:
+      - "9100:9100/tcp"   # JetDirect (RAW ESC/POS) — porta padrão do backend
+      - "515:515/tcp"     # LPD
+      - "8081:80/tcp"     # Interface web (recibos em HTML)
+      - "631:631/tcp"     # CUPS admin (opcional; usuario cupsadmin / 123456)
+    volumes:
+      - escpos-receipts:/home/escpos-emu/web
+      # Overrides de templates: lista + footer com monitor de novos recibos (auto-refresh)
+      - ./templates/receiptList.html.j2:/home/escpos-emu/templates/receiptList.html.j2
+      - ./templates/footer.html.j2:/home/escpos-emu/templates/footer.html.j2
+      # Página de monitor dedicada: lê a fila e exibe o último recibo
+      - ./static:/home/escpos-emu/static
+    environment:
+      - ESCPOS_DEBUG=False
+      - ESCPOS_TIMEZONE=America/Sao_Paulo
+    restart: unless-stopped
+
+volumes:
+  escpos-receipts:

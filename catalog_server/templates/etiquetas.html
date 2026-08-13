@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Etiquetas de preço</title>
+<style>
+  @page{ margin:8mm; }
+  *{ box-sizing:border-box; }
+  body{ font-family:'Segoe UI',Arial,sans-serif; margin:0; background:#fff; }
+  .toolbar{ display:flex; gap:8px; justify-content:flex-end; padding:8px 12px; }
+  .toolbar button{ padding:8px 14px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer; }
+  .toolbar button.primary{ background:#2E7D46; color:#fff; border-color:#2E7D46; }
+  @media print{ .toolbar{ display:none; } }
+  .sheet{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:4px 12px; }
+  .tag{ border:1.5px solid #222; border-radius:8px; padding:10px 12px; min-height:120px; display:flex; flex-direction:column; justify-content:space-between; page-break-inside:avoid; }
+  .tag .nome{ font-size:12.5px; font-weight:600; line-height:1.2; }
+  .tag .sku{ font-family:Consolas,monospace; font-size:10.5px; color:#555; }
+  .tag .ean{ font-family:Consolas,monospace; font-size:10px; color:#777; }
+  .tag .preco{ font-size:18px; font-weight:800; color:#1F5C33; text-align:right; }
+  .tag .uni{ font-size:10px; color:#666; text-align:right; }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <button onclick="window.close()">Fechar</button>
+    <button class="primary" onclick="window.print()">Imprimir etiquetas</button>
+  </div>
+  <div class="sheet">
+    {% for e in etiquetas %}
+    <div class="tag">
+      <div>
+        <div class="nome">{{ e.nome }}</div>
+        <div class="sku">{{ e.sku or '—' }}</div>
+        {% if e.ean %}<div class="ean">{{ e.ean }}</div>{% endif %}
+      </div>
+      <div>
+        <div class="preco">R$ {{ "%.2f"|format(e.preco) }}</div>
+        <div class="uni">{% if e.unidade_venda %}{{ e.unidade_venda }}{% endif %}{% if e.localizacao %} · {{ e.localizacao }}{% endif %}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</body>
+</html>

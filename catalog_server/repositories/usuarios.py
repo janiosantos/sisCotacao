@@ -8,7 +8,10 @@ class UsuarioRepository:
     PERFIS = ("admin", "vendedor")
 
     def list(self, somente_ativos: bool = False) -> list[dict]:
-        sql = "SELECT id, nome, login, perfil, ativo, criado_em FROM usuarios"
+        sql = (
+            "SELECT id, nome, login, perfil, ativo, desconto_limite_pct,"
+            " autoriza_desconto, criado_em FROM usuarios"
+        )
         if somente_ativos:
             sql += " WHERE ativo = 1"
         sql += " ORDER BY nome"
@@ -20,7 +23,8 @@ class UsuarioRepository:
     def get(self, usuario_id: int) -> dict | None:
         with system_conn() as conn:
             row = conn.execute(
-                "SELECT id, nome, login, perfil, ativo, criado_em FROM usuarios"
+                "SELECT id, nome, login, perfil, ativo, desconto_limite_pct,"
+                " autoriza_desconto, criado_em FROM usuarios"
                 " WHERE id = ?",
                 (usuario_id,),
             ).fetchone()
@@ -44,12 +48,28 @@ class UsuarioRepository:
 
     # ------------------------------------------------------------------
 
-    def create(self, nome: str, login: str, senha_hash: str, perfil: str) -> int:
+    def create(
+        self,
+        nome: str,
+        login: str,
+        senha_hash: str,
+        perfil: str,
+        desconto_limite_pct: float = 0.0,
+        autoriza_desconto: bool = False,
+    ) -> int:
         with system_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO usuarios (nome, login, senha_hash, perfil)"
-                " VALUES (?,?,?,?)",
-                (nome, login, senha_hash, perfil),
+                "INSERT INTO usuarios (nome, login, senha_hash, perfil,"
+                " desconto_limite_pct, autoriza_desconto)"
+                " VALUES (?,?,?,?,?,?)",
+                (
+                    nome,
+                    login,
+                    senha_hash,
+                    perfil,
+                    max(0.0, float(desconto_limite_pct or 0)),
+                    1 if autoriza_desconto else 0,
+                ),
             )
             return cur.lastrowid
 
@@ -61,20 +81,27 @@ class UsuarioRepository:
         nome: str,
         perfil: str,
         senha_hash: str | None = None,
+        desconto_limite_pct: float | None = None,
+        autoriza_desconto: bool | None = None,
     ) -> bool:
+        fields = ["nome=?", "perfil=?"]
+        params: list = [nome, perfil]
+        if senha_hash:
+            fields.append("senha_hash=?")
+            params.append(senha_hash)
+        if desconto_limite_pct is not None:
+            fields.append("desconto_limite_pct=?")
+            params.append(max(0.0, float(desconto_limite_pct)))
+        if autoriza_desconto is not None:
+            fields.append("autoriza_desconto=?")
+            params.append(1 if autoriza_desconto else 0)
+        params.append(usuario_id)
         with system_conn() as conn:
-            if senha_hash:
-                cur = conn.execute(
-                    "UPDATE usuarios SET nome=?, perfil=?, senha_hash=?,"
-                    " atualizado_em=datetime('now') WHERE id=?",
-                    (nome, perfil, senha_hash, usuario_id),
-                )
-            else:
-                cur = conn.execute(
-                    "UPDATE usuarios SET nome=?, perfil=?,"
-                    " atualizado_em=datetime('now') WHERE id=?",
-                    (nome, perfil, usuario_id),
-                )
+            cur = conn.execute(
+                f"UPDATE usuarios SET {', '.join(fields)},"
+                " atualizado_em=datetime('now') WHERE id=?",
+                params,
+            )
             return cur.rowcount > 0
 
     # ------------------------------------------------------------------

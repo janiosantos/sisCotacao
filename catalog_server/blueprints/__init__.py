@@ -13,12 +13,15 @@ from catalog_server.blueprints.api_relatorios import api_relatorios_bp
 from catalog_server.blueprints.api_suppliers import api_suppliers_bp
 from catalog_server.blueprints.api_usuarios import api_usuarios_bp
 from catalog_server.blueprints.api_vendedores import api_vendedores_bp
+from catalog_server.blueprints.api_dashboard import api_dashboard_bp
+from catalog_server.blueprints.api_loja import api_loja_bp
 from catalog_server.blueprints.api_bancos import api_bancos_bp
 from catalog_server.blueprints.api_posvenda import api_posvenda_bp
 from catalog_server.blueprints.api_estoque import api_estoque_bp
 from catalog_server.blueprints.api_financeiro import api_financeiro_bp
 from catalog_server.blueprints.api_fiscal import api_fiscal_bp
 from catalog_server.blueprints.api_fiscal_avancado import api_fiscal_avancado_bp
+from catalog_server.blueprints.api_fiscal_regras import api_fiscal_regras_bp
 from catalog_server.blueprints.api_precos import api_precos_bp
 from catalog_server.blueprints.pages import pages_bp
 from catalog_server.blueprints.portal import portal_bp

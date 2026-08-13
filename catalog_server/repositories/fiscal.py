@@ -46,38 +46,43 @@ class FiscalConfigRepository:
         cst_icms: str | None = None,
         cst_pis: str | None = None,
         cst_cofins: str | None = None,
-        aliquota_icms: float = 0,
-        aliquota_pis: float = 0,
-        aliquota_cofins: float = 0,
-        aliquota_ipi: float = 0,
+        aliquota_icms: float | None = None,
+        aliquota_pis: float | None = None,
+        aliquota_cofins: float | None = None,
+        aliquota_ipi: float | None = None,
+        origem: int | None = None,
+        cest: str | None = None,
+        csosn: str | None = None,
+        aliquota_icms_st: float | None = None,
+        mva: float | None = None,
+        base_reducao: float | None = None,
+        aliquota_interestadual: float | None = None,
+        aliquota_fecp: float | None = None,
+        credito_icms: float | None = None,
+        beneficio_id: int | None = None,
+        vigencia_inicio: str | None = None,
+        vigencia_fim: str | None = None,
     ) -> int:
+        texto = {
+            "ncm": ncm, "cfop": cfop, "cst_icms": cst_icms, "cst_pis": cst_pis,
+            "cst_cofins": cst_cofins, "cest": cest, "csosn": csosn,
+            "vigencia_inicio": vigencia_inicio, "vigencia_fim": vigencia_fim,
+        }
+        numeros = {
+            "aliquota_icms": aliquota_icms, "aliquota_pis": aliquota_pis,
+            "aliquota_cofins": aliquota_cofins, "aliquota_ipi": aliquota_ipi,
+            "origem": origem, "aliquota_icms_st": aliquota_icms_st, "mva": mva,
+            "base_reducao": base_reducao, "aliquota_interestadual": aliquota_interestadual,
+            "aliquota_fecp": aliquota_fecp, "credito_icms": credito_icms,
+        }
+        cols = list(texto) + list(numeros) + ["beneficio_id"]
+        vals = list(texto.values()) + list(numeros.values()) + [beneficio_id]
         with system_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO fiscal_config (variante_id, ncm, cfop, cst_icms, cst_pis, cst_cofins,"
-                " aliquota_icms, aliquota_pis, aliquota_cofins, aliquota_ipi)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?)"
-                " ON CONFLICT(variante_id) DO UPDATE SET"
-                " ncm=COALESCE(excluded.ncm, fiscal_config.ncm),"
-                " cfop=COALESCE(excluded.cfop, fiscal_config.cfop),"
-                " cst_icms=COALESCE(excluded.cst_icms, fiscal_config.cst_icms),"
-                " cst_pis=COALESCE(excluded.cst_pis, fiscal_config.cst_pis),"
-                " cst_cofins=COALESCE(excluded.cst_cofins, fiscal_config.cst_cofins),"
-                " aliquota_icms=COALESCE(excluded.aliquota_icms, fiscal_config.aliquota_icms),"
-                " aliquota_pis=COALESCE(excluded.aliquota_pis, fiscal_config.aliquota_pis),"
-                " aliquota_cofins=COALESCE(excluded.aliquota_cofins, fiscal_config.aliquota_cofins),"
-                " aliquota_ipi=COALESCE(excluded.aliquota_ipi, fiscal_config.aliquota_ipi)",
-                (
-                    variante_id,
-                    ncm or "",
-                    cfop,
-                    cst_icms,
-                    cst_pis,
-                    cst_cofins,
-                    aliquota_icms,
-                    aliquota_pis,
-                    aliquota_cofins,
-                    aliquota_ipi,
-                ),
+                f"INSERT INTO fiscal_config (variante_id, {', '.join(cols)}) VALUES (?, {', '.join('?' for _ in cols)})"
+                f" ON CONFLICT(variante_id) DO UPDATE SET"
+                f" {', '.join(f'{c}=COALESCE(excluded.{c}, fiscal_config.{c})' for c in cols)}",
+                [variante_id] + vals,
             )
             return cur.lastrowid if cur.lastrowid else variante_id
 
@@ -119,7 +124,94 @@ class FiscalConfigRepository:
                 count += 1
             return count
 
+    # ------------------------------------------------------------------
+
+    def registrar_historico_config(self, variante_id: int, tipo: str, usuario_id: int | None = None) -> int:
+        """Snapshot atual da fiscal_config em fiscal_config_historico (auditoria)."""
+        with system_conn() as conn:
+            cfg = conn.execute(
+                "SELECT * FROM fiscal_config WHERE variante_id=?", (variante_id,)
+            ).fetchone()
+            if cfg is None:
+                return 0
+            cols = (
+                "ncm, cfop, cst_icms, cst_pis, cst_cofins, aliquota_icms, aliquota_pis,"
+                " aliquota_cofins, aliquota_ipi, origem, cest, csosn, aliquota_icms_st, mva,"
+                " base_reducao, aliquota_interestadual, aliquota_fecp, credito_icms,"
+                " beneficio_id, vigencia_inicio, vigencia_fim"
+            )
+            cur = conn.execute(
+                f"INSERT INTO fiscal_config_historico"
+                f" (variante_id, tipo, {cols}, usuario_id)"
+                f" VALUES (?,?,{', '.join('?' for _ in cols.split(','))},?)",
+                [variante_id, tipo] + [cfg[c.strip()] for c in cols.split(",")] + [usuario_id],
+            )
+            return cur.lastrowid
+
+    def list_historico(self, termo: str | None = None, variante_id: int | None = None, limit: int = 200) -> list[dict]:
+        sql = (
+            "SELECT h.*, v.sku, p.nome AS produto_nome, p.marca, u.nome AS usuario_nome"
+            " FROM fiscal_config_historico h"
+            " JOIN variantes v ON v.id = h.variante_id"
+            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " LEFT JOIN usuarios u ON u.id = h.usuario_id"
+        )
+        conds, args = [], []
+        if variante_id:
+            conds.append("h.variante_id=?")
+            args.append(variante_id)
+        if termo:
+            like = f"%{termo}%"
+            conds.append("(p.nome LIKE ? OR v.sku LIKE ? OR h.ncm LIKE ?)")
+            args += [like, like, like]
+        if conds:
+            sql += " WHERE " + " AND ".join(conds)
+        sql += " ORDER BY h.id DESC LIMIT ?"
+        args.append(limit)
+        with system_conn() as conn:
+            return [dict(r) for r in conn.execute(sql, args).fetchall()]
+
 
 cfop_repo = CfopRepository()
 cst_repo = CstRepository()
 fiscal_config_repo = FiscalConfigRepository()
+
+
+class CestRepository:
+
+    def list(self, ncm: str | None = None, somente_ativos: bool = True) -> list[dict]:
+        sql = "SELECT * FROM cest"
+        conds, args = [], []
+        if somente_ativos:
+            conds.append("ativo=1")
+        if ncm:
+            conds.append("ncm_prefix LIKE ?")
+            args.append(ncm[:4] + "%")
+        if conds:
+            sql += " WHERE " + " AND ".join(conds)
+        sql += " ORDER BY codigo"
+        with system_conn() as conn:
+            return [dict(r) for r in conn.execute(sql, args).fetchall()]
+
+
+class CsosnRepository:
+
+    def list(self) -> list[dict]:
+        with system_conn() as conn:
+            return [dict(r) for r in conn.execute("SELECT * FROM csosn ORDER BY codigo").fetchall()]
+
+
+class BeneficioFiscalRepository:
+
+    def list(self, somente_ativos: bool = True) -> list[dict]:
+        sql = "SELECT * FROM beneficios_fiscais"
+        if somente_ativos:
+            sql += " WHERE ativo=1"
+        sql += " ORDER BY descricao"
+        with system_conn() as conn:
+            return [dict(r) for r in conn.execute(sql).fetchall()]
+
+
+cest_repo = CestRepository()
+csosn_repo = CsosnRepository()
+beneficio_fiscal_repo = BeneficioFiscalRepository()

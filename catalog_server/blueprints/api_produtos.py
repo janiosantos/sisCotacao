@@ -37,7 +37,9 @@ def create_familia():
     if not nome:
         return jsonify({"error": "Informe o nome da família"}), 400
     familia_id = produto_repo.create_familia(
-        nome, (data.get("descricao") or "").strip(), data.get("atributos") or []
+        nome, (data.get("descricao") or "").strip(), data.get("atributos") or [],
+        ncm_padrao=(data.get("ncm_padrao") or "").strip(),
+        unidade_padrao=(data.get("unidade_padrao") or "").strip(),
     )
     return jsonify({"id": familia_id}), 201
 
@@ -57,7 +59,9 @@ def update_familia(familia_id: int):
     if not nome:
         return jsonify({"error": "Informe o nome da família"}), 400
     if not produto_repo.update_familia(
-        familia_id, nome, (data.get("descricao") or "").strip(), data.get("atributos") or []
+        familia_id, nome, (data.get("descricao") or "").strip(), data.get("atributos") or [],
+        ncm_padrao=(data.get("ncm_padrao") or "").strip(),
+        unidade_padrao=(data.get("unidade_padrao") or "").strip(),
     ):
         return jsonify({"error": "Família não encontrada"}), 404
     return jsonify({"ok": True})
