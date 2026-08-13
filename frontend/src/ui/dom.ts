@@ -20,7 +20,7 @@ export function openModal(
   {
     onMount,
     modalClass,
-    fecharClickFora = true,
+    fecharClickFora = false,
   }: {
     onMount?: (modal: HTMLElement) => void;
     modalClass?: string;
