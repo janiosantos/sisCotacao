@@ -1,0 +1,258 @@
+/* ============================================================
+   LEGACY KIT — estética ERP legado (Protheus/TOTVS)
+   Desktop cinza, janelas com moldura, titlebar azul, sidebar de ações.
+   ============================================================ */
+
+:root {
+  --lg-desktop: #4a4a4a;
+  --lg-window-bg: #ffffff;
+  --lg-window-border: #999;
+  --lg-title-bg: #1f3a5f;
+  --lg-title-bg-dark: #14273f;
+  --lg-title-ink: #ffffff;
+  --lg-sub-bg: #e9edf1;
+  --lg-sub-ink: #22303f;
+  --lg-field-bg: #ffffff;
+  --lg-field-border: #9aa7b8;
+  --lg-label-ink: #33404d;
+  --lg-ink: #22303f;
+  --lg-ink-soft: #5b6b7c;
+  --lg-row-alt: #eaf2fb;
+  --lg-blue: #1f3a5f;
+  --lg-blue-soft: #bfe0ff;
+  --lg-accent: #1b4dab;
+  --lg-danger: #a8432a;
+  --lg-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --lg-font: "IBM Plex Mono", "SFMono-Regular", Consolas, "Courier New", monospace;
+  --lg-font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.lg-desktop {
+  background: var(--lg-desktop);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--lg-font-ui);
+  color: var(--lg-ink);
+}
+
+/* Menu bar superior (arquivos de navegação) */
+.lg-menubar {
+  background: #343434;
+  color: #e8e8e8;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 8px;
+  font-size: 12.5px;
+  border-bottom: 1px solid #1c1c1c;
+  flex-wrap: wrap;
+}
+.lg-menubar .lg-brand {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-right: 14px;
+  color: #ffffff;
+}
+.lg-menu { position: relative; }
+.lg-menu > button {
+  background: none;
+  border: none;
+  color: #e0e0e0;
+  font-size: 12.5px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+.lg-menu > button:hover,
+.lg-menu > button.is-open { background: #4a4a4a; color: #fff; }
+.lg-menu-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 200;
+  min-width: 200px;
+  background: #3c3c3c;
+  border: 1px solid #222;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+}
+.lg-menu.is-open .lg-menu-dropdown { display: block; }
+.lg-menu-dropdown a {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  color: #e0e0e0;
+  font-size: 12.5px;
+}
+.lg-menu-dropdown a:hover { background: var(--lg-blue); color: #fff; }
+.lg-menu-dropdown a.is-active { background: var(--lg-blue); color: #fff; }
+.lg-menu-dropdown .lg-shortcut { color: #9aa7b8; font-size: 11px; }
+
+/* Janela com moldura */
+.lg-window {
+  flex: 1;
+  margin: 16px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--lg-window-border);
+  box-shadow: var(--lg-shadow);
+  background: var(--lg-window-bg);
+  min-height: 0;
+}
+.lg-window--full { margin: 0; border: none; box-shadow: none; }
+
+.lg-titlebar {
+  background: linear-gradient(180deg, #2a4a78 0%, var(--lg-title-bg) 100%);
+  color: var(--lg-title-ink);
+  display: flex;
+  align-items: center;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+.lg-titlebar .lg-titlebar-ico { margin-right: 8px; font-size: 13px; }
+.lg-titlebar .lg-titlebar-actions { margin-left: auto; display: flex; gap: 2px; }
+.lg-titlebar .lg-titlebar-actions button {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.lg-titlebar .lg-titlebar-actions button:hover { background: rgba(255, 255, 255, 0.3); }
+
+.lg-subheader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--lg-sub-bg);
+  border-bottom: 1px solid #c8d0da;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--lg-sub-ink);
+  min-height: 26px;
+}
+.lg-subheader .lg-sub-title { font-weight: 700; }
+.lg-subheader .lg-sub-meta { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; color: var(--lg-ink-soft); }
+.lg-subheader b { color: var(--lg-danger); }
+
+/* Corpo da janela: conteúdo + sidebar */
+.lg-body { display: flex; flex: 1; min-height: 0; }
+.lg-content { flex: 1; padding: 12px; overflow: auto; min-width: 0; }
+
+/* Sidebar de ações (atalhos F/Ctrl) */
+.lg-sidebar {
+  flex: none;
+  width: 200px;
+  border-left: 1px solid #c8d0da;
+  background: #f4f6f8;
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+.lg-sidebar-brand { padding: 8px 10px; border-bottom: 1px solid #c8d0da; background: var(--lg-sub-bg); }
+.lg-sidebar-brand b { display: block; font-size: 12px; color: var(--lg-blue); }
+.lg-sidebar-brand span { font-size: 10px; color: var(--lg-ink-soft); letter-spacing: 0.05em; }
+.lg-sidebar-actions { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+.lg-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #c8d0da;
+  background: #fff;
+  padding: 7px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--lg-ink);
+}
+.lg-action:hover { background: var(--lg-blue-soft); border-color: var(--lg-blue); }
+.lg-action.is-active { background: var(--lg-blue); border-color: var(--lg-blue); color: #fff; }
+.lg-action .lg-action-ico { flex: none; width: 18px; text-align: center; }
+.lg-action .lg-action-shortcut { margin-left: auto; font-size: 10px; color: var(--lg-ink-soft); white-space: nowrap; }
+.lg-action.is-active .lg-action-shortcut { color: #d7e3f4; }
+.lg-sidebar-note { padding: 6px 10px; border-top: 1px solid #c8d0da; font-size: 10.5px; color: var(--lg-ink-soft); }
+
+/* FieldBox */
+.lg-fieldbox { border: 1px solid var(--lg-field-border); background: var(--lg-field-bg); margin-bottom: 8px; }
+.lg-fieldbox-label {
+  background: var(--lg-sub-bg);
+  border-bottom: 1px solid var(--lg-field-border);
+  padding: 2px 8px;
+  font-family: var(--lg-font);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--lg-label-ink);
+  font-weight: 700;
+}
+.lg-fieldbox-body { padding: 6px 8px; }
+
+/* Inputs / selects no estilo legado */
+.lg-input {
+  font-family: var(--lg-font);
+  font-size: 12.5px;
+  padding: 3px 6px;
+  border: 1px solid var(--lg-field-border);
+  background: #fff;
+  color: var(--lg-ink);
+  height: 24px;
+}
+.lg-input:focus { outline: none; border-color: var(--lg-blue); box-shadow: 0 0 0 2px var(--lg-blue-soft); }
+select.lg-input { padding: 2px 4px; }
+
+/* Modal legado */
+.lg-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 26, 34, 0.55);
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.lg-modal {
+  background: #fff;
+  border: 1px solid #999;
+  box-shadow: var(--lg-shadow);
+  width: min(640px, 96vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+}
+.lg-modal-body { padding: 12px; overflow: auto; }
+.lg-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid #c8d0da;
+  background: var(--lg-sub-bg);
+}
+
+/* Botão legado */
+.lg-btn {
+  font-family: var(--lg-font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 16px;
+  border: 1px solid var(--lg-field-border);
+  background: #fff;
+  color: var(--lg-ink);
+  cursor: pointer;
+}
+.lg-btn:hover { background: var(--lg-blue-soft); border-color: var(--lg-blue); }
+.lg-btn--primary { background: var(--lg-blue); border-color: var(--lg-blue); color: #fff; }
+.lg-btn--primary:hover { background: var(--lg-title-bg-dark); }
+
+/* Dados em grade dentro do conteúdo legado (tabelas existentes continuam valendo) */
+.lg-hint { font-size: 11px; color: var(--lg-ink-soft); }

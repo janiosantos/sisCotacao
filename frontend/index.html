@@ -11,71 +11,11 @@
   />
   <link rel="stylesheet" href="/src/styles/tokens.css" />
   <link rel="stylesheet" href="/src/styles/base.css" />
+  <link rel="stylesheet" href="/src/styles/legacy.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark">◆</span>
-      <div class="brand-text">
-        <span class="brand-title">COTAÇÕES</span>
-        <span class="brand-sub">catálogo · fornecedores · histórico</span>
-      </div>
-    </div>
-    <nav class="nav-group" id="mainNav">
-      <div class="nav-item">
-        <button class="nav-toggle" data-group="vendas">Vendas ▾</button>
-        <div class="nav-sub" data-group="vendas">
-          <a href="#/catalogo" data-route="catalogo">Catálogo</a>
-          <a href="#/pdv" data-route="pdv">PDV</a>
-          <a href="#/orcamentos" data-route="orcamentos">Orçamentos</a>
-          <a href="#/cotacoes" data-route="cotacoes">Cotações</a>
-          <a href="#/compras" data-route="compras">Compras</a>
-        </div>
-      </div>
-      <div class="nav-item">
-        <button class="nav-toggle" data-group="cadastros">Cadastros ▾</button>
-        <div class="nav-sub" data-group="cadastros">
-          <a href="#/clientes" data-route="clientes">Clientes</a>
-          <a href="#/fornecedores" data-route="fornecedores">Fornecedores</a>
-          <a href="#/produtos" data-route="produtos">Produtos</a>
-          <a href="#/vendedores" data-route="vendedores">Vendedores</a>
-          <a href="#/categorias" data-route="categorias">Categorias</a>
-          <a href="#/unidades" data-route="unidades">Unidades</a>
-          <a href="#/diagnostico-variacoes" data-route="diagnostico-variacoes">Qualidade do catálogo</a>
-        </div>
-      </div>
-      <div class="nav-item">
-        <button class="nav-toggle" data-group="financeiro">Financeiro ▾</button>
-        <div class="nav-sub" data-group="financeiro">
-          <a href="#/financeiro" data-route="financeiro">Financeiro</a>
-          <a href="#/precos" data-route="precos">Preços</a>
-          <a href="#/bancos" data-route="bancos">Bancos</a>
-          <a href="#/plano-contas" data-route="plano-contas">Plano de contas</a>
-        </div>
-      </div>
-      <div class="nav-item">
-        <button class="nav-toggle" data-group="logistica">Logística ▾</button>
-        <div class="nav-sub" data-group="logistica">
-          <a href="#/estoque" data-route="estoque">Estoque</a>
-          <a href="#/fiscal" data-route="fiscal">Fiscal</a>
-        </div>
-      </div>
-      <div class="nav-item">
-        <button class="nav-toggle" data-group="admin">Admin ▾</button>
-        <div class="nav-sub" data-group="admin">
-          <a href="#/posvenda" data-route="posvenda">Pós-venda</a>
-          <a href="#/solicitacoes" data-route="solicitacoes">Solic. Compra</a>
-          <a href="#/historico" data-route="historico">Hist. preços</a>
-          <a href="#/usuarios" data-route="usuarios">Usuários</a>
-        </div>
-      </div>
-    </nav>
-  </header>
-
-  <main id="app"></main>
-
+  <div id="root"></div>
   <div id="toast" class="toast" hidden></div>
-
-  <script type="module" src="/src/main.ts"></script>
+  <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
