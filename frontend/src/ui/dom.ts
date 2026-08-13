@@ -41,7 +41,11 @@ export function openModal(
   window.addEventListener("keydown", escHandler);
   document.body.appendChild(overlay);
   document.body.style.overflow = "hidden";
-  if (onMount) onMount(overlay.querySelector<HTMLElement>(".modal")!);
+  const modalEl = overlay.querySelector<HTMLElement>(".modal")!;
+  // Fecha/fechar automático: qualquer [data-close] fecha o modal, mesmo que o
+  // chamador esqueça de ligar manualmente (bug de modais sem onMount).
+  modalEl.querySelectorAll<HTMLElement>("[data-close]").forEach((b) => ((b as HTMLElement).onclick = closeModal));
+  if (onMount) onMount(modalEl);
   return overlay;
 }
 
