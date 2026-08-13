@@ -23,12 +23,24 @@ export interface RouteDef {
   actions?: SidebarActionDef[];
 }
 
-const PreVenda = lazy(() => import("./pages/PreVenda"));
-const PdvPage = lazy(() => import("./pages/PdvPage"));
+const Dashboard = lazy(() => import("./pages/dashboard"));
+const Clientes = lazy(() => import("./pages/clientes"));
+const Fornecedores = lazy(() => import("./pages/fornecedores"));
+const Vendedores = lazy(() => import("./pages/vendedores"));
+const Usuarios = lazy(() => import("./pages/usuarios"));
+const Unidades = lazy(() => import("./pages/unidades"));
+const Categorias = lazy(() => import("./pages/categorias"));
+const PlanoContas = lazy(() => import("./pages/plano_contas"));
+const Solicitacoes = lazy(() => import("./pages/solicitacoes"));
+const Bancos = lazy(() => import("./pages/bancos"));
+const PosVenda = lazy(() => import("./pages/posvenda"));
+const Historico = lazy(() => import("./pages/historico"));
+const Diagnostico = lazy(() => import("./pages/diagnostico_variacoes"));
+const Estoque = lazy(() => import("./pages/estoque"));
+const Financeiro = lazy(() => import("./pages/financeiro"));
 
 export const ROUTES: RouteDef[] = [
-  { pattern: /^#\/dashboard$/, title: "Painel", loader: () => import("./pages/dashboard").then((m) => m.render) },
-  { pattern: /^#\/prevenda$/, title: "Pré-Venda", component: PreVenda },
+  { pattern: /^#\/dashboard$/, title: "Painel", component: Dashboard },
   { pattern: /^#\/catalogo$/, title: "Catálogo", loader: () => import("./pages/catalogo").then((m) => m.render) },
   { pattern: /^#\/compras$/, title: "Compras", loader: () => import("./pages/compras").then((m) => m.render) },
   { pattern: /^#\/produtos$/, title: "Produtos", loader: () => import("./pages/produtos").then((m) => m.renderLista) },
@@ -48,26 +60,26 @@ export const ROUTES: RouteDef[] = [
     title: "Cotação",
     loader: () => import("./pages/cotacoes").then((m) => (el, mm) => m.renderDetalhe(el, Number(mm[1]))),
   },
-  { pattern: /^#\/pdv$/, title: "PDV", component: PdvPage },
-  { pattern: /^#\/estoque$/, title: "Estoque", loader: () => import("./pages/estoque").then((m) => m.render) },
-  { pattern: /^#\/posvenda$/, title: "Pós-venda", loader: () => import("./pages/posvenda").then((m) => m.render) },
-  { pattern: /^#\/bancos$/, title: "Bancos", loader: () => import("./pages/bancos").then((m) => m.render) },
+  { pattern: /^#\/pdv$/, title: "PDV", loader: () => import("./pages/pdv").then((m) => m.render) },
+  { pattern: /^#\/estoque$/, title: "Estoque", component: Estoque },
+  { pattern: /^#\/posvenda$/, title: "Pós-venda", component: PosVenda },
+  { pattern: /^#\/bancos$/, title: "Bancos", component: Bancos },
   { pattern: /^#\/fiscal$/, title: "Fiscal", loader: () => import("./pages/fiscal").then((m) => m.render) },
-  { pattern: /^#\/financeiro$/, title: "Financeiro", loader: () => import("./pages/financeiro").then((m) => m.render) },
+  { pattern: /^#\/financeiro$/, title: "Financeiro", component: Financeiro },
   { pattern: /^#\/precos$/, title: "Preços", loader: () => import("./pages/precos").then((m) => m.render) },
   { pattern: /^#\/orcamentos$/, title: "Orçamentos", loader: () => import("./pages/orcamentos").then((m) => m.render) },
-  { pattern: /^#\/solicitacoes$/, title: "Solicitações de Compra", loader: () => import("./pages/solicitacoes").then((m) => m.render) },
-  { pattern: /^#\/categorias$/, title: "Categorias", loader: () => import("./pages/categorias").then((m) => m.render) },
-  { pattern: /^#\/unidades$/, title: "Unidades", loader: () => import("./pages/unidades").then((m) => m.render) },
+  { pattern: /^#\/solicitacoes$/, title: "Solicitações de Compra", component: Solicitacoes },
+  { pattern: /^#\/categorias$/, title: "Categorias", component: Categorias },
+  { pattern: /^#\/unidades$/, title: "Unidades", component: Unidades },
   {
     pattern: /^#\/diagnostico-variacoes$/,
     title: "Qualidade do Catálogo",
-    loader: () => import("./pages/diagnostico_variacoes").then((m) => m.render),
+    component: Diagnostico,
   },
-  { pattern: /^#\/fornecedores$/, title: "Fornecedores", loader: () => import("./pages/fornecedores").then((m) => m.render) },
-  { pattern: /^#\/historico$/, title: "Histórico de Preços", loader: () => import("./pages/historico").then((m) => m.render) },
-  { pattern: /^#\/clientes$/, title: "Clientes", loader: () => import("./pages/clientes").then((m) => m.render) },
-  { pattern: /^#\/vendedores$/, title: "Vendedores", loader: () => import("./pages/vendedores").then((m) => m.render) },
-  { pattern: /^#\/usuarios$/, title: "Usuários", loader: () => import("./pages/usuarios").then((m) => m.render) },
-  { pattern: /^#\/plano-contas$/, title: "Plano de Contas", loader: () => import("./pages/plano_contas").then((m) => m.render) },
+  { pattern: /^#\/fornecedores$/, title: "Fornecedores", component: Fornecedores },
+  { pattern: /^#\/historico$/, title: "Histórico de Preços", component: Historico },
+  { pattern: /^#\/clientes$/, title: "Clientes", component: Clientes },
+  { pattern: /^#\/vendedores$/, title: "Vendedores", component: Vendedores },
+  { pattern: /^#\/usuarios$/, title: "Usuários", component: Usuarios },
+  { pattern: /^#\/plano-contas$/, title: "Plano de Contas", component: PlanoContas },
 ];

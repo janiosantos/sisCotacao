@@ -1,5 +1,6 @@
 import { defineConfig, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -10,7 +11,7 @@ const FRONTEND_DIR = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
   base: "/",
-  plugins: [react(), buildInfo()],
+  plugins: [react(), tailwindcss(), buildInfo()],
   build: {
     outDir: "dist",
     emptyOutDir: true,

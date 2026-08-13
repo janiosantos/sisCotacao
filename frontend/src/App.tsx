@@ -1,23 +1,43 @@
-// App.tsx — shell React do ERP legado (Protheus/TOTVS).
-// Desktop cinza + menubar de navegação + janela com titlebar/sidebar por rota.
+// App.tsx — shell do ERP (sidebar + topbar + conteúdo) em React + Tailwind.
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Sidebar,
-  SubHeader,
-  TitleBar,
-  ctrlLetter,
-  useGlobalShortcuts,
-  type SidebarAction,
-} from "./legacy-kit";
-import { ROUTES, type PageRenderer, type SidebarActionDef } from "./routes";
+  LayoutDashboard,
+  Package,
+  ShoppingCart,
+  FileText,
+  Gavel,
+  ShoppingBag,
+  Users,
+  Truck,
+  Boxes,
+  UserCheck,
+  Tags,
+  Scale,
+  SearchCheck,
+  Wallet,
+  DollarSign,
+  Landmark,
+  BookOpen,
+  Warehouse,
+  Receipt,
+  RotateCcw,
+  ClipboardList,
+  History,
+  ShieldCheck,
+  LogOut,
+  type LucideIcon,
+} from "lucide-react";
+import { ROUTES, type PageRenderer } from "./routes";
 import { carregarSessao, entrar, sair, usuarioCorrente } from "./pages/login";
 import { startupAuth } from "./auth";
 import { countItens, injectOverlay as injectCartOverlay, toggle as toggleCart } from "./cart";
+import { Button } from "./ui/ui";
 
 interface NavItem {
   href: string;
   label: string;
+  icon: LucideIcon;
 }
 interface NavGroup {
   label: string;
@@ -28,59 +48,58 @@ const NAV: NavGroup[] = [
   {
     label: "Vendas",
     items: [
-      { href: "#/dashboard", label: "Painel" },
-      { href: "#/prevenda", label: "Pré-Venda" },
-      { href: "#/catalogo", label: "Catálogo" },
-      { href: "#/pdv", label: "PDV" },
-      { href: "#/orcamentos", label: "Orçamentos" },
-      { href: "#/cotacoes", label: "Cotações" },
-      { href: "#/compras", label: "Compras" },
+      { href: "#/dashboard", label: "Painel", icon: LayoutDashboard },
+      { href: "#/catalogo", label: "Catálogo", icon: Package },
+      { href: "#/pdv", label: "PDV", icon: ShoppingCart },
+      { href: "#/orcamentos", label: "Orçamentos", icon: FileText },
+      { href: "#/cotacoes", label: "Cotações", icon: Gavel },
+      { href: "#/compras", label: "Compras", icon: ShoppingBag },
     ],
   },
   {
     label: "Cadastros",
     items: [
-      { href: "#/clientes", label: "Clientes" },
-      { href: "#/fornecedores", label: "Fornecedores" },
-      { href: "#/produtos", label: "Produtos" },
-      { href: "#/vendedores", label: "Vendedores" },
-      { href: "#/categorias", label: "Categorias" },
-      { href: "#/unidades", label: "Unidades" },
-      { href: "#/diagnostico-variacoes", label: "Qualidade do catálogo" },
+      { href: "#/clientes", label: "Clientes", icon: Users },
+      { href: "#/fornecedores", label: "Fornecedores", icon: Truck },
+      { href: "#/produtos", label: "Produtos", icon: Boxes },
+      { href: "#/vendedores", label: "Vendedores", icon: UserCheck },
+      { href: "#/categorias", label: "Categorias", icon: Tags },
+      { href: "#/unidades", label: "Unidades", icon: Scale },
+      { href: "#/diagnostico-variacoes", label: "Qualidade", icon: SearchCheck },
     ],
   },
   {
     label: "Financeiro",
     items: [
-      { href: "#/financeiro", label: "Financeiro" },
-      { href: "#/precos", label: "Preços" },
-      { href: "#/bancos", label: "Bancos" },
-      { href: "#/plano-contas", label: "Plano de contas" },
+      { href: "#/financeiro", label: "Financeiro", icon: Wallet },
+      { href: "#/precos", label: "Preços", icon: DollarSign },
+      { href: "#/bancos", label: "Bancos", icon: Landmark },
+      { href: "#/plano-contas", label: "Plano de contas", icon: BookOpen },
     ],
   },
   {
     label: "Logística",
     items: [
-      { href: "#/estoque", label: "Estoque" },
-      { href: "#/fiscal", label: "Fiscal" },
+      { href: "#/estoque", label: "Estoque", icon: Warehouse },
+      { href: "#/fiscal", label: "Fiscal", icon: Receipt },
     ],
   },
   {
     label: "Admin",
     items: [
-      { href: "#/posvenda", label: "Pós-venda" },
-      { href: "#/solicitacoes", label: "Solic. Compra" },
-      { href: "#/historico", label: "Hist. preços" },
-      { href: "#/usuarios", label: "Usuários" },
+      { href: "#/posvenda", label: "Pós-venda", icon: RotateCcw },
+      { href: "#/solicitacoes", label: "Solic. Compra", icon: ClipboardList },
+      { href: "#/historico", label: "Hist. preços", icon: History },
+      { href: "#/usuarios", label: "Usuários", icon: ShieldCheck },
     ],
   },
 ];
 
 function useHashRoute(): string {
-  const [hash, setHash] = useState(() => location.hash || "#/catalogo");
+  const [hash, setHash] = useState(() => location.hash || "#/dashboard");
   useEffect(() => {
     const onHash = () => {
-      setHash(location.hash || "#/catalogo");
+      setHash(location.hash || "#/dashboard");
       window.scrollTo(0, 0);
     };
     window.addEventListener("hashchange", onHash);
@@ -89,84 +108,30 @@ function useHashRoute(): string {
   return hash;
 }
 
-function focusSearch(container: HTMLElement | null): void {
-  if (!container) return;
-  const el = container.querySelector<HTMLElement>(
-    'input[type="text"], input:not([type]), input[type="search"], input[type="number"]'
-  );
-  el?.focus();
+function isActive(hash: string, href: string): boolean {
+  return hash === href || hash.startsWith(href + "/");
 }
 
-function LegacyPage({
-  title,
-  render,
-  match,
-  actions,
-}: {
-  title: string;
-  render: (el: HTMLElement, m: RegExpMatchArray) => void | Promise<void>;
-  match: RegExpMatchArray;
-  actions?: SidebarActionDef[];
-}) {
-  const contentRef = useRef<HTMLDivElement>(null);
-
-  useGlobalShortcuts(
-    [{ match: ctrlLetter("q"), label: "Pesquisar (Ctrl+Q)", action: () => focusSearch(contentRef.current) }],
-    true
-  );
-
+function LegacyMount({ render, match }: { render: PageRenderer; match: RegExpMatchArray }) {
+  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const el = contentRef.current;
+    const el = ref.current;
     if (!el) return;
     el.innerHTML = "";
     Promise.resolve(render(el, match)).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const sidebarActions: SidebarAction[] = (actions || []).map((a) => ({
-    icon: a.icon,
-    label: a.label,
-    shortcut: a.shortcut,
-    onAction: a.action,
-  }));
-
-  return (
-    <div className="lg-window">
-      <TitleBar title={title} />
-      <SubHeader
-        title={title}
-        meta={<span>Controle <b>PENDENTE</b></span>}
-      />
-      <div className="lg-body">
-        <div className="lg-content" ref={contentRef} />
-        <Sidebar brand="Sistema ERP" subBrand="GESTÃO COMERCIAL" actions={sidebarActions} />
-      </div>
-    </div>
-  );
-}
-
-function LoadingWindow({ title }: { title: string }) {
-  return (
-    <div className="lg-window">
-      <TitleBar title={title} />
-      <div className="lg-content lg-hint">Carregando…</div>
-    </div>
-  );
+  return <div ref={ref} />;
 }
 
 function LazyVanillaPage({
-  title,
   load,
   match,
-  actions,
 }: {
-  title: string;
   load: () => Promise<PageRenderer>;
   match: RegExpMatchArray;
-  actions?: SidebarActionDef[];
 }) {
   const [renderFn, setRenderFn] = useState<PageRenderer | null>(null);
-
   useEffect(() => {
     let alive = true;
     load()
@@ -179,9 +144,8 @@ function LazyVanillaPage({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  if (!renderFn) return <LoadingWindow title={title} />;
-  return <LegacyPage title={title} render={renderFn} match={match} actions={actions} />;
+  if (!renderFn) return <div className="py-16 text-center text-sm text-gray-400">Carregando…</div>;
+  return <LegacyMount render={renderFn} match={match} />;
 }
 
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
@@ -199,39 +163,46 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   };
 
   return (
-    <div className="lg-window" style={{ margin: "auto", maxWidth: 480, maxHeight: 320 }}>
-      <TitleBar title="Acesso ao sistema" />
-      <div className="login-box" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>Entre com seu usuário</div>
-        <div>
-          <div className="lg-fieldbox-label" style={{ marginBottom: 2 }}>Login</div>
-          <input
-            id="lgLogin"
-            ref={loginRef}
-            className="lg-input"
-            style={{ width: "100%" }}
-            value={login}
-            autoComplete="username"
-            onChange={(e) => setLogin(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void tentar()}
-          />
+    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
+      <div className="login-box w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-lg">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white">
+            <ShoppingBag size={18} />
+          </div>
+          <div>
+            <div className="text-base font-semibold text-gray-900">ERP Comercial</div>
+            <div className="text-xs text-gray-500">Entre com seu usuário</div>
+          </div>
         </div>
-        <div>
-          <div className="lg-fieldbox-label" style={{ marginBottom: 2 }}>Senha</div>
-          <input
-            id="lgSenha"
-            className="lg-input"
-            style={{ width: "100%" }}
-            type="password"
-            value={senha}
-            autoComplete="current-password"
-            onChange={(e) => setSenha(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void tentar()}
-          />
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Login</label>
+            <input
+              id="lgLogin"
+              ref={loginRef}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+              value={login}
+              autoComplete="username"
+              onChange={(e) => setLogin(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void tentar()}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Senha</label>
+            <input
+              id="lgSenha"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+              type="password"
+              value={senha}
+              autoComplete="current-password"
+              onChange={(e) => setSenha(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void tentar()}
+            />
+          </div>
+          <Button id="lgEntrar" variant="primary" className="w-full" onClick={() => void tentar()}>
+            Entrar
+          </Button>
         </div>
-        <button id="lgEntrar" className="lg-btn lg-btn--primary" onClick={() => void tentar()}>
-          Entrar
-        </button>
       </div>
     </div>
   );
@@ -240,7 +211,6 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 export default function App() {
   const hash = useHashRoute();
   const [authed, setAuthed] = useState<boolean | null>(null);
-  const [openMenu, setOpenMenu] = useState<number | null>(null);
   const [cartCount, setCartCount] = useState(0);
 
   useEffect(() => {
@@ -273,94 +243,114 @@ export default function App() {
   }, [hash]);
 
   useEffect(() => {
-    if (authed && !route && hash !== "#/catalogo") {
-      location.hash = "#/catalogo";
+    if (authed && !route && hash !== "#/dashboard") {
+      location.hash = "#/dashboard";
     }
   }, [authed, route, hash]);
 
   if (authed === null) {
-    return <div className="lg-desktop" />;
+    return <div className="min-h-screen bg-gray-100" />;
   }
 
   if (!authed) {
-    return (
-      <div className="lg-desktop" style={{ alignItems: "center", justifyContent: "center" }}>
-        <LoginScreen onLogin={() => setAuthed(true)} />
-      </div>
-    );
+    return <LoginScreen onLogin={() => setAuthed(true)} />;
   }
 
   const usuario = usuarioCorrente();
-
   const RouteComponent = route?.def.component ?? null;
 
   return (
-    <div className="lg-desktop">
-      <nav className="lg-menubar" id="mainNav">
-        <span className="lg-brand">◆ ERP COMERCIAL</span>
-        {NAV.map((g, i) => (
-          <div className={`lg-menu${openMenu === i ? " is-open" : ""}`} key={g.label}>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenMenu(openMenu === i ? null : i);
-              }}
-            >
-              {g.label}
-            </button>
-            {openMenu === i ? (
-              <div className="lg-menu-dropdown">
+    <div className="flex h-screen overflow-hidden bg-gray-100">
+      {/* Sidebar */}
+      <aside className="flex w-60 flex-none flex-col border-r border-gray-200 bg-white">
+        <div className="flex h-16 items-center gap-2 border-b border-gray-200 px-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white">
+            <ShoppingBag size={18} />
+          </div>
+          <div>
+            <div className="text-sm font-semibold leading-tight text-gray-900">ERP Comercial</div>
+            <div className="text-[11px] text-gray-400">Gestão de varejo</div>
+          </div>
+        </div>
+        <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
+          {NAV.map((g) => (
+            <div key={g.label}>
+              <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                {g.label}
+              </div>
+              <div className="space-y-0.5">
                 {g.items.map((it) => {
-                  const active = hash === it.href || hash.startsWith(it.href + "/");
+                  const active = isActive(hash, it.href);
+                  const Icon = it.icon;
                   return (
                     <a
                       key={it.href}
                       href={it.href}
-                      data-route={it.href.slice(2)}
-                      className={active ? "is-active" : ""}
-                      onClick={() => setOpenMenu(null)}
+                      className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium ${
+                        active
+                          ? "bg-brand-50 text-brand-700"
+                          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
                     >
-                      <span>{it.label}</span>
+                      <Icon size={16} className={active ? "text-brand-600" : "text-gray-400"} />
+                      {it.label}
                     </a>
                   );
                 })}
               </div>
-            ) : null}
-          </div>
-        ))}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <button className="lg-btn" style={{ padding: "3px 10px", fontSize: 12 }} onClick={() => toggleCart()}>
-            🛒 {cartCount}
-          </button>
-          <span style={{ fontSize: 12 }}>{usuario?.nome ?? ""}</span>
-          <button
-            className="lg-btn"
-            style={{ padding: "3px 10px", fontSize: 12 }}
-            onClick={async () => {
-              await sair();
-              setAuthed(false);
-            }}
-          >
-            Sair
-          </button>
-        </div>
-      </nav>
+            </div>
+          ))}
+        </nav>
+      </aside>
 
-      {route ? (
-        <Suspense fallback={<LoadingWindow title={route.def.title} />}>
-          {RouteComponent ? (
-            <RouteComponent key={route.m[0]} />
-          ) : route.def.loader ? (
-            <LazyVanillaPage
-              key={route.m[0]}
-              title={route.def.title}
-              load={route.def.loader}
-              match={route.m}
-              actions={route.def.actions}
-            />
-          ) : null}
-        </Suspense>
-      ) : null}
+      {/* Conteúdo */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <header className="flex h-16 flex-none items-center gap-4 border-b border-gray-200 bg-white px-6">
+          <h1 className="text-lg font-semibold text-gray-900">{route?.def.title ?? "ERP"}</h1>
+          <div className="ml-auto flex items-center gap-3">
+            <button
+              onClick={() => toggleCart()}
+              className="relative rounded-md border border-gray-200 p-2 text-gray-600 hover:bg-gray-50"
+              title="Carrinho"
+            >
+              <ShoppingCart size={18} />
+              {cartCount > 0 ? (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-semibold text-white">
+                  {cartCount}
+                </span>
+              ) : null}
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
+                {(usuario?.nome || "?").charAt(0).toUpperCase()}
+              </div>
+              <span className="text-sm text-gray-700">{usuario?.nome ?? ""}</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                await sair();
+                setAuthed(false);
+              }}
+            >
+              <LogOut size={16} /> Sair
+            </Button>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-auto p-6">
+          <Suspense fallback={<div className="py-16 text-center text-sm text-gray-400">Carregando…</div>}>
+            {route ? (
+              RouteComponent ? (
+                <RouteComponent key={route.m[0]} />
+              ) : route.def.loader ? (
+                <LazyVanillaPage key={route.m[0]} load={route.def.loader} match={route.m} />
+              ) : null
+            ) : null}
+          </Suspense>
+        </main>
+      </div>
     </div>
   );
 }
