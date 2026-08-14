@@ -1,4 +1,6 @@
 import { defineConfig, type PluginOption } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -9,7 +11,7 @@ const FRONTEND_DIR = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
   base: "/",
-  plugins: [buildInfo()],
+  plugins: [react(), tailwindcss(), buildInfo()],
   build: {
     outDir: "dist",
     emptyOutDir: true,
@@ -27,6 +29,21 @@ export default defineConfig({
         changeOrigin: true,
       },
       "/images": {
+        target: `http://${BACKEND_HOST}:${PORT_BACKEND}`,
+        changeOrigin: true,
+      },
+      // Páginas renderizadas pelo Flask (fora da SPA): impressão de
+      // pedidos de compra e de orçamentos. Sem isso, em dev (porta 5173)
+      // o clique em "PDF"/"Imprimir" cai na SPA em vez do backend.
+      "/compras/pedidos": {
+        target: `http://${BACKEND_HOST}:${PORT_BACKEND}`,
+        changeOrigin: true,
+      },
+      "/orcamentos": {
+        target: `http://${BACKEND_HOST}:${PORT_BACKEND}`,
+        changeOrigin: true,
+      },
+      "/fornecedor": {
         target: `http://${BACKEND_HOST}:${PORT_BACKEND}`,
         changeOrigin: true,
       },

@@ -279,7 +279,7 @@ def comissoes(inicio: str | None = None, fim: str | None = None) -> list[dict]:
             " FROM orcamentos o"
             " JOIN clientes c ON c.id=o.cliente_id"
             " JOIN vendedores v ON v.id=c.vendedor_id"
-            " WHERE o.status='faturado' AND date(o.criado_em) BETWEEN ? AND ?"
+            " WHERE o.status IN ('faturado','recebido') AND date(o.criado_em) BETWEEN ? AND ?"
             " GROUP BY v.id ORDER BY comissao DESC",
             (inicio, fim),
         ).fetchall()]

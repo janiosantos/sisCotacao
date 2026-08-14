@@ -23,12 +23,12 @@ def resumo() -> dict:
     with system_conn() as conn:
         vendas_hoje = conn.execute(
             "SELECT COUNT(*) n, COALESCE(SUM(total),0) t FROM orcamentos"
-            " WHERE status IN ('faturado','fechado') AND date(criado_em)=?",
+            " WHERE status IN ('faturado','fechado','recebido') AND date(criado_em)=?",
             (hoje,),
         ).fetchone()
         vendas_mes = conn.execute(
             "SELECT COUNT(*) n, COALESCE(SUM(total),0) t FROM orcamentos"
-            " WHERE status IN ('faturado','fechado') AND date(criado_em)>=?",
+            " WHERE status IN ('faturado','fechado','recebido') AND date(criado_em)>=?",
             (mes_inicio,),
         ).fetchone()
         receber_a_vencer = conn.execute(
@@ -90,7 +90,7 @@ def top_vendas(limit: int = 5) -> list[dict]:
             " SUM(oi.preco_unitario * oi.quantidade) AS receita"
             " FROM orcamento_itens oi"
             " JOIN orcamentos o ON o.id=oi.orcamento_id"
-            "  AND o.status IN ('faturado','fechado') AND date(o.criado_em)>=?"
+            "  AND o.status IN ('faturado','fechado','recebido') AND date(o.criado_em)>=?"
             " JOIN variantes v ON v.id=oi.produto_id"
             " JOIN produtos_cadastro p ON p.id=v.produto_id"
             " GROUP BY oi.produto_id ORDER BY receita DESC LIMIT ?",

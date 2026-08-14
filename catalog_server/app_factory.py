@@ -102,6 +102,14 @@ def create_app() -> Flask:
     except Exception:
         app.logger.warning("Falha ao criar usuário admin inicial.", exc_info=True)
 
+    # Cliente padrão (id 1 — CONSUMIDOR) usado quando o vendedor não informa cliente.
+    from catalog_server.repositories.clientes import cliente_repo
+
+    try:
+        cliente_repo.garantir_padrao()
+    except Exception:
+        app.logger.warning("Falha ao garantir cliente padrão.", exc_info=True)
+
     # Evita que o navegador use uma versão em cache de CSS/JS enquanto o
     # sistema está em desenvolvimento ativo (o index.html já tinha essa
     # proteção; os demais estáticos não tinham).

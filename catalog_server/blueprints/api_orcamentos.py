@@ -8,7 +8,7 @@ from catalog_server.blueprints.api_usuarios import SESSION_KEY
 from catalog_server.repositories.orcamentos import STATUS_LIST, orcamento_repo, resumo_desconto
 from catalog_server.repositories import cliente_repo, usuario_repo
 from catalog_server.repositories.pdv_frete import desconto_repo, frete_repo
-from catalog_server.repositories.financeiro import contas_repo
+from catalog_server.repositories.financeiro import caixa_repo, contas_repo
 from catalog_server.repositories.estoque import estoque_repo
 from catalog_server.services import venda_fiscal
 from catalog_server.repositories import loja
@@ -21,7 +21,16 @@ def listar():
     status = (request.args.get("status") or "").strip()
     somente_meus = request.args.get("somente_meus", "").lower() in ("1", "true")
     usuario_id = session.get(SESSION_KEY) if somente_meus else None
-    return jsonify(orcamento_repo.listar(status, usuario_id=usuario_id))
+    q = (request.args.get("q") or "").strip()
+    data_inicio = request.args.get("data_inicio") or None
+    data_fim = request.args.get("data_fim") or None
+    return jsonify(orcamento_repo.listar(
+        status,
+        usuario_id=usuario_id,
+        q=q,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    ))
 
 
 @api_orcamentos_bp.post("/api/orcamentos")
@@ -32,6 +41,9 @@ def criar():
         return jsonify({"error": "O orçamento precisa de ao menos 1 item"}), 400
     cliente_nome = data.get("cliente") or ""
     cliente_id = data.get("cliente_id")
+    # Cliente padrão (id 1) quando o vendedor não informa cliente.
+    if not cliente_id and not (cliente_nome or "").strip():
+        cliente_id = 1
     uf_destino = data.get("uf_destino")
     tipo_cliente = data.get("tipo_cliente")
     contribuinte = data.get("contribuinte")
@@ -195,6 +207,167 @@ def excluir(orcamento_id: int):
     if not orcamento_repo.excluir(orcamento_id):
         return jsonify({"error": "Orçamento não encontrado"}), 404
     return jsonify({"ok": True})
+
+
+# ─── Recebimento de vendas (caixa) ────────────────────────
+
+FORMAS_PAGAMENTO = ("dinheiro", "pix", "cheque", "cartao_debito", "cartao_credito", "convenio", "boleto", "transferencia")
+
+
+@api_orcamentos_bp.get("/api/orcamentos/receber/formas")
+def formas_pagamento():
+    return jsonify(list(FORMAS_PAGAMENTO))
+
+
+def _normalizar_pagamentos(data: dict) -> tuple[list[tuple[str, float]], str | None]:
+    """Normaliza o payload de recebimento (simples ou múltiplas formas).
+
+    Aceita:
+      - forma simples: {forma_pagamento, valor_recebido}
+      - múltiplas:     {pagamentos: [{forma_pagamento, valor}, ...]}
+
+    Retorna (lista_de_(forma, valor), erro).
+    """
+    pagamentos_raw = data.get("pagamentos")
+    if isinstance(pagamentos_raw, list) and pagamentos_raw:
+        out: list[tuple[str, float]] = []
+        for p in pagamentos_raw:
+            if not isinstance(p, dict):
+                continue
+            forma = (p.get("forma_pagamento") or "").strip().lower()
+            if forma not in FORMAS_PAGAMENTO:
+                continue
+            try:
+                valor = round(float(p.get("valor") or 0), 2)
+            except (TypeError, ValueError):
+                continue
+            if valor > 0:
+                out.append((forma, valor))
+        if not out:
+            return [], "Informe ao menos um pagamento válido"
+        return out, None
+
+    forma = (data.get("forma_pagamento") or "dinheiro").strip().lower()
+    if forma not in FORMAS_PAGAMENTO:
+        return [], "Forma de pagamento inválida"
+    try:
+        valor = round(float(data.get("valor_recebido") or 0), 2)
+    except (TypeError, ValueError):
+        return [], "Valor recebido inválido"
+    if valor <= 0:
+        return [], "Informe o valor recebido"
+    return [(forma, valor)], None
+
+
+@api_orcamentos_bp.post("/api/orcamentos/<int:orcamento_id>/receber")
+def receber(orcamento_id: int):
+    """Registra o recebimento de uma venda de balcão já faturada (combinável).
+
+    Aceita uma ou mais formas de pagamento simultâneas (ex.: parte em PIX, parte
+    em dinheiro). Faz o lançamento no caixa (entrada) para cada forma e baixa a
+    conta a receber vinculada pelo número do orçamento. Se o total recebido
+    quitar a venda, o status muda para `recebido`.
+    """
+    data = request.get_json(silent=True) or {}
+    pagamentos, erro = _normalizar_pagamentos(data)
+    if erro:
+        return jsonify({"error": erro}), 400
+
+    orc = orcamento_repo.buscar(orcamento_id)
+    if orc is None:
+        return jsonify({"error": "Orçamento não encontrado"}), 404
+    if orc.get("status") != "faturado":
+        return jsonify({"error": "Apenas orçamentos faturados podem ser recebidos"}), 400
+
+    total = round(float(orc.get("total") or 0), 2)
+    total_recebido = round(sum(v for _, v in pagamentos), 2)
+    troco = round(max(0.0, total_recebido - total), 2)
+
+    # O excedente é devolvido como troco (sempre em dinheiro); subtrai do 1º
+    # pagamento em dinheiro antes de lançar no caixa.
+    restante_troco = troco
+    descricao = f"Venda {orc.get('numero', '')} — {orc.get('cliente', '') or 'cliente'}"
+    for forma, valor in pagamentos:
+        entrada = valor
+        if forma == "dinheiro" and restante_troco > 0:
+            abatido = min(entrada, restante_troco)
+            entrada = round(entrada - abatido, 2)
+            restante_troco = round(restante_troco - abatido, 2)
+        if entrada <= 0:
+            continue
+        try:
+            caixa_repo.movimentar(
+                "entrada",
+                descricao,
+                entrada,
+                forma_pagamento=forma,
+                documento=orc.get("numero", ""),
+                orcamento_id=orcamento_id,
+                usuario_id=session.get(SESSION_KEY),
+            )
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+
+    entrada_total = round(total_recebido - troco, 2)
+    contas_repo.receber_por_documento(orc.get("numero", ""), entrada_total)
+
+    recebido = total_recebido >= total - 1e-9
+    if recebido:
+        orcamento_repo.atualizar_cabecalho(orcamento_id, status="recebido")
+
+    return jsonify({
+        "ok": True,
+        "total": total,
+        "valor_recebido": total_recebido,
+        "troco": troco,
+        "recebido": recebido,
+    })
+
+
+@api_orcamentos_bp.post("/api/orcamentos/<int:orcamento_id>/cancelar")
+def cancelar(orcamento_id: int):
+    """Cancela uma venda de balcão faturada (sem baixa de estoque)."""
+    orc = orcamento_repo.buscar(orcamento_id)
+    if orc is None:
+        return jsonify({"error": "Orçamento não encontrado"}), 404
+    if orc.get("status") not in ("faturado", "recebido", "ativo", "liberado", "em_analise"):
+        return jsonify({"error": "Orçamento não pode ser cancelado"}), 400
+    contas_repo.cancelar_por_documento(orc.get("numero", ""))
+    orcamento_repo.atualizar_cabecalho(orcamento_id, status="cancelado")
+    return jsonify({"ok": True})
+
+
+@api_orcamentos_bp.post("/api/orcamentos/<int:orcamento_id>/devolver")
+def devolver(orcamento_id: int):
+    """Devolve uma venda de balcão: reverte o estoque (entrada) e cancela a venda."""
+    orc = orcamento_repo.buscar(orcamento_id)
+    if orc is None:
+        return jsonify({"error": "Orçamento não encontrado"}), 404
+    if orc.get("status") not in ("faturado", "recebido"):
+        return jsonify({"error": "Apenas vendas faturadas/recebidas podem ser devolvidas"}), 400
+
+    # Estorno do estoque (entrada) para cada item, invertendo a baixa feita no faturamento.
+    devolvidos = 0
+    for item in orc.get("itens", []):
+        qtd = float(item.get("quantidade") or 0)
+        if qtd <= 0:
+            continue
+        vid = item.get("produto_id") or item.get("variante_id")
+        if not vid:
+            continue
+        try:
+            estoque_repo.movimentar(
+                deposito_id=1, variante_id=vid,
+                tipo="entrada", quantidade=qtd,
+                documento=f"DEV {orc.get('numero', '')}",
+            )
+            devolvidos += 1
+        except Exception:
+            pass
+
+    contas_repo.cancelar_por_documento(orc.get("numero", ""))
+    orcamento_repo.atualizar_cabecalho(orcamento_id, status="cancelado")
+    return jsonify({"ok": True, "itens_devolvidos": devolvidos})
 
 
 # ─── Desconto por alçada ──────────────────────────────────

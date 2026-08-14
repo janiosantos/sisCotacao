@@ -54,6 +54,27 @@ class ClienteRepository:
 
     # ------------------------------------------------------------------
 
+    def garantir_padrao(self) -> int:
+        """Garante o cliente padrão (id 1, CONSUMIDOR) usado no balcão.
+
+        Idempotente: se já existir um cliente com id 1, retorna-o sem alterar.
+        """
+        with system_conn() as conn:
+            row = conn.execute("SELECT id FROM clientes WHERE id = 1").fetchone()
+            if row is not None:
+                return 1
+            conn.execute(
+                "INSERT INTO clientes"
+                " (id, nome, tipo_pessoa, doc, email, telefone, whatsapp, endereco,"
+                "  cidade, uf, cep, vendedor_id, limite_credito, observacoes,"
+                "  contribuinte, ie, c_municipio, ativo)"
+                " VALUES (1, 'CONSUMIDOR', 'f', NULL, NULL, NULL, NULL, NULL,"
+                "  NULL, NULL, NULL, NULL, 0, NULL, '', '', '', 1)"
+            )
+            return 1
+
+    # ------------------------------------------------------------------
+
     def create(self, dados: dict) -> int:
         with system_conn() as conn:
             cur = conn.execute(

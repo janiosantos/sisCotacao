@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from catalog_server.db import system_conn
 
-STATUS_LIST = ("rascunho", "ativo", "em_analise", "liberado", "faturado", "cancelado")
+STATUS_LIST = ("rascunho", "ativo", "em_analise", "liberado", "faturado", "recebido", "cancelado")
 
 
 def next_numero(conn) -> str:
@@ -152,13 +152,21 @@ class OrcamentoRepository:
 
     # ------------------------------------------------------------------
 
-    def listar(self, status: str = "", usuario_id: int | None = None) -> list[dict]:
+    def listar(
+        self,
+        status: str = "",
+        usuario_id: int | None = None,
+        q: str = "",
+        data_inicio: str | None = None,
+        data_fim: str | None = None,
+    ) -> list[dict]:
         sql = """
             SELECT o.id, o.numero, o.cliente, o.contato, o.status, o.desconto,
                    o.subtotal, o.total, o.validade_dias, o.criado_em, o.observacoes,
                    o.usuario_id, o.desconto_autorizado, o.desconto_autorizado_por,
                    o.desconto_autorizado_em,
-                   (SELECT COUNT(*) FROM orcamento_itens oi WHERE oi.orcamento_id=o.id) AS n_itens
+                   (SELECT COUNT(*) FROM orcamento_itens oi WHERE oi.orcamento_id=o.id) AS n_itens,
+                   (SELECT u.nome FROM usuarios u WHERE u.id=o.usuario_id) AS usuario_nome
             FROM orcamentos o
         """
         params: list = []
@@ -169,6 +177,16 @@ class OrcamentoRepository:
         if usuario_id is not None:
             conds.append("o.usuario_id=?")
             params.append(usuario_id)
+        if q:
+            like = f"%{q}%"
+            conds.append("(o.numero LIKE ? OR o.cliente LIKE ?)")
+            params.extend([like, like])
+        if data_inicio:
+            conds.append("date(o.criado_em) >= ?")
+            params.append(data_inicio)
+        if data_fim:
+            conds.append("date(o.criado_em) <= ?")
+            params.append(data_fim)
         if conds:
             sql += " WHERE " + " AND ".join(conds)
         sql += " ORDER BY o.id DESC"

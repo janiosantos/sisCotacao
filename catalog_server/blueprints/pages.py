@@ -29,6 +29,7 @@ _ORC_STATUS_LABEL = {
     "em_analise": "Em análise",
     "liberado": "Liberado",
     "faturado": "Faturado",
+    "recebido": "Recebido",
     "cancelado": "Cancelado",
 }
 
