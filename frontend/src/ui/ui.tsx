@@ -1,6 +1,6 @@
 // ui/ui.tsx — componentes React + Tailwind reutilizáveis do ERP.
 
-import { useEffect, type ReactNode } from "react";
+import { forwardRef, useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 // ------------------------------------------------------------------
@@ -17,26 +17,24 @@ const BTN_VARIANTS: Record<BtnVariant, string> = {
   outline: "border border-brand-600 text-brand-700 hover:bg-brand-50",
 };
 
-export function Button({
-  children,
-  variant = "secondary",
-  size = "md",
-  className = "",
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: BtnVariant;
-  size?: "sm" | "md";
-}) {
+export const Button = forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: BtnVariant;
+    size?: "sm" | "md";
+  }
+>(function Button({ children, variant = "secondary", size = "md", className = "", ...props }, ref) {
   const sizeCls = size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-3.5 py-2 text-sm";
   return (
     <button
+      ref={ref}
       className={`inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/40 disabled:opacity-50 disabled:cursor-not-allowed ${BTN_VARIANTS[variant]} ${sizeCls} ${className}`}
       {...props}
     >
       {children}
     </button>
   );
-}
+});
 
 // ------------------------------------------------------------------
 // Card / StatCard
@@ -182,13 +180,25 @@ export function Field({
 const inputCls =
   "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30";
 
-export function Input({ className = "", ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={`${inputCls} ${className}`} {...props} />;
-}
+export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  function Input({ className = "", autoComplete, spellCheck, ...props }, ref) {
+    return (
+      <input
+        ref={ref}
+        autoComplete={autoComplete ?? "off"}
+        spellCheck={spellCheck ?? false}
+        className={`${inputCls} ${className}`}
+        {...props}
+      />
+    );
+  }
+);
 
-export function Select({ className = "", ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={`${inputCls} ${className}`} {...props} />;
-}
+export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(
+  function Select({ className = "", ...props }, ref) {
+    return <select ref={ref} className={`${inputCls} ${className}`} {...props} />;
+  }
+);
 
 export function Textarea({ className = "", ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea className={`${inputCls} ${className}`} rows={3} {...props} />;

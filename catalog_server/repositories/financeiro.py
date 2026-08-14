@@ -109,6 +109,44 @@ class ContasRepository:
             )
             return {"saldo_anterior": saldo_atual, "saldo_posterior": novo_saldo, "status": novo_status}
 
+    def receber_por_documento(self, documento: str, valor_recebido: float, data_recebimento: str | None = None) -> dict:
+        """Baixa as contas a receber associadas a um documento (nº do orçamento).
+
+        Aplica o valor recebido nas contas em aberto/parcial na ordem, retornando
+        o valor excedente (troco) que sobrou após quitar todas.
+        """
+        with system_conn() as conn:
+            contas = conn.execute(
+                "SELECT * FROM contas_receber WHERE documento=? AND status IN ('aberto','parcial') ORDER BY id",
+                (documento,),
+            ).fetchall()
+            restante = valor_recebido
+            baixadas = 0
+            for conta in contas:
+                if restante <= 0:
+                    break
+                saldo = float(conta["saldo"] or 0)
+                abatido = min(restante, saldo)
+                novo_saldo = max(0.0, saldo - abatido)
+                novo_status = "pago" if novo_saldo <= 0 else "parcial"
+                conn.execute(
+                    "UPDATE contas_receber SET saldo=?, status=?, data_recebimento=COALESCE(?, data_recebimento) WHERE id=?",
+                    (novo_saldo, novo_status, data_recebimento or "", conta["id"]),
+                )
+                restante -= abatido
+                baixadas += 1
+            return {"contas": baixadas, "excedente": round(max(0.0, restante), 2)}
+
+    def cancelar_por_documento(self, documento: str) -> int:
+        """Cancela as contas a receber ainda em aberto/parcial de um documento."""
+        with system_conn() as conn:
+            cur = conn.execute(
+                "UPDATE contas_receber SET status='cancelado'"
+                " WHERE documento=? AND status IN ('aberto','parcial')",
+                (documento,),
+            )
+            return cur.rowcount
+
     def listar_pagar(
         self, status: str | None = None, fornecedor_id: int | None = None, vencimento_ate: str | None = None,
     ) -> list[dict]:

@@ -19,16 +19,18 @@ import {
   DollarSign,
   Landmark,
   BookOpen,
+  Banknote,
   Warehouse,
   Receipt,
   RotateCcw,
   ClipboardList,
   History,
   ShieldCheck,
+  Settings,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
-import { ROUTES, type PageRenderer } from "./routes";
+import { ROUTES } from "./routes";
 import { carregarSessao, entrar, sair, usuarioCorrente } from "./pages/login";
 import { startupAuth } from "./auth";
 import { countItens, injectOverlay as injectCartOverlay, toggle as toggleCart } from "./cart";
@@ -72,6 +74,7 @@ const NAV: NavGroup[] = [
     label: "Financeiro",
     items: [
       { href: "#/financeiro", label: "Financeiro", icon: Wallet },
+      { href: "#/recebimentos", label: "Recebimentos", icon: Banknote },
       { href: "#/precos", label: "Preços", icon: DollarSign },
       { href: "#/bancos", label: "Bancos", icon: Landmark },
       { href: "#/plano-contas", label: "Plano de contas", icon: BookOpen },
@@ -91,6 +94,7 @@ const NAV: NavGroup[] = [
       { href: "#/solicitacoes", label: "Solic. Compra", icon: ClipboardList },
       { href: "#/historico", label: "Hist. preços", icon: History },
       { href: "#/usuarios", label: "Usuários", icon: ShieldCheck },
+      { href: "#/configuracoes", label: "Configurações", icon: Settings },
     ],
   },
 ];
@@ -110,42 +114,6 @@ function useHashRoute(): string {
 
 function isActive(hash: string, href: string): boolean {
   return hash === href || hash.startsWith(href + "/");
-}
-
-function LegacyMount({ render, match }: { render: PageRenderer; match: RegExpMatchArray }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.innerHTML = "";
-    Promise.resolve(render(el, match)).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return <div ref={ref} />;
-}
-
-function LazyVanillaPage({
-  load,
-  match,
-}: {
-  load: () => Promise<PageRenderer>;
-  match: RegExpMatchArray;
-}) {
-  const [renderFn, setRenderFn] = useState<PageRenderer | null>(null);
-  useEffect(() => {
-    let alive = true;
-    load()
-      .then((fn) => {
-        if (alive) setRenderFn(() => fn);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  if (!renderFn) return <div className="py-16 text-center text-sm text-gray-400">Carregando…</div>;
-  return <LegacyMount render={renderFn} match={match} />;
 }
 
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
@@ -341,13 +309,7 @@ export default function App() {
 
         <main className="flex-1 overflow-auto p-6">
           <Suspense fallback={<div className="py-16 text-center text-sm text-gray-400">Carregando…</div>}>
-            {route ? (
-              RouteComponent ? (
-                <RouteComponent key={route.m[0]} />
-              ) : route.def.loader ? (
-                <LazyVanillaPage key={route.m[0]} load={route.def.loader} match={route.m} />
-              ) : null
-            ) : null}
+            {route && RouteComponent ? <RouteComponent key={route.m[0]} /> : null}
           </Suspense>
         </main>
       </div>

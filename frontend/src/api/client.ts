@@ -962,6 +962,18 @@ export const api = {
   // orçamentos de venda (PDV)
   listarOrcamentos: (status = "", somente_meus = false) =>
     request<OrcamentoLista[]>("GET", "/api/orcamentos" + qs({ status, somente_meus: somente_meus ? "1" : undefined })),
+  listarOrcamentosFiltro: (params: { status?: string; somente_meus?: boolean; q?: string; data_inicio?: string; data_fim?: string } = {}) =>
+    request<OrcamentoLista[]>(
+      "GET",
+      "/api/orcamentos" +
+        qs({
+          status: params.status || undefined,
+          somente_meus: params.somente_meus ? "1" : undefined,
+          q: params.q || undefined,
+          data_inicio: params.data_inicio || undefined,
+          data_fim: params.data_fim || undefined,
+        })
+    ),
   criarOrcamento: (payload: OrcamentoPayload) =>
     request<{ id: number; numero: string }>("POST", "/api/orcamentos", payload),
   detalharOrcamento: (id: number) =>
@@ -977,6 +989,11 @@ export const api = {
       `/api/orcamentos/${id}/autorizar-desconto`,
       creds
     ),
+  receberOrcamento: (id: number, data: { forma_pagamento?: string; valor_recebido?: number; pagamentos?: { forma_pagamento: string; valor: number }[] }) =>
+    request<RecebimentoResultado>("POST", `/api/orcamentos/${id}/receber`, data),
+  cancelarOrcamento: (id: number) => request<{ ok: boolean }>("POST", `/api/orcamentos/${id}/cancelar`),
+  devolverOrcamento: (id: number) => request<{ ok: boolean; itens_devolvidos: number }>("POST", `/api/orcamentos/${id}/devolver`),
+  formasPagamento: () => request<string[]>("GET", "/api/orcamentos/receber/formas"),
 
   // retaguarda de impressão (PDV → ESC/POS direto à impressora)
   imprimirOrcamento: (id: number) =>
@@ -1244,7 +1261,7 @@ export interface UnidadeCompra {
 // Orçamentos de venda (PDV)
 // ------------------------------------------------------------------
 
-export type OrcamentoStatus = "rascunho" | "ativo" | "fechado" | "cancelado";
+export type OrcamentoStatus = "rascunho" | "ativo" | "em_analise" | "liberado" | "faturado" | "recebido" | "cancelado";
 
 export interface OrcamentoItemPayload {
   produto_id?: number | null;
@@ -1272,6 +1289,7 @@ export interface OrcamentoLista {
   observacoes: string;
   n_itens: number;
   usuario_id?: number | null;
+  usuario_nome?: string | null;
   desconto_autorizado?: number | boolean;
   desconto_autorizado_por?: number | null;
   desconto_autorizado_em?: string | null;
@@ -1287,6 +1305,14 @@ export interface OrcamentoLista {
 
 export interface OrcamentoDetalhe extends OrcamentoLista {
   itens: OrcamentoItemPayload[];
+}
+
+export interface RecebimentoResultado {
+  ok: boolean;
+  total: number;
+  valor_recebido: number;
+  troco: number;
+  recebido: boolean;
 }
 
 export interface ConfigImpressao {

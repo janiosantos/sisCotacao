@@ -1,26 +1,11 @@
 // routes.tsx — registro central de rotas com code-splitting por tela.
-// - Telas React (componentes) usam React.lazy.
-// - Telas legadas (TS puro) usam um `loader` que importa o módulo e devolve a
-//   função `render` — o LegacyPage/LazyVanillaPage (App.tsx) a executa dentro
-//   do chrome "legacy".
 
-import { lazy, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
-
-export interface SidebarActionDef {
-  icon?: ReactNode;
-  label: string;
-  shortcut?: string;
-  action?: () => void;
-}
-
-export type PageRenderer = (el: HTMLElement, m: RegExpMatchArray) => void | Promise<void>;
+import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 
 export interface RouteDef {
   pattern: RegExp;
   title: string;
   component?: LazyExoticComponent<ComponentType>;
-  loader?: () => Promise<PageRenderer>;
-  actions?: SidebarActionDef[];
 }
 
 const Dashboard = lazy(() => import("./pages/dashboard"));
@@ -38,36 +23,49 @@ const Historico = lazy(() => import("./pages/historico"));
 const Diagnostico = lazy(() => import("./pages/diagnostico_variacoes"));
 const Estoque = lazy(() => import("./pages/estoque"));
 const Financeiro = lazy(() => import("./pages/financeiro"));
+const Recebimentos = lazy(() => import("./pages/recebimentos"));
+const Precos = lazy(() => import("./pages/precos"));
+const Fiscal = lazy(() => import("./pages/fiscal"));
+const Orcamentos = lazy(() => import("./pages/orcamentos"));
+const Cotacoes = lazy(() => import("./pages/cotacoes"));
+const CotacoesDetalhe = lazy(() => import("./pages/cotacoes").then((m) => ({ default: m.CotacoesDetalhe })));
+const Catalogo = lazy(() => import("./pages/catalogo"));
+const Compras = lazy(() => import("./pages/compras"));
+const Produtos = lazy(() => import("./pages/produtos"));
+const ProdutoEditor = lazy(() => import("./pages/produtos").then((m) => ({ default: m.ProdutoEditor })));
+const Pdv = lazy(() => import("./pages/pdv"));
+const Configuracoes = lazy(() => import("./pages/configuracoes"));
 
 export const ROUTES: RouteDef[] = [
   { pattern: /^#\/dashboard$/, title: "Painel", component: Dashboard },
-  { pattern: /^#\/catalogo$/, title: "Catálogo", loader: () => import("./pages/catalogo").then((m) => m.render) },
-  { pattern: /^#\/compras$/, title: "Compras", loader: () => import("./pages/compras").then((m) => m.render) },
-  { pattern: /^#\/produtos$/, title: "Produtos", loader: () => import("./pages/produtos").then((m) => m.renderLista) },
+  { pattern: /^#\/catalogo$/, title: "Catálogo", component: Catalogo },
+  { pattern: /^#\/compras$/, title: "Compras", component: Compras },
+  { pattern: /^#\/produtos$/, title: "Produtos", component: Produtos },
   {
     pattern: /^#\/produtos\/novo$/,
     title: "Novo produto",
-    loader: () => import("./pages/produtos").then((m) => (el) => m.renderEditor(el, null)),
+    component: ProdutoEditor,
   },
   {
     pattern: /^#\/produtos\/(\d+)$/,
     title: "Produto",
-    loader: () => import("./pages/produtos").then((m) => (el, mm) => m.renderEditor(el, Number(mm[1]))),
+    component: ProdutoEditor,
   },
-  { pattern: /^#\/cotacoes$/, title: "Cotações", loader: () => import("./pages/cotacoes").then((m) => m.renderLista) },
+  { pattern: /^#\/cotacoes$/, title: "Cotações", component: Cotacoes },
   {
     pattern: /^#\/cotacoes\/(\d+)$/,
     title: "Cotação",
-    loader: () => import("./pages/cotacoes").then((m) => (el, mm) => m.renderDetalhe(el, Number(mm[1]))),
+    component: CotacoesDetalhe,
   },
-  { pattern: /^#\/pdv$/, title: "PDV", loader: () => import("./pages/pdv").then((m) => m.render) },
+  { pattern: /^#\/pdv$/, title: "PDV", component: Pdv },
   { pattern: /^#\/estoque$/, title: "Estoque", component: Estoque },
   { pattern: /^#\/posvenda$/, title: "Pós-venda", component: PosVenda },
   { pattern: /^#\/bancos$/, title: "Bancos", component: Bancos },
-  { pattern: /^#\/fiscal$/, title: "Fiscal", loader: () => import("./pages/fiscal").then((m) => m.render) },
+  { pattern: /^#\/fiscal$/, title: "Fiscal", component: Fiscal },
   { pattern: /^#\/financeiro$/, title: "Financeiro", component: Financeiro },
-  { pattern: /^#\/precos$/, title: "Preços", loader: () => import("./pages/precos").then((m) => m.render) },
-  { pattern: /^#\/orcamentos$/, title: "Orçamentos", loader: () => import("./pages/orcamentos").then((m) => m.render) },
+  { pattern: /^#\/recebimentos$/, title: "Recebimentos", component: Recebimentos },
+  { pattern: /^#\/precos$/, title: "Preços", component: Precos },
+  { pattern: /^#\/orcamentos$/, title: "Orçamentos", component: Orcamentos },
   { pattern: /^#\/solicitacoes$/, title: "Solicitações de Compra", component: Solicitacoes },
   { pattern: /^#\/categorias$/, title: "Categorias", component: Categorias },
   { pattern: /^#\/unidades$/, title: "Unidades", component: Unidades },
@@ -82,4 +80,5 @@ export const ROUTES: RouteDef[] = [
   { pattern: /^#\/vendedores$/, title: "Vendedores", component: Vendedores },
   { pattern: /^#\/usuarios$/, title: "Usuários", component: Usuarios },
   { pattern: /^#\/plano-contas$/, title: "Plano de Contas", component: PlanoContas },
+  { pattern: /^#\/configuracoes$/, title: "Configurações", component: Configuracoes },
 ];
