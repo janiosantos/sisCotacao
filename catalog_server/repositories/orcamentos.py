@@ -245,6 +245,14 @@ class OrcamentoRepository:
                 params.append(val)
         if not fields:
             return False
+        # O desconto mudou: uma autorização de alçada anterior valia para o
+        # percentual de ANTES da edição. Zera para forçar reavaliação — se o
+        # novo desconto já estiver dentro do limite do vendedor, a checagem
+        # de alçada simplesmente não vai exigir nada de novo.
+        if desconto is not None:
+            fields.append("desconto_autorizado=0")
+            fields.append("desconto_autorizado_por=NULL")
+            fields.append("desconto_autorizado_em=NULL")
         params.append(orcamento_id)
         with system_conn() as conn:
             cur = conn.execute(
@@ -263,7 +271,13 @@ class OrcamentoRepository:
     # ------------------------------------------------------------------
 
     def substituir_itens(self, orcamento_id: int, itens: list[dict]) -> bool:
-        """Substitui integralmente os itens do orçamento e recalcula totais."""
+        """Substitui integralmente os itens do orçamento e recalcula totais.
+
+        Também zera uma autorização de desconto pré-existente: o percentual
+        efetivo depende dos itens (desconto por item entra na conta), então
+        trocar os itens invalida a autorização anterior pelo mesmo motivo
+        que trocar o desconto geral invalida — ver `atualizar_cabecalho`.
+        """
         with system_conn() as conn:
             cur = conn.execute(
                 "SELECT 1 FROM orcamentos WHERE id=?", (orcamento_id,)
@@ -298,7 +312,9 @@ class OrcamentoRepository:
                 )
             self._recalc_totals(conn, orcamento_id)
             conn.execute(
-                "UPDATE orcamentos SET atualizado_em=datetime('now') WHERE id=?",
+                "UPDATE orcamentos SET atualizado_em=datetime('now'),"
+                " desconto_autorizado=0, desconto_autorizado_por=NULL,"
+                " desconto_autorizado_em=NULL WHERE id=?",
                 (orcamento_id,),
             )
         return True

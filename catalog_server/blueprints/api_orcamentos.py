@@ -63,6 +63,12 @@ def criar():
                 contribuinte = cli.get("contribuinte")
             if not ie:
                 ie = cli.get("ie")
+    # Status "protegidos" (faturado) só podem ser aplicados pelo PATCH, que
+    # passa pelo gate de alçada/estoque/fiscal. Criar já direto como
+    # faturado pulava todas essas checagens — força rascunho aqui, e quem
+    # quiser finalizar de fato usa o PATCH depois.
+    status_pedido = data.get("status", "rascunho")
+    status_criacao = "rascunho" if status_pedido == "faturado" else status_pedido
     orcamento_id, numero = orcamento_repo.criar(
         cliente=cliente_nome or "",
         contato=data.get("contato") or "",
@@ -73,7 +79,7 @@ def criar():
         frete=float(data.get("frete") or 0),
         seguro=float(data.get("seguro") or 0),
         despesas_acessorias=float(data.get("despesas_acessorias") or 0),
-        status=data.get("status", "rascunho"),
+        status=status_criacao,
         condicao_pagamento_id=data.get("condicao_pagamento_id"),
         usuario_id=session.get(SESSION_KEY),
         cliente_id=cliente_id,
@@ -101,6 +107,27 @@ def atualizar(orcamento_id: int):
     status = data.get("status")
     if status is not None and status not in STATUS_LIST:
         return jsonify({"error": "Status inválido"}), 400
+
+    if orcamento_repo.buscar(orcamento_id) is None:
+        return jsonify({"error": "Orçamento não encontrado"}), 404
+
+    # Aplica os campos "normais" primeiro (inclusive desconto/itens, se
+    # vierem no mesmo PATCH) — só DEPOIS reavalia a alçada, usando o
+    # desconto já atualizado. Antes, quando desconto e status="faturado"
+    # chegavam juntos no mesmo PATCH, a checagem via o valor antigo.
+    # Existência já foi confirmada acima: se não há nenhum campo "normal"
+    # para gravar (ex.: PATCH só com status="faturado"), atualizar_cabecalho
+    # retorna False por não ter o que fazer — isso não é um 404.
+    orcamento_repo.atualizar_cabecalho(
+        orcamento_id,
+        cliente=data.get("cliente"),
+        contato=data.get("contato"),
+        validade_dias=data.get("validade_dias"),
+        observacoes=data.get("observacoes"),
+        status=None if status == "faturado" else status,
+        desconto=data.get("desconto"),
+        condicao_pagamento_id=data.get("condicao_pagamento_id"),
+    )
 
     # Desconto por alçada: para finalizar (faturar) com desconto acima do
     # limite do vendedor, o desconto precisa estar autorizado por um gerente.
@@ -136,17 +163,8 @@ def atualizar(orcamento_id: int):
                 "detalhes": snap.get("erros", []),
             }), 403
 
-    if not orcamento_repo.atualizar_cabecalho(
-        orcamento_id,
-        cliente=data.get("cliente"),
-        contato=data.get("contato"),
-        validade_dias=data.get("validade_dias"),
-        observacoes=data.get("observacoes"),
-        status=status,
-        desconto=data.get("desconto"),
-        condicao_pagamento_id=data.get("condicao_pagamento_id"),
-    ):
-        return jsonify({"error": "Orçamento não encontrado"}), 404
+        # Só agora aplica de fato o status protegido, já validado.
+        orcamento_repo.atualizar_cabecalho(orcamento_id, status="faturado")
 
     # Gatilho: faturar → gerar conta a receber + baixar estoque
     if status == "faturado":
@@ -374,16 +392,20 @@ def devolver(orcamento_id: int):
 
 
 def _verificar_alcada(orc: dict) -> dict | None:
-    """Retorna o payload de bloqueio (403) se o desconto excede a alçada do vendedor."""
+    """Retorna o payload de bloqueio (403) se o desconto excede a alçada do vendedor.
+
+    Sem vendedor identificado (sessão ausente/expirada) ou usuário
+    inexistente, a alçada é 0% — qualquer desconto exige autorização — em
+    vez de pular a checagem. Pular era um jeito fácil de burlar o limite
+    (bastava não estar logado).
+    """
     if orc.get("desconto_autorizado"):
         return None
     usuario_id = orc.get("usuario_id")
-    if not usuario_id:
+    user = usuario_repo.get(usuario_id) if usuario_id else None
+    if user is not None and user.get("perfil") == "admin":
         return None
-    user = usuario_repo.get(usuario_id)
-    if user is None or user.get("perfil") == "admin":
-        return None
-    limite = float(user.get("desconto_limite_pct") or 0)
+    limite = float(user.get("desconto_limite_pct") or 0) if user is not None else 0.0
     resumo = resumo_desconto(orc)
     if resumo["desconto_pct"] > limite + 1e-9:
         return {

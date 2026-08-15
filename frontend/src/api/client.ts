@@ -714,15 +714,17 @@ async function request<T>(method: Metodo, path: string, body?: unknown): Promise
   if (!res.ok) {
     let detail = res.statusText;
     let code: string | undefined;
+    let json: Record<string, unknown> = {};
     try {
-      const j = await res.json();
-      detail = j.error || detail;
-      code = j.code;
+      json = await res.json();
+      detail = (json.error as string) || detail;
+      code = json.code as string | undefined;
     } catch {
       /* resposta não-JSON */
     }
-    const err = new Error(detail) as Error & { code?: string };
+    const err = new Error(detail) as Error & { code?: string; details?: Record<string, unknown> };
     if (code) err.code = code;
+    err.details = json;
     throw err;
   }
   if (res.status === 204) return undefined as T;

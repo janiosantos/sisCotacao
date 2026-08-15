@@ -104,7 +104,9 @@ export default function Pdv() {
 
   const [modalCadCliente, setModalCadCliente] = useState<string | null>(null);
   const [modalBuscaCliente, setModalBuscaCliente] = useState(false);
-  const [modalAutorizar, setModalAutorizar] = useState<number | null>(null);
+  const [modalAutorizar, setModalAutorizar] = useState<
+    { id: number; descontoPct?: number; limitePct?: number } | null
+  >(null);
   const [modalRecebimento, setModalRecebimento] = useState<{ id: number; numero: string; total: number } | null>(null);
   const [modalLocalizar, setModalLocalizar] = useState(false);
 
@@ -244,9 +246,13 @@ export default function Pdv() {
       setModalRecebimento({ id, numero, total });
       return true;
     } catch (e) {
-      const err = e as Error & { code?: string };
+      const err = e as Error & { code?: string; details?: Record<string, unknown> };
       if (err.code === "desconto_exige_autorizacao") {
-        setModalAutorizar(id);
+        setModalAutorizar({
+          id,
+          descontoPct: err.details?.desconto_pct as number | undefined,
+          limitePct: err.details?.limite_pct as number | undefined,
+        });
         recebimentoPendenteRef.current = { id, numero, total };
         return false;
       }
@@ -740,7 +746,9 @@ export default function Pdv() {
       )}
       {modalAutorizar !== null && (
         <ModalAutorizar
-          id={modalAutorizar}
+          id={modalAutorizar.id}
+          descontoPct={modalAutorizar.descontoPct}
+          limitePct={modalAutorizar.limitePct}
           onClose={() => setModalAutorizar(null)}
           onAutorizado={() => {
             const pend = recebimentoPendenteRef.current;
@@ -902,7 +910,19 @@ function ModalBuscaCliente({
   );
 }
 
-function ModalAutorizar({ id, onClose, onAutorizado }: { id: number; onClose: () => void; onAutorizado: () => void }) {
+function ModalAutorizar({
+  id,
+  descontoPct,
+  limitePct,
+  onClose,
+  onAutorizado,
+}: {
+  id: number;
+  descontoPct?: number;
+  limitePct?: number;
+  onClose: () => void;
+  onAutorizado: () => void;
+}) {
   const [login, setLogin] = useState("");
   const [senha, setSenha] = useState("");
   const [autorizando, setAutorizando] = useState(false);
@@ -940,7 +960,15 @@ function ModalAutorizar({ id, onClose, onAutorizado }: { id: number; onClose: ()
       }
     >
       <p className="mb-4 text-sm text-gray-500">
-        O desconto aplicado está acima da alçada do vendedor. Informe as credenciais do gerente para autorizar e finalizar.
+        {descontoPct != null && limitePct != null ? (
+          <>
+            O desconto aplicado (<b>{descontoPct.toFixed(1)}%</b>) está acima da alçada do
+            vendedor (<b>{limitePct.toFixed(1)}%</b>). Informe as credenciais de um gerente
+            para autorizar e finalizar.
+          </>
+        ) : (
+          "O desconto aplicado está acima da alçada do vendedor. Informe as credenciais do gerente para autorizar e finalizar."
+        )}
       </p>
       <div className="space-y-4">
         <Field label="Login do gerente">
