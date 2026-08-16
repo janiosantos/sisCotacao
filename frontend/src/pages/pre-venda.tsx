@@ -1,9 +1,10 @@
-// pages/pdv.tsx — PDV de orçamentos (React + Tailwind).
+// pages/pre-venda.tsx — Pré-venda de orçamentos (React + Tailwind).
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   type Cliente,
+  type ClienteSituacao,
   type CondicaoPagamento,
   type OrcamentoDetalhe,
   type OrcamentoItemPayload,
@@ -15,7 +16,6 @@ import { toast } from "../ui/dom";
 import { usuarioCorrente } from "./login";
 import { Button, Field, Input, Modal } from "../ui/ui";
 import { SearchModal } from "../ui/search-modal";
-import { ModalRecebimento } from "./recebimento";
 
 interface LinhaPdv {
   produto_id: number | null;
@@ -77,7 +77,7 @@ function DataBox({
   );
 }
 
-export default function Pdv() {
+export default function PreVenda() {
   const [linhas, setLinhas] = useState<LinhaPdv[]>([]);
   const [busca, setBusca] = useState("");
   const [sugestoes, setSugestoes] = useState<ProdutoResumo[]>([]);
@@ -90,8 +90,6 @@ export default function Pdv() {
     return saved ? Number(saved) : CLIENTE_PADRAO.id;
   });
 
-  const [contato, setContato] = useState("");
-  const [validade, setValidade] = useState(String(VALIDADE_PADRAO));
   const [obs, setObs] = useState("");
   const [desconto, setDesconto] = useState("");
   const [descModo, setDescModo] = useState<"pct" | "valor">("valor");
@@ -105,14 +103,15 @@ export default function Pdv() {
   const [modalCadCliente, setModalCadCliente] = useState<string | null>(null);
   const [modalBuscaCliente, setModalBuscaCliente] = useState(false);
   const [modalAutorizar, setModalAutorizar] = useState<
-    { id: number; descontoPct?: number; limitePct?: number } | null
+    { id: number | null; descontoPct?: number; limitePct?: number; modo: "autorizar" | "finalizar" } | null
   >(null);
-  const [modalRecebimento, setModalRecebimento] = useState<{ id: number; numero: string; total: number } | null>(null);
+  const [modalDadosCliente, setModalDadosCliente] = useState(false);
   const [modalLocalizar, setModalLocalizar] = useState(false);
+  // Desconto acima da alçada já autorizado por um gerente (nesta composição).
+  // Qualquer alteração de itens/desconto expira essa autorização.
+  const [descontoAutorizado, setDescontoAutorizado] = useState(false);
 
   const buscaRef = useRef<HTMLInputElement>(null);
-  const contatoRef = useRef<HTMLInputElement>(null);
-  const validadeRef = useRef<HTMLInputElement>(null);
   const descontoRef = useRef<HTMLInputElement>(null);
   const condRef = useRef<HTMLSelectElement>(null);
   const obsRef = useRef<HTMLInputElement>(null);
@@ -121,7 +120,6 @@ export default function Pdv() {
   const buscaTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [linhaAtiva, setLinhaAtiva] = useState<number | null>(null);
-  const recebimentoPendenteRef = useRef<{ id: number; numero: string; total: number } | null>(null);
   const [hora, setHora] = useState(() => new Date().toLocaleTimeString("pt-BR"));
 
   useEffect(() => {
@@ -131,8 +129,30 @@ export default function Pdv() {
 
   const c = useMemo(() => calculosPdv(linhas, descModo, desconto), [linhas, descModo, desconto]);
 
+  // Limite de alçada do vendedor atual (temporariamente se aplica a todos,
+  // inclusive admin, até existirem grupos/permissões).
+  const usuario = usuarioCorrente();
+  const limiteAlcadaPct = usuario ? (usuario.desconto_limite_pct ?? 0) : 0;
+
+  // Qualquer alteração no pedido (itens/quantidade/cliente/desconto/condição…)
+  // expira a autorização de desconto anterior — reavalia do zero.
   useEffect(() => {
-    void api.listarCondicoes().then(setCondicoes).catch(() => {});
+    setDescontoAutorizado(false);
+  }, [linhas, cliente, clienteId, obs, desconto, descModo, condicaoId]);
+
+  useEffect(() => {
+    void api
+      .listarCondicoes()
+      .then((cds) => {
+        setCondicoes(cds);
+        // Condição padrão: "À Vista" (ou a primeira disponível).
+        setCondicaoId((cur) => {
+          if (cur) return cur;
+          const vista = cds.find((cd) => /vista/i.test(cd.nome)) ?? cds[0];
+          return vista ? String(vista.id) : "";
+        });
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -218,7 +238,6 @@ export default function Pdv() {
   const selecionarCliente = (cli: Cliente) => {
     setCliente(cli.nome);
     setClienteId(cli.id);
-    if (!contato && cli.whatsapp) setContato(cli.whatsapp);
     sessionStorage.setItem("pdv_cliente", cli.nome);
     sessionStorage.setItem("pdv_cliente_id", String(cli.id));
     buscaRef.current?.focus();
@@ -240,33 +259,8 @@ export default function Pdv() {
     );
   };
 
-  const finalizarOrcamento = async (id: number, numero: string, total: number): Promise<boolean> => {
-    try {
-      await api.atualizarOrcamento(id, { status: "faturado" });
-      setModalRecebimento({ id, numero, total });
-      return true;
-    } catch (e) {
-      const err = e as Error & { code?: string; details?: Record<string, unknown> };
-      if (err.code === "desconto_exige_autorizacao") {
-        setModalAutorizar({
-          id,
-          descontoPct: err.details?.desconto_pct as number | undefined,
-          limitePct: err.details?.limite_pct as number | undefined,
-        });
-        recebimentoPendenteRef.current = { id, numero, total };
-        return false;
-      }
-      toast("Erro ao finalizar: " + err.message, "error");
-      return false;
-    }
-  };
-
-  const salvar = async (finalizado = false, imprimir = true): Promise<{ id: number; numero: string } | null> => {
-    if (!linhas.length) {
-      toast("Adicione ao menos um item", "error");
-      return null;
-    }
-    const itens: OrcamentoItemPayload[] = linhas.map((l) => ({
+  const buildItens = (): OrcamentoItemPayload[] =>
+    linhas.map((l) => ({
       produto_id: l.produto_id,
       nome: l.nome,
       sku: l.sku,
@@ -276,15 +270,22 @@ export default function Pdv() {
       preco_unitario: l.preco_unitario,
       desconto_percentual: l.desconto_percentual,
     }));
-    setSalvando(true);
-    try {
+
+  // Persiste (cria/atualiza) o rascunho atual — sem limpar a tela nem avisar.
+  // Compartilha a chamada em voo para não criar orçamento duplicado quando o
+  // auto-save e uma ação manual (finalizar/salvar) disparam juntos.
+  const persistirInFlightRef = useRef<Promise<{ id: number; numero: string } | null> | null>(null);
+
+  const persistir = async (): Promise<{ id: number; numero: string } | null> => {
+    if (persistirInFlightRef.current) return persistirInFlightRef.current;
+    if (!linhas.length) return null;
+    const p = (async () => {
+      const itens = buildItens();
       const condId = parseInt(condicaoId, 10) || undefined;
       let res: { id: number; numero: string };
       if (editandoId != null) {
         const patch: Record<string, unknown> = {
           cliente: cliente.trim(),
-          contato: contato.trim(),
-          validade_dias: parseInt(validade, 10) || VALIDADE_PADRAO,
           observacoes: obs.trim(),
           desconto: c.descontoGeral,
         };
@@ -295,39 +296,112 @@ export default function Pdv() {
       } else {
         res = await api.criarOrcamento({
           cliente: cliente.trim(),
-          contato: contato.trim(),
-          validade_dias: parseInt(validade, 10) || VALIDADE_PADRAO,
+          validade_dias: VALIDADE_PADRAO,
           observacoes: obs.trim(),
           desconto: c.descontoGeral,
           itens,
           condicao_pagamento_id: condId,
           cliente_id: clienteId ?? undefined,
         });
+        setEditandoId(res.id);
+        setEditandoNumero(res.numero);
       }
       sessionStorage.setItem("pdv_cliente", cliente.trim());
       sessionStorage.setItem("pdv_cliente_id", clienteId != null ? String(clienteId) : String(CLIENTE_PADRAO.id));
-
-      if (finalizado) {
-        const ok = await finalizarOrcamento(res.id, res.numero, c.total);
-        toast(ok ? `${res.numero} finalizado` : `${res.numero} salvo — finalização requer autorização de desconto`, ok ? "success" : "error");
-      } else {
-        toast(editandoId == null ? `${res.numero} salvo` : `${res.numero} atualizado`, "success");
-      }
-
-      if (imprimir) {
-        void api.imprimirOrcamento(res.id).catch(() => toast("Orçamento salvo, mas a impressão falhou", "error"));
-      }
-
-      setEditandoId(null);
-      setEditandoNumero("");
-      setLinhas([]);
-      setDesconto("");
-      setObs("");
-      buscaRef.current?.focus();
       return res;
+    })();
+    persistirInFlightRef.current = p;
+    try {
+      return await p;
+    } finally {
+      persistirInFlightRef.current = null;
+    }
+  };
+
+  const limparTela = () => {
+    setEditandoId(null);
+    setEditandoNumero("");
+    setLinhas([]);
+    setLinhaAtiva(null);
+    setDesconto("");
+    setDescModo("valor");
+    setObs("");
+    // Nova pré-venda começa no cliente padrão (CONSUMIDOR).
+    setCliente(CLIENTE_PADRAO.nome);
+    setClienteId(CLIENTE_PADRAO.id);
+    sessionStorage.setItem("pdv_cliente", CLIENTE_PADRAO.nome);
+    sessionStorage.setItem("pdv_cliente_id", String(CLIENTE_PADRAO.id));
+    buscaRef.current?.focus();
+  };
+
+  const finalizarOrcamento = async (id: number): Promise<boolean> => {
+    // Gate local: desconto acima da alçada e ainda não autorizado → abre o
+    // modal de autorização ANTES de chamar o backend (sem o 403 confuso).
+    if (c.descontoTotal > 0.01 && c.pct > limiteAlcadaPct + 1e-6 && !descontoAutorizado) {
+      setModalAutorizar({ id, descontoPct: c.pct, limitePct: limiteAlcadaPct, modo: "finalizar" });
+      return false;
+    }
+    try {
+      await api.atualizarOrcamento(id, { status: "faturado" });
+      return true;
+    } catch (e) {
+      const err = e as Error & { code?: string; details?: Record<string, unknown> };
+      if (err.code === "desconto_exige_autorizacao") {
+        // Fallback: o backend rejeitou (ex.: autorização expirada após edição).
+        setModalAutorizar({
+          id,
+          descontoPct: err.details?.desconto_pct as number | undefined,
+          limitePct: err.details?.limite_pct as number | undefined,
+          modo: "finalizar",
+        });
+        return false;
+      }
+      toast("Erro ao finalizar: " + err.message, "error");
+      return false;
+    }
+  };
+
+  // Finaliza (fatura → caixa). Ação principal (F1).
+  const finalizar = async (): Promise<void> => {
+    if (!linhas.length) {
+      toast("Adicione ao menos um item", "error");
+      return;
+    }
+    setSalvando(true);
+    try {
+      const res = await persistir();
+      if (!res) return;
+      const ok = await finalizarOrcamento(res.id);
+      if (!ok) {
+        // Finalização bloqueada: mantém os dados e passa a editar o rascunho
+        // criado (para não duplicar) enquanto o modal de autorização está aberto.
+        setEditandoId(res.id);
+        setEditandoNumero(res.numero);
+        return;
+      }
+      toast(`${res.numero} finalizado`, "success");
+      limparTela();
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
-      return null;
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  // Salva explicitamente o rascunho e limpa a tela (F3).
+  const salvar = async (): Promise<void> => {
+    if (!linhas.length) {
+      toast("Adicione ao menos um item", "error");
+      return;
+    }
+    setSalvando(true);
+    try {
+      const res = await persistir();
+      if (!res) return;
+      toast(`${res.numero} salvo`, "success");
+      limparTela();
+    } catch (e) {
+      toast("Erro: " + (e as Error).message, "error");
     } finally {
       setSalvando(false);
     }
@@ -338,32 +412,95 @@ export default function Pdv() {
       toast("Adicione itens antes de visualizar", "error");
       return;
     }
-    const res = await salvar(false, false);
+    const res = await persistir();
     if (res) window.open(`/orcamentos/venda/${res.id}/imprimir`, "_blank");
   };
 
-  const limpar = () => {
-    if (linhas.length && !window.confirm("Limpar todos os itens?")) return;
-    setLinhas([]);
-    setLinhaAtiva(null);
-    setDesconto("");
-    setObs("");
-    setEditandoId(null);
-    setEditandoNumero("");
-    buscaRef.current?.focus();
+  const imprimirTermica = async () => {
+    if (!linhas.length) {
+      toast("Adicione itens antes de imprimir", "error");
+      return;
+    }
+    setSalvando(true);
+    try {
+      const res = await persistir();
+      if (!res) return;
+      void api.imprimirOrcamento(res.id).catch(() => toast("Orçamento salvo, mas a impressão falhou", "error"));
+    } catch (e) {
+      toast("Erro: " + (e as Error).message, "error");
+    } finally {
+      setSalvando(false);
+    }
   };
+
+  const limpar = () => {
+    if (linhas.length && !window.confirm("Descartar o pedido atual e limpar a tela?")) return;
+    if (editandoId != null) {
+      void api.excluirOrcamento(editandoId).catch(() => {});
+    }
+    limparTela();
+  };
+
+  // ── Auto-save: persistir o rascunho a cada mudança (debounce) ──
+  const persistirRef = useRef(persistir);
+  persistirRef.current = persistir;
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    if (linhas.length === 0) return;
+    clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      void persistirRef.current().catch(() => {});
+    }, 500);
+    return () => clearTimeout(autoSaveTimer.current);
+  }, [linhas, cliente, clienteId, obs, desconto, descModo, condicaoId]);
+
+  // ── Ao sair da tela: salvar (manter) ou descartar (excluir) o pedido ──
+  const editandoIdRef = useRef<number | null>(null);
+  const linhasRef = useRef<LinhaPdv[]>([]);
+  useEffect(() => {
+    editandoIdRef.current = editandoId;
+    linhasRef.current = linhas;
+  }, [editandoId, linhas]);
+
+  useEffect(() => {
+    const temPedido = () => linhasRef.current.length > 0;
+    const aoSair = () => {
+      if (!temPedido()) return;
+      const manter = window.confirm(
+        "Há um pedido em andamento.\n\nClique em OK para SALVAR (manter o rascunho) ou em Cancelar para DESCARTAR (excluir) o pedido."
+      );
+      if (!manter && editandoIdRef.current != null) {
+        void api.excluirOrcamento(editandoIdRef.current).catch(() => {});
+      }
+    };
+    const onHash = () => {
+      if (location.hash !== "#/pre-venda") aoSair();
+    };
+    const onUnload = (e: BeforeUnloadEvent) => {
+      if (temPedido()) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("hashchange", onHash);
+    window.addEventListener("beforeunload", onUnload);
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      window.removeEventListener("beforeunload", onUnload);
+    };
+  }, []);
 
   const acaoAtalho = async (f: number) => {
     switch (f) {
       case 1:
-        if (linhas.length) await salvar(false, false);
+        await finalizar();
         break;
       case 2:
         await visualizarImprimir();
         break;
       case 3:
-        if (linhas.length) await salvar(true, false);
-        else toast("Adicione ao menos um item", "error");
+        await salvar();
         break;
       case 5:
         limpar();
@@ -372,14 +509,19 @@ export default function Pdv() {
         setModalBuscaCliente(true);
         break;
       case 7:
-        if (linhas.length) await salvar(false, true);
-        else toast("Adicione itens antes de imprimir", "error");
+        await imprimirTermica();
         break;
       case 8:
         setModalLocalizar(true);
         break;
+      case 9:
+        if (clienteId != null && clienteId !== CLIENTE_PADRAO.id) setModalDadosCliente(true);
+        break;
     }
   };
+
+  const acaoAtalhoRef = useRef(acaoAtalho);
+  acaoAtalhoRef.current = acaoAtalho;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -387,20 +529,31 @@ export default function Pdv() {
       if (!m) return;
       e.preventDefault();
       e.stopPropagation();
-      void acaoAtalho(Number(m[1]));
+      void acaoAtalhoRef.current(Number(m[1]));
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linhas, cliente, clienteId, contato, validade, obs, desconto, descModo, condicaoId, editandoId]);
+  }, []);
 
   const onDescontoChange = (raw: string) => {
     let v = raw;
+    let modo: "pct" | "valor" = descModo;
     if (/%/.test(v)) {
-      setDescModo("pct");
+      modo = "pct";
       v = v.replace(/%/g, "").trim();
     }
+    setDescModo(modo);
     setDesconto(v);
+    // Avisa na hora quando o desconto geral ultrapassa a alçada do vendedor
+    // (modal dispensável), em vez de só na finalização.
+    if (limiteAlcadaPct != null) {
+      const novo = calculosPdv(linhas, modo, v);
+      if (novo.descontoTotal > 0.01 && novo.pct > limiteAlcadaPct + 1e-6) {
+        setModalAutorizar((prev) => prev ?? { id: editandoId, descontoPct: novo.pct, limitePct: limiteAlcadaPct, modo: "autorizar" });
+      } else {
+        setModalAutorizar((prev) => (prev?.modo === "autorizar" ? null : prev));
+      }
+    }
   };
 
   const carregarParaEdicao = async (id: number) => {
@@ -413,8 +566,6 @@ export default function Pdv() {
     }
     setCliente(d.cliente || "");
     setClienteId(d.cliente_id ?? null);
-    setContato(d.contato || "");
-    setValidade(String(d.validade_dias || VALIDADE_PADRAO));
     setObs(d.observacoes || "");
     setDesconto(String(d.desconto || ""));
     setDescModo("valor");
@@ -459,9 +610,17 @@ export default function Pdv() {
             className="max-w-md truncate rounded border border-gray-400 bg-white px-2 py-0.5 text-sm font-medium text-gray-800 hover:bg-gray-100"
             title="F6 — selecionar cliente"
           >
-            {clienteId != null ? `${clienteId} · ${cliente}` : cliente}
+            {cliente}
           </button>
           <span className="text-[10px] text-gray-500">F6</span>
+          <button
+            onClick={() => setModalDadosCliente(true)}
+            disabled={clienteId == null || clienteId === CLIENTE_PADRAO.id}
+            className="rounded border border-gray-400 bg-white px-2 py-0.5 text-xs text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+            title="F9 — dados do cliente"
+          >
+            Dados do cliente <span className="text-[10px] text-gray-400">F9</span>
+          </button>
         </div>
         <div>Vendedor: {usuarioCorrente()?.nome ?? "—"}</div>
         <div>Horário: {hora}</div>
@@ -599,37 +758,8 @@ export default function Pdv() {
           </div>
         </div>
 
-        {/* Lançamento (contato / validade / desconto / condição / obs) */}
+        {/* Lançamento (desconto / condição / obs) */}
         <div className="flex flex-shrink-0 flex-wrap items-center gap-2 rounded-xl bg-white/90 px-3 py-2 text-xs">
-          <span className="font-semibold text-gray-600">Contato</span>
-          <input
-            ref={contatoRef}
-            value={contato}
-            onChange={(e) => setContato(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                validadeRef.current?.focus();
-              }
-            }}
-            className="w-40 rounded border border-gray-300 px-2 py-1 text-sm"
-            placeholder="WhatsApp / e-mail"
-          />
-          <span className="font-semibold text-gray-600">Validade</span>
-          <input
-            ref={validadeRef}
-            type="number"
-            min={1}
-            value={validade}
-            onChange={(e) => setValidade(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                buscaRef.current?.focus();
-              }
-            }}
-            className="w-20 rounded border border-gray-300 px-2 py-1 text-sm"
-          />
           <span className="ml-2 font-semibold text-gray-600">Desconto {descModo === "pct" ? "%" : "R$"}</span>
           <input
             ref={descontoRef}
@@ -720,10 +850,10 @@ export default function Pdv() {
             Visualizar (F2)
           </Button>
           <Button size="sm" variant="outline" onClick={() => void acaoAtalho(3)} disabled={!linhas.length || salvando}>
-            Finalizar (F3)
+            Salvar (F3)
           </Button>
           <Button ref={salvarRef} variant="primary" onClick={() => void acaoAtalho(1)} disabled={!linhas.length || salvando}>
-            Salvar orçamento (F1)
+            Finalizar (F1)
           </Button>
         </div>
       </footer>
@@ -744,25 +874,21 @@ export default function Pdv() {
       {modalLocalizar && (
         <ModalLocalizarOrcamento onClose={() => setModalLocalizar(false)} onSelecionar={(id) => void carregarParaEdicao(id)} />
       )}
+      {modalDadosCliente && clienteId != null && (
+        <ModalDadosCliente clienteId={clienteId} onClose={() => setModalDadosCliente(false)} />
+      )}
       {modalAutorizar !== null && (
         <ModalAutorizar
           id={modalAutorizar.id}
           descontoPct={modalAutorizar.descontoPct}
           limitePct={modalAutorizar.limitePct}
+          finalizar={modalAutorizar.modo === "finalizar"}
+          onSalvarAntes={() => persistir()}
           onClose={() => setModalAutorizar(null)}
           onAutorizado={() => {
-            const pend = recebimentoPendenteRef.current;
-            recebimentoPendenteRef.current = null;
-            if (pend) setModalRecebimento(pend);
+            setDescontoAutorizado(true);
+            limparTela();
           }}
-        />
-      )}
-      {modalRecebimento !== null && (
-        <ModalRecebimento
-          dados={modalRecebimento}
-          onClose={() => setModalRecebimento(null)}
-          onRecebido={() => setModalRecebimento(null)}
-          imprimir
         />
       )}
     </div>
@@ -910,16 +1036,81 @@ function ModalBuscaCliente({
   );
 }
 
+function LinhaInfo({ label, valor }: { label: string; valor?: string | null }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="text-xs font-medium uppercase text-gray-500">{label}</span>
+      <span className="text-right font-medium text-gray-800">{valor || "—"}</span>
+    </div>
+  );
+}
+
+function ModalDadosCliente({ clienteId, onClose }: { clienteId: number; onClose: () => void }) {
+  const [cli, setCli] = useState<Cliente | null>(null);
+  const [situacao, setSituacao] = useState<ClienteSituacao | null>(null);
+  const [carregando, setCarregando] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    setCarregando(true);
+    void Promise.all([api.detalharCliente(clienteId), api.situacaoCliente(clienteId)])
+      .then(([c, s]) => {
+        if (!alive) return;
+        setCli(c);
+        setSituacao(s);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setCarregando(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [clienteId]);
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={cli?.nome ?? "Dados do cliente"}
+      footer={<Button onClick={onClose}>Fechar</Button>}
+    >
+      {carregando ? (
+        <p className="py-6 text-center text-sm text-gray-400">Carregando…</p>
+      ) : (
+        <div className="space-y-3 text-sm">
+          <LinhaInfo label="Endereço" valor={[cli?.endereco, cli?.cidade, cli?.uf].filter(Boolean).join(" — ")} />
+          <LinhaInfo label="Telefone" valor={cli?.telefone || cli?.whatsapp} />
+          <LinhaInfo label="E-mail" valor={cli?.email} />
+          <div className="my-2 border-t border-gray-200" />
+          <LinhaInfo label="Limite" valor={fmtMoney(situacao?.limite_credito ?? 0)} />
+          <LinhaInfo label="Limite utilizado" valor={fmtMoney(situacao?.limite_utilizado ?? 0)} />
+          <LinhaInfo label="Limite disponível" valor={fmtMoney(situacao?.limite_disponivel ?? 0)} />
+          {situacao?.tem_atraso && (
+            <div className="rounded-md bg-red-50 px-3 py-2 text-red-700">
+              <strong>Conta em aberto (em atraso):</strong> {fmtMoney(situacao.saldo_em_atraso)}
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function ModalAutorizar({
   id,
   descontoPct,
   limitePct,
+  finalizar,
+  onSalvarAntes,
   onClose,
   onAutorizado,
 }: {
-  id: number;
+  id: number | null;
   descontoPct?: number;
   limitePct?: number;
+  finalizar: boolean;
+  onSalvarAntes?: () => Promise<{ id: number } | null>;
   onClose: () => void;
   onAutorizado: () => void;
 }) {
@@ -934,9 +1125,22 @@ function ModalAutorizar({
     }
     setAutorizando(true);
     try {
-      await api.autorizarDescontoOrcamento(id, { login: login.trim(), senha });
-      await api.atualizarOrcamento(id, { status: "faturado" });
-      toast("Desconto autorizado e venda finalizada", "success");
+      let alvoId = id;
+      if (alvoId == null && onSalvarAntes) {
+        const res = await onSalvarAntes();
+        if (!res) {
+          setAutorizando(false);
+          return;
+        }
+        alvoId = res.id;
+      }
+      if (alvoId != null) {
+        await api.autorizarDescontoOrcamento(alvoId, { login: login.trim(), senha });
+        if (finalizar) {
+          await api.atualizarOrcamento(alvoId, { status: "faturado" });
+        }
+      }
+      toast(finalizar ? "Desconto autorizado e venda finalizada" : "Desconto autorizado", "success");
       onClose();
       onAutorizado();
     } catch (e) {
@@ -954,7 +1158,7 @@ function ModalAutorizar({
         <>
           <Button onClick={onClose}>Cancelar</Button>
           <Button variant="primary" onClick={() => void tentar()} disabled={autorizando}>
-            {autorizando ? "Autorizando…" : "Autorizar e finalizar"}
+            {autorizando ? "Autorizando…" : finalizar ? "Autorizar e finalizar" : "Autorizar desconto"}
           </Button>
         </>
       }
@@ -964,12 +1168,17 @@ function ModalAutorizar({
           <>
             O desconto aplicado (<b>{descontoPct.toFixed(1)}%</b>) está acima da alçada do
             vendedor (<b>{limitePct.toFixed(1)}%</b>). Informe as credenciais de um gerente
-            para autorizar e finalizar.
+            para {finalizar ? "autorizar e finalizar" : "autorizar"}.
           </>
         ) : (
-          "O desconto aplicado está acima da alçada do vendedor. Informe as credenciais do gerente para autorizar e finalizar."
+          `O desconto aplicado está acima da alçada do vendedor. Informe as credenciais do gerente para ${finalizar ? "autorizar e finalizar" : "autorizar"}.`
         )}
       </p>
+      {id == null && (
+        <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          A pré-venda ainda não foi salva — ela será salva para registrar a autorização.
+        </p>
+      )}
       <div className="space-y-4">
         <Field label="Login do gerente">
           <Input autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} autoFocus />

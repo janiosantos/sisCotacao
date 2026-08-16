@@ -17,6 +17,7 @@ from catalog_server.blueprints import (
     api_financeiro_bp,
     api_fiscal_avancado_bp,
     api_fiscal_bp,
+    api_fiscal_docs_bp,
     api_fiscal_regras_bp,
     api_relatorios_bp,
     api_precos_bp,
@@ -84,6 +85,7 @@ def create_app() -> Flask:
     app.register_blueprint(api_financeiro_bp)
     app.register_blueprint(api_fiscal_avancado_bp)
     app.register_blueprint(api_fiscal_bp)
+    app.register_blueprint(api_fiscal_docs_bp)
     app.register_blueprint(api_fiscal_regras_bp)
     app.register_blueprint(api_precos_bp)
     app.register_blueprint(api_relatorios_bp)

@@ -154,9 +154,10 @@ def atualizar(orcamento_id: int):
                                 "detalhes": sem_estoque}), 403
 
         # Snapshot fiscal + validação: grava o FiscalResult por item e bloqueia
-        # finalização quando há erro fiscal "hard" (NCM/CFOP/CST/CSOSN).
+        # finalização quando há erro fiscal "hard" (NCM/CFOP/CST/CSOSN) — só
+        # quando a loja está configurada para isso (bloquear_venda_sem_fiscal).
         snap = venda_fiscal.snapshot_orcamento(orcamento_id)
-        if snap and not snap.get("pode_finalizar"):
+        if loja.bloquear_sem_fiscal() and snap and not snap.get("pode_finalizar"):
             return jsonify({
                 "error": "Validação fiscal bloqueou a finalização. Corrija os erros abaixo.",
                 "code": "fiscal_error",
@@ -237,18 +238,18 @@ def formas_pagamento():
     return jsonify(list(FORMAS_PAGAMENTO))
 
 
-def _normalizar_pagamentos(data: dict) -> tuple[list[tuple[str, float]], str | None]:
+def _normalizar_pagamentos(data: dict) -> tuple[list[tuple[str, float, str | None, str | None]], str | None]:
     """Normaliza o payload de recebimento (simples ou múltiplas formas).
 
     Aceita:
-      - forma simples: {forma_pagamento, valor_recebido}
-      - múltiplas:     {pagamentos: [{forma_pagamento, valor}, ...]}
+      - forma simples: {forma_pagamento, valor_recebido, bandeira?, codigo_autorizacao?}
+      - múltiplas:     {pagamentos: [{forma_pagamento, valor, bandeira?, codigo_autorizacao?}, ...]}
 
-    Retorna (lista_de_(forma, valor), erro).
+    Retorna (lista_de_(forma, valor, bandeira, codigo_autorizacao), erro).
     """
     pagamentos_raw = data.get("pagamentos")
     if isinstance(pagamentos_raw, list) and pagamentos_raw:
-        out: list[tuple[str, float]] = []
+        out: list[tuple[str, float, str | None, str | None]] = []
         for p in pagamentos_raw:
             if not isinstance(p, dict):
                 continue
@@ -260,7 +261,9 @@ def _normalizar_pagamentos(data: dict) -> tuple[list[tuple[str, float]], str | N
             except (TypeError, ValueError):
                 continue
             if valor > 0:
-                out.append((forma, valor))
+                bandeira = (p.get("bandeira") or "").strip() or None
+                codigo = (p.get("codigo_autorizacao") or "").strip() or None
+                out.append((forma, valor, bandeira, codigo))
         if not out:
             return [], "Informe ao menos um pagamento válido"
         return out, None
@@ -274,7 +277,9 @@ def _normalizar_pagamentos(data: dict) -> tuple[list[tuple[str, float]], str | N
         return [], "Valor recebido inválido"
     if valor <= 0:
         return [], "Informe o valor recebido"
-    return [(forma, valor)], None
+    bandeira = (data.get("bandeira") or "").strip() or None
+    codigo = (data.get("codigo_autorizacao") or "").strip() or None
+    return [(forma, valor, bandeira, codigo)], None
 
 
 @api_orcamentos_bp.post("/api/orcamentos/<int:orcamento_id>/receber")
@@ -298,14 +303,14 @@ def receber(orcamento_id: int):
         return jsonify({"error": "Apenas orçamentos faturados podem ser recebidos"}), 400
 
     total = round(float(orc.get("total") or 0), 2)
-    total_recebido = round(sum(v for _, v in pagamentos), 2)
+    total_recebido = round(sum(v for _, v, _, _ in pagamentos), 2)
     troco = round(max(0.0, total_recebido - total), 2)
 
     # O excedente é devolvido como troco (sempre em dinheiro); subtrai do 1º
     # pagamento em dinheiro antes de lançar no caixa.
     restante_troco = troco
     descricao = f"Venda {orc.get('numero', '')} — {orc.get('cliente', '') or 'cliente'}"
-    for forma, valor in pagamentos:
+    for forma, valor, bandeira, codigo in pagamentos:
         entrada = valor
         if forma == "dinheiro" and restante_troco > 0:
             abatido = min(entrada, restante_troco)
@@ -322,6 +327,8 @@ def receber(orcamento_id: int):
                 documento=orc.get("numero", ""),
                 orcamento_id=orcamento_id,
                 usuario_id=session.get(SESSION_KEY),
+                bandeira=bandeira,
+                codigo_autorizacao=codigo,
             )
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
@@ -398,16 +405,24 @@ def _verificar_alcada(orc: dict) -> dict | None:
     inexistente, a alçada é 0% — qualquer desconto exige autorização — em
     vez de pular a checagem. Pular era um jeito fácil de burlar o limite
     (bastava não estar logado).
+
+    OBS (temporário): enquanto não há grupos/permissões, a alçada se aplica a
+    TODOS os usuários (inclusive admin), para o fluxo de autorização poder ser
+    exercitado com um usuário único — o próprio usuário logado autoriza a si
+    mesmo no modal.
     """
     if orc.get("desconto_autorizado"):
         return None
     usuario_id = orc.get("usuario_id")
     user = usuario_repo.get(usuario_id) if usuario_id else None
-    if user is not None and user.get("perfil") == "admin":
-        return None
     limite = float(user.get("desconto_limite_pct") or 0) if user is not None else 0.0
     resumo = resumo_desconto(orc)
-    if resumo["desconto_pct"] > limite + 1e-9:
+    # Sem desconto efetivo (ou irrelevante), não há o que autorizar. O epsilon
+    # em centavos evita que uma diferença de arredondamento (subtotal × base)
+    # vire um "desconto" minúsculo que, com alçada 0%, dispararia o bloqueio.
+    if resumo["desconto_total"] <= 0.01:
+        return None
+    if resumo["desconto_pct"] > limite + 1e-6:
         return {
             "error": "Desconto acima da alçada exige autorização de um gerente.",
             "code": "desconto_exige_autorizacao",

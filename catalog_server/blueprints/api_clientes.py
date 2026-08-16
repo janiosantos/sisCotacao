@@ -30,6 +30,14 @@ def detalhar(cliente_id: int):
     return jsonify(cliente)
 
 
+@api_clientes_bp.get("/api/clientes/<int:cliente_id>/situacao")
+def situacao(cliente_id: int):
+    s = cliente_repo.situacao_credito(cliente_id)
+    if s is None:
+        return jsonify({"error": "Cliente não encontrado"}), 404
+    return jsonify(s)
+
+
 @api_clientes_bp.post("/api/clientes")
 def criar():
     data = request.get_json(silent=True) or {}

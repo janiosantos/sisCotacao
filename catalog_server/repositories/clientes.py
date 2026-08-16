@@ -54,6 +54,44 @@ class ClienteRepository:
 
     # ------------------------------------------------------------------
 
+    def situacao_credito(self, cliente_id: int) -> dict | None:
+        """Situação de crédito do cliente para o balcão.
+
+        Retorna o limite cadastrado, o quanto já está utilizado (contas a
+        receber abertas/parciais), o limite disponível e o saldo em atraso
+        (parcelas vencidas ainda não pagas).
+        """
+        with system_conn() as conn:
+            cli = conn.execute(
+                "SELECT nome, limite_credito FROM clientes WHERE id=?", (cliente_id,)
+            ).fetchone()
+            if cli is None:
+                return None
+            utilizado = conn.execute(
+                "SELECT COALESCE(SUM(saldo),0) AS s FROM contas_receber"
+                " WHERE cliente_id=? AND status IN ('aberto','parcial')",
+                (cliente_id,),
+            ).fetchone()
+            atraso = conn.execute(
+                "SELECT COALESCE(SUM(saldo),0) AS s FROM contas_receber"
+                " WHERE cliente_id=? AND status IN ('aberto','parcial')"
+                " AND date(data_vencimento) < date('now')",
+                (cliente_id,),
+            ).fetchone()
+        limite = max(0.0, float(cli["limite_credito"] or 0))
+        utilizado_val = max(0.0, float(utilizado["s"] or 0))
+        atraso_val = max(0.0, float(atraso["s"] or 0))
+        return {
+            "nome": cli["nome"],
+            "limite_credito": round(limite, 2),
+            "limite_utilizado": round(utilizado_val, 2),
+            "limite_disponivel": round(max(0.0, limite - utilizado_val), 2),
+            "saldo_em_atraso": round(atraso_val, 2),
+            "tem_atraso": atraso_val > 0.005,
+        }
+
+    # ------------------------------------------------------------------
+
     def garantir_padrao(self) -> int:
         """Garante o cliente padrão (id 1, CONSUMIDOR) usado no balcão.
 

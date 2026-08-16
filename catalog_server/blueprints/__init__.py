@@ -21,6 +21,7 @@ from catalog_server.blueprints.api_estoque import api_estoque_bp
 from catalog_server.blueprints.api_financeiro import api_financeiro_bp
 from catalog_server.blueprints.api_fiscal import api_fiscal_bp
 from catalog_server.blueprints.api_fiscal_avancado import api_fiscal_avancado_bp
+from catalog_server.blueprints.api_fiscal_docs import api_fiscal_docs_bp
 from catalog_server.blueprints.api_fiscal_regras import api_fiscal_regras_bp
 from catalog_server.blueprints.api_precos import api_precos_bp
 from catalog_server.blueprints.pages import pages_bp

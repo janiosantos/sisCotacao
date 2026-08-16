@@ -23,7 +23,7 @@ const Historico = lazy(() => import("./pages/historico"));
 const Diagnostico = lazy(() => import("./pages/diagnostico_variacoes"));
 const Estoque = lazy(() => import("./pages/estoque"));
 const Financeiro = lazy(() => import("./pages/financeiro"));
-const Recebimentos = lazy(() => import("./pages/recebimentos"));
+const Caixa = lazy(() => import("./pages/caixa"));
 const Precos = lazy(() => import("./pages/precos"));
 const Fiscal = lazy(() => import("./pages/fiscal"));
 const Orcamentos = lazy(() => import("./pages/orcamentos"));
@@ -33,7 +33,7 @@ const Catalogo = lazy(() => import("./pages/catalogo"));
 const Compras = lazy(() => import("./pages/compras"));
 const Produtos = lazy(() => import("./pages/produtos"));
 const ProdutoEditor = lazy(() => import("./pages/produtos").then((m) => ({ default: m.ProdutoEditor })));
-const Pdv = lazy(() => import("./pages/pdv"));
+const Pdv = lazy(() => import("./pages/pre-venda"));
 const Configuracoes = lazy(() => import("./pages/configuracoes"));
 
 export const ROUTES: RouteDef[] = [
@@ -57,13 +57,13 @@ export const ROUTES: RouteDef[] = [
     title: "Cotação",
     component: CotacoesDetalhe,
   },
-  { pattern: /^#\/pdv$/, title: "PDV", component: Pdv },
+  { pattern: /^#\/pre-venda$/, title: "Pré-venda", component: Pdv },
   { pattern: /^#\/estoque$/, title: "Estoque", component: Estoque },
   { pattern: /^#\/posvenda$/, title: "Pós-venda", component: PosVenda },
   { pattern: /^#\/bancos$/, title: "Bancos", component: Bancos },
   { pattern: /^#\/fiscal$/, title: "Fiscal", component: Fiscal },
   { pattern: /^#\/financeiro$/, title: "Financeiro", component: Financeiro },
-  { pattern: /^#\/recebimentos$/, title: "Recebimentos", component: Recebimentos },
+  { pattern: /^#\/caixa$/, title: "Caixa", component: Caixa },
   { pattern: /^#\/precos$/, title: "Preços", component: Precos },
   { pattern: /^#\/orcamentos$/, title: "Orçamentos", component: Orcamentos },
   { pattern: /^#\/solicitacoes$/, title: "Solicitações de Compra", component: Solicitacoes },

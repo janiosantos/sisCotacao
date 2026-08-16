@@ -36,6 +36,8 @@ class CaixaRepository:
         documento: str | None = None,
         orcamento_id: int | None = None,
         usuario_id: int | None = None,
+        bandeira: str | None = None,
+        codigo_autorizacao: str | None = None,
     ) -> dict:
         if valor <= 0:
             raise ValueError("Valor deve ser positivo")
@@ -50,10 +52,12 @@ class CaixaRepository:
 
             cur = conn.execute(
                 "INSERT INTO caixa_movimento (tipo, descricao, valor, saldo_anterior, saldo_posterior,"
-                " forma_pagamento, plano_conta_id, documento, orcamento_id, usuario_id)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                " forma_pagamento, plano_conta_id, documento, orcamento_id, usuario_id,"
+                " bandeira, codigo_autorizacao)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (tipo, descricao, valor, saldo_ant, saldo_novo,
-                 forma_pagamento, plano_conta_id, documento, orcamento_id, usuario_id),
+                 forma_pagamento, plano_conta_id, documento, orcamento_id, usuario_id,
+                 bandeira, codigo_autorizacao),
             )
             return {"id": cur.lastrowid, "saldo_anterior": saldo_ant, "saldo_posterior": saldo_novo}
 

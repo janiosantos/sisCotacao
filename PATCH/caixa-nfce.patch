@@ -1,0 +1,1400 @@
+diff -ruN -x node_modules -x __pycache__ -x '*.pyc' -x dist -x server.db -x package-lock.json sisCotacao-main/TECNOSPEED.md sisCotacao-main/TECNOSPEED.md
+--- sisCotacao-main/TECNOSPEED.md	1970-01-01 00:00:00.000000000 +0000
++++ sisCotacao-main/TECNOSPEED.md	2026-08-15 21:51:21.483994780 +0000
+@@ -0,0 +1,73 @@
++# Emissão fiscal via Tecnospeed (NFC-e / NF-e)
++
++## O que existe
++
++- **Modo simulado (padrão)**: nenhuma chamada de rede é feita. Emitir uma
++  NFC-e retorna "autorizado" na hora, com chave de acesso e protocolo
++  fictícios (prefixo `SIMULADO`). Serve para testar todo o fluxo — Caixa →
++  emissão → status → webhook — sem precisar de credenciais.
++- **Tabela `documentos_fiscais`**: uma linha por tentativa de emissão
++  (NFC-e modelo 65, ou NF-e modelo 55), com o ciclo de vida completo
++  (pendente → processando → autorizado/rejeitado/cancelado/erro).
++- **Serviço** `catalog_server/services/tecnospeed.py`: monta o payload a
++  partir do orçamento faturado (itens, snapshot fiscal gravado na
++  finalização, pagamentos reais do caixa), emite, consulta status, e
++  processa webhooks assíncronos.
++- **Endpoints**:
++  - `POST /api/orcamentos/<id>/nfce` — emite (idempotente: se já está
++    autorizada ou em processamento, devolve o registro existente em vez
++    de duplicar).
++  - `GET /api/orcamentos/<id>/nfce` — status atual (reconsulta na
++    Tecnospeed automaticamente se ainda está "processando").
++  - `GET` / `PUT /api/tecnospeed/config` — ambiente, modo simulado, token
++    (nunca devolvido em texto puro — some fica mascarado como `••••••••`
++    no GET).
++  - `POST /api/webhooks/tecnospeed` — receptor de notificação assíncrona
++    de mudança de status.
++- **Caixa (ECF)**: depois que o recebimento é confirmado, abre
++  automaticamente um modal oferecendo emitir a NFC-e na hora (ou "emitir
++  depois").
++
++## O que falta validar antes de ligar em produção
++
++Este serviço foi escrito com o formato de payload e os endpoints **tal
++como documentados publicamente pela Tecnospeed/PlugNotas no momento em que
++foi escrito** (autenticação Bearer + JSON, `POST /nfce`, `GET /nfce/{id}`).
++APIs de terceiros mudam. **Antes de desligar o modo simulado**, confirme
++contra a documentação/sandbox atual da Tecnospeed:
++
++1. **URLs base** (`BASE_URL` em `tecnospeed.py`) — homologação e produção.
++2. **Nome exato dos campos do payload** (`idIntegracao`, `emitente`,
++   `itens[].icms`, etc.) — o contrato pode ter mudado.
++3. **Autenticação** — hoje assume Bearer token simples; confirme se a
++   Tecnospeed exige algo adicional (client_id/client_secret, certificado
++   digital A1 anexado à requisição, etc.).
++4. **Assinatura do webhook** — hoje o endpoint `/api/webhooks/tecnospeed`
++   aceita qualquer POST; se a Tecnospeed assina os webhooks (HMAC/header
++   secreto), adicione a validação antes de ir para produção — sem isso,
++   qualquer um que descubra a URL pode forjar uma notificação de status.
++5. **NCM/CFOP/CST por item** — hoje vêm do snapshot fiscal gravado na
++   finalização do orçamento (`orcamento_itens_fiscal`); se algum item não
++   tiver esse snapshot (produto cadastrado sem dados fiscais completos),
++   cai em valores-placeholder (`NCM 00000000`, `CFOP 5102`) que **vão
++   gerar rejeição real da SEFAZ** — trate isso antes de emitir de verdade.
++6. **NF-e (modelo 55)**: a estrutura (tabela, service, endpoints) já
++   suporta o modelo 55 nos parâmetros, mas o payload em
++   `montar_payload_nfce` foi desenhado para NFC-e de balcão (consumidor
++   final, presencial). Emissão de NF-e B2B (com destinatário
++   contribuinte, frete, etc.) precisa de um builder de payload próprio —
++   ainda não implementado.
++
++## Como configurar credenciais reais
++
++```
++PUT /api/tecnospeed/config
++{
++  "ambiente": "producao",
++  "simulado": "0",
++  "token": "SEU_TOKEN_AQUI",
++  "cnpj_emitente": "00000000000000"
++}
++```
++
++Só desligue `simulado` depois de validar os pontos acima em homologação.
+diff -ruN -x node_modules -x __pycache__ -x '*.pyc' -x dist -x server.db -x package-lock.json sisCotacao-main/catalog_server/app_factory.py sisCotacao-main/catalog_server/app_factory.py
+--- sisCotacao-main/catalog_server/app_factory.py	2026-08-14 21:29:38.000000000 +0000
++++ sisCotacao-main/catalog_server/app_factory.py	2026-08-15 16:56:55.271827613 +0000
+@@ -17,6 +17,7 @@
+     api_financeiro_bp,
+     api_fiscal_avancado_bp,
+     api_fiscal_bp,
++    api_fiscal_docs_bp,
+     api_fiscal_regras_bp,
+     api_relatorios_bp,
+     api_precos_bp,
+@@ -84,6 +85,7 @@
+     app.register_blueprint(api_financeiro_bp)
+     app.register_blueprint(api_fiscal_avancado_bp)
+     app.register_blueprint(api_fiscal_bp)
++    app.register_blueprint(api_fiscal_docs_bp)
+     app.register_blueprint(api_fiscal_regras_bp)
+     app.register_blueprint(api_precos_bp)
+     app.register_blueprint(api_relatorios_bp)
+diff -ruN -x node_modules -x __pycache__ -x '*.pyc' -x dist -x server.db -x package-lock.json sisCotacao-main/catalog_server/blueprints/__init__.py sisCotacao-main/catalog_server/blueprints/__init__.py
+--- sisCotacao-main/catalog_server/blueprints/__init__.py	2026-08-14 21:29:38.000000000 +0000
++++ sisCotacao-main/catalog_server/blueprints/__init__.py	2026-08-15 16:56:48.960081571 +0000
+@@ -21,6 +21,7 @@
+ from catalog_server.blueprints.api_financeiro import api_financeiro_bp
+ from catalog_server.blueprints.api_fiscal import api_fiscal_bp
+ from catalog_server.blueprints.api_fiscal_avancado import api_fiscal_avancado_bp
++from catalog_server.blueprints.api_fiscal_docs import api_fiscal_docs_bp
+ from catalog_server.blueprints.api_fiscal_regras import api_fiscal_regras_bp
+ from catalog_server.blueprints.api_precos import api_precos_bp
+ from catalog_server.blueprints.pages import pages_bp
+diff -ruN -x node_modules -x __pycache__ -x '*.pyc' -x dist -x server.db -x package-lock.json sisCotacao-main/catalog_server/blueprints/api_fiscal_docs.py sisCotacao-main/catalog_server/blueprints/api_fiscal_docs.py
+--- sisCotacao-main/catalog_server/blueprints/api_fiscal_docs.py	1970-01-01 00:00:00.000000000 +0000
++++ sisCotacao-main/catalog_server/blueprints/api_fiscal_docs.py	2026-08-15 16:56:36.435311033 +0000
+@@ -0,0 +1,64 @@
++"""API de emissão de documentos fiscais (NFC-e/NF-e) via Tecnospeed."""
++from __future__ import annotations
++
++from flask import Blueprint, jsonify, request
++
++from catalog_server.repositories.fiscal_documentos import (
++    documento_fiscal_repo,
++    tecnospeed_config_repo,
++)
++from catalog_server.services import tecnospeed
++
++api_fiscal_docs_bp = Blueprint("api_fiscal_docs", __name__)
++
++
++@api_fiscal_docs_bp.post("/api/orcamentos/<int:orcamento_id>/nfce")
++def emitir_nfce(orcamento_id: int):
++    try:
++        doc = tecnospeed.emitir_nfce(orcamento_id)
++    except tecnospeed.TecnospeedError as e:
++        return jsonify({"error": str(e)}), 400
++    return jsonify(doc), 201
++
++
++@api_fiscal_docs_bp.get("/api/orcamentos/<int:orcamento_id>/nfce")
++def status_nfce(orcamento_id: int):
++    doc = documento_fiscal_repo.get_by_orcamento(orcamento_id, "65")
++    if doc is None:
++        return jsonify({"status": "nao_emitido"}), 200
++    if doc["status"] == "processando":
++        try:
++            doc = tecnospeed.consultar_status(doc["id"])
++        except tecnospeed.TecnospeedError:
++            pass  # mantém o último status conhecido; o polling do front tenta de novo
++    return jsonify(doc)
++
++
++@api_fiscal_docs_bp.get("/api/tecnospeed/config")
++def get_config():
++    cfg = tecnospeed_config_repo.get_all()
++    cfg["token"] = "••••••••" if cfg.get("token") else ""  # nunca devolve o token em texto puro
++    return jsonify(cfg)
++
++
++@api_fiscal_docs_bp.put("/api/tecnospeed/config")
++def set_config():
++    data = request.get_json(silent=True) or {}
++    permitido = {"ambiente", "simulado", "token", "cnpj_emitente", "serie_nfce", "serie_nfe"}
++    chaves = {k: v for k, v in data.items() if k in permitido}
++    if "token" in chaves and chaves["token"] == "••••••••":
++        del chaves["token"]  # front reenviou o placeholder mascarado; não sobrescreve
++    if "ambiente" in chaves and chaves["ambiente"] not in ("homologacao", "producao"):
++        return jsonify({"error": "Ambiente inválido"}), 400
++    cfg = tecnospeed_config_repo.set(chaves)
++    cfg["token"] = "••••••••" if cfg.get("token") else ""
++    return jsonify(cfg)
++
++
++@api_fiscal_docs_bp.post("/api/webhooks/tecnospeed")
++def webhook_tecnospeed():
++    """Endpoint público que a Tecnospeed chama quando o status de uma nota
++    emitida assincronamente muda (autorizada/rejeitada pela SEFAZ)."""
++    payload = request.get_json(silent=True) or {}
++    tecnospeed.processar_webhook(payload)
++    return jsonify({"ok": True})
+diff -ruN -x node_modules -x __pycache__ -x '*.pyc' -x dist -x server.db -x package-lock.json sisCotacao-main/catalog_server/blueprints/api_orcamentos.py sisCotacao-main/catalog_server/blueprints/api_orcamentos.py
+--- sisCotacao-main/catalog_server/blueprints/api_orcamentos.py	2026-08-14 21:29:38.000000000 +0000
++++ sisCotacao-main/catalog_server/blueprints/api_orcamentos.py	2026-08-15 11:34:54.552100481 +0000
+@@ -63,6 +63,12 @@
+                 contribuinte = cli.get("contribuinte")
+             if not ie:
+                 ie = cli.get("ie")
++    # Status "protegidos" (faturado) só podem ser aplicados pelo PATCH, que
++    # passa pelo gate de alçada/estoque/fiscal. Criar já direto como
++    # faturado pulava todas essas checagens — força rascunho aqui, e quem
++    # quiser finalizar de fato usa o PATCH depois.
++    status_pedido = data.get("status", "rascunho")
++    status_criacao = "rascunho" if status_pedido == "faturado" else status_pedido
+     orcamento_id, numero = orcamento_repo.criar(
+         cliente=cliente_nome or "",
+         contato=data.get("contato") or "",
+@@ -73,7 +79,7 @@
+         frete=float(data.get("frete") or 0),
+         seguro=float(data.get("seguro") or 0),
+         despesas_acessorias=float(data.get("despesas_acessorias") or 0),
+-        status=data.get("status", "rascunho"),
++        status=status_criacao,
+         condicao_pagamento_id=data.get("condicao_pagamento_id"),
+         usuario_id=session.get(SESSION_KEY),
+         cliente_id=cliente_id,
+@@ -102,6 +108,27 @@
+     if status is not None and status not in STATUS_LIST:
+         return jsonify({"error": "Status inválido"}), 400
+ 
++    if orcamento_repo.buscar(orcamento_id) is None:
++        return jsonify({"error": "Orçamento não encontrado"}), 404
++
++    # Aplica os campos "normais" primeiro (inclusive desconto/itens, se
++    # vierem no mesmo PATCH) — só DEPOIS reavalia a alçada, usando o
++    # desconto já atualizado. Antes, quando desconto e status="faturado"
++    # chegavam juntos no mesmo PATCH, a checagem via o valor antigo.
++    # Existência já foi confirmada acima: se não há nenhum campo "normal"
++    # para gravar (ex.: PATCH só com status="faturado"), atualizar_cabecalho
++    # retorna False por não ter o que fazer — isso não é um 404.
++    orcamento_repo.atualizar_cabecalho(
++        orcamento_id,
++        cliente=data.get("cliente"),
++        contato=data.get("contato"),
++        validade_dias=data.get("validade_dias"),
++        observacoes=data.get("observacoes"),
++        status=None if status == "faturado" else status,
++        desconto=data.get("desconto"),
++        condicao_pagamento_id=data.get("condicao_pagamento_id"),
++    )
++
+     # Desconto por alçada: para finalizar (faturar) com desconto acima do
+     # limite do vendedor, o desconto precisa estar autorizado por um gerente.
+     if status == "faturado":
+@@ -136,17 +163,8 @@
+                 "detalhes": snap.get("erros", []),
+             }), 403
+ 
+-    if not orcamento_repo.atualizar_cabecalho(
+-        orcamento_id,
+-        cliente=data.get("cliente"),
+-        contato=data.get("contato"),
+-        validade_dias=data.get("validade_dias"),
+-        observacoes=data.get("observacoes"),
+-        status=status,
+-        desconto=data.get("desconto"),
+-        condicao_pagamento_id=data.get("condicao_pagamento_id"),
+-    ):
+-        return jsonify({"error": "Orçamento não encontrado"}), 404
++        # Só agora aplica de fato o status protegido, já validado.
++        orcamento_repo.atualizar_cabecalho(orcamento_id, status="faturado")
+ 
+     # Gatilho: faturar → gerar conta a receber + baixar estoque
+     if status == "faturado":
+@@ -374,16 +392,20 @@
+ 
+ 
+ def _verificar_alcada(orc: dict) -> dict | None:
+-    """Retorna o payload de bloqueio (403) se o desconto excede a alçada do vendedor."""
++    """Retorna o payload de bloqueio (403) se o desconto excede a alçada do vendedor.
++
++    Sem vendedor identificado (sessão ausente/expirada) ou usuário
++    inexistente, a alçada é 0% — qualquer desconto exige autorização — em
++    vez de pular a checagem. Pular era um jeito fácil de burlar o limite
++    (bastava não estar logado).
++    """
+     if orc.get("desconto_autorizado"):
+         return None
+     usuario_id = orc.get("usuario_id")
+-    if not usuario_id:
+-        return None
+-    user = usuario_repo.get(usuario_id)
+-    if user is None or user.get("perfil") == "admin":
++    user = usuario_repo.get(usuario_id) if usuario_id else None
++    if user is not None and user.get("perfil") == "admin":
+         return None
+-    limite = float(user.get("desconto_limite_pct") or 0)
++    limite = float(user.get("desconto_limite_pct") or 0) if user is not None else 0.0
+     resumo = resumo_desconto(orc)
+     if resumo["desconto_pct"] > limite + 1e-9:
+         return {
+diff -ruN -x node_modules -x __pycache__ -x '*.pyc' -x dist -x server.db -x package-lock.json sisCotacao-main/catalog_server/migrations/versions/0050_tecnospeed_nfce.py sisCotacao-main/catalog_server/migrations/versions/0050_tecnospeed_nfce.py
+--- sisCotacao-main/catalog_server/migrations/versions/0050_tecnospeed_nfce.py	1970-01-01 00:00:00.000000000 +0000
++++ sisCotacao-main/catalog_server/migrations/versions/0050_tecnospeed_nfce.py	2026-08-15 16:54:18.423316144 +0000
+@@ -0,0 +1,90 @@
++"""
++0050 — Emissão de NFC-e/NF-e via Tecnospeed.
++
++- `documentos_fiscais` → uma linha por tentativa de emissão de NFC-e (modelo
++  65) ou NF-e (modelo 55) atrelada a um orçamento faturado. Guarda o ciclo
++  de vida completo (pendente → processando → autorizado/rejeitado/cancelado)
++  e os dados de retorno da SEFAZ repassados pela Tecnospeed (chave de
++  acesso, protocolo, XML e DANFE/DANFCE).
++- `tecnospeed_config` → credenciais e ambiente da integração (chave/valor,
++  mesmo padrão de `config_loja`), separada por ser dado sensível (token).
++
++ATENÇÃO: esta migração cria a estrutura de rastreio; a integração de fato
++com a API da Tecnospeed (client HTTP) está em
++`catalog_server/services/tecnospeed.py`, e por padrão roda em modo
++simulação até alguém configurar token/CNPJ reais — ver `TECNOSPEED.md`.
++"""
++from __future__ import annotations
++
++import sqlite3
++
++VERSION = 50
++NAME = "Documentos fiscais (NFC-e/NF-e) + config Tecnospeed"
++
++_SCHEMA = """
++CREATE TABLE IF NOT EXISTS documentos_fiscais (
++    id                INTEGER PRIMARY KEY AUTOINCREMENT,
++    orcamento_id      INTEGER NOT NULL REFERENCES orcamentos(id) ON DELETE CASCADE,
++    modelo            TEXT NOT NULL DEFAULT '65' CHECK(modelo IN ('55','65')),
++    ambiente          TEXT NOT NULL DEFAULT 'homologacao' CHECK(ambiente IN ('homologacao','producao')),
++    status            TEXT NOT NULL DEFAULT 'pendente'
++                      CHECK(status IN ('pendente','processando','autorizado','rejeitado','cancelado','erro')),
++    tecnospeed_id     TEXT,
++    chave_acesso      TEXT,
++    protocolo         TEXT,
++    numero            INTEGER,
++    serie             INTEGER,
++    motivo            TEXT,
++    xml_url           TEXT,
++    danfe_url         TEXT,
++    payload_enviado   TEXT,
++    resposta_bruta    TEXT,
++    criado_em         TEXT NOT NULL DEFAULT (datetime('now')),
++    atualizado_em     TEXT NOT NULL DEFAULT (datetime('now')),
++    UNIQUE(orcamento_id, modelo)
++);
++
++CREATE INDEX IF NOT EXISTS idx_docfiscal_orc ON documentos_fiscais(orcamento_id);
++CREATE INDEX IF NOT EXISTS idx_docfiscal_status ON documentos_fiscais(status);
++CREATE INDEX IF NOT EXISTS idx_docfiscal_tecnospeed ON documentos_fiscais(tecnospeed_id);
++
++CREATE TABLE IF NOT EXISTS tecnospeed_config (
++    chave         TEXT PRIMARY KEY,
++    valor         TEXT NOT NULL DEFAULT '',
++    atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
++);
++"""
++
++SEED_CONFIG = [
++    ("ambiente", "homologacao"),
++    ("simulado", "1"),  # 1 = não chama a API real; usado até alguém configurar credenciais
++    ("token", ""),
++    ("cnpj_emitente", ""),
++    ("serie_nfce", "1"),
++    ("serie_nfe", "1"),
++]
++
++
++def guard(conn: sqlite3.Connection) -> bool:
++    try:
++        conn.execute("SELECT 1 FROM documentos_fiscais LIMIT 1").fetchone()
++        conn.execute("SELECT 1 FROM tecnospeed_config LIMIT 1").fetchone()
++    except sqlite3.OperationalError:
++        return False
++    return True
++
++
++def forward(conn: sqlite3.Connection) -> None:
++    conn.executescript(_SCHEMA)
++    for chave, valor in SEED_CONFIG:
++        conn.execute(
++            "INSERT OR IGNORE INTO tecnospeed_config (chave, valor) VALUES (?,?)",
++            (chave, valor),
++        )
++
++
++def backward(conn: sqlite3.Connection) -> None:
++    conn.executescript(
++        "DROP TABLE IF EXISTS documentos_fiscais;"
++        " DROP TABLE IF EXISTS tecnospeed_config;"
++    )
+diff -ruN -x node_modules -x __pycache__ -x '*.pyc' -x dist -x server.db -x package-lock.json sisCotacao-main/catalog_server/repositories/fiscal_documentos.py sisCotacao-main/catalog_server/repositories/fiscal_documentos.py
+--- sisCotacao-main/catalog_server/repositories/fiscal_documentos.py	1970-01-01 00:00:00.000000000 +0000
++++ sisCotacao-main/catalog_server/repositories/fiscal_documentos.py	2026-08-15 16:54:43.424292495 +0000
+@@ -0,0 +1,103 @@
++"""Rastreio de documentos fiscais (NFC-e/NF-e) e config da integração Tecnospeed."""
++from __future__ import annotations
++
++import json
++
++from catalog_server.db import system_conn
++
++
++class TecnospeedConfigRepository:
++
++    def get_all(self) -> dict:
++        with system_conn() as conn:
++            rows = conn.execute("SELECT chave, valor FROM tecnospeed_config").fetchall()
++        return {r["chave"]: r["valor"] for r in rows}
++
++    def set(self, chaves: dict) -> dict:
++        with system_conn() as conn:
++            for chave, valor in chaves.items():
++                conn.execute(
++                    "INSERT INTO tecnospeed_config (chave, valor, atualizado_em)"
++                    " VALUES (?,?,datetime('now'))"
++                    " ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor, atualizado_em=excluded.atualizado_em",
++                    (chave, str(valor)),
++                )
++        return self.get_all()
++
++    def simulado(self) -> bool:
++        return self.get_all().get("simulado", "1") == "1"
++
++    def ambiente(self) -> str:
++        return self.get_all().get("ambiente", "homologacao")
++
++
++class DocumentoFiscalRepository:
++
++    def get_by_orcamento(self, orcamento_id: int, modelo: str = "65") -> dict | None:
++        with system_conn() as conn:
++            row = conn.execute(
++                "SELECT * FROM documentos_fiscais WHERE orcamento_id=? AND modelo=?",
++                (orcamento_id, modelo),
++            ).fetchone()
++            return dict(row) if row else None
++
++    def get(self, doc_id: int) -> dict | None:
++        with system_conn() as conn:
++            row = conn.execute("SELECT * FROM documentos_fiscais WHERE id=?", (doc_id,)).fetchone()
++            return dict(row) if row else None
++
++    def get_by_tecnospeed_id(self, tecnospeed_id: str) -> dict | None:
++        with system_conn() as conn:
++            row = conn.execute(
++                "SELECT * FROM documentos_fiscais WHERE tecnospeed_id=?", (tecnospeed_id,)
++            ).fetchone()
++            return dict(row) if row else None
++
++    def criar_ou_reiniciar(
++        self, orcamento_id: int, modelo: str, ambiente: str, payload: dict
++    ) -> int:
++        """Cria a linha de rastreio (ou reinicia, se a última tentativa não
++        vingou — rejeitada/erro) e volta pra status 'pendente'."""
++        with system_conn() as conn:
++            existente = conn.execute(
++                "SELECT id, status FROM documentos_fiscais WHERE orcamento_id=? AND modelo=?",
++                (orcamento_id, modelo),
++            ).fetchone()
++            if existente:
++                conn.execute(
++                    "UPDATE documentos_fiscais SET status='pendente', ambiente=?,"
++                    " motivo=NULL, payload_enviado=?, atualizado_em=datetime('now')"
++                    " WHERE id=?",
++                    (ambiente, json.dumps(payload, ensure_ascii=False), existente["id"]),
++                )
++                return existente["id"]
++            cur = conn.execute(
++                "INSERT INTO documentos_fiscais (orcamento_id, modelo, ambiente, status, payload_enviado)"
++                " VALUES (?,?,?, 'pendente', ?)",
++                (orcamento_id, modelo, ambiente, json.dumps(payload, ensure_ascii=False)),
++            )
++            return cur.lastrowid
++
++    def atualizar(self, doc_id: int, **campos) -> bool:
++        permitidos = {
++            "status", "tecnospeed_id", "chave_acesso", "protocolo", "numero",
++            "serie", "motivo", "xml_url", "danfe_url", "resposta_bruta",
++        }
++        sets, vals = [], []
++        for k, v in campos.items():
++            if k in permitidos:
++                sets.append(f"{k}=?")
++                vals.append(v)
++        if not sets:
++            return False
++        sets.append("atualizado_em=datetime('now')")
++        vals.append(doc_id)
++        with system_conn() as conn:
++            cur = conn.execute(
++                f"UPDATE documentos_fiscais SET {', '.join(sets)} WHERE id=?", vals
++            )
++            return cur.rowcount > 0
++
++
++tecnospeed_config_repo = TecnospeedConfigRepository()
++documento_fiscal_repo = DocumentoFiscalRepository()
+diff -ruN -x node_modules -x __pycache__ -x '*.pyc' -x dist -x server.db -x package-lock.json sisCotacao-main/catalog_server/repositories/orcamentos.py sisCotacao-main/catalog_server/repositories/orcamentos.py
+--- sisCotacao-main/catalog_server/repositories/orcamentos.py	2026-08-14 21:29:38.000000000 +0000
++++ sisCotacao-main/catalog_server/repositories/orcamentos.py	2026-08-15 03:34:57.421385665 +0000
+@@ -245,6 +245,14 @@
+                 params.append(val)
+         if not fields:
+             return False
++        # O desconto mudou: uma autorização de alçada anterior valia para o
++        # percentual de ANTES da edição. Zera para forçar reavaliação — se o
++        # novo desconto já estiver dentro do limite do vendedor, a checagem
++        # de alçada simplesmente não vai exigir nada de novo.
++        if desconto is not None:
++            fields.append("desconto_autorizado=0")
++            fields.append("desconto_autorizado_por=NULL")
++            fields.append("desconto_autorizado_em=NULL")
+         params.append(orcamento_id)
+         with system_conn() as conn:
+             cur = conn.execute(
+@@ -263,7 +271,13 @@
+     # ------------------------------------------------------------------
+ 
+     def substituir_itens(self, orcamento_id: int, itens: list[dict]) -> bool:
+-        """Substitui integralmente os itens do orçamento e recalcula totais."""
++        """Substitui integralmente os itens do orçamento e recalcula totais.
++
++        Também zera uma autorização de desconto pré-existente: o percentual
++        efetivo depende dos itens (desconto por item entra na conta), então
++        trocar os itens invalida a autorização anterior pelo mesmo motivo
++        que trocar o desconto geral invalida — ver `atualizar_cabecalho`.
++        """
+         with system_conn() as conn:
+             cur = conn.execute(
+                 "SELECT 1 FROM orcamentos WHERE id=?", (orcamento_id,)
+@@ -298,7 +312,9 @@
+                 )
+             self._recalc_totals(conn, orcamento_id)
+             conn.execute(
+-                "UPDATE orcamentos SET atualizado_em=datetime('now') WHERE id=?",
++                "UPDATE orcamentos SET atualizado_em=datetime('now'),"
++                " desconto_autorizado=0, desconto_autorizado_por=NULL,"
++                " desconto_autorizado_em=NULL WHERE id=?",
+                 (orcamento_id,),
+             )
+         return True
+diff -ruN -x node_modules -x __pycache__ -x '*.pyc' -x dist -x server.db -x package-lock.json sisCotacao-main/catalog_server/services/tecnospeed.py sisCotacao-main/catalog_server/services/tecnospeed.py
+--- sisCotacao-main/catalog_server/services/tecnospeed.py	1970-01-01 00:00:00.000000000 +0000
++++ sisCotacao-main/catalog_server/services/tecnospeed.py	2026-08-15 16:56:23.018261457 +0000
+@@ -0,0 +1,296 @@
++"""Integração com a API da Tecnospeed (PlugNotas) para emissão de NFC-e
++(modelo 65) e NF-e (modelo 55).
++
++IMPORTANTE — leia antes de configurar credenciais reais:
++Este módulo implementa o formato de payload e os endpoints tal como
++documentados publicamente pela Tecnospeed/PlugNotas no momento em que foi
++escrito (autenticação Bearer, JSON, `POST /nfce` para emitir e
++`GET /nfce/{id}` para consultar). APIs de terceiros mudam; **valide os
++nomes de campo e o contrato exato contra a documentação/sandbox atual da
++Tecnospeed antes de ligar isso em produção** — ver TECNOSPEED.md na raiz
++do projeto.
++
++Por padrão a integração roda em MODO SIMULADO (`tecnospeed_config.simulado
++= '1'`): nenhuma chamada de rede é feita, e a emissão retorna um resultado
++simulado de "autorizado" na hora, para que todo o resto do fluxo (Caixa,
++guarda em `documentos_fiscais`, exibição de status) seja testável sem
++credenciais. Desligar o modo simulado exige token + CNPJ do emitente
++cadastrados em `tecnospeed_config`.
++"""
++from __future__ import annotations
++
++import uuid
++from typing import Any
++
++import requests
++
++from catalog_server.db import system_conn
++from catalog_server.repositories import emitente_repo
++from catalog_server.repositories.fiscal_documentos import (
++    documento_fiscal_repo,
++    tecnospeed_config_repo,
++)
++from catalog_server.repositories.orcamentos import orcamento_repo
++
++BASE_URL = {
++    "homologacao": "https://api.sandbox.tecnospeed.com.br/v1",
++    "producao": "https://api.tecnospeed.com.br/v1",
++}
++
++# Mapeia a forma de pagamento interna do sistema para o código de meio de
++# pagamento do SAT/NFC-e (tabela oficial da SEFAZ, usada por qualquer
++# emissor — inclusive a Tecnospeed).
++CODIGO_PAGAMENTO_SEFAZ = {
++    "dinheiro": "01",
++    "cheque": "02",
++    "cartao_credito": "03",
++    "cartao_debito": "04",
++    "credito_loja": "05",
++    "vale_alimentacao": "10",
++    "vale_refeicao": "11",
++    "vale_presente": "12",
++    "vale_combustivel": "13",
++    "boleto": "15",
++    "pix": "17",
++    "convenio": "99",
++    "outros": "99",
++}
++
++
++class TecnospeedError(Exception):
++    pass
++
++
++def _headers(token: str) -> dict:
++    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
++
++
++def _pagamentos_do_orcamento(orcamento_id: int) -> list[dict]:
++    """Os pagamentos de uma venda ficam em `caixa_movimento` (lançamentos de
++    entrada vinculados ao orçamento), não no próprio registro do orçamento."""
++    with system_conn() as conn:
++        rows = conn.execute(
++            "SELECT forma_pagamento, valor FROM caixa_movimento"
++            " WHERE orcamento_id=? AND tipo='entrada' ORDER BY id",
++            (orcamento_id,),
++        ).fetchall()
++        return [dict(r) for r in rows]
++
++
++def _snapshot_fiscal_por_item(orcamento_id: int) -> dict[int, dict]:
++    """NCM/CFOP/CST/alíquotas gravados no momento da finalização (fonte
++    oficial para a nota — não usar o cadastro atual do produto, que pode
++    ter mudado desde a venda)."""
++    with system_conn() as conn:
++        rows = conn.execute(
++            "SELECT * FROM orcamento_itens_fiscal WHERE orcamento_id=?", (orcamento_id,)
++        ).fetchall()
++        return {r["item_id"]: dict(r) for r in rows}
++
++
++def montar_payload_nfce(orcamento: dict, emitente: dict) -> dict[str, Any]:
++    """Constrói o corpo JSON de emissão a partir do orçamento faturado e do
++    cadastro do emitente. Consumidor final sem CPF/CNPJ informado é
++    permitido (comum em NFC-e de balcão)."""
++    snapshots = _snapshot_fiscal_por_item(orcamento["id"])
++    itens = []
++    for idx, it in enumerate(orcamento.get("itens", []), start=1):
++        fiscal = snapshots.get(it.get("id"), {})
++        itens.append({
++            "numeroItem": idx,
++            "codigo": it.get("sku") or f"ITEM{idx}",
++            "descricao": it.get("nome") or "",
++            "ncm": fiscal.get("ncm") or "00000000",
++            "cfop": fiscal.get("cfop") or "5102",
++            "unidade": "UN",
++            "quantidade": float(it.get("quantidade") or 0),
++            "valorUnitario": float(it.get("preco_unitario") or 0),
++            "valorTotal": float(it.get("subtotal") or 0),
++            "icms": {
++                "situacaoTributaria": fiscal.get("cst_icms") or fiscal.get("csosn") or "102",
++                "aliquota": float(fiscal.get("aliquota_icms") or 0),
++            },
++        })
++
++    pagamentos = _pagamentos_do_orcamento(orcamento["id"])
++    formas_pagamento = [
++        {
++            "meioPagamento": CODIGO_PAGAMENTO_SEFAZ.get(p.get("forma_pagamento", ""), "99"),
++            "valorPago": float(p.get("valor") or 0),
++        }
++        for p in pagamentos
++    ] or [{"meioPagamento": "99", "valorPago": float(orcamento.get("total") or 0)}]
++
++    payload: dict[str, Any] = {
++        "idIntegracao": f"orc-{orcamento['id']}-{uuid.uuid4().hex[:8]}",
++        "presencial": True,
++        "emitente": {
++            "cpfCnpj": (emitente.get("cnpj") or "").replace(".", "").replace("/", "").replace("-", ""),
++            "inscricaoEstadual": emitente.get("ie") or "",
++        },
++        "itens": itens,
++        "pagamentos": formas_pagamento,
++        "valorTotal": float(orcamento.get("total") or 0),
++        "informacoesAdicionais": f"Venda ref. orçamento {orcamento.get('numero', '')}",
++    }
++
++    cliente_doc = (orcamento.get("cliente_doc") or "").strip()
++    if cliente_doc:
++        payload["destinatario"] = {
++            "cpfCnpj": cliente_doc.replace(".", "").replace("/", "").replace("-", ""),
++            "nome": orcamento.get("cliente") or "",
++        }
++
++    return payload
++
++
++def _resposta_simulada(payload: dict) -> dict:
++    """Simula uma autorização instantânea, no mesmo formato (reduzido) que
++    a API real devolveria — permite testar o fluxo ponta a ponta sem rede."""
++    chave_fake = "SIMULADO" + uuid.uuid4().hex[:36].upper()
++    return {
++        "id": f"sim-{uuid.uuid4().hex[:12]}",
++        "status": "autorizado",
++        "chaveAcesso": chave_fake[:44],
++        "numeroProtocolo": "SIMULADO-" + uuid.uuid4().hex[:10],
++        "numero": None,
++        "serie": None,
++        "xmlUrl": None,
++        "danfeUrl": None,
++        "motivo": "Emissão simulada (TECNOSPEED_SIMULADO ativo) — configure credenciais reais para emitir de verdade.",
++    }
++
++
++def emitir_nfce(orcamento_id: int) -> dict:
++    """Emite (ou reemite, se a tentativa anterior falhou) a NFC-e de um
++    orçamento faturado. Retorna o registro de `documentos_fiscais`
++    atualizado."""
++    orc = orcamento_repo.buscar(orcamento_id)
++    if orc is None:
++        raise TecnospeedError("Orçamento não encontrado")
++    if orc.get("status") not in ("faturado", "recebido"):
++        raise TecnospeedError("Só é possível emitir NFC-e para um orçamento faturado/recebido")
++
++    existente = documento_fiscal_repo.get_by_orcamento(orcamento_id, "65")
++    if existente and existente["status"] in ("autorizado", "processando"):
++        return existente
++
++    emitente = emitente_repo.get() or {}
++    cfg = tecnospeed_config_repo.get_all()
++    ambiente = cfg.get("ambiente", "homologacao")
++    payload = montar_payload_nfce(orc, emitente)
++
++    doc_id = documento_fiscal_repo.criar_ou_reiniciar(orcamento_id, "65", ambiente, payload)
++
++    if tecnospeed_config_repo.simulado():
++        resp = _resposta_simulada(payload)
++    else:
++        token = cfg.get("token", "")
++        if not token:
++            documento_fiscal_repo.atualizar(doc_id, status="erro", motivo="Token da Tecnospeed não configurado")
++            raise TecnospeedError(
++                "Integração não está em modo simulado, mas não há token configurado "
++                "(configure em Configurações → Tecnospeed, ou reative o modo simulado)."
++            )
++        try:
++            r = requests.post(
++                f"{BASE_URL[ambiente]}/nfce",
++                json=payload,
++                headers=_headers(token),
++                timeout=30,
++            )
++            r.raise_for_status()
++            resp = r.json()
++        except requests.RequestException as e:
++            documento_fiscal_repo.atualizar(doc_id, status="erro", motivo=str(e))
++            raise TecnospeedError(f"Falha ao comunicar com a Tecnospeed: {e}") from e
++
++    documento_fiscal_repo.atualizar(
++        doc_id,
++        status=_normalizar_status(resp.get("status")),
++        tecnospeed_id=resp.get("id"),
++        chave_acesso=resp.get("chaveAcesso"),
++        protocolo=resp.get("numeroProtocolo"),
++        numero=resp.get("numero"),
++        serie=resp.get("serie"),
++        motivo=resp.get("motivo"),
++        xml_url=resp.get("xmlUrl"),
++        danfe_url=resp.get("danfeUrl"),
++        resposta_bruta=str(resp),
++    )
++    return documento_fiscal_repo.get(doc_id)
++
++
++def _normalizar_status(status_tecnospeed: str | None) -> str:
++    m = {
++        "autorizado": "autorizado",
++        "authorized": "autorizado",
++        "rejeitado": "rejeitado",
++        "rejected": "rejeitado",
++        "cancelado": "cancelado",
++        "cancelled": "cancelado",
++        "processando": "processando",
++        "processing": "processando",
++        "pending": "processando",
++    }
++    return m.get((status_tecnospeed or "").lower(), "processando")
++
++
++def consultar_status(doc_id: int) -> dict:
++    """Reconsulta o status na Tecnospeed (útil quando ficou 'processando' —
++    emissão assíncrona) e atualiza o registro local."""
++    doc = documento_fiscal_repo.get(doc_id)
++    if doc is None:
++        raise TecnospeedError("Documento fiscal não encontrado")
++    if doc["status"] != "processando":
++        return doc
++    if tecnospeed_config_repo.simulado() or not doc.get("tecnospeed_id"):
++        return doc
++
++    cfg = tecnospeed_config_repo.get_all()
++    token = cfg.get("token", "")
++    ambiente = doc.get("ambiente", "homologacao")
++    try:
++        r = requests.get(
++            f"{BASE_URL[ambiente]}/nfce/{doc['tecnospeed_id']}",
++            headers=_headers(token),
++            timeout=30,
++        )
++        r.raise_for_status()
++        resp = r.json()
++    except requests.RequestException as e:
++        raise TecnospeedError(f"Falha ao consultar status na Tecnospeed: {e}") from e
++
++    documento_fiscal_repo.atualizar(
++        doc_id,
++        status=_normalizar_status(resp.get("status")),
++        chave_acesso=resp.get("chaveAcesso") or doc.get("chave_acesso"),
++        protocolo=resp.get("numeroProtocolo") or doc.get("protocolo"),
++        motivo=resp.get("motivo"),
++        xml_url=resp.get("xmlUrl") or doc.get("xml_url"),
++        danfe_url=resp.get("danfeUrl") or doc.get("danfe_url"),
++        resposta_bruta=str(resp),
++    )
++    return documento_fiscal_repo.get(doc_id)
++
++
++def processar_webhook(payload: dict) -> None:
++    """Recebe notificações assíncronas de mudança de status (a Tecnospeed
++    chama essa rota quando uma NFC-e que ficou 'processando' é autorizada
++    ou rejeitada pela SEFAZ)."""
++    tecnospeed_id = payload.get("id") or payload.get("idIntegracao")
++    if not tecnospeed_id:
++        return
++    doc = documento_fiscal_repo.get_by_tecnospeed_id(tecnospeed_id)
++    if doc is None:
++        return
++    documento_fiscal_repo.atualizar(
++        doc["id"],
++        status=_normalizar_status(payload.get("status")),
++        chave_acesso=payload.get("chaveAcesso") or doc.get("chave_acesso"),
++        protocolo=payload.get("numeroProtocolo") or doc.get("protocolo"),
++        motivo=payload.get("motivo"),
++        xml_url=payload.get("xmlUrl") or doc.get("xml_url"),
++        danfe_url=payload.get("danfeUrl") or doc.get("danfe_url"),
++        resposta_bruta=str(payload),
++    )
+diff -ruN -x node_modules -x __pycache__ -x '*.pyc' -x dist -x server.db -x package-lock.json sisCotacao-main/frontend/src/api/client.ts sisCotacao-main/frontend/src/api/client.ts
+--- sisCotacao-main/frontend/src/api/client.ts	2026-08-14 21:29:38.000000000 +0000
++++ sisCotacao-main/frontend/src/api/client.ts	2026-08-15 16:57:54.942840854 +0000
+@@ -714,15 +714,17 @@
+   if (!res.ok) {
+     let detail = res.statusText;
+     let code: string | undefined;
++    let json: Record<string, unknown> = {};
+     try {
+-      const j = await res.json();
+-      detail = j.error || detail;
+-      code = j.code;
++      json = await res.json();
++      detail = (json.error as string) || detail;
++      code = json.code as string | undefined;
+     } catch {
+       /* resposta não-JSON */
+     }
+-    const err = new Error(detail) as Error & { code?: string };
++    const err = new Error(detail) as Error & { code?: string; details?: Record<string, unknown> };
+     if (code) err.code = code;
++    err.details = json;
+     throw err;
+   }
+   if (res.status === 204) return undefined as T;
+@@ -995,6 +997,15 @@
+   devolverOrcamento: (id: number) => request<{ ok: boolean; itens_devolvidos: number }>("POST", `/api/orcamentos/${id}/devolver`),
+   formasPagamento: () => request<string[]>("GET", "/api/orcamentos/receber/formas"),
+ 
++  // emissão fiscal (NFC-e/NF-e via Tecnospeed)
++  emitirNfce: (orcamentoId: number) =>
++    request<DocumentoFiscal>("POST", `/api/orcamentos/${orcamentoId}/nfce`),
++  statusNfce: (orcamentoId: number) =>
++    request<DocumentoFiscal | { status: "nao_emitido" }>("GET", `/api/orcamentos/${orcamentoId}/nfce`),
++  getTecnospeedConfig: () => request<TecnospeedConfig>("GET", "/api/tecnospeed/config"),
++  setTecnospeedConfig: (data: Partial<TecnospeedConfig>) =>
++    request<TecnospeedConfig>("PUT", "/api/tecnospeed/config", data),
++
+   // retaguarda de impressão (PDV → ESC/POS direto à impressora)
+   imprimirOrcamento: (id: number) =>
+     request<{ ok: boolean; job_id: number; numero: string }>("POST", `/api/impressao/orcamentos/${id}`),
+@@ -1315,6 +1326,36 @@
+   recebido: boolean;
+ }
+ 
++export type StatusDocumentoFiscal =
++  | "pendente" | "processando" | "autorizado" | "rejeitado" | "cancelado" | "erro" | "nao_emitido";
++
++export interface DocumentoFiscal {
++  id: number;
++  orcamento_id: number;
++  modelo: "55" | "65";
++  ambiente: "homologacao" | "producao";
++  status: StatusDocumentoFiscal;
++  tecnospeed_id: string | null;
++  chave_acesso: string | null;
++  protocolo: string | null;
++  numero: number | null;
++  serie: number | null;
++  motivo: string | null;
++  xml_url: string | null;
++  danfe_url: string | null;
++  criado_em: string;
++  atualizado_em: string;
++}
++
++export interface TecnospeedConfig {
++  ambiente: "homologacao" | "producao";
++  simulado: "0" | "1";
++  token: string;
++  cnpj_emitente: string;
++  serie_nfce: string;
++  serie_nfe: string;
++}
++
+ export interface ConfigImpressao {
+   host: string;
+   porta: number;
+diff -ruN -x node_modules -x __pycache__ -x '*.pyc' -x dist -x server.db -x package-lock.json sisCotacao-main/frontend/src/pages/pdv.tsx sisCotacao-main/frontend/src/pages/pdv.tsx
+--- sisCotacao-main/frontend/src/pages/pdv.tsx	2026-08-14 21:29:38.000000000 +0000
++++ sisCotacao-main/frontend/src/pages/pdv.tsx	2026-08-15 11:33:06.054092294 +0000
+@@ -104,7 +104,9 @@
+ 
+   const [modalCadCliente, setModalCadCliente] = useState<string | null>(null);
+   const [modalBuscaCliente, setModalBuscaCliente] = useState(false);
+-  const [modalAutorizar, setModalAutorizar] = useState<number | null>(null);
++  const [modalAutorizar, setModalAutorizar] = useState<
++    { id: number; descontoPct?: number; limitePct?: number } | null
++  >(null);
+   const [modalRecebimento, setModalRecebimento] = useState<{ id: number; numero: string; total: number } | null>(null);
+   const [modalLocalizar, setModalLocalizar] = useState(false);
+ 
+@@ -244,9 +246,13 @@
+       setModalRecebimento({ id, numero, total });
+       return true;
+     } catch (e) {
+-      const err = e as Error & { code?: string };
++      const err = e as Error & { code?: string; details?: Record<string, unknown> };
+       if (err.code === "desconto_exige_autorizacao") {
+-        setModalAutorizar(id);
++        setModalAutorizar({
++          id,
++          descontoPct: err.details?.desconto_pct as number | undefined,
++          limitePct: err.details?.limite_pct as number | undefined,
++        });
+         recebimentoPendenteRef.current = { id, numero, total };
+         return false;
+       }
+@@ -740,7 +746,9 @@
+       )}
+       {modalAutorizar !== null && (
+         <ModalAutorizar
+-          id={modalAutorizar}
++          id={modalAutorizar.id}
++          descontoPct={modalAutorizar.descontoPct}
++          limitePct={modalAutorizar.limitePct}
+           onClose={() => setModalAutorizar(null)}
+           onAutorizado={() => {
+             const pend = recebimentoPendenteRef.current;
+@@ -902,7 +910,19 @@
+   );
+ }
+ 
+-function ModalAutorizar({ id, onClose, onAutorizado }: { id: number; onClose: () => void; onAutorizado: () => void }) {
++function ModalAutorizar({
++  id,
++  descontoPct,
++  limitePct,
++  onClose,
++  onAutorizado,
++}: {
++  id: number;
++  descontoPct?: number;
++  limitePct?: number;
++  onClose: () => void;
++  onAutorizado: () => void;
++}) {
+   const [login, setLogin] = useState("");
+   const [senha, setSenha] = useState("");
+   const [autorizando, setAutorizando] = useState(false);
+@@ -940,7 +960,15 @@
+       }
+     >
+       <p className="mb-4 text-sm text-gray-500">
+-        O desconto aplicado está acima da alçada do vendedor. Informe as credenciais do gerente para autorizar e finalizar.
++        {descontoPct != null && limitePct != null ? (
++          <>
++            O desconto aplicado (<b>{descontoPct.toFixed(1)}%</b>) está acima da alçada do
++            vendedor (<b>{limitePct.toFixed(1)}%</b>). Informe as credenciais de um gerente
++            para autorizar e finalizar.
++          </>
++        ) : (
++          "O desconto aplicado está acima da alçada do vendedor. Informe as credenciais do gerente para autorizar e finalizar."
++        )}
+       </p>
+       <div className="space-y-4">
+         <Field label="Login do gerente">
+diff -ruN -x node_modules -x __pycache__ -x '*.pyc' -x dist -x server.db -x package-lock.json sisCotacao-main/frontend/src/pages/recebimentos.tsx sisCotacao-main/frontend/src/pages/recebimentos.tsx
+--- sisCotacao-main/frontend/src/pages/recebimentos.tsx	2026-08-14 21:29:38.000000000 +0000
++++ sisCotacao-main/frontend/src/pages/recebimentos.tsx	2026-08-15 21:50:41.035995330 +0000
+@@ -2,7 +2,7 @@
+ // Tela orientada a teclado: ↑/↓ navegam, ENTER abre, M abre o menu de ações.
+ 
+ import { useEffect, useRef, useState } from "react";
+-import { api, type OrcamentoDetalhe, type OrcamentoLista } from "../api/client";
++import { api, type DocumentoFiscal, type OrcamentoDetalhe, type OrcamentoLista } from "../api/client";
+ import { fmtDate, fmtMoney } from "../ui/format";
+ import { toast } from "../ui/dom";
+ import { Badge, Button, Cell, Field, Input, Loading, Modal, PageHeader, Select, Table, TBody, THead } from "../ui/ui";
+@@ -88,10 +88,13 @@
+     }
+   };
+ 
++  const [modalMovimento, setModalMovimento] = useState<"sangria" | "suprimento" | null>(null);
++  const [modalNfce, setModalNfce] = useState<{ id: number; numero: string } | null>(null);
++
+   // Teclado global da tela (lista).
+   useEffect(() => {
+     const handler = (e: KeyboardEvent) => {
+-      if (modalPedido || menuAberto || editarDe) return;
++      if (modalPedido || menuAberto || editarDe || modalMovimento) return;
+       const k = e.key.toLowerCase();
+       if (e.key === "ArrowDown") {
+         e.preventDefault();
+@@ -105,12 +108,18 @@
+       } else if (k === "m") {
+         e.preventDefault();
+         setMenuAberto(true);
++      } else if (k === "s") {
++        e.preventDefault();
++        setModalMovimento("sangria");
++      } else if (k === "r") {
++        e.preventDefault();
++        setModalMovimento("suprimento");
+       }
+     };
+     window.addEventListener("keydown", handler);
+     return () => window.removeEventListener("keydown", handler);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [focoId, pedidos, modalPedido, menuAberto, editarDe]);
++  }, [focoId, pedidos, modalPedido, menuAberto, editarDe, modalMovimento]);
+ 
+   const focado = pedidos.find((o) => o.id === focoId) ?? null;
+   const totalPendente = pedidos.reduce((s, o) => s + o.total, 0);
+@@ -128,10 +137,20 @@
+           <div className="text-xs font-medium uppercase text-orange-700">Pendente</div>
+           <div className="text-2xl font-semibold text-orange-600">{fmtMoney(totalPendente)}</div>
+         </div>
++        <div className="flex gap-2">
++          <Button size="sm" onClick={() => setModalMovimento("sangria")}>
++            ↓ Sangria <kbd className="ml-1 rounded bg-gray-100 px-1 text-[10px] text-gray-400">S</kbd>
++          </Button>
++          <Button size="sm" onClick={() => setModalMovimento("suprimento")}>
++            ↑ Reforço <kbd className="ml-1 rounded bg-gray-100 px-1 text-[10px] text-gray-400">R</kbd>
++          </Button>
++        </div>
+         <div className="ml-auto flex flex-wrap items-center gap-2 rounded-md bg-gray-100 px-3 py-2 text-xs text-gray-600">
+           <span><kbd className="rounded bg-white px-1.5 py-0.5 shadow-sm">↑</kbd> <kbd className="rounded bg-white px-1.5 py-0.5 shadow-sm">↓</kbd> navegar</span>
+           <span><kbd className="rounded bg-white px-1.5 py-0.5 shadow-sm">ENTER</kbd> abrir</span>
+           <span><kbd className="rounded bg-white px-1.5 py-0.5 shadow-sm">M</kbd> menu</span>
++          <span><kbd className="rounded bg-white px-1.5 py-0.5 shadow-sm">S</kbd> sangria</span>
++          <span><kbd className="rounded bg-white px-1.5 py-0.5 shadow-sm">R</kbd> reforço</span>
+           <span className="text-gray-400">· auto-atualiza a cada 5s</span>
+         </div>
+       </div>
+@@ -218,7 +237,9 @@
+           d={modalPedido}
+           onVoltar={() => setModalPedido(null)}
+           onRecebido={() => {
++            const rec = modalPedido;
+             setModalPedido(null);
++            setModalNfce({ id: rec.id, numero: rec.numero });
+             void carregar(true);
+           }}
+         />
+@@ -234,10 +255,95 @@
+           }}
+         />
+       )}
++
++      {modalMovimento && (
++        <ModalMovimentoCaixa
++          tipo={modalMovimento}
++          onClose={() => setModalMovimento(null)}
++          onSalvo={() => {
++            setModalMovimento(null);
++            void carregar(true);
++          }}
++        />
++      )}
++
++      {modalNfce && (
++        <ModalEmitirNfce orcamentoId={modalNfce.id} numero={modalNfce.numero} onClose={() => setModalNfce(null)} />
++      )}
+     </div>
+   );
+ }
+ 
++function ModalMovimentoCaixa({
++  tipo,
++  onClose,
++  onSalvo,
++}: {
++  tipo: "sangria" | "suprimento";
++  onClose: () => void;
++  onSalvo: () => void;
++}) {
++  const [valor, setValor] = useState("");
++  const [descricao, setDescricao] = useState("");
++  const [enviando, setEnviando] = useState(false);
++  const titulo = tipo === "sangria" ? "Sangria (retirada do caixa)" : "Reforço (suprimento de caixa)";
++
++  const confirmar = async () => {
++    const v = parseNum(valor);
++    if (v <= 0) {
++      toast("Informe um valor maior que zero", "error");
++      return;
++    }
++    setEnviando(true);
++    try {
++      const res = await api.movimentarCaixa({
++        tipo,
++        descricao: descricao.trim() || (tipo === "sangria" ? "Sangria" : "Reforço"),
++        valor: v,
++        forma_pagamento: "dinheiro",
++      });
++      toast(`${titulo} registrada · novo saldo ${fmtMoney(res.saldo_posterior)}`, "success");
++      onSalvo();
++    } catch (e) {
++      toast("Erro: " + (e as Error).message, "error");
++      setEnviando(false);
++    }
++  };
++
++  return (
++    <Modal
++      open
++      onClose={onClose}
++      title={titulo}
++      footer={
++        <>
++          <Button onClick={onClose}>Cancelar</Button>
++          <Button variant="primary" onClick={() => void confirmar()} disabled={enviando}>
++            {enviando ? "Registrando…" : "Confirmar"}
++          </Button>
++        </>
++      }
++    >
++      <div className="space-y-4">
++        <Field label="Valor">
++          <Input
++            inputMode="decimal"
++            value={valor}
++            onChange={(e) => setValor(e.target.value)}
++            onKeyDown={(e) => {
++              if (e.key === "Enter") void confirmar();
++            }}
++            autoFocus
++          />
++        </Field>
++        <Field label="Descrição (opcional)">
++          <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder={tipo === "sangria" ? "ex.: depósito no banco" : "ex.: troco inicial"} />
++        </Field>
++      </div>
++    </Modal>
++  );
++}
++
+ function MenuAcoes({
+   pedido,
+   onClose,
+@@ -398,6 +504,38 @@
+     }
+   };
+ 
++  // Atalhos de teclado no estilo caixa (ECF): F2..F8 trocam a forma de
++  // pagamento (mesma ordem dos botões), F9 preenche o campo com o valor
++  // restante, e Ctrl+Enter confirma o recebimento — sem precisar do mouse.
++  useEffect(() => {
++    const onKey = (e: KeyboardEvent) => {
++      if (e.key.startsWith("F") && e.key.length <= 3) {
++        const idx = FORMAS_PAGAMENTO.findIndex((_, i) => `F${i + 2}` === e.key);
++        if (idx >= 0) {
++          e.preventDefault();
++          setForma(FORMAS_PAGAMENTO[idx].valor);
++          valorRef.current?.focus();
++          valorRef.current?.select();
++          return;
++        }
++        if (e.key === "F9") {
++          e.preventDefault();
++          setValor(fmtNum2(falta));
++          valorRef.current?.focus();
++          valorRef.current?.select();
++          return;
++        }
++      }
++      if (e.key === "Enter" && e.ctrlKey) {
++        e.preventDefault();
++        void confirmar();
++      }
++    };
++    window.addEventListener("keydown", onKey);
++    return () => window.removeEventListener("keydown", onKey);
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [falta, forma, pagamentos]);
++
+   return (
+     <Modal
+       open
+@@ -407,10 +545,11 @@
+       footer={
+         <>
+           <Button variant="ghost" onClick={onVoltar}>
+-            ← Voltar para Caixa (ECF)
++            ← Voltar para Caixa (ECF) <kbd className="ml-1 rounded bg-white px-1 text-[10px] shadow-sm">ESC</kbd>
+           </Button>
+           <Button variant="primary" onClick={() => void confirmar()} disabled={enviando || pagamentos.length === 0}>
+             {enviando ? "Registrando…" : "Confirmar recebimento"}
++            <kbd className="ml-2 rounded bg-white/20 px-1 text-[10px]">Ctrl+Enter</kbd>
+           </Button>
+         </>
+       }
+@@ -437,15 +576,19 @@
+         </TBody>
+       </Table>
+ 
+-      <div className="mt-4 flex flex-wrap justify-end gap-4 text-sm">
+-        <div>
+-          Subtotal: <strong>{fmtMoney(d.subtotal)}</strong>
++      <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
++        <div className="text-sm text-gray-500">
++          Subtotal: <strong className="text-gray-700">{fmtMoney(d.subtotal)}</strong>
++          {d.desconto > 0 && (
++            <>
++              {" "}
++              · Desconto: <strong className="text-gray-700">{fmtMoney(d.desconto)}</strong>
++            </>
++          )}
+         </div>
+-        <div>
+-          Desconto: <strong>{fmtMoney(d.desconto)}</strong>
+-        </div>
+-        <div>
+-          Total: <strong className="text-orange-600">{fmtMoney(d.total)}</strong>
++        <div className="rounded-lg bg-orange-50 px-5 py-2 text-right">
++          <div className="text-xs font-medium uppercase text-orange-700">Total a receber</div>
++          <div className="text-2xl font-bold text-orange-600">{fmtMoney(d.total)}</div>
+         </div>
+       </div>
+ 
+@@ -460,15 +603,21 @@
+         </div>
+ 
+         <div className="mb-3 flex flex-wrap gap-1.5">
+-          {FORMAS_PAGAMENTO.map((f) => (
++          {FORMAS_PAGAMENTO.map((f, i) => (
+             <button
+               key={f.valor}
+-              onClick={() => setForma(f.valor)}
+-              className={`rounded-full border px-3 py-1 text-xs font-medium ${
++              onClick={() => {
++                setForma(f.valor);
++                valorRef.current?.focus();
++              }}
++              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
+                 forma === f.valor ? "border-orange-500 bg-orange-500 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100"
+               }`}
+             >
+               {f.label}
++              <kbd className={`rounded px-1 text-[10px] ${forma === f.valor ? "bg-white/25" : "bg-gray-100 text-gray-400"}`}>
++                F{i + 2}
++              </kbd>
+             </button>
+           ))}
+         </div>
+@@ -481,7 +630,7 @@
+             value={valor}
+             onChange={(e) => setValor(e.target.value)}
+             onKeyDown={(e) => {
+-              if (e.key === "Enter") {
++              if (e.key === "Enter" && !e.ctrlKey) {
+                 e.preventDefault();
+                 adicionar();
+               }
+@@ -490,7 +639,7 @@
+           />
+           <Button onClick={adicionar}>Adicionar</Button>
+           <Button size="sm" variant="ghost" onClick={() => { setValor(fmtNum2(falta)); }}>
+-            Restante
++            Restante <kbd className="ml-1 rounded bg-gray-100 px-1 text-[10px] text-gray-400">F9</kbd>
+           </Button>
+         </div>
+ 
+@@ -511,3 +660,125 @@
+     </Modal>
+   );
+ }
++
++const STATUS_NFCE_LABEL: Record<string, string> = {
++  nao_emitido: "Não emitida",
++  pendente: "Pendente",
++  processando: "Processando na SEFAZ…",
++  autorizado: "Autorizada",
++  rejeitado: "Rejeitada",
++  cancelado: "Cancelada",
++  erro: "Erro na emissão",
++};
++
++const STATUS_NFCE_TONE: Record<string, "gray" | "green" | "amber" | "red"> = {
++  nao_emitido: "gray",
++  pendente: "amber",
++  processando: "amber",
++  autorizado: "green",
++  rejeitado: "red",
++  cancelado: "gray",
++  erro: "red",
++};
++
++/**
++ * Emissão de NFC-e (modelo 65) via Tecnospeed, aberta logo depois que o
++ * recebimento da venda é confirmado no Caixa. Em modo simulado (padrão,
++ * até alguém configurar credenciais reais em Configurações → Tecnospeed),
++ * a autorização é instantânea; em produção, faz polling enquanto o status
++ * ficar "processando" (emissão é assíncrona na SEFAZ).
++ */
++function ModalEmitirNfce({
++  orcamentoId,
++  numero,
++  onClose,
++}: {
++  orcamentoId: number;
++  numero: string;
++  onClose: () => void;
++}) {
++  const [doc, setDoc] = useState<DocumentoFiscal | { status: "nao_emitido" } | null>(null);
++  const [emitindo, setEmitindo] = useState(false);
++
++  useEffect(() => {
++    void api.statusNfce(orcamentoId).then(setDoc).catch(() => setDoc({ status: "nao_emitido" }));
++  }, [orcamentoId]);
++
++  // Enquanto "processando" (emissão assíncrona), consulta de novo a cada 4s.
++  useEffect(() => {
++    if (!doc || doc.status !== "processando") return;
++    const t = setInterval(() => {
++      void api.statusNfce(orcamentoId).then(setDoc);
++    }, 4000);
++    return () => clearInterval(t);
++  }, [doc, orcamentoId]);
++
++  const emitir = async () => {
++    setEmitindo(true);
++    try {
++      const res = await api.emitirNfce(orcamentoId);
++      setDoc(res);
++      if (res.status === "autorizado") toast("NFC-e autorizada", "success");
++      else if (res.status === "rejeitado") toast("NFC-e rejeitada: " + (res.motivo || ""), "error");
++    } catch (e) {
++      toast("Erro ao emitir NFC-e: " + (e as Error).message, "error");
++    } finally {
++      setEmitindo(false);
++    }
++  };
++
++  const status = doc?.status ?? "nao_emitido";
++  const full = doc && "chave_acesso" in doc ? doc : null;
++
++  return (
++    <Modal
++      open
++      onClose={onClose}
++      title={`Emitir NFC-e — Pedido ${numero}`}
++      footer={
++        <>
++          <Button onClick={onClose}>{status === "autorizado" ? "Fechar" : "Emitir depois"}</Button>
++          {status !== "autorizado" && (
++            <Button variant="primary" onClick={() => void emitir()} disabled={emitindo || status === "processando"}>
++              {emitindo ? "Emitindo…" : status === "rejeitado" || status === "erro" ? "Tentar novamente" : "Emitir NFC-e"}
++            </Button>
++          )}
++        </>
++      }
++    >
++      <div className="mb-4 flex items-center gap-2">
++        <span className="text-sm text-gray-500">Status:</span>
++        <Badge tone={STATUS_NFCE_TONE[status] || "gray"}>{STATUS_NFCE_LABEL[status] || status}</Badge>
++      </div>
++
++      {full?.chave_acesso && (
++        <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
++          <div className="mb-1 text-xs font-medium uppercase text-gray-500">Chave de acesso</div>
++          <div className="break-all font-mono text-xs">{full.chave_acesso}</div>
++          {full.protocolo && <div className="mt-2 text-xs text-gray-500">Protocolo: {full.protocolo}</div>}
++        </div>
++      )}
++
++      {full?.danfe_url && (
++        <a
++          href={full.danfe_url}
++          target="_blank"
++          rel="noreferrer"
++          className="mb-3 inline-block rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
++        >
++          Ver DANFE (imprimir/baixar)
++        </a>
++      )}
++
++      {(status === "rejeitado" || status === "erro") && full?.motivo && (
++        <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{full.motivo}</p>
++      )}
++
++      {status === "nao_emitido" && (
++        <p className="text-sm text-gray-500">
++          A venda foi recebida. Emita a NFC-e agora, ou feche e emita depois pela lista de pedidos.
++        </p>
++      )}
++    </Modal>
++  );
++}

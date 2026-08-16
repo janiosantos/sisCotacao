@@ -134,6 +134,15 @@ export interface Cliente {
   ie?: string;
 }
 
+export interface ClienteSituacao {
+  nome: string;
+  limite_credito: number;
+  limite_utilizado: number;
+  limite_disponivel: number;
+  saldo_em_atraso: number;
+  tem_atraso: boolean;
+}
+
 export interface ClientePayload {
   nome: string;
   tipo_pessoa?: string;
@@ -912,6 +921,7 @@ export const api = {
   buscarClientes: (q: string) =>
     request<Cliente[]>("GET", "/api/clientes/buscar" + qs({ q })),
   detalharCliente: (id: number) => request<Cliente>("GET", `/api/clientes/${id}`),
+  situacaoCliente: (id: number) => request<ClienteSituacao>("GET", `/api/clientes/${id}/situacao`),
   criarCliente: (data: ClientePayload) => request<{ id: number }>("POST", "/api/clientes", data),
   atualizarCliente: (id: number, data: ClientePayload) =>
     request<{ ok: boolean }>("PUT", `/api/clientes/${id}`, data),
@@ -991,11 +1001,20 @@ export const api = {
       `/api/orcamentos/${id}/autorizar-desconto`,
       creds
     ),
-  receberOrcamento: (id: number, data: { forma_pagamento?: string; valor_recebido?: number; pagamentos?: { forma_pagamento: string; valor: number }[] }) =>
+  receberOrcamento: (id: number, data: { forma_pagamento?: string; valor_recebido?: number; bandeira?: string; codigo_autorizacao?: string; pagamentos?: { forma_pagamento: string; valor: number; bandeira?: string; codigo_autorizacao?: string }[] }) =>
     request<RecebimentoResultado>("POST", `/api/orcamentos/${id}/receber`, data),
   cancelarOrcamento: (id: number) => request<{ ok: boolean }>("POST", `/api/orcamentos/${id}/cancelar`),
   devolverOrcamento: (id: number) => request<{ ok: boolean; itens_devolvidos: number }>("POST", `/api/orcamentos/${id}/devolver`),
   formasPagamento: () => request<string[]>("GET", "/api/orcamentos/receber/formas"),
+
+  // emissão fiscal (NFC-e/NF-e via Tecnospeed)
+  emitirNfce: (orcamentoId: number) =>
+    request<DocumentoFiscal>("POST", `/api/orcamentos/${orcamentoId}/nfce`),
+  statusNfce: (orcamentoId: number) =>
+    request<DocumentoFiscal | { status: "nao_emitido" }>("GET", `/api/orcamentos/${orcamentoId}/nfce`),
+  getTecnospeedConfig: () => request<TecnospeedConfig>("GET", "/api/tecnospeed/config"),
+  setTecnospeedConfig: (data: Partial<TecnospeedConfig>) =>
+    request<TecnospeedConfig>("PUT", "/api/tecnospeed/config", data),
 
   // retaguarda de impressão (PDV → ESC/POS direto à impressora)
   imprimirOrcamento: (id: number) =>
@@ -1315,6 +1334,36 @@ export interface RecebimentoResultado {
   valor_recebido: number;
   troco: number;
   recebido: boolean;
+}
+
+export type StatusDocumentoFiscal =
+  | "pendente" | "processando" | "autorizado" | "rejeitado" | "cancelado" | "erro" | "nao_emitido";
+
+export interface DocumentoFiscal {
+  id: number;
+  orcamento_id: number;
+  modelo: "55" | "65";
+  ambiente: "homologacao" | "producao";
+  status: StatusDocumentoFiscal;
+  tecnospeed_id: string | null;
+  chave_acesso: string | null;
+  protocolo: string | null;
+  numero: number | null;
+  serie: number | null;
+  motivo: string | null;
+  xml_url: string | null;
+  danfe_url: string | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export interface TecnospeedConfig {
+  ambiente: "homologacao" | "producao";
+  simulado: "0" | "1";
+  token: string;
+  cnpj_emitente: string;
+  serie_nfce: string;
+  serie_nfe: string;
 }
 
 export interface ConfigImpressao {

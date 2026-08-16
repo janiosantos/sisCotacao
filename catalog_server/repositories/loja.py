@@ -40,6 +40,19 @@ def bloquear_sem_estoque() -> bool:
     return row is not None and row["valor"] == "1"
 
 
+def bloquear_sem_fiscal() -> bool:
+    """Bloqueia a finalização quando há erro fiscal "hard" (NCM/CFOP/CST).
+
+    Desativado por padrão enquanto o cadastro fiscal dos produtos ainda está
+    sendo populado — ligue via config_loja (`bloquear_venda_sem_fiscal=1`).
+    """
+    with system_conn() as conn:
+        row = conn.execute(
+            "SELECT valor FROM config_loja WHERE chave='bloquear_venda_sem_fiscal'"
+        ).fetchone()
+    return row is not None and row["valor"] == "1"
+
+
 # ─── Saldo / endereçamento ────────────────────────────────
 
 _CAMPOS_LOGISTICA = ("peso", "dimensoes", "unidade_venda", "embalagem", "fator_conversao", "localizacao")

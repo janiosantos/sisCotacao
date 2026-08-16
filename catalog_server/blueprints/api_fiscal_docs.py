@@ -1,0 +1,89 @@
+"""API de emissão de documentos fiscais (NFC-e/NF-e) via Tecnospeed."""
+from __future__ import annotations
+
+from flask import Blueprint, jsonify, request
+
+from catalog_server.repositories.fiscal_documentos import (
+    documento_fiscal_repo,
+    tecnospeed_config_repo,
+)
+from catalog_server.services import tecnospeed
+
+api_fiscal_docs_bp = Blueprint("api_fiscal_docs", __name__)
+
+
+@api_fiscal_docs_bp.post("/api/orcamentos/<int:orcamento_id>/nfce")
+def emitir_nfce(orcamento_id: int):
+    try:
+        doc = tecnospeed.emitir_nfce(orcamento_id)
+    except tecnospeed.TecnospeedError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(doc), 201
+
+
+@api_fiscal_docs_bp.get("/api/orcamentos/<int:orcamento_id>/nfce")
+def status_nfce(orcamento_id: int):
+    doc = documento_fiscal_repo.get_by_orcamento(orcamento_id, "65")
+    if doc is None:
+        return jsonify({"status": "nao_emitido"}), 200
+    if doc["status"] == "processando":
+        try:
+            doc = tecnospeed.consultar_status(doc["id"])
+        except tecnospeed.TecnospeedError:
+            pass  # mantém o último status conhecido; o polling do front tenta de novo
+    return jsonify(doc)
+
+
+@api_fiscal_docs_bp.post("/api/orcamentos/<int:orcamento_id>/nfe")
+def emitir_nfe(orcamento_id: int):
+    """NF-e (modelo 55) — venda B2B faturada. Exige que o orçamento tenha
+    um cliente vinculado (cliente_id) com CNPJ/CPF, IE e endereço
+    completos cadastrados."""
+    try:
+        doc = tecnospeed.emitir_nfe(orcamento_id)
+    except tecnospeed.TecnospeedError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(doc), 201
+
+
+@api_fiscal_docs_bp.get("/api/orcamentos/<int:orcamento_id>/nfe")
+def status_nfe(orcamento_id: int):
+    doc = documento_fiscal_repo.get_by_orcamento(orcamento_id, "55")
+    if doc is None:
+        return jsonify({"status": "nao_emitido"}), 200
+    if doc["status"] == "processando":
+        try:
+            doc = tecnospeed.consultar_status(doc["id"])
+        except tecnospeed.TecnospeedError:
+            pass
+    return jsonify(doc)
+
+
+@api_fiscal_docs_bp.get("/api/tecnospeed/config")
+def get_config():
+    cfg = tecnospeed_config_repo.get_all()
+    cfg["token"] = "••••••••" if cfg.get("token") else ""  # nunca devolve o token em texto puro
+    return jsonify(cfg)
+
+
+@api_fiscal_docs_bp.put("/api/tecnospeed/config")
+def set_config():
+    data = request.get_json(silent=True) or {}
+    permitido = {"ambiente", "simulado", "token", "cnpj_emitente", "serie_nfce", "serie_nfe"}
+    chaves = {k: v for k, v in data.items() if k in permitido}
+    if "token" in chaves and chaves["token"] == "••••••••":
+        del chaves["token"]  # front reenviou o placeholder mascarado; não sobrescreve
+    if "ambiente" in chaves and chaves["ambiente"] not in ("homologacao", "producao"):
+        return jsonify({"error": "Ambiente inválido"}), 400
+    cfg = tecnospeed_config_repo.set(chaves)
+    cfg["token"] = "••••••••" if cfg.get("token") else ""
+    return jsonify(cfg)
+
+
+@api_fiscal_docs_bp.post("/api/webhooks/tecnospeed")
+def webhook_tecnospeed():
+    """Endpoint público que a Tecnospeed chama quando o status de uma nota
+    emitida assincronamente muda (autorizada/rejeitada pela SEFAZ)."""
+    payload = request.get_json(silent=True) or {}
+    tecnospeed.processar_webhook(payload)
+    return jsonify({"ok": True})

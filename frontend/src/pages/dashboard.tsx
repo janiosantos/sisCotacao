@@ -80,8 +80,8 @@ export default function Dashboard() {
         title="Painel"
         subtitle={`Indicadores do negócio — atualizados em ${r.hoje}.`}
         actions={
-          <a href="#/pdv">
-            <Button variant="primary">+ Venda no PDV</Button>
+          <a href="#/pre-venda">
+            <Button variant="primary">+ Nova pré-venda</Button>
           </a>
         }
       />

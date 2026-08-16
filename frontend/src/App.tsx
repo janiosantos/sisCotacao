@@ -52,7 +52,7 @@ const NAV: NavGroup[] = [
     items: [
       { href: "#/dashboard", label: "Painel", icon: LayoutDashboard },
       { href: "#/catalogo", label: "Catálogo", icon: Package },
-      { href: "#/pdv", label: "PDV", icon: ShoppingCart },
+      { href: "#/pre-venda", label: "Pré-venda", icon: ShoppingCart },
       { href: "#/orcamentos", label: "Orçamentos", icon: FileText },
       { href: "#/cotacoes", label: "Cotações", icon: Gavel },
       { href: "#/compras", label: "Compras", icon: ShoppingBag },
@@ -74,7 +74,7 @@ const NAV: NavGroup[] = [
     label: "Financeiro",
     items: [
       { href: "#/financeiro", label: "Financeiro", icon: Wallet },
-      { href: "#/recebimentos", label: "Recebimentos", icon: Banknote },
+      { href: "#/caixa", label: "Caixa", icon: Banknote },
       { href: "#/precos", label: "Preços", icon: DollarSign },
       { href: "#/bancos", label: "Bancos", icon: Landmark },
       { href: "#/plano-contas", label: "Plano de contas", icon: BookOpen },
