@@ -756,11 +756,29 @@ O serviço `db` do `docker-compose.yml` sobe um PostgreSQL 16 com a URL
 `postgresql+psycopg://catalog:catalog@db:5432/catalog`. A variável
 `DATABASE_URL` no backend controla o destino: **vazia = SQLite** (padrão,
 produção atual); preenchida = PostgreSQL. Nesta fase o sistema continua
-rodando em SQLite; o Postgres é o destino da migração planejada.
+rodando em SQLite; o Postgres já recebeu o schema e os dados.
 
 ```bash
 docker compose up -d db
 ```
+
+**Migrar os dados do SQLite para o Postgres** (schema + dados + conferência):
+
+```bash
+.venv\Scripts\python.exe scripts\backup_db.py                      # backup pré-migração
+$env:DATABASE_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog"
+.venv\Scripts\python.exe scripts\schema_postgres.py                # gera scripts/postgres_schema.sql
+.venv\Scripts\python.exe scripts\migrar_postgres.py --apply-schema # DROP SCHEMA + schema + import + conferência
+```
+
+O `server_cache.db` (cache de páginas-fonte) **não** é migrado — fica fora da
+estrutura de produção. O FTS5 (busca por produto) também não é migrado; será
+substituído por `tsvector`/`pg_trgm` numa etapa futura.
+
+O script imprime a conferência linha a linha (contagens origem → destino) e
+falha (`exit 1`) se houver divergência. Após o import, as FKs são validadas
+pelo Postgres (todas `convalidated`) e as sequences são ajustadas com
+`setval` para o maior id de cada tabela.
 
 ### Suporte
 
