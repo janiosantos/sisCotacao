@@ -755,11 +755,21 @@ Copy-Item backups\server_YYYY-MM-DD_HHMMSS.db catalog_server\data\server.db
 O serviço `db` do `docker-compose.yml` sobe um PostgreSQL 16 com a URL
 `postgresql+psycopg://catalog:catalog@db:5432/catalog`. A variável
 `DATABASE_URL` no backend controla o destino: **vazia = SQLite** (padrão,
-produção atual); preenchida = PostgreSQL. Nesta fase o sistema continua
-rodando em SQLite; o Postgres já recebeu o schema e os dados.
+produção atual); preenchida = PostgreSQL.
+
+O sistema já roda sobre o Postgres: `db.system_conn()` usa a camada de
+compatibilidade `catalog_server/pgsql.py` quando `DATABASE_URL` está
+configurada, traduzindo o SQL dos repositórios (escritos para SQLite) para o
+dialeto Postgres na hora da execução (`?`→`%s`, `datetime('now')`→`to_char`,
+`INSERT OR IGNORE`→`ON CONFLICT DO NOTHING`, `LIKE ... COLLATE NOCASE`→`ILIKE`,
+`GROUP_CONCAT`→`string_agg`, etc.). As migrações SQLite não rodam no PG: o
+schema é aplicado pelos scripts de migração.
 
 ```bash
 docker compose up -d db
+# rodar o backend sobre o Postgres:
+$env:DATABASE_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog"
+.venv\Scripts\python.exe -m catalog_server.app
 ```
 
 **Migrar os dados do SQLite para o Postgres** (schema + dados + conferência):
@@ -773,12 +783,24 @@ $env:DATABASE_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog
 
 O `server_cache.db` (cache de páginas-fonte) **não** é migrado — fica fora da
 estrutura de produção. O FTS5 (busca por produto) também não é migrado; será
-substituído por `tsvector`/`pg_trgm` numa etapa futura.
+substituído por `tsvector`/`pg_trgm` numa etapa futura — no PG a busca cai
+para `ILIKE`.
 
 O script imprime a conferência linha a linha (contagens origem → destino) e
 falha (`exit 1`) se houver divergência. Após o import, as FKs são validadas
 pelo Postgres (todas `convalidated`) e as sequences são ajustadas com
 `setval` para o maior id de cada tabela.
+
+**Validar a camada Postgres com a suíte de testes** (35 testes rodam também
+contra o PG; cada teste zera as tabelas e replica os seeds das migrações):
+
+```bash
+# SQLite (padrão):
+.venv\Scripts\python.exe -m pytest tests\ -q
+# PostgreSQL:
+$env:TEST_PG_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test"
+.venv\Scripts\python.exe -m pytest tests\ -q
+```
 
 ### Suporte
 

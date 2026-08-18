@@ -18,7 +18,9 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 
-from catalog_server.config import CACHE_DB, SYSTEM_DB
+from catalog_server.config import CACHE_DB, DATABASE_URL, SYSTEM_DB
+
+_PG = bool(DATABASE_URL)
 
 
 # ---------------------------------------------------------------------------
@@ -31,6 +33,8 @@ _MIGRATED_LOCK = threading.Lock()
 
 def _ensure_migrations(db_path: Path = SYSTEM_DB) -> None:
     """Aplica migrações pendentes uma única vez por processo/banco."""
+    if _PG:
+        return  # schema Postgres é aplicado por scripts/migrar_postgres.py
     with _MIGRATED_LOCK:
         if db_path in _MIGRATED:
             return
@@ -59,6 +63,8 @@ def init_db(db_path: Path = SYSTEM_DB) -> None:
 def _ensure_fts(db_path: Path) -> None:
     from catalog_server import fts
 
+    if _PG:
+        return  # FTS5 é SQLite-only; no Postgres será tsvector/pg_trgm (futuro)
     conn = sqlite3.connect(db_path, timeout=30)
     conn.row_factory = sqlite3.Row
     try:
@@ -124,10 +130,21 @@ def cache_conn():
 def system_conn():
     """Conexão com o banco próprio do módulo (fornecedores/cotações).
 
-    As migrações são garantidas uma única vez no primeiro acesso de cada
-    processo (fora do hot path das requisições subsequentes).
+    Com `DATABASE_URL` configurada usa o Postgres (via shim `pgsql`); senão,
+    o SQLite (padrão). As migrações são garantidas uma única vez no primeiro
+    acesso de cada processo (fora do hot path das requisições subsequentes).
     """
     _ensure_ready(SYSTEM_DB)
+    if _PG:
+        from catalog_server.pgsql import connect
+
+        conn = connect(DATABASE_URL)
+        try:
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
+        return
     conn = sqlite3.connect(SYSTEM_DB, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")

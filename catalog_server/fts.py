@@ -53,18 +53,29 @@ LEFT JOIN familias f ON f.id = p.familia_id
 _QUERY_TOKENS = re.compile(r"[0-9A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF]+")
 
 
+def _is_pg(conn) -> bool:
+    """Detecta conexão Postgres (shim `pgsql`); FTS5 não existe lá."""
+    return getattr(conn, "is_pg", False)
+
+
 def ensure_fts(conn) -> None:
     """Garante que a tabela virtual FTS exista (idempotente)."""
+    if _is_pg(conn):
+        return
     conn.execute(_CREATE)
 
 
 def is_empty(conn) -> bool:
+    if _is_pg(conn):
+        return True  # sem FTS no Postgres: busca cai para LIKE/browse
     row = conn.execute(f"SELECT COUNT(*) AS n FROM {_FTS}").fetchone()
     return not row or not row[0]
 
 
 def rebuild(conn) -> None:
     """Reconstrói o índice a partir das tabelas base."""
+    if _is_pg(conn):
+        return
     conn.execute(f"DELETE FROM {_FTS}")
     conn.execute(
         f"INSERT INTO {_FTS}(produto_id, nome, marca, descricao, familia, skus, termos_busca)"
@@ -74,6 +85,8 @@ def rebuild(conn) -> None:
 
 def sync_product(conn, produto_id: int) -> None:
     """Atualiza o índice para um único produto (create-or-replace)."""
+    if _is_pg(conn):
+        return
     conn.execute(f"DELETE FROM {_FTS} WHERE produto_id = ?", (produto_id,))
     row = conn.execute(
         f"{_SELECT_FOR_INDEX} WHERE p.id = ?", (produto_id,)
@@ -90,6 +103,8 @@ def sync_product(conn, produto_id: int) -> None:
 
 
 def delete_product(conn, produto_id: int) -> None:
+    if _is_pg(conn):
+        return
     conn.execute(f"DELETE FROM {_FTS} WHERE produto_id = ?", (produto_id,))
 
 
