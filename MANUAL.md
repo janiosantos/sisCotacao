@@ -782,9 +782,12 @@ $env:DATABASE_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog
 ```
 
 O `server_cache.db` (cache de páginas-fonte) **não** é migrado — fica fora da
-estrutura de produção. O FTS5 (busca por produto) também não é migrado; será
-substituído por `tsvector`/`pg_trgm` numa etapa futura — no PG a busca cai
-para `ILIKE`.
+estrutura de produção. A tabela `produtos_fts` (índice FTS5 de busca) também
+não vem da migração: no Postgres ela é criada automaticamente no primeiro
+`ensure_fts()` (startup do servidor) usando `tsvector` + `pg_trgm` — coluna
+`fts` gerada com `to_tsvector('simple', f_unaccent(...))` (remover acentos) e
+função `fts5_to_tsquery()` que converte a query FTS5 (`parafuso* AND 5x50*`)
+para tsquery de prefixo. O `rebuild()` roda no startup para popular o índice.
 
 O script imprime a conferência linha a linha (contagens origem → destino) e
 falha (`exit 1`) se houver divergência. Após o import, as FKs são validadas

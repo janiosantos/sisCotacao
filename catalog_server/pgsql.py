@@ -104,13 +104,28 @@ def translate_sql(sql: str) -> str:
         masked = re.sub(r"INSERT\s+OR\s+REPLACE\s+INTO", "INSERT INTO", masked, count=1, flags=re.IGNORECASE)
         upsert = "ON CONFLICT DO NOTHING"
 
+    # FTS: produtos_fts MATCH ? (FTS5) -> tsvector (Postgres)
+    masked = re.sub(
+        r"produtos_fts\s+MATCH\s+\?",
+        "fts @@ fts5_to_tsquery(?)",
+        masked,
+        flags=re.IGNORECASE,
+    )
+    # bm25(produtos_fts) (FTS5) -> ts_rank (Postgres)
+    masked = re.sub(
+        r"\bbm25\s*\(\s*produtos_fts\s*\)",
+        "ts_rank(fts, fts5_to_tsquery(?))",
+        masked,
+        flags=re.IGNORECASE,
+    )
+
     # LIKE case-insensitive (LIKE do SQLite é insensível por padrão)
     masked = re.sub(r"LIKE\s+\?\s+COLLATE\s+NOCASE", "ILIKE ?", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bLIKE\s+\?", "ILIKE ?", masked, flags=re.IGNORECASE)
     # expr COLLATE NOCASE -> LOWER(expr) (ordenação insensível a caixa)
     masked = re.sub(r"(\w+(?:\.\w+)?)\s+COLLATE\s+NOCASE", r"LOWER(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bCOLLATE\s+NOCASE\b", "", masked, flags=re.IGNORECASE)
-    masked = masked.replace("GROUP_CONCAT(", "string_agg(")
+    masked = re.sub(r"GROUP_CONCAT\(", "string_agg(", masked, flags=re.IGNORECASE)
     masked = masked.replace("last_insert_rowid()", "lastval()")
 
     if upsert:
@@ -193,6 +208,15 @@ class PgCursor:
 
     def _execute(self, sql: str, params) -> None:
         translated = translate_sql(sql)
+        if "bm25(" in sql or "ts_rank(" in translated:
+            # o match é sempre o primeiro param nas queries FTS dos repos;
+            # injeta como literal para não deslocar LIMIT/OFFSET (%s posicional).
+            match = params[0] if params else ""
+            lit = match.replace("'", "''")
+            translated = translated.replace(
+                "ts_rank(fts, fts5_to_tsquery(%s))",
+                f"ts_rank(fts, fts5_to_tsquery('{lit}'))",
+            )
         raw = self._conn._conn.execute(translated, params or ())
         if raw.description is not None:
             self._description = [d[0] for d in raw.description]
@@ -204,10 +228,19 @@ class PgCursor:
             self._set_lastrowid()
 
     def _set_lastrowid(self) -> None:
+        # SAVEPOINT: se a tabela não tiver sequence, lastval() falha e abortaria
+        # a transação; o rollback para o savepoint a mantém utilizável.
         try:
+            self._conn._conn.execute("SAVEPOINT pgsql_lastrowid")
             row = self._conn._conn.execute("SELECT lastval()").fetchone()
             self.lastrowid = int(row[0]) if row else None
+            self._conn._conn.execute("RELEASE SAVEPOINT pgsql_lastrowid")
         except Exception:  # noqa: BLE001 (tabela sem sequence)
+            try:
+                self._conn._conn.execute("ROLLBACK TO SAVEPOINT pgsql_lastrowid")
+                self._conn._conn.execute("RELEASE SAVEPOINT pgsql_lastrowid")
+            except Exception:  # noqa: BLE001
+                pass
             self.lastrowid = None
 
     def fetchone(self) -> PgRow | None:

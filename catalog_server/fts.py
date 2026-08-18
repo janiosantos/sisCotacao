@@ -28,6 +28,47 @@ CREATE VIRTUAL TABLE IF NOT EXISTS {_FTS} USING fts5(
 )
 """
 
+# DDL do índice tsvector no Postgres (idempotente). `unaccent` é STABLE,
+# então o wrapper IMMUTABLE `f_unaccent` permite usar em generated column.
+_PG_CREATE = [
+    "CREATE EXTENSION IF NOT EXISTS unaccent",
+    "CREATE EXTENSION IF NOT EXISTS pg_trgm",
+    """
+CREATE OR REPLACE FUNCTION f_unaccent(text) RETURNS text
+LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+  SELECT public.unaccent('public.unaccent', $1)
+$$;
+""",
+    """
+CREATE OR REPLACE FUNCTION fts5_to_tsquery(q text) RETURNS tsquery
+LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+  SELECT to_tsquery('simple', string_agg(
+    CASE WHEN tok LIKE '%*' THEN left(tok, -1) || ':*' ELSE tok END, ' & '))
+  FROM regexp_split_to_table(lower(f_unaccent(coalesce(q, ''))), '\\s+and\\s+') tok
+  WHERE tok <> ''
+$$;
+""",
+    f"""
+CREATE TABLE IF NOT EXISTS {_FTS} (
+    produto_id BIGINT PRIMARY KEY,
+    nome TEXT NOT NULL DEFAULT '',
+    marca TEXT NOT NULL DEFAULT '',
+    descricao TEXT NOT NULL DEFAULT '',
+    familia TEXT NOT NULL DEFAULT '',
+    skus TEXT NOT NULL DEFAULT '',
+    termos_busca TEXT NOT NULL DEFAULT '',
+    fts tsvector GENERATED ALWAYS AS (
+        to_tsvector('simple', f_unaccent(
+            coalesce(nome, '') || ' ' || coalesce(marca, '') || ' ' ||
+            coalesce(descricao, '') || ' ' || coalesce(familia, '') || ' ' ||
+            coalesce(skus, '') || ' ' || coalesce(termos_busca, '')
+        ))
+    ) STORED
+);
+""",
+    f"CREATE INDEX IF NOT EXISTS idx_produtos_fts_fts ON {_FTS} USING gin (fts)",
+]
+
 # O que vai para o índice, por produto.
 _SELECT_FOR_INDEX = """
 SELECT p.id AS id,
@@ -59,23 +100,31 @@ def _is_pg(conn) -> bool:
 
 
 def ensure_fts(conn) -> None:
-    """Garante que a tabela virtual FTS exista (idempotente)."""
+    """Garante que o índice FTS exista (idempotente) no SQLite ou Postgres."""
     if _is_pg(conn):
+        _ensure_pg_fts(conn)
         return
     conn.execute(_CREATE)
 
 
+def _ensure_pg_fts(conn) -> None:
+    """Cria extensões/funções/tabela/índice tsvector no Postgres (idempotente)."""
+    row = conn.execute("SELECT to_regclass('public.produtos_fts') AS t").fetchone()
+    if row is not None and row[0] is not None:
+        return
+    for stmt in _PG_CREATE:
+        conn.execute(stmt)
+
+
 def is_empty(conn) -> bool:
-    if _is_pg(conn):
-        return True  # sem FTS no Postgres: busca cai para LIKE/browse
+    ensure_fts(conn)
     row = conn.execute(f"SELECT COUNT(*) AS n FROM {_FTS}").fetchone()
     return not row or not row[0]
 
 
 def rebuild(conn) -> None:
     """Reconstrói o índice a partir das tabelas base."""
-    if _is_pg(conn):
-        return
+    ensure_fts(conn)
     conn.execute(f"DELETE FROM {_FTS}")
     conn.execute(
         f"INSERT INTO {_FTS}(produto_id, nome, marca, descricao, familia, skus, termos_busca)"
@@ -85,8 +134,7 @@ def rebuild(conn) -> None:
 
 def sync_product(conn, produto_id: int) -> None:
     """Atualiza o índice para um único produto (create-or-replace)."""
-    if _is_pg(conn):
-        return
+    ensure_fts(conn)
     conn.execute(f"DELETE FROM {_FTS} WHERE produto_id = ?", (produto_id,))
     row = conn.execute(
         f"{_SELECT_FOR_INDEX} WHERE p.id = ?", (produto_id,)
@@ -103,8 +151,7 @@ def sync_product(conn, produto_id: int) -> None:
 
 
 def delete_product(conn, produto_id: int) -> None:
-    if _is_pg(conn):
-        return
+    ensure_fts(conn)
     conn.execute(f"DELETE FROM {_FTS} WHERE produto_id = ?", (produto_id,))
 
 
