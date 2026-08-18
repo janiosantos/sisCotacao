@@ -15,6 +15,10 @@ SYSTEM_DB = Path(os.getenv("SYSTEM_DB", str(MODULE_DIR / "data" / "server.db")))
 # dados principal enxuto e rápido (evita que os blobs de HTML inflem o DB).
 CACHE_DB = Path(os.getenv("CACHE_DB", str(MODULE_DIR / "data" / "server_cache.db")))
 
+# PostgreSQL (banco de destino da migração). Vazio = ainda usando SQLite.
+# Formato: postgresql+psycopg://usuario:senha@host:porta/banco
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
 IMAGES_DIR = Path(os.getenv("IMAGES_DIR", str(PROJECT_DIR / "images")))
 
 HOST = os.getenv("CATALOG_HOST", "0.0.0.0")

@@ -723,6 +723,45 @@ A tela de PDV foi projetada para uso sem mouse. Os atalhos são:
 | "Status inválido" | Usou "fechado" em vez de "faturado" | Use o menu de orçamentos para alterar status |
 | "FOREIGN KEY" | Referência a registro inexistente | Cadastre o registro antes de referenciá-lo |
 
+### Desenvolvimento
+
+**Rodar os testes de regressão** (banco SQLite temporário, não toca no `server.db`):
+
+```bash
+.venv\Scripts\python.exe -m pytest tests\ -q
+```
+
+**Backup do banco antes de mudanças de schema** (cópia timestampada de `server.db`, `server_cache.db` e `crawler.db` em `backups/`):
+
+```bash
+.venv\Scripts\python.exe scripts\backup_db.py
+.venv\Scripts\python.exe scripts\backup_db.py --incluir-cache   # inclui o cache de 8,6 GB
+```
+
+**Baseline de qualidade dos dados** (contagens + métricas em JSON):
+
+```bash
+.venv\Scripts\python.exe scripts\baseline.py
+```
+
+**Rollback:** para desfazer uma migração de schema, restaure o backup:
+
+```bash
+Copy-Item backups\server_YYYY-MM-DD_HHMMSS.db catalog_server\data\server.db
+```
+
+### PostgreSQL (em migração)
+
+O serviço `db` do `docker-compose.yml` sobe um PostgreSQL 16 com a URL
+`postgresql+psycopg://catalog:catalog@db:5432/catalog`. A variável
+`DATABASE_URL` no backend controla o destino: **vazia = SQLite** (padrão,
+produção atual); preenchida = PostgreSQL. Nesta fase o sistema continua
+rodando em SQLite; o Postgres é o destino da migração planejada.
+
+```bash
+docker compose up -d db
+```
+
 ### Suporte
 
 Para dúvidas ou problemas, entre em contato com o suporte técnico.
