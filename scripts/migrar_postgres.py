@@ -18,6 +18,7 @@ Uso:
     .venv\\Scripts\\python.exe scripts\\migrar_postgres.py --db <path>    # banco específico
     .venv\\Scripts\\python.exe scripts\\migrar_postgres.py --apply-schema
     .venv\\Scripts\\python.exe scripts\\migrar_postgres.py --no-crawler   # não migra crawler.db
+    .venv\\Scripts\\python.exe scripts\\migrar_postgres.py --only-crawler # migra só o crawler.db
     .venv\\Scripts\\python.exe scripts\\migrar_postgres.py --pg-url postgresql+psycopg://...
 """
 from __future__ import annotations
@@ -162,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--schema-file", default=str(PROJECT / "scripts" / "postgres_schema.sql"))
     ap.add_argument("--crawler-db", default=None, help="SQLite do scraper (default: crawler.db)")
     ap.add_argument("--no-crawler", action="store_true", help="não migra o crawler.db")
+    ap.add_argument("--only-crawler", action="store_true", help="migra apenas o crawler.db (sem o banco do sistema)")
     args = ap.parse_args(argv)
 
     sqlite_path = Path(args.db) if args.db else Path(SYSTEM_DB)
@@ -172,47 +174,48 @@ def main(argv: list[str] | None = None) -> int:
 
     crawler_path = Path(args.crawler_db) if args.crawler_db else Path(CATALOG_DB)
 
-    print(f"[origem ] SQLite  : {sqlite_path}")
+    print(f"[origem ] SQLite  : {sqlite_path if not args.only_crawler else crawler_path}")
     print(f"[destino] Postgres: {pg_url}")
 
-    if not sqlite_path.exists():
-        print(f"ERRO: banco SQLite não existe: {sqlite_path}", file=sys.stderr)
-        return 2
-
-    sq = sqlite3.connect(sqlite_path)
-    tabelas = listar_tabelas(sq)
-    print(f"[info] {len(tabelas)} tabelas a copiar")
-
     ok = True
+    sq = None
     try:
         with psycopg.connect(pg_dsn(pg_url), row_factory=dict_row) as pg:
             if args.apply_schema:
                 aplicar_schema_runner(pg_url, Path(args.schema_file))
 
+            if not args.only_crawler:
+                if not sqlite_path.exists():
+                    print(f"ERRO: banco SQLite não existe: {sqlite_path}", file=sys.stderr)
+                    return 2
+
+                sq = sqlite3.connect(sqlite_path)
+                tabelas = listar_tabelas(sq)
+                print(f"[info] {len(tabelas)} tabelas a copiar")
+
+                # desativa FKs durante o import (evita violação por ordem de carga)
+                pg.autocommit = True
+                with pg.cursor() as cur:
+                    cur.execute("SET session_replication_role = replica")
+                pg.autocommit = False
+
+                for nome in tabelas:
+                    print(f"[import] {nome} ...")
+                    n = copiar_tabela(sq, pg, nome)
+                    print(f"  {nome}: {n} linhas")
+
+                # reativa FKs e valida
+                pg.autocommit = True
+                with pg.cursor() as cur:
+                    cur.execute("SET session_replication_role = DEFAULT")
+                pg.autocommit = False
+
+                ajustar_sequences(pg, tabelas)
+                ok = conferir(sq, pg, tabelas)
+                sq.close()
+
             if not args.no_crawler and crawler_path.exists():
                 aplicar_schema_scraper(pg)
-
-            # desativa FKs durante o import (evita violação por ordem de carga)
-            pg.autocommit = True
-            with pg.cursor() as cur:
-                cur.execute("SET session_replication_role = replica")
-            pg.autocommit = False
-
-            for nome in tabelas:
-                print(f"[import] {nome} ...")
-                n = copiar_tabela(sq, pg, nome)
-                print(f"  {nome}: {n} linhas")
-
-            # reativa FKs e valida
-            pg.autocommit = True
-            with pg.cursor() as cur:
-                cur.execute("SET session_replication_role = DEFAULT")
-            pg.autocommit = False
-
-            ajustar_sequences(pg, tabelas)
-            ok = conferir(sq, pg, tabelas)
-
-            if not args.no_crawler and crawler_path.exists():
                 sq_crawler = sqlite3.connect(crawler_path)
                 try:
                     tabelas_crawler = listar_tabelas(sq_crawler)
@@ -237,7 +240,8 @@ def main(argv: list[str] | None = None) -> int:
                 finally:
                     sq_crawler.close()
     finally:
-        sq.close()
+        if sq is not None:
+            sq.close()
 
     if ok:
         print("\nMigração concluída com sucesso.")
