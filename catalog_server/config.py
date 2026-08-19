@@ -13,7 +13,9 @@ SYSTEM_DB = Path(os.getenv("SYSTEM_DB", str(MODULE_DIR / "data" / "server.db")))
 
 # Cache de páginas-fonte (HTML) em banco separado, para manter o banco de
 # dados principal enxuto e rápido (evita que os blobs de HTML inflem o DB).
-CACHE_DB = Path(os.getenv("CACHE_DB", str(MODULE_DIR / "data" / "server_cache.db")))
+# Fica FORA da estrutura da aplicação (em database/, junto do crawler.db) e é
+# usado apenas pelos scripts de scraper — o hot path da API não lê/grava o cache.
+CACHE_DB = Path(os.getenv("CACHE_DB", str(PROJECT_DIR / "database" / "server_cache.db")))
 
 # PostgreSQL (banco de destino da migração). Vazio = ainda usando SQLite.
 # Formato: postgresql+psycopg://usuario:senha@host:porta/banco

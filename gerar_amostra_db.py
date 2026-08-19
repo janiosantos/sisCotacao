@@ -15,7 +15,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from catalog_server.config import CACHE_DB, SYSTEM_DB
+from catalog_server.config import SYSTEM_DB
 
 OUT = Path(__file__).resolve().parent / "amostra_estrutura.db"
 
