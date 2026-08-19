@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 from typing import Optional
 
 from app.config.settings import DATABASE_FOLDER
+from app.database.schema_pg import PRODUCT_ATTRIBUTES_PG_CREATE, SCRAPER_PG_CREATE
+
+_PG_URL = os.getenv("DATABASE_URL", "")
 
 
 class Database:
@@ -13,12 +17,19 @@ class Database:
 
         self.db_path = DATABASE_FOLDER / "crawler.db"
 
-        self.conn = sqlite3.connect(
-            self.db_path,
-            check_same_thread=False
-        )
+        self.is_pg = bool(_PG_URL)
 
-        self.conn.row_factory = sqlite3.Row
+        if self.is_pg:
+            from catalog_server.pgsql import connect
+
+            self.conn = connect(_PG_URL)
+        else:
+            self.conn = sqlite3.connect(
+                self.db_path,
+                check_same_thread=False
+            )
+
+            self.conn.row_factory = sqlite3.Row
 
         self.create_tables()
 
@@ -27,6 +38,12 @@ class Database:
     # --------------------------------------------------
 
     def create_tables(self):
+
+        if self.is_pg:
+            for stmt in SCRAPER_PG_CREATE + PRODUCT_ATTRIBUTES_PG_CREATE:
+                self.conn.execute(stmt)
+            self.conn.commit()
+            return
 
         cursor = self.conn.cursor()
 
@@ -162,6 +179,9 @@ class Database:
 
     def migrate(self):
 
+        if self.is_pg:
+            return  # schema PG já contém todas as colunas
+
         self._ensure_column(
             "products",
             "old_price",
@@ -184,15 +204,13 @@ class Database:
 
     def execute(self, sql, values=None):
 
-        cur = self.conn.cursor()
-
         if values:
 
-            cur.execute(sql, values)
+            cur = self.conn.execute(sql, values)
 
         else:
 
-            cur.execute(sql)
+            cur = self.conn.execute(sql)
 
         self.conn.commit()
 
@@ -219,14 +237,12 @@ class Database:
     def close(self):
 
         self.conn.close()
-        
+
     # --------------------------------------------------
 
     def insert(self, sql, values):
 
-        cursor = self.conn.cursor()
-
-        cursor.execute(sql, values)
+        cursor = self.conn.execute(sql, values)
 
         self.conn.commit()
 
@@ -236,9 +252,7 @@ class Database:
 
     def executemany(self, sql, values):
 
-        cursor = self.conn.cursor()
-
-        cursor.executemany(sql, values)
+        self.conn.executemany(sql, values)
 
         self.conn.commit()
 

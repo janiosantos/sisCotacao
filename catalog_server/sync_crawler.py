@@ -49,7 +49,13 @@ FAMILY_ATTR_LABELS: dict[str, list[tuple[str, str]]] = {
 
 
 def _load_crawler() -> list[dict]:
-    """Carrega produtos parseados com atributos e imagens do crawler.db."""
+    """Carrega produtos parseados com atributos e imagens do scraper.
+
+    Com `DATABASE_URL` configurada lê as tabelas do scraper no Postgres (mesmo
+    banco do sistema); senão, do `crawler.db` (SQLite).
+    """
+    if config.DATABASE_URL:
+        return _load_crawler_pg()
     if not config.CATALOG_DB.exists():
         return []
     conn = sqlite3.connect(
@@ -75,6 +81,38 @@ def _load_crawler() -> list[dict]:
             )
     finally:
         conn.close()
+
+    products = []
+    for r in rows:
+        d = dict(r)
+        d["attrs"] = attrs_map.get(d["id"], {})
+        d["images"] = imgs_map.get(d["id"], [])
+        products.append(d)
+    return products
+
+
+def _load_crawler_pg() -> list[dict]:
+    """Carrega os produtos parseados do scraper direto do Postgres."""
+    with system_conn() as conn:
+        try:
+            rows = conn.execute("SELECT * FROM products WHERE parsed=1").fetchall()
+        except Exception:
+            return []  # tabelas do scraper ainda não existem no Postgres
+        attrs_map: dict[int, dict] = {}
+        try:
+            for r in conn.execute(
+                "SELECT product_id, attr, value FROM product_attributes"
+            ):
+                attrs_map.setdefault(r["product_id"], {})[r["attr"]] = r["value"]
+        except Exception:
+            pass
+        imgs_map: dict[int, list] = {}
+        for r in conn.execute(
+            "SELECT product_id, filename, url FROM images ORDER BY id"
+        ):
+            imgs_map.setdefault(r["product_id"], []).append(
+                {"filename": r["filename"], "url": r["url"]}
+            )
 
     products = []
     for r in rows:
@@ -202,15 +240,15 @@ def sync_crawler() -> dict:
 
             found = conn.execute(
                 "SELECT id FROM produtos_cadastro WHERE external_id=?",
-                (rep_p["id"],),
+                (str(rep_p["id"]),),
             ).fetchone()
             if not found:
                 # O representante pode ter mudado (re-scrape): adota o produto que
                 # já guarda as variantes deste grupo (mesmos produtos do crawler).
                 for member in current_external:
                     vrow = conn.execute(
-                        "SELECT produto_id FROM variantes WHERE external_id=? AND external_id IS NOT NULL LIMIT 1",
-                        (member,),
+                        "SELECT produto_id AS id FROM variantes WHERE external_id=? AND external_id IS NOT NULL LIMIT 1",
+                        (str(member),),
                     ).fetchone()
                     if vrow:
                         found = vrow
@@ -223,7 +261,7 @@ def sync_crawler() -> dict:
                     " descricao=?, categoria_id=?, subcategoria_id=?, embalagem=?, url=?,"
                     " external_id=?, atualizado_em=datetime('now') WHERE id=?",
                     (familia_id, nome, marca, descricao, categoria_id, subcategoria_id,
-                     package or "", rep_p.get("url") or "", rep_p["id"], produto_id),
+                     package or "", rep_p.get("url") or "", str(rep_p["id"]), produto_id),
                 )
                 updated += 1
             else:
@@ -233,14 +271,14 @@ def sync_crawler() -> dict:
                     " categoria_id, subcategoria_id, embalagem, url, external_id)"
                     " VALUES (?,?,?,?,?,?,?,?,?)",
                     (familia_id, nome, marca, descricao, categoria_id, subcategoria_id,
-                     package or "", rep_p.get("url") or "", rep_p["id"]),
+                     package or "", rep_p.get("url") or "", str(rep_p["id"])),
                 ).lastrowid
                 created += 1
 
             for p, meta in items:
                 vrow = conn.execute(
                     "SELECT id FROM variantes WHERE produto_id=? AND external_id=?",
-                    (produto_id, p["id"]),
+                    (produto_id, str(p["id"])),
                 ).fetchone()
                 if vrow:
                     vid = vrow["id"]
@@ -260,7 +298,7 @@ def sync_crawler() -> dict:
                         (produto_id, p.get("sku") or "", p.get("ean") or "",
                          p.get("price") or 0, p.get("pix_price"), p.get("old_price"),
                          p.get("pix_price"), p.get("installment") or "",
-                         p.get("url") or "", p["id"], extract_brand(p) or (p.get("brand") or "")),
+                         p.get("url") or "", str(p["id"]), extract_brand(p) or (p.get("brand") or "")),
                     ).lastrowid
                 remap[p["id"]] = vid
 
@@ -295,7 +333,7 @@ def sync_crawler() -> dict:
             conn.execute(
                 f"DELETE FROM variantes WHERE produto_id=? AND external_id IS NOT NULL"
                 f" AND external_id NOT IN ({placeholders})",
-                [produto_id] + list(current_external),
+                [produto_id] + [str(x) for x in current_external],
             )
 
         # Preserva cotações/histórico: remapeia antigos ids do crawler para

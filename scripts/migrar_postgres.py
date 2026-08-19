@@ -1,19 +1,23 @@
-"""Migra os dados do SQLite (catálogo/cotações) para o PostgreSQL.
+"""Migra os dados do SQLite (catálogo/cotações + crawler) para o PostgreSQL.
 
 Fluxo:
 1. Conecta no SQLite (default: `catalog_server/data/server.db`) e no Postgres
    (`--pg-url`; default: lê `DATABASE_URL` do ambiente).
-2. Opcionalmente aplica o schema (`scripts/postgres_schema.sql`) antes do
-   import (`--apply-schema`).
+2. Opcionalmente aplica o baseline + migrações pendentes via runner PG
+   (`scripts.pg_migrations`; o baseline usa `scripts/postgres_schema.sql`) antes
+   do import (`--apply-schema`).
 3. Desativa as FKs no Postgres (`session_replication_role=replica`), copia
    cada tabela em lotes de 5000 linhas, reativa as FKs e ajusta as sequences
    (`setval`) para o maior id importado.
 4. Confere a contagem de linhas de cada tabela entre origem e destino.
+5. Se o banco do scraper (`--crawler-db`; default `database/crawler.db`)
+   existir, aplica o schema das tabelas do scraper e migra os dados também.
 
 Uso:
     .venv\\Scripts\\python.exe scripts\\migrar_postgres.py                # server.db real
     .venv\\Scripts\\python.exe scripts\\migrar_postgres.py --db <path>    # banco específico
     .venv\\Scripts\\python.exe scripts\\migrar_postgres.py --apply-schema
+    .venv\\Scripts\\python.exe scripts\\migrar_postgres.py --no-crawler   # não migra crawler.db
     .venv\\Scripts\\python.exe scripts\\migrar_postgres.py --pg-url postgresql+psycopg://...
 """
 from __future__ import annotations
@@ -31,7 +35,12 @@ PROJECT = Path(__file__).resolve().parent.parent
 if str(PROJECT) not in sys.path:
     sys.path.insert(0, str(PROJECT))
 
-from catalog_server.config import SYSTEM_DB  # noqa: E402
+from catalog_server.config import CATALOG_DB, SYSTEM_DB  # noqa: E402
+
+from app.database.schema_pg import (  # noqa: E402
+    PRODUCT_ATTRIBUTES_PG_CREATE,
+    SCRAPER_PG_CREATE,
+)
 
 BATCH = 5000
 
@@ -56,13 +65,26 @@ def listar_tabelas(sq: sqlite3.Connection) -> list[str]:
     return [r[0] for r in rows if r[0] not in TABELAS_SKIP]
 
 
-def aplicar_schema(pg: psycopg.Connection, schema_file: Path) -> None:
-    print(f"[schema] aplicando {schema_file} ...")
-    stmts = schema_file.read_text(encoding="utf-8")
+def aplicar_schema_scraper(pg: psycopg.Connection) -> None:
+    """Cria as tabelas do scraper no Postgres (idempotente)."""
+    print("[schema] criando tabelas do scraper ...")
     pg.autocommit = True
     with pg.cursor() as cur:
-        cur.execute(stmts)
+        for stmt in SCRAPER_PG_CREATE + PRODUCT_ATTRIBUTES_PG_CREATE:
+            cur.execute(stmt)
     pg.autocommit = False
+    print("[schema] scraper OK")
+
+
+def aplicar_schema_runner(pg_url: str, schema_file: Path | None = None) -> None:
+    """Aplica o baseline + migrações pendentes via runner PG."""
+    from scripts.pg_migrations import runner as pgm
+
+    if schema_file is not None:
+        pgm.SCHEMA_FILE = Path(schema_file)
+    print(f"[schema] aplicando baseline + migrações ({pgm.SCHEMA_FILE}) ...")
+    applied = pgm.apply(pg_url)
+    print(f"[schema] versões aplicadas: {applied}")
     print("[schema] OK")
 
 
@@ -138,6 +160,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pg-url", default=None, help="URL Postgres (default: DATABASE_URL)")
     ap.add_argument("--apply-schema", action="store_true", help="aplica postgres_schema.sql antes")
     ap.add_argument("--schema-file", default=str(PROJECT / "scripts" / "postgres_schema.sql"))
+    ap.add_argument("--crawler-db", default=None, help="SQLite do scraper (default: crawler.db)")
+    ap.add_argument("--no-crawler", action="store_true", help="não migra o crawler.db")
     args = ap.parse_args(argv)
 
     sqlite_path = Path(args.db) if args.db else Path(SYSTEM_DB)
@@ -145,6 +169,8 @@ def main(argv: list[str] | None = None) -> int:
     if not pg_url:
         print("ERRO: informe --pg-url ou defina DATABASE_URL", file=sys.stderr)
         return 2
+
+    crawler_path = Path(args.crawler_db) if args.crawler_db else Path(CATALOG_DB)
 
     print(f"[origem ] SQLite  : {sqlite_path}")
     print(f"[destino] Postgres: {pg_url}")
@@ -157,10 +183,14 @@ def main(argv: list[str] | None = None) -> int:
     tabelas = listar_tabelas(sq)
     print(f"[info] {len(tabelas)} tabelas a copiar")
 
+    ok = True
     try:
         with psycopg.connect(pg_dsn(pg_url), row_factory=dict_row) as pg:
             if args.apply_schema:
-                aplicar_schema(pg, Path(args.schema_file))
+                aplicar_schema_runner(pg_url, Path(args.schema_file))
+
+            if not args.no_crawler and crawler_path.exists():
+                aplicar_schema_scraper(pg)
 
             # desativa FKs durante o import (evita violação por ordem de carga)
             pg.autocommit = True
@@ -181,6 +211,31 @@ def main(argv: list[str] | None = None) -> int:
 
             ajustar_sequences(pg, tabelas)
             ok = conferir(sq, pg, tabelas)
+
+            if not args.no_crawler and crawler_path.exists():
+                sq_crawler = sqlite3.connect(crawler_path)
+                try:
+                    tabelas_crawler = listar_tabelas(sq_crawler)
+                    print(f"[crawler] {len(tabelas_crawler)} tabelas a copiar")
+                    pg.commit()
+                    pg.autocommit = True
+                    with pg.cursor() as cur:
+                        cur.execute("SET session_replication_role = replica")
+                    pg.autocommit = False
+                    for nome in tabelas_crawler:
+                        print(f"[import] crawler/{nome} ...")
+                        n = copiar_tabela(sq_crawler, pg, nome)
+                        print(f"  {nome}: {n} linhas")
+                    pg.commit()
+                    pg.autocommit = True
+                    with pg.cursor() as cur:
+                        cur.execute("SET session_replication_role = DEFAULT")
+                    pg.autocommit = False
+                    ajustar_sequences(pg, tabelas_crawler)
+                    ok_crawler = conferir(sq_crawler, pg, tabelas_crawler)
+                    ok = ok and ok_crawler
+                finally:
+                    sq_crawler.close()
     finally:
         sq.close()
 
