@@ -21,25 +21,25 @@ TEST_PG_URL = os.getenv("TEST_PG_URL", "")
 
 @pytest.fixture(scope="session")
 def pg_schema():
-    """Aplica o schema Postgres (scripts/postgres_schema.sql) uma vez por sessão."""
+    """Aplica o schema Postgres (baseline + migrações) uma vez por sessão."""
     if not TEST_PG_URL:
         return None
     import sqlalchemy
 
     engine = sqlalchemy.create_engine(TEST_PG_URL)
-    schema = (
-        (__import__("pathlib").Path(__file__).resolve().parent.parent / "scripts" / "postgres_schema.sql")
-        .read_text(encoding="utf-8")
-    )
     with engine.connect() as conn:
         conn.exec_driver_sql("DROP SCHEMA public CASCADE")
         conn.exec_driver_sql("CREATE SCHEMA public")
-        for stmt in schema.split(";"):
-            stmt = "\n".join(
-                ln for ln in stmt.splitlines() if not ln.strip().startswith("--")
-            ).strip()
-            if stmt:
-                conn.exec_driver_sql(stmt)
+        conn.commit()
+    engine.dispose()
+
+    from scripts.pg_migrations.runner import apply as pg_apply
+
+    applied = pg_apply(TEST_PG_URL)
+    assert applied, "nenhuma migração aplicada no banco de teste PG"
+
+    engine = sqlalchemy.create_engine(TEST_PG_URL)
+    with engine.connect() as conn:
         # Seeds replicados das migrações SQLite (estado pós-migração):
         conn.exec_driver_sql("INSERT INTO depositos (nome) VALUES ('Matriz')")
         conn.exec_driver_sql("INSERT INTO tabelas_preco (nome, tipo) VALUES ('Tabela Padrão', 'varejo')")

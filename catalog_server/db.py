@@ -32,9 +32,21 @@ _MIGRATED_LOCK = threading.Lock()
 
 
 def _ensure_migrations(db_path: Path = SYSTEM_DB) -> None:
-    """Aplica migrações pendentes uma única vez por processo/banco."""
+    """Aplica migrações pendentes uma única vez por processo/banco.
+
+    Com `DATABASE_URL` usa o runner PG (`scripts.pg_migrations`); senão, o
+    runner SQLite (`catalog_server.migrations`).
+    """
     if _PG:
-        return  # schema Postgres é aplicado por scripts/migrar_postgres.py
+        with _MIGRATED_LOCK:
+            key = f"pg:{DATABASE_URL}"
+            if key in _MIGRATED:
+                return
+            from scripts.pg_migrations.runner import apply as pg_apply
+
+            pg_apply(DATABASE_URL)
+            _MIGRATED.add(key)
+        return
     with _MIGRATED_LOCK:
         if db_path in _MIGRATED:
             return
@@ -81,7 +93,9 @@ def _ensure_fts(db_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # O HTML cru das páginas baixadas é volumoso (centenas de KB por página).
 # Mantê-lo no mesmo arquivo do catálogo/ERP infla o DB e degrada o
-# desempenho das consultas — por isso ele fica num banco dedicado.
+# desempenho das consultas — por isso ele fica num banco dedicado, FORA da
+# estrutura da aplicação (em database/server_cache.db), usado apenas pelos
+# scripts de scraper.
 CACHE_SCHEMA = """
 PRAGMA journal_mode = WAL;
 

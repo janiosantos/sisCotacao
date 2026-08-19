@@ -735,8 +735,12 @@ A tela de PDV foi projetada para uso sem mouse. Os atalhos são:
 
 ```bash
 .venv\Scripts\python.exe scripts\backup_db.py
-.venv\Scripts\python.exe scripts\backup_db.py --incluir-cache   # inclui o cache de 8,6 GB
+.venv\Scripts\python.exe scripts\backup_db.py --incluir-cache   # inclui o cache de ~8 GB
 ```
+
+O `server_cache.db` vive em `database/` (fora da estrutura da aplicação), é
+usado apenas pelos scripts de scraper e fica fora do backup padrão — use
+`--incluir-cache` apenas quando precisar dele.
 
 **Baseline de qualidade dos dados** (contagens + métricas em JSON):
 
@@ -762,8 +766,23 @@ compatibilidade `catalog_server/pgsql.py` quando `DATABASE_URL` está
 configurada, traduzindo o SQL dos repositórios (escritos para SQLite) para o
 dialeto Postgres na hora da execução (`?`→`%s`, `datetime('now')`→`to_char`,
 `INSERT OR IGNORE`→`ON CONFLICT DO NOTHING`, `LIKE ... COLLATE NOCASE`→`ILIKE`,
-`GROUP_CONCAT`→`string_agg`, etc.). As migrações SQLite não rodam no PG: o
-schema é aplicado pelos scripts de migração.
+`GROUP_CONCAT`→`string_agg`, etc.).
+
+O schema do Postgres evolui por **migrações versionadas** próprias
+(`scripts/pg_migrations/`): a versão `0052_baseline_postgres` aplica o
+`scripts/postgres_schema.sql` (gerado das 52 migrações SQLite) + o schema do
+scraper; mudanças futuras entram como arquivos `0053+` em
+`scripts/pg_migrations/versions/`, aplicados incrementalmente e registrados na
+tabela `schema_migrations`. O `init_db` (startup do servidor) e o
+`migrar_postgres.py --apply-schema` aplicam as pendentes automaticamente.
+
+```bash
+# CLI do runner PG:
+$env:DATABASE_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog"
+.venv\Scripts\python.exe -m scripts.pg_migrations status
+.venv\Scripts\python.exe -m scripts.pg_migrations check
+.venv\Scripts\python.exe -m scripts.pg_migrations apply
+```
 
 ```bash
 docker compose up -d db
