@@ -170,7 +170,7 @@ class PgRow:
         return self._values[self._index(key)]
 
     def __iter__(self):
-        return iter(self._cols)
+        return iter(self._values)
 
     def __len__(self) -> int:
         return len(self._cols)

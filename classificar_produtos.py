@@ -22,7 +22,6 @@ import argparse
 import csv
 import logging
 import shutil
-import sqlite3
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -35,11 +34,13 @@ sys.path.insert(0, str(ROOT))
 
 from catalog_server import classification as C  # noqa: E402
 from catalog_server import categorias  # noqa: E402
-from catalog_server.db import SYSTEM_DB  # noqa: E402
+from catalog_server.config import DATABASE_URL  # noqa: E402
+from catalog_server.db import SYSTEM_DB, system_conn  # noqa: E402
 from catalog_server.services import parse_url_service  # noqa: E402
 from catalog_server import source_cache  # noqa: E402
 
 DB = Path(SYSTEM_DB)
+_IS_PG = bool(DATABASE_URL)
 _LOG_DIR = ROOT / "logs"
 
 _SEM_BREADCRUMB = ("casamattos",)
@@ -47,6 +48,8 @@ _ONLINE_HOSTS = ("anhangueraferramentas", "casadosparafusos", "casadoeletricista
 
 
 def _backup() -> str:
+    if _IS_PG:
+        return "Postgres (backup não se aplica a arquivo)"
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = DB.with_name(f"server_backup_classificar_{ts}.db")
     shutil.copy2(DB, dest)
@@ -86,17 +89,13 @@ def _processar(pro: dict, apply: bool):
     if not cat:
         return pro["id"], "sem_classificacao", "", "", url
     if apply:
-        conn = sqlite3.connect(DB, timeout=30)
-        try:
+        with system_conn() as conn:
             categoria_id, subcategoria_id = categorias.resolve(conn, cat, sub)
             conn.execute(
                 "UPDATE produtos_cadastro SET categoria_id=?, subcategoria_id=?,"
-                " atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+                " atualizado_em=datetime('now') WHERE id=?",
                 (categoria_id, subcategoria_id, pro["id"]),
             )
-            conn.commit()
-        finally:
-            conn.close()
     return pro["id"], "ok", cat, sub, url
 
 
@@ -110,21 +109,19 @@ def main() -> None:
     ap.add_argument("--only-online", action="store_true")
     args = ap.parse_args()
 
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
-    try:
-        rows = conn.execute(
+    rows: list[dict] = []
+    with system_conn() as conn:
+        for r in conn.execute(
             """SELECT p.id, p.nome, p.marca,
                       (SELECT v.url FROM variantes v
                         WHERE v.produto_id = p.id AND v.url <> '' LIMIT 1) AS url
                FROM produtos_cadastro p
                WHERE p.categoria_id IS NULL
                ORDER BY p.id"""
-        ).fetchall()
-    finally:
-        conn.close()
+        ):
+            rows.append(dict(r))
 
-    pros = [dict(r) for r in rows]
+    pros = rows
     offline = [p for p in pros if not _precisa_rede(p["url"] or "")]
     online = [p for p in pros if _precisa_rede(p["url"] or "")]
     if args.only_offline:

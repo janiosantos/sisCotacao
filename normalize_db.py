@@ -18,8 +18,34 @@ from __future__ import annotations
 import argparse
 import re
 import sqlite3
+import sys
+from contextlib import contextmanager
+from pathlib import Path
 
-DB = r"C:\Users\jpsantos\Documents\Projetos\ecommerce_scraper\catalog_server\data\server.db"
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+
+from catalog_server.config import DATABASE_URL  # noqa: E402
+from catalog_server.db import SYSTEM_DB, system_conn  # noqa: E402
+
+DB = str(SYSTEM_DB)
+_IS_PG = bool(DATABASE_URL)
+
+
+@contextmanager
+def _open_db(db_path: str):
+    """Conexão do script: shim Postgres (quando configurado) ou SQLite."""
+    if _IS_PG:
+        with system_conn() as conn:
+            yield conn
+        return
+    conn = sqlite3.connect(db_path, timeout=30)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
 
 # ---------------------------------------------------------------------------
 # Title case / normalização de nomes
@@ -319,9 +345,11 @@ def main() -> None:
     parser.add_argument("--db", default=DB)
     args = parser.parse_args()
 
-    conn = sqlite3.connect(args.db, timeout=30)
-    conn.row_factory = sqlite3.Row
+    with _open_db(args.db) as conn:
+        _main(conn, args)
 
+
+def _main(conn, args) -> None:
     brands = load_brands(conn)
     print(f"marcas conhecidas: {len(brands)}")
     brand_patterns = [(b, re.compile(rf"\b{re.escape(b)}\b", re.I))
@@ -384,13 +412,11 @@ def main() -> None:
 
     if not args.apply:
         print("\n[dry-run] Nada foi alterado. Rode com --apply para aplicar.")
-        conn.close()
         return
 
     # ---------- 3. APLICA ----------
     print("\n== APLICANDO ==")
     stats = {"deleted": 0, "variants": 0, "images": 0, "quotes": 0}
-    conn.execute("BEGIN")
     try:
         for c in comps:
             st = apply_merge(conn, c)
@@ -439,7 +465,6 @@ def main() -> None:
     print(f"produtos restantes: {n_prod} | índice FTS: {n_fts}")
     print("merge:", stats)
     print(f"nomes normalizados: {n_name} | colisões unidas: {n_coll} | nomes diferenciados: {n_disamb}")
-    conn.close()
 
 
 if __name__ == "__main__":

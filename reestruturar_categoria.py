@@ -12,17 +12,21 @@ from __future__ import annotations
 import argparse
 import shutil
 import sys
-import sqlite3
 from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-from catalog_server.db import SYSTEM_DB  # noqa: E402
+from catalog_server.config import DATABASE_URL  # noqa: E402
+from catalog_server.db import SYSTEM_DB, system_conn  # noqa: E402
+
+_IS_PG = bool(DATABASE_URL)
 
 
 def _backup() -> str:
+    if _IS_PG:
+        return "Postgres (backup não se aplica a arquivo)"
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = Path(SYSTEM_DB).with_name(f"server_backup_categoria_{ts}.db")
     shutil.copy2(SYSTEM_DB, dest)
@@ -51,6 +55,14 @@ def main() -> None:
     ap.add_argument("--dry", action="store_true", help="não grava nada")
     args = ap.parse_args()
 
+    if _IS_PG:
+        # No Postgres o schema já é normalizado (categoria_id/subcategoria_id).
+        print("Schema já normalizado no Postgres (categorias/subcategorias). "
+              "Este script é obsoleto — nada a fazer.")
+        return
+
+    import sqlite3
+
     with sqlite3.connect(SYSTEM_DB, timeout=30) as conn:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(produtos_cadastro)").fetchall()}
     if "categoria" not in cols:
@@ -58,12 +70,14 @@ def main() -> None:
               "obsoleto — nada a fazer.")
         return
 
-    with sqlite3.connect(SYSTEM_DB, timeout=30) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT id, categoria, subcategoria FROM produtos_cadastro"
-            " WHERE categoria IS NOT NULL AND categoria != ''"
-        ).fetchall()
+    with system_conn() as conn:
+        rows = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT id, categoria, subcategoria FROM produtos_cadastro"
+                " WHERE categoria IS NOT NULL AND categoria != ''"
+            )
+        ]
 
     mudados = 0
     amostras: list[tuple[str, str, str, str]] = []
@@ -84,10 +98,10 @@ def main() -> None:
         backup = _backup()
         print(f"backup: {backup}")
         print(f"aplicando {len(updates)} ajustes...")
-        with sqlite3.connect(SYSTEM_DB, timeout=60) as w:
+        with system_conn() as w:
             w.executemany(
                 "UPDATE produtos_cadastro SET categoria=?, subcategoria=?,"
-                " atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+                " atualizado_em=datetime('now') WHERE id=?",
                 updates,
             )
         print("ok.")

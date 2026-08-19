@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import logging
 import re
-import sqlite3
 import sys
 import threading
 import time
@@ -33,7 +32,7 @@ import requests
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-from catalog_server.config import SYSTEM_DB
+from catalog_server.db import system_conn
 from catalog_server.services import parse_url_service
 
 SITES: dict[str, dict] = {
@@ -97,16 +96,13 @@ def descobrir_produtos(sess: requests.Session, site: dict) -> list[str]:
 
 def carregar_cadastrados() -> set[str]:
     """Urls de produtos já cadastrados no server.db (produto ou variação)."""
-    conn = sqlite3.connect(f"file:{SYSTEM_DB.as_posix()}?mode=ro", uri=True, timeout=10)
-    conn.row_factory = sqlite3.Row
     try:
-        urls = {r["url"] for r in conn.execute("SELECT url FROM produtos_cadastro WHERE url <> ''")}
-        urls |= {r["url"] for r in conn.execute("SELECT url FROM variantes WHERE url <> ''")}
-        return urls
-    except sqlite3.OperationalError:
+        with system_conn() as conn:
+            urls = {r["url"] for r in conn.execute("SELECT url FROM produtos_cadastro WHERE url <> ''")}
+            urls |= {r["url"] for r in conn.execute("SELECT url FROM variantes WHERE url <> ''")}
+            return urls
+    except Exception:  # noqa: BLE001 — SQLite/PG ausente não deve parar o lote
         return set()
-    finally:
-        conn.close()
 
 
 class Stats:

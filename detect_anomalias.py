@@ -23,10 +23,14 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import sqlite3
 import unicodedata
+from typing import Any
 
-DB = r"C:\Users\jpsantos\Documents\Projetos\ecommerce_scraper\catalog_server\data\server.db"
+from catalog_server.config import DATABASE_URL
+from catalog_server.db import SYSTEM_DB, system_conn
+
+DB = str(SYSTEM_DB)
+_IS_PG = bool(DATABASE_URL)
 
 _BITOLA_KEYS = {"bitola", "diametro"}
 
@@ -46,7 +50,7 @@ def _ratio(min_p: float, max_p: float) -> float:
     return max_p / min_p
 
 
-def ean_duplicatas(conn: sqlite3.Connection, limite: float) -> list[dict]:
+def ean_duplicatas(conn: Any, limite: float) -> list[dict]:
     rows = conn.execute(
         """
         SELECT v.ean, v.id AS variante_id, v.sku, v.preco, v.marca,
@@ -92,7 +96,7 @@ def ean_duplicatas(conn: sqlite3.Connection, limite: float) -> list[dict]:
     return out
 
 
-def bitola_no_produto(conn: sqlite3.Connection, limite: float) -> list[dict]:
+def bitola_no_produto(conn: Any, limite: float) -> list[dict]:
     bitola_ids = [
         a["id"]
         for a in conn.execute("SELECT id, nome FROM familia_atributos").fetchall()
@@ -163,20 +167,16 @@ def main() -> None:
     ap.add_argument("--json", default="", help="opcional: também exporta o relatório em JSON")
     args = ap.parse_args()
 
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
-    try:
+    with system_conn() as conn:
         por_ean = ean_duplicatas(conn, args.ratio)
         por_bitola = bitola_no_produto(conn, args.ratio)
-    finally:
-        conn.close()
 
     todos = por_ean + por_bitola
     suspeitos = [g for g in todos if g["anomalia"]]
 
     print("=" * 78)
     print("ANOMALIAS DE PREÇO — revisão manual")
-    print(f"Limite de razão: {args.ratio}x | base: {DB}")
+    print(f"Limite de razão: {args.ratio}x | base: {DB}" + (" (Postgres)" if _IS_PG else ""))
     print("=" * 78)
 
     def imprime_grupo(g):

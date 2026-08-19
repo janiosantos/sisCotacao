@@ -18,34 +18,38 @@ from __future__ import annotations
 import argparse
 import logging
 import shutil
-import sqlite3
 import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-from catalog_server.db import SYSTEM_DB  # noqa: E402
+from catalog_server.config import DATABASE_URL  # noqa: E402
+from catalog_server.db import SYSTEM_DB, system_conn  # noqa: E402
 from catalog_server.services import parse_url_service  # noqa: E402
 from detect_anomalias import bitola_no_produto, ean_duplicatas  # noqa: E402
 
 DB = Path(SYSTEM_DB)
+_IS_PG = bool(DATABASE_URL)
 _LOG_DIR = ROOT / "logs"
 _LOG = _LOG_DIR / "revalidar_precos.log"
 
 
 def _backup() -> str:
+    if _IS_PG:
+        return "Postgres (backup não se aplica a arquivo)"
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = DB.with_name(f"server_backup_revalidar_{ts}.db")
     shutil.copy2(DB, dest)
     return str(dest)
 
 
-def _alvos(conn: sqlite3.Connection, ratio: float) -> set[int]:
+def _alvos(conn: Any, ratio: float) -> set[int]:
     alvos: set[int] = set()
     for grupo in ean_duplicatas(conn, ratio) + bitola_no_produto(conn, ratio):
         if not grupo["anomalia"]:
@@ -80,15 +84,11 @@ def _processar(valor_id: int, url: str, apply: bool) -> tuple[int, str | None, f
             pix = data.get("pix_price") or price
             old = data.get("old_price")
             inst = data.get("installment") or ""
-            conn2 = sqlite3.connect(DB, timeout=30)
-            try:
+            with system_conn() as conn2:
                 conn2.execute(
                     "UPDATE variantes SET preco=?, preco_promocional=?, old_price=?, pix_price=?, installment=? WHERE id=?",
                     (round(price, 2), round(pix, 2), old, round(pix, 2), inst, valor_id),
                 )
-                conn2.commit()
-            finally:
-                conn2.close()
         return valor_id, "ok", price
     except Exception as exc:  # noqa: BLE001
         return valor_id, f"erro:{type(exc).__name__}:{exc}", None
@@ -103,23 +103,22 @@ def main() -> None:
     ap.add_argument("--dry", action="store_true", help="não grava nada (só verifica)")
     args = ap.parse_args()
 
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
-    try:
+    with system_conn() as conn:
         ids = _alvos(conn, args.ratio)
         if not ids:
             print("Nenhuma variante suspeita.")
             return
         placeholders = ",".join("?" * len(ids))
-        rows = conn.execute(
-            f"""SELECT v.id, v.url, v.sku FROM variantes v
-                WHERE v.id IN ({placeholders}) AND v.url <> ''""",
-            list(ids),
-        ).fetchall()
-    finally:
-        conn.close()
+        rows = [
+            dict(r)
+            for r in conn.execute(
+                f"""SELECT v.id, v.url, v.sku FROM variantes v
+                    WHERE v.id IN ({placeholders}) AND v.url <> ''""",
+                list(ids),
+            )
+        ]
 
-    alvos = [dict(r) for r in rows]
+    alvos = rows
     sem_url = len(ids) - len(alvos)
     if args.offset:
         alvos = alvos[args.offset:]

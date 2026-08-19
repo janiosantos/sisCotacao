@@ -22,10 +22,15 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 from catalog_server import abc  # noqa: E402
+from catalog_server.config import DATABASE_URL  # noqa: E402
 from catalog_server.db import SYSTEM_DB  # noqa: E402
+
+_IS_PG = bool(DATABASE_URL)
 
 
 def _backup() -> str:
+    if _IS_PG:
+        return "Postgres (backup não se aplica a arquivo)"
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = Path(SYSTEM_DB).with_name(f"server_backup_abc_{ts}.db")
     shutil.copy2(SYSTEM_DB, dest)
