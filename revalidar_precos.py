@@ -76,7 +76,7 @@ class Stats:
 
 def _processar(valor_id: int, url: str, apply: bool) -> tuple[int, str | None, float | None]:
     try:
-        data = parse_url_service.parse_url(url)
+        data = parse_url_service.parse_url(url, use_cache=True)
         price = data.get("price")
         if not price or price <= 0:
             return valor_id, "sem_preco", None

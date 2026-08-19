@@ -113,7 +113,7 @@ def main() -> None:
     t0 = time.time()
     for i, url in enumerate(pendentes, 1):
         try:
-            criado = parse_url_service.criar_produto_por_url(url)
+            criado = parse_url_service.criar_produto_por_url(url, use_cache=True)
             ok += 1
             log.info(
                 "[%d/%d] OK id=%s fotos=%s | %s",

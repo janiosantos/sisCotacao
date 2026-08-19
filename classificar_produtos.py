@@ -37,7 +37,6 @@ from catalog_server import categorias  # noqa: E402
 from catalog_server.config import DATABASE_URL  # noqa: E402
 from catalog_server.db import SYSTEM_DB, system_conn  # noqa: E402
 from catalog_server.services import parse_url_service  # noqa: E402
-from catalog_server import source_cache  # noqa: E402
 
 DB = Path(SYSTEM_DB)
 _IS_PG = bool(DATABASE_URL)
@@ -85,7 +84,6 @@ def _processar(pro: dict, apply: bool):
 
     cat = C.categoria(items)
     sub = C.subcategoria(items)
-    source_cache.referenciar(url, produto_id=pro["id"])
     if not cat:
         return pro["id"], "sem_classificacao", "", "", url
     if apply:

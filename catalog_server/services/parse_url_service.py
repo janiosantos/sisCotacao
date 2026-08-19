@@ -16,6 +16,9 @@ O fluxo é dividido em duas etapas:
 1. `parse_url(url)` — só lê a página e devolve um "preview" dos dados
    (usado para o usuário conferir antes de confirmar).
 2. `criar_produto_por_url(url)` — reparseia e cria tudo, devolvendo o id.
+
+Por padrão o serviço NÃO usa o cache de páginas-fonte (hot path da API). Os
+scripts de scraper passam `use_cache=True` para reaproveitar o `server_cache.db`.
 """
 from __future__ import annotations
 
@@ -86,11 +89,14 @@ def _quote_url(url: str) -> str:
     return quote(url, safe=":/?#[]@!$&'()*+,;=%~-._")
 
 
-def _fetch_html(url: str, use_cache: bool = True) -> tuple[str, str]:
-    """Baixa a página (ou usa a fonte salva no cache, se disponível).
+def _fetch_html(url: str, use_cache: bool = False) -> tuple[str, str]:
+    """Baixa a página (ou usa a fonte salva no cache, se habilitado).
 
-    Devolve (html, url_final). Quando vem do cache, `url_final` é a própria URL
-    solicitada; a fonte é armazenada automaticamente em `paginas_fonte`.
+    O cache de páginas-fonte (`server_cache.db`) é exclusivo dos scripts de
+    scraper (crawl_sites, crawl_casadosparafusos, revalidar_precos): o hot path
+    da API não lê nem grava o cache. Quando vem do cache, `url_final` é a
+    própria URL solicitada; a fonte é armazenada automaticamente em
+    `paginas_fonte`.
     """
     if use_cache:
         cached = source_cache.buscar(url)
@@ -106,7 +112,7 @@ def _fetch_html(url: str, use_cache: bool = True) -> tuple[str, str]:
     return html, resp.url
 
 
-def parse_url(url: str) -> dict:
+def parse_url(url: str, use_cache: bool = False) -> dict:
     """Baixa a página e extrai os dados estruturados do produto."""
     url = (url or "").strip()
     if not url:
@@ -114,7 +120,7 @@ def parse_url(url: str) -> dict:
     if not url.startswith(("http://", "https://")):
         raise ParseError("URL inválida: informe um endereço completo (https://...).")
 
-    html, final_url = _fetch_html(url)
+    html, final_url = _fetch_html(url, use_cache=use_cache)
     data = _parser_for(url).parse(html, url=url)
     if not data.get("name"):
         raise ParseError(
@@ -259,9 +265,14 @@ def _baixar_imagem(produto_id: int, img_url: str, page_url: str) -> Path | None:
         return None
 
 
-def criar_produto_por_url(url: str, categoria: str = "", subcategoria: str = "") -> dict:
+def criar_produto_por_url(
+    url: str,
+    categoria: str = "",
+    subcategoria: str = "",
+    use_cache: bool = False,
+) -> dict:
     """Cria família, produto, variação, atributos e fotos a partir de uma URL."""
-    data = parse_url(url)
+    data = parse_url(url, use_cache=use_cache)
     attrs = data.get("attrs") or {}
     family_key = attrs.get("family")
     fname = FAMILY_DISPLAY.get(family_key) if family_key else DEFAULT_FAMILY
@@ -322,8 +333,10 @@ def criar_produto_por_url(url: str, categoria: str = "", subcategoria: str = "")
 
         fts.sync_product(conn, produto_id)
 
-    # Vincula a página-fonte já salva no cache ao produto/variante criados.
-    source_cache.referenciar(url_final, produto_id=produto_id, variante_id=vid)
+    # Vincula a página-fonte já salva no cache ao produto/variante criados
+    # (apenas quando o scraper usou o cache; o hot path da API não toca nele).
+    if use_cache:
+        source_cache.referenciar(url_final, produto_id=produto_id, variante_id=vid)
 
     # Downloads de imagem ficam FORA da transação: não seguram o lock de
     # escrita do SQLite durante requisições de rede (evita "database is locked"

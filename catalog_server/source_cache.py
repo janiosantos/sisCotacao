@@ -4,6 +4,10 @@ O HTML cru é volumoso; para não inflar/degradar o banco do catálogo/ERP, ele 
 guardado num arquivo separado (`server_cache.db`, ver `db.CACHE_DB`), na tabela
 `paginas_fonte` (coluna `html`), indexado por URL. Assim, consultas futuras
 (breadcrumb, preços, atributos) leem a fonte já salva sem rebaixar a página.
+
+Uso exclusivo dos scripts de scraper (crawl_sites, crawl_casadosparafusos,
+revalidar_precos): o hot path da API (`parse_url_service`) não lê nem grava o
+cache — ele permanece fora da aplicação (SQLite, não migrado para o Postgres).
 """
 from __future__ import annotations
 

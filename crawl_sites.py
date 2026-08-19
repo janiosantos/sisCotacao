@@ -134,7 +134,7 @@ def _processar(log: logging.Logger, stats: Stats, site: str, url: str, delay: fl
     ultimo: Exception | None = None
     for tentativa in (1, 2):
         try:
-            criado = parse_url_service.criar_produto_por_url(url)
+            criado = parse_url_service.criar_produto_por_url(url, use_cache=True)
             stats.add(site, True)
             log.info(
                 "[OK] id=%s fotos=%s | %s",
