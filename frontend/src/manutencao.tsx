@@ -26,7 +26,6 @@ export function sinalizarFalhaConexao(): void {
   if (!offline) {
     offline = true;
     notificar();
-    iniciarPolling();
   }
 }
 
@@ -34,32 +33,37 @@ export function sinalizarFalhaConexao(): void {
 export function sinalizarSucesso(): void {
   if (!offline) return;
   offline = false;
-  pararPolling();
   notificar();
   // Recuperação automática: recarrega para revalidar sessão e dados.
   location.reload();
 }
 
-function iniciarPolling(): void {
+/**
+ * Monitoramento SEMPRE ligado (não só quando offline): detecta a queda do
+ * backend em ~10s mesmo com o usuário parado numa tela que não faz chamadas.
+ * Pausa quando a aba está oculta para não gastar recursos à toa.
+ */
+export function iniciarMonitoramento(): void {
   if (timer !== null) return;
-  timer = window.setInterval(() => void verificar(), 10000);
+  document.addEventListener("visibilitychange", aoMudarVisibilidade);
+  timer = window.setInterval(() => {
+    if (document.visibilityState === "visible") void verificar();
+  }, 10000);
   void verificar();
 }
 
-function pararPolling(): void {
-  if (timer !== null) {
-    window.clearInterval(timer);
-    timer = null;
-  }
+function aoMudarVisibilidade(): void {
+  // Ao voltar para a aba, checa imediatamente em vez de esperar o próximo tick.
+  if (document.visibilityState === "visible") void verificar();
 }
 
 async function verificar(): Promise<void> {
   try {
     const r = await fetch("/api/pronto", { cache: "no-store" });
     if (r.ok) sinalizarSucesso();
-    else ultimaTentativa = new Date();
+    else sinalizarFalhaConexao();
   } catch {
-    ultimaTentativa = new Date();
+    sinalizarFalhaConexao();
   }
 }
 
@@ -67,6 +71,7 @@ export function Manutencao() {
   const [mostrar, setMostrar] = useState(estaOffline());
 
   useEffect(() => {
+    iniciarMonitoramento();
     const f = () => setMostrar(estaOffline());
     ouvintes.add(f);
     return () => {

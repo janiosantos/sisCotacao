@@ -1,0 +1,12 @@
+{
+  "versao": "v1.6.1",
+  "componentes": ["frontend"],
+  "correcoes": [
+    "Detecção de indisponibilidade levava minutos: agora há monitoramento ativo a cada 10s (mesmo com a tela parada) e timeout de 45s nas requisições, que antes podiam ficar penduradas por minutos"
+  ],
+  "melhorias": [
+    "nginx falha rápido para backend morto (proxy_connect_timeout 5s em vez do padrão de 60s)",
+    "Endpoints de IA com timeout estendido (5 min) para não serem interrompidos indevidamente"
+  ],
+  "recursos": []
+}

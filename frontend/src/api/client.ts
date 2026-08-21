@@ -755,10 +755,41 @@ function getToken(): string | null {
   return _apiToken;
 }
 
-async function request<T>(method: Metodo, path: string, body?: unknown): Promise<T> {
-  const opts: RequestInit = { method, headers: {} as Record<string, string> };
+// Timeout padrão das chamadas: sem isso, uma requisição emitida no momento
+// exato em que o backend cai pode ficar pendurada minutos (padrão do browser)
+// e a detecção de manutenção atrasa demais. Endpoints lentos por design (IA,
+// uploads grandes) passam timeoutMs maior explicitamente.
+const TIMEOUT_PADRAO_MS = 45000;
+
+interface RequestOpts {
+  timeoutMs?: number;
+}
+
+function sinalizarRes(res: Response): void {
+  if ([502, 503, 504].includes(res.status)) {
+    // Backend indisponível (deploy/restart/proxy sem upstream).
+    sinalizarFalhaConexao();
+  } else {
+    // Qualquer resposta válida do backend (mesmo 4xx/5xx de negócio)
+    // prova que ele está no ar.
+    sinalizarSucesso();
+  }
+}
+
+async function request<T>(
+  method: Metodo,
+  path: string,
+  body?: unknown,
+  opts?: RequestOpts,
+): Promise<T> {
+  const opts2: RequestInit = { method, headers: {} as Record<string, string> };
   const tk = getToken();
-  if (tk) (opts.headers as Record<string, string>)["Authorization"] = `Bearer ${tk}`;
+  if (tk) (opts2.headers as Record<string, string>)["Authorization"] = `Bearer ${tk}`;
+  const ctrl = new AbortController();
+  const t = window.setTimeout(
+    () => ctrl.abort(),
+    opts?.timeoutMs ?? TIMEOUT_PADRAO_MS,
+  );
   let url = path;
   if (body !== undefined) {
     if (method === "GET") {
@@ -769,26 +800,21 @@ async function request<T>(method: Metodo, path: string, body?: unknown): Promise
       const qs = params.toString();
       if (qs) url += "?" + qs;
     } else {
-      (opts.headers as Record<string, string>)["Content-Type"] = "application/json";
-      opts.body = JSON.stringify(body);
+      (opts2.headers as Record<string, string>)["Content-Type"] = "application/json";
+      opts2.body = JSON.stringify(body);
     }
   }
   let res: Response;
   try {
-    res = await fetch(url, opts);
+    res = await fetch(url, { ...opts2, signal: ctrl.signal });
   } catch {
-    // Falha de rede/DNS/backend fora do ar → modo manutenção.
+    // Rede/DNS/backend fora do ar ou requisição pendurada além do timeout.
+    window.clearTimeout(t);
     sinalizarFalhaConexao();
     throw new Error("Servidor indisponível");
   }
-  if ([502, 503, 504].includes(res.status)) {
-    // Backend indisponível (deploy/restart/proxy sem upstream).
-    sinalizarFalhaConexao();
-  } else {
-    // Qualquer resposta válida do backend (mesmo 4xx/5xx de negócio)
-    // prova que ele está no ar.
-    sinalizarSucesso();
-  }
+  window.clearTimeout(t);
+  sinalizarRes(res);
   if (!res.ok) {
     if (res.status === 401) {
       // Só força re-login se HAVIA token (expirou). Sem token, deixa o erro
@@ -817,17 +843,33 @@ async function request<T>(method: Metodo, path: string, body?: unknown): Promise
   return (await res.json()) as T;
 }
 
-async function enviarArquivo<T>(path: string, formData: FormData): Promise<T> {
+async function enviarArquivo<T>(
+  path: string,
+  formData: FormData,
+  opts?: RequestOpts,
+): Promise<T> {
   const headers: Record<string, string> = {};
   const tk = getToken();
   if (tk) headers["Authorization"] = `Bearer ${tk}`;
+  const ctrl = new AbortController();
+  const t = window.setTimeout(
+    () => ctrl.abort(),
+    opts?.timeoutMs ?? 180000,
+  );
   let res: Response;
   try {
-    res = await fetch(path, { method: "POST", body: formData, headers });
+    res = await fetch(path, {
+      method: "POST",
+      body: formData,
+      headers,
+      signal: ctrl.signal,
+    });
   } catch {
+    window.clearTimeout(t);
     sinalizarFalhaConexao();
     throw new Error("Servidor indisponível");
   }
+  window.clearTimeout(t);
   if (![502, 503, 504].includes(res.status)) sinalizarSucesso();
   if (!res.ok) {
     let detail = res.statusText;
@@ -914,17 +956,19 @@ export const api = {
     request<HistoricoPreco[]>("GET", "/api/historico-precos" + qs({ produto_id: produtoId })),
   produtosComHistorico: () => request<ProdutoComHistorico[]>("GET", "/api/historico-precos/produtos"),
 
-  // importador IA
+  // importador IA (lento por design — backend permite até 240s no serviço de IA)
   iaHealth: () => request<{ ok: boolean }>("GET", "/api/ia/health"),
-  iaSeed: (reset = false) => request<IASeedResult>("POST", "/api/ia/seed", { reset }),
-  iaExtrairTexto: (texto: string) => request<IAExtrairResult>("POST", "/api/ia/extract", { text: texto }),
+  iaSeed: (reset = false) =>
+    request<IASeedResult>("POST", "/api/ia/seed", { reset }, { timeoutMs: 300000 }),
+  iaExtrairTexto: (texto: string) =>
+    request<IAExtrairResult>("POST", "/api/ia/extract", { text: texto }, { timeoutMs: 300000 }),
   iaExtrairPdf: (file: File) => {
     const fd = new FormData();
     fd.append("file", file);
-    return enviarArquivo<IAExtrairResult>("/api/ia/extract/file", fd);
+    return enviarArquivo<IAExtrairResult>("/api/ia/extract/file", fd, { timeoutMs: 300000 });
   },
   iaMatch: (items: unknown[], topK = 5, cotacaoId?: number) =>
-    request<IAMatchResult>("POST", "/api/ia/match", { items, top_k: topK, cotacao_id: cotacaoId ?? null }),
+    request<IAMatchResult>("POST", "/api/ia/match", { items, top_k: topK, cotacao_id: cotacaoId ?? null }, { timeoutMs: 300000 }),
   iaAplicar: (cotacaoId: number, data: Record<string, unknown>) =>
     request<IAAplicarResult>("POST", "/api/ia/apply", { cotacao_id: cotacaoId, ...data }),
 
