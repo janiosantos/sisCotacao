@@ -27,6 +27,9 @@ services:
       - "8000"
     volumes:
       - /home/jpsantos/siscom/img:/app/images
+      # Manifestos de release direto do checkout do runner — publicações
+      # frontend/schema-only registram no Histórico sem rebuild do backend.
+      - ./releases:/app/releases:ro
     environment:
       - IMAGES_DIR=/app/images
       - CATALOG_HOST=0.0.0.0

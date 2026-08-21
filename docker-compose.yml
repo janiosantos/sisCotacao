@@ -35,6 +35,7 @@ services:
     volumes:
       - ./images:/app/images
       - ./catalog_server:/app/catalog_server
+      - ./releases:/app/releases:ro
     environment:
       - FLASK_ENV=development
       - IMAGES_DIR=/app/images
