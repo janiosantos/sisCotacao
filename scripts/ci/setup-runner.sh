@@ -8,6 +8,9 @@
 # (atenção: tokens de registro expiram em ~1h).
 set -euo pipefail
 
+# O runner do GitHub recusa rodar como root sem esta variável.
+export RUNNER_ALLOW_RUNASROOT=1
+
 RUNNER_DIR=/home/jpsantos/actions-runner
 REPO_URL=https://github.com/janiosantos/sisCotacao
 LABEL=siscom-prod
@@ -29,7 +32,7 @@ fi
 
 mkdir -p "$RUNNER_DIR" && cd "$RUNNER_DIR"
 
-if [ -f config.sh ]; then
+if [ -f .runner ]; then
   echo "Runner já configurado em $RUNNER_DIR (use ./svc.sh para gerenciar)."
 else
   curl -fsSL -o act.tar.gz \
