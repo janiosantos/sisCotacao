@@ -275,7 +275,11 @@ class PgConnection:
 
     def __init__(self, url: str) -> None:
         self._url = url
-        self._engine = sqlalchemy.create_engine(url, pool_pre_ping=True)
+        # connect_timeout curto: com o banco fora do ar a requisição falha
+        # rápido (503 db_indisponivel) em vez de pendurar o worker.
+        self._engine = sqlalchemy.create_engine(
+            url, pool_pre_ping=True, connect_args={"connect_timeout": 3}
+        )
         self._conn = self._engine.raw_connection()
         self.is_pg = True
 

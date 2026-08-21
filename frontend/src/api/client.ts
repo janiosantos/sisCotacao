@@ -741,6 +741,8 @@ export interface CriarProdutoUrlResult {
 // transporte
 // ------------------------------------------------------------------
 
+import { sinalizarFalhaConexao, sinalizarSucesso } from "../manutencao";
+
 let _apiToken: string | null =
   typeof sessionStorage !== "undefined" ? sessionStorage.getItem("sis_token") : null;
 export function setToken(t: string | null): void {
@@ -771,7 +773,22 @@ async function request<T>(method: Metodo, path: string, body?: unknown): Promise
       opts.body = JSON.stringify(body);
     }
   }
-  const res = await fetch(url, opts);
+  let res: Response;
+  try {
+    res = await fetch(url, opts);
+  } catch {
+    // Falha de rede/DNS/backend fora do ar → modo manutenção.
+    sinalizarFalhaConexao();
+    throw new Error("Servidor indisponível");
+  }
+  if ([502, 503, 504].includes(res.status)) {
+    // Backend indisponível (deploy/restart/proxy sem upstream).
+    sinalizarFalhaConexao();
+  } else {
+    // Qualquer resposta válida do backend (mesmo 4xx/5xx de negócio)
+    // prova que ele está no ar.
+    sinalizarSucesso();
+  }
   if (!res.ok) {
     if (res.status === 401) {
       // Só força re-login se HAVIA token (expirou). Sem token, deixa o erro
@@ -804,7 +821,14 @@ async function enviarArquivo<T>(path: string, formData: FormData): Promise<T> {
   const headers: Record<string, string> = {};
   const tk = getToken();
   if (tk) headers["Authorization"] = `Bearer ${tk}`;
-  const res = await fetch(path, { method: "POST", body: formData, headers });
+  let res: Response;
+  try {
+    res = await fetch(path, { method: "POST", body: formData, headers });
+  } catch {
+    sinalizarFalhaConexao();
+    throw new Error("Servidor indisponível");
+  }
+  if (![502, 503, 504].includes(res.status)) sinalizarSucesso();
   if (!res.ok) {
     let detail = res.statusText;
     try {

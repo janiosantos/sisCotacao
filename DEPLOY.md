@@ -224,6 +224,27 @@ Fluxo completo:
 > O gatilho por tag `v*` foi **removido** após a v1.5.0. Publicar é sempre via
 > **Run workflow** — tags passam a ser apenas registro documental, se você quiser.
 
+### Indisponibilidade e modo manutenção
+
+Comportamento previsto quando um serviço fica fora do ar:
+
+| Cenário | O que acontece |
+|---|---|
+| Backend reiniciando (deploy/restart) | nginx devolve 502/503 → SPA entra em **modo manutenção** (overlay "Sistema em manutenção") |
+| Banco fora do ar / em manutenção | Endpoints respondem `503 {"code":"db_indisponivel"}` (`/api/pronto` também 503) → mesmo overlay |
+| Usuário abre o sistema com backend fora | Vê o overlay de manutenção **em vez da tela de login** |
+| Serviço volta | Overlay detecta sozinho (polling `GET /api/pronto` a cada 10s), recarrega a aplicação e some |
+
+- `/api/health` = *liveness* do container (não olha o banco, não causa loop de
+  restart). `/api/pronto` = *readiness* real (executa `SELECT 1`).
+- Conexões com o banco usam `connect_timeout=3s`: falham rápido com 503 em vez
+  de pendurar o worker. Não há pool persistente — quando o banco volta, o
+  backend se recupera sozinho, sem restart.
+- No deploy **com migrações**, o pipeline para o backend antes do DDL
+  (`docker compose stop backend`) e aplica as migrações num container one-off
+  com a imagem nova — usuários veem o banner de manutenção nessa janela.
+  Deploy só-frontend não toca no backend.
+
 ### Autenticação por token (API)
 
 Toda rota `/api/*` (exceto `health`, `login`, `logout`, `primeiro-usuario` e

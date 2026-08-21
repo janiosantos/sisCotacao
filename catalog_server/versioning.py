@@ -37,7 +37,7 @@ def _dsn() -> str:
 def _applied_versions() -> set[int]:
     """Versões registradas em ``schema_migrations`` (read-only; tolera tabela ausente)."""
     try:
-        with psycopg.connect(_dsn()) as conn:
+        with psycopg.connect(_dsn(), connect_timeout=3) as conn:
             rows = conn.execute("SELECT version FROM schema_migrations").fetchall()
         return {int(r[0]) for r in rows}
     except Exception:
@@ -65,7 +65,7 @@ def _versao_key(versao: str) -> tuple[int, ...]:
 def _publicadas() -> set[str]:
     """Versões de release já registradas no log (tolera tabela ausente)."""
     try:
-        with psycopg.connect(_dsn()) as conn:
+        with psycopg.connect(_dsn(), connect_timeout=3) as conn:
             rows = conn.execute(
                 "SELECT DISTINCT versao_release FROM sistema_atualizacoes"
                 " WHERE versao_release IS NOT NULL"
@@ -151,7 +151,7 @@ def _registrar_log(
 ) -> None:
     """Grava o evento de atualização. Falhas de log são ignoradas."""
     try:
-        with psycopg.connect(_dsn()) as conn:
+        with psycopg.connect(_dsn(), connect_timeout=3) as conn:
             conn.execute(
                 """
                 INSERT INTO sistema_atualizacoes
@@ -249,7 +249,7 @@ def apply_updates(
 def listar_log(limite: int = 50) -> list[dict]:
     """Retorna os últimos eventos de atualização (tolerante a tabela ausente)."""
     try:
-        with psycopg.connect(_dsn()) as conn:
+        with psycopg.connect(_dsn(), connect_timeout=3) as conn:
             rows = conn.execute(
                 """
                 SELECT id, executado_em, nivel, versao_app, schema_antes,

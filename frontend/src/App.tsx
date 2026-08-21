@@ -34,6 +34,7 @@ import {
 import { ROUTES } from "./routes";
 import { carregarSessao, entrar, sair, usuarioCorrente } from "./pages/login";
 import { startupAuth } from "./auth";
+import { Manutencao, estaOffline } from "./manutencao";
 import { countItens, injectOverlay as injectCartOverlay, toggle as toggleCart } from "./cart";
 import { Button } from "./ui/ui";
 
@@ -197,7 +198,9 @@ export default function App() {
       const ok = await carregarSessao();
       if (!alive) return;
       setAuthed(ok);
-      if (!ok) startupAuth();
+      // Backend fora do ar: o overlay de manutenção assume; não abre o fluxo
+      // de primeiro acesso nem a tela de login por cima do banner.
+      if (!ok && !estaOffline()) startupAuth();
     })();
     return () => {
       alive = false;
@@ -219,18 +222,30 @@ export default function App() {
   }, [authed, route, hash]);
 
   if (authed === null) {
-    return <div className="min-h-screen bg-gray-100" />;
+    return (
+      <>
+        <div className="min-h-screen bg-gray-100" />
+        <Manutencao />
+      </>
+    );
   }
 
   if (!authed) {
-    return <LoginScreen onLogin={() => setAuthed(true)} />;
+    return (
+      <>
+        <LoginScreen onLogin={() => setAuthed(true)} />
+        <Manutencao />
+      </>
+    );
   }
 
   const usuario = usuarioCorrente();
   const RouteComponent = route?.def.component ?? null;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100">
+    <>
+      <Manutencao />
+      <div className="flex h-screen overflow-hidden bg-gray-100">
       {/* Sidebar */}
       <aside className="flex w-60 flex-none flex-col border-r border-gray-200 bg-white">
         <div className="flex h-16 items-center gap-2 border-b border-gray-200 px-4">
@@ -316,5 +331,6 @@ export default function App() {
         </main>
       </div>
     </div>
+    </>
   );
 }

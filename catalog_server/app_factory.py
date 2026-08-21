@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import psycopg
 from flask import Flask, abort, request, send_from_directory
+from sqlalchemy.exc import OperationalError as SAOperationalError
 
 from catalog_server import auth_token, config
 from catalog_server.blueprints import (
@@ -119,6 +121,7 @@ def create_app() -> Flask:
     # acesso (criação do admin inicial e checagem de "vazio").
     _WHITELIST = {
         "/api/health": {"GET"},
+        "/api/pronto": {"GET"},
         "/api/login": {"POST"},
         "/api/logout": {"POST"},
         "/api/primeiro-usuario": {"GET"},
@@ -154,6 +157,31 @@ def create_app() -> Flask:
     @app.get("/api/health")
     def health():
         return {"status": "ok"}, 200
+
+    # Readiness: sinaliza se o sistema está utilizável (banco acessível).
+    # Diferente do /api/health (liveness do container), aqui o banco é checado
+    # de verdade — o frontend usa este endpoint para o modo manutenção.
+    @app.get("/api/pronto")
+    def pronto():
+        try:
+            with system_conn() as conn:
+                conn.execute("SELECT 1").fetchone()
+            return {"pronto": True}, 200
+        except Exception:
+            return (
+                {"pronto": False, "error": "Banco de dados indisponível", "code": "db_indisponivel"},
+                503,
+            )
+
+    # Banco fora do ar (deploy, manutenção, rede): resposta limpa em vez de
+    # 500 genérico — o frontend reconhece e entra em modo manutenção.
+    @app.errorhandler(SAOperationalError)
+    @app.errorhandler(psycopg.OperationalError)
+    def db_indisponivel(e):
+        return (
+            {"error": "Banco de dados indisponível", "code": "db_indisponivel"},
+            503,
+        )
 
     # Retaguarda de impressão: passa a drenar a fila de cupons assim que o
     # sistema estiver de pé.

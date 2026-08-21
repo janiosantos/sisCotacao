@@ -1,0 +1,15 @@
+{
+  "versao": "v1.6.0",
+  "componentes": ["backend", "frontend"],
+  "correcoes": [],
+  "melhorias": [
+    "Conexões com o banco falham rápido (connect_timeout=3s) em vez de pendurar requisições",
+    "Deploy com migrações para o backend durante o DDL — sem consultas concorrentes ao schema"
+  ],
+  "recursos": [
+    "Modo manutenção no frontend: overlay 'Sistema em manutenção' com reconexão automática a cada 10s e reload ao voltar",
+    "Endpoint de prontidão GET /api/pronto (checa o banco de verdade; /api/health segue como liveness)",
+    "Banco indisponível responde 503 db_indisponivel (handler global) em vez de 500 genérico",
+    "Abertura do sistema com backend fora do ar mostra manutenção em vez da tela de login"
+  ]
+}

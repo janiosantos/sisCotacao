@@ -144,7 +144,7 @@ def _dsn(url: str) -> str:
 def _connect(url: str):
     import psycopg
 
-    return psycopg.connect(_dsn(url))
+    return psycopg.connect(_dsn(url), connect_timeout=3)
 
 
 def _ensure_tracking(conn) -> None:

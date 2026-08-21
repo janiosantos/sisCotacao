@@ -85,16 +85,22 @@ jobs:
         if: steps.comp.outputs.frontend == 'true'
         run: docker compose -f docker-compose.prod.yml build frontend
 
+      - name: Para o backend (janela de manutenção — DDL sem tráfego)
+        if: steps.comp.outputs.migracoes == 'true'
+        run: docker compose -f docker-compose.prod.yml stop backend
+
+      - name: Aplica migrações pendentes (container one-off com a imagem nova)
+        if: steps.comp.outputs.migracoes == 'true'
+        env:
+          APP_VERSION: ${{ steps.version.outputs.tag }}
+        run: |
+          docker compose -f docker-compose.prod.yml run --rm backend \
+            python -m catalog_server.versioning apply --origem deploy
+
       - name: Deploy (sobe containers)
         env:
           APP_VERSION: ${{ steps.version.outputs.tag }}
         run: docker compose -f docker-compose.prod.yml up -d
-
-      - name: Aplica migrações pendentes (com log de atualização)
-        if: steps.comp.outputs.migracoes == 'true'
-        run: |
-          docker compose -f docker-compose.prod.yml exec -T backend \
-            python -m catalog_server.versioning apply --origem deploy
 
       - name: Health gate - migrações + backend
         run: |
