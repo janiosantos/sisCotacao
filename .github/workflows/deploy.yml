@@ -12,7 +12,6 @@ jobs:
     runs-on: [self-hosted, siscom-prod]
     env:
       COMPOSE_PROJECT_NAME: siscom   # mantém o volume siscom_postgres-data (dados intactos)
-      APP_VERSION: ${{ steps.version.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,9 +39,13 @@ jobs:
         run: docker tag siscom-backend:latest siscom-backend:prev || true
 
       - name: Build das imagens (no servidor, incremental via cache de layers)
+        env:
+          APP_VERSION: ${{ steps.version.outputs.tag }}
         run: docker compose -f docker-compose.prod.yml build
 
       - name: Deploy (sobe containers; backend aplica migrações online no start)
+        env:
+          APP_VERSION: ${{ steps.version.outputs.tag }}
         run: docker compose -f docker-compose.prod.yml up -d
 
       - name: Health gate - migrações + backend
