@@ -1,0 +1,57 @@
+name: Deploy produção (siscom)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    # Executa no self-hosted runner instalado no próprio servidor de produção.
+    runs-on: [self-hosted, siscom-prod]
+    env:
+      COMPOSE_PROJECT_NAME: siscom   # mantém o volume siscom_postgres-data (dados intactos)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Backup de segurança (somente se houver migration pendente)
+        run: |
+          mkdir -p /home/jpsantos/siscom/backups
+          PLAN=$(docker compose -f docker-compose.prod.yml exec -T backend \
+                  python -m scripts.pg_migrations plan)
+          echo "$PLAN"
+          if echo "$PLAN" | grep -q "(nenhuma)"; then
+            echo "sem migrations pendentes; pulando backup"
+          else
+            docker compose -f docker-compose.prod.yml exec -T db pg_dump -U catalog -d catalog -Fc \
+              > "/home/jpsantos/siscom/backups/prod-pre-$(date +%Y%m%d-%H%M%S).dump"
+            echo "backup de segurança criado em /home/jpsantos/siscom/backups/"
+          fi
+
+      - name: Salva imagem atual (para rollback)
+        run: docker tag siscom-backend:latest siscom-backend:prev || true
+
+      - name: Build das imagens (no servidor, incremental via cache de layers)
+        run: docker compose -f docker-compose.prod.yml build
+
+      - name: Deploy (sobe containers; backend aplica migrações online no start)
+        run: docker compose -f docker-compose.prod.yml up -d
+
+      - name: Health gate - migrações + backend
+        run: |
+          docker compose -f docker-compose.prod.yml exec -T backend \
+            python -m scripts.pg_migrations status
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/ >/dev/null 2>&1; then
+              echo "backend OK"; exit 0
+            fi
+            sleep 3
+          done
+          echo "backend não subiu após deploy"; \
+            docker compose -f docker-compose.prod.yml logs backend; exit 1
+
+      - name: Limpa imagens órfãs
+        if: always()
+        run: docker image prune -f

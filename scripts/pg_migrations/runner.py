@@ -171,11 +171,24 @@ def apply(url: str, up_to: int | None = None) -> list[int]:
         for mig in load_migrations():
             if mig.version in done or (up_to is not None and mig.version > up_to):
                 continue
-            if mig.guard(conn):
+            try:
+                already = mig.guard(conn)
+            except Exception:
+                # Guard falhou (ex.: tabela ainda não existe no banco). Trata
+                # como "banco ainda não está no estado-alvo" e tenta o forward.
+                already = False
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+            if already:
                 _record(conn, mig)
                 applied_here.append(mig.version)
                 continue
-            conn.commit()  # encerra transação aberta pelo guard (INTRANS)
+            try:
+                conn.commit()  # encerra transação aberta pelo guard (INTRANS)
+            except Exception:
+                pass
             mig.forward(conn)
             _record(conn, mig)
             applied_here.append(mig.version)
@@ -199,6 +212,25 @@ def rollback(url: str, to_version: int | None = None) -> list[int]:
             conn.commit()
             reverted.append(mig.version)
         return reverted
+    finally:
+        conn.close()
+
+
+def plan_pending(url: str) -> str:
+    """Lista as migrações pendentes (serão aplicadas no próximo `apply`)."""
+    conn = _connect(url)
+    try:
+        done = applied_versions(conn)
+        lines = ["Migrações pendentes (serão aplicadas no próximo apply):"]
+        any_pending = False
+        for mig in load_migrations():
+            if mig.version in done:
+                continue
+            any_pending = True
+            lines.append(f"  -> {mig.version:>5}  {mig.name}")
+        if not any_pending:
+            lines.append("  (nenhuma)")
+        return "\n".join(lines)
     finally:
         conn.close()
 
@@ -249,6 +281,7 @@ def main(argv: list[str] | None = None) -> int:
     p_apply.add_argument("--up-to", type=int, default=None)
     p_roll = sub.add_parser("rollback", help="desfaz versões (somente .py)")
     p_roll.add_argument("--to", type=int, default=None)
+    sub.add_parser("plan", help="lista migrações pendentes (controle de update)")
     sub.add_parser("check", help="conexão + schema_migrations + pendentes")
 
     args = ap.parse_args(argv)
@@ -266,6 +299,8 @@ def main(argv: list[str] | None = None) -> int:
         reverted = rollback(args.url, to_version=args.to)
         print(f"versões desfeitas: {reverted}")
         print(status(args.url))
+    elif args.cmd == "plan":
+        print(plan_pending(args.url))
     elif args.cmd == "check":
         for line in check_db(args.url):
             print(line)
