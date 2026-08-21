@@ -1,6 +1,6 @@
 // pages/login.ts — tela de login e gate de autenticação do app.
 
-import { api, type UsuarioAtual } from "../api/client";
+import { api, setToken, type UsuarioAtual } from "../api/client";
 import { closeModal, openModal, toast } from "../ui/dom";
 
 let atual: UsuarioAtual | null = null;
@@ -19,13 +19,16 @@ export async function carregarSessao(): Promise<boolean> {
     return !!atual?.autenticado;
   } catch {
     atual = null;
+    setToken(null);
     return false;
   }
 }
 
 export async function entrar(login: string, senha: string): Promise<boolean> {
   try {
-    atual = await api.login(login, senha);
+    const u = await api.login(login, senha);
+    atual = u;
+    setToken(u.token ?? null);
     return true;
   } catch (e) {
     toast("Falha no login: " + (e as Error).message, "error");
@@ -36,6 +39,7 @@ export async function entrar(login: string, senha: string): Promise<boolean> {
 export async function sair(): Promise<void> {
   try { await api.logout(); } catch { /* off-line */ }
   atual = null;
+  setToken(null);
 }
 
 export function renderLogin($app: HTMLElement): void {

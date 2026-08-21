@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from catalog_server import auth_token
 from catalog_server.repositories import usuario_repo
 
 api_usuarios_bp = Blueprint("api_usuarios", __name__)
-
-SESSION_KEY = "usuario_id"
 
 
 @api_usuarios_bp.get("/api/usuarios")
@@ -18,12 +17,11 @@ def listar():
 
 @api_usuarios_bp.get("/api/usuarios/atual")
 def usuario_atual():
-    uid = session.get(SESSION_KEY)
-    if not uid:
+    payload = getattr(request, "usuario", None)
+    if not payload:
         return jsonify({"autenticado": False}), 200
-    user = usuario_repo.get(uid)
+    user = usuario_repo.get(payload["sub"])
     if not user:
-        session.pop(SESSION_KEY, None)
         return jsonify({"autenticado": False}), 200
     return jsonify({"autenticado": True, **user})
 
@@ -101,13 +99,21 @@ def login():
     user = usuario_repo.get_by_login(login_str)
     if not user or not check_password_hash(user["senha_hash"], senha) or not user.get("ativo"):
         return jsonify({"error": "Usuário ou senha inválidos"}), 401
-    session[SESSION_KEY] = user["id"]
-    return jsonify({"autenticado": True, "id": user["id"], "nome": user["nome"], "login": user["login"], "perfil": user["perfil"]})
+    token = auth_token.criar_token(user)
+    return jsonify(
+        {
+            "autenticado": True,
+            "token": token,
+            "id": user["id"],
+            "nome": user["nome"],
+            "login": user["login"],
+            "perfil": user["perfil"],
+        }
+    )
 
 
 @api_usuarios_bp.post("/api/logout")
 def logout():
-    session.pop(SESSION_KEY, None)
     return jsonify({"ok": True})
 
 

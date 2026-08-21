@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from catalog_server.versioning import apply_updates, system_status
+from catalog_server.versioning import apply_updates, listar_log, system_status
 
 api_sistema_bp = Blueprint("api_sistema", __name__)
 
@@ -36,10 +36,20 @@ def apply_pending():
     body = request.get_json(silent=True) or {}
     nivel = body.get("risco", "todos")
     riscos = _RISCO_MAP.get(nivel, None)
+    usuario = request.usuario.get("login") if getattr(request, "usuario", None) else None
     try:
-        result = apply_updates(riscos=riscos)
+        result = apply_updates(riscos=riscos, origem="painel", usuario=usuario)
     except Exception as exc:  # noqa: BLE001 - reporta erro ao operador
         return jsonify({"ok": False, "error": str(exc)}), 500
     result["ok"] = True
     result["nivel"] = nivel
     return jsonify(result), 200
+
+
+@api_sistema_bp.get("/api/sistema/updates/log")
+def updates_log():
+    """Histórico de atualizações aplicadas (deploy ou painel)."""
+    try:
+        return jsonify({"log": listar_log(limite=50)}), 200
+    except Exception as exc:  # noqa: BLE001 - expõe erro de infra ao operador
+        return jsonify({"error": str(exc)}), 500

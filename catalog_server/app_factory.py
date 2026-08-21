@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from flask import Flask, request, send_from_directory
+from flask import Flask, abort, request, send_from_directory
 
-from catalog_server import config
+from catalog_server import auth_token, config
 from catalog_server.blueprints import (
     api_bancos_bp,
     api_compras_avancado_bp,
@@ -114,6 +114,34 @@ def create_app() -> Flask:
         if app.static_url_path and request.path.startswith(app.static_url_path + "/"):
             resp.headers["Cache-Control"] = "no-cache"
         return resp
+
+    # Rotas /api abertas (sem token): health, login e o fluxo de primeiro
+    # acesso (criação do admin inicial e checagem de "vazio").
+    _WHITELIST = {
+        "/api/health": {"GET"},
+        "/api/login": {"POST"},
+        "/api/logout": {"POST"},
+        "/api/primeiro-usuario": {"GET"},
+        "/api/usuarios": {"POST"},  # criação do primeiro administrador
+    }
+
+    @app.before_request
+    def exigir_token():
+        if not request.path.startswith("/api/"):
+            return
+        # Portal do fornecedor: usa token próprio na URL, fora da auth da API.
+        if request.path.startswith("/api/fornecedor/"):
+            return
+        metodos = _WHITELIST.get(request.path)
+        if metodos and request.method in metodos:
+            return
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            abort(401, description="Token de API ausente")
+        payload = auth_token.validar_token(auth[7:])
+        if not payload:
+            abort(401, description="Token de API inválido ou expirado")
+        request.usuario = payload
 
     app.jinja_env.filters["brl"] = quote_service.fmt_brl
     app.jinja_env.filters["qty"] = quote_service.fmt_qty

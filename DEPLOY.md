@@ -118,11 +118,22 @@ Exemplo:
 }
 ```
 
-### Aplicação on-demand por risco (Painel "Atualizações")
+### Aplicação automática no deploy + on-demand (Painel "Atualizações")
 
-O frontend (menu **Admin → Atualizações**) expõe o estado e permite aplicar
-migrações pendentes **sob demanda**, separado do apply automático na subida do
-container. O backend atende `POST /api/sistema/updates/apply` com corpo:
+No deploy, após subir os containers, o pipeline roda:
+
+```bash
+docker compose exec -T backend python -m catalog_server.versioning apply --origem deploy
+```
+
+Isso **aplica todas as migrações pendentes automaticamente** e registra o evento
+na tabela `sistema_atualizacoes` (ver migração `0061`), alimentando o histórico
+do painel. Portal do fornecedor (`/api/fornecedor/...`) e demais rotas continuam
+fora desse fluxo.
+
+O frontend (menu **Admin → Atualizações**) também permite aplicar migrações
+pendentes **sob demanda** (útil para hotfix sem redeploy completo), via
+`POST /api/sistema/updates/apply`:
 
 ```json
 { "risco": "critica" | "rotina" | "melhoria" | "todos" }
@@ -137,8 +148,41 @@ Críticas sempre entram antes (não é possível pular a ordem de migração). O
 endpoint devolve o `system_status()` atualizado (`ok`, `nivel`, `pending`, …).
 Em caso de falha devolve `{ "ok": false, "error": "..." }` com HTTP 500.
 
-> ⚠️ O endpoint altera o schema. Como o restante da API, não há auth no app —
-> restrinja por rede/VPN ou proteja o path no proxy.
+O painel também expõe `GET /api/sistema/updates/log` com o **Histórico** de
+atualizações (versão, nível/risco, schema antes/depois, origem deploy/painel,
+usuário e erro).
+
+### Processo de publicação e versionamento
+
+Versionamento semântico `MAJOR.MINOR.PATCH` derivado de **git tag**; `APP_VERSION`
+é resolvido por `git describe` no deploy.
+
+- **PATCH** (`vX.Y.Z+1`) → correção (bugfix).
+- **MINOR** (`vX.Y+1.0`) → melhoria / novo recurso (não-breaking).
+- **MAJOR** (`vX+1.0.0`) → mudança breaking (contrato/schema incompatível).
+
+Fluxo de uma correção:
+1. Faça a mudança de código **e** a migration `00XX_*.py` com `RISCO` adequado.
+2. Commit.
+3. `git tag vX.Y.Z` e `git push origin main --tags` → o pipeline builda, sobe e
+   aplica as migrações (registradas no log).
+4. No painel **Admin → Atualizações**, confira versão/`Atualizado` e o Histórico.
+
+Dev (sem tag) roda com `APP_VERSION=dev` (mostrado no painel). A migration
+sempre acompanha o código que a exige e recebe classificação `RISCO`.
+
+### Autenticação por token (API)
+
+Toda rota `/api/*` (exceto `health`, `login`, `logout`, `primeiro-usuario` e
+`POST /api/usuarios` para o primeiro admin, mais o portal do fornecedor) exige
+`Authorization: Bearer <token>`. O token é emitido no `/api/login` (HMAC
+assinado com `CATALOG_SECRET`, TTL 7 dias) e enviado pelo frontend em todas as
+chamadas. Em `401` o frontend limpa o token e volta ao login.
+
+> O backend **não** expõe a porta `8000` no host — só na rede Docker. O acesso
+> externo entra via proxy (`:80`/`:6173`), que faz o proxy de `/api`. App e
+> Portal do Fornecedor ficam protegidos pelo token; o proxy deve continuar
+> restrito por rede conforme necessário.
 
 ## Rollback
 - Deploy falhou no health gate: o pipeline não sobe a nova versão; para reverter

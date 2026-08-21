@@ -224,6 +224,7 @@ export interface UsuarioPayload {
 
 export interface UsuarioAtual extends Usuario {
   autenticado: boolean;
+  token?: string;
 }
 
 export interface ContaPlano {
@@ -740,8 +741,22 @@ export interface CriarProdutoUrlResult {
 // transporte
 // ------------------------------------------------------------------
 
+let _apiToken: string | null =
+  typeof sessionStorage !== "undefined" ? sessionStorage.getItem("sis_token") : null;
+export function setToken(t: string | null): void {
+  _apiToken = t;
+  if (typeof sessionStorage === "undefined") return;
+  if (t) sessionStorage.setItem("sis_token", t);
+  else sessionStorage.removeItem("sis_token");
+}
+function getToken(): string | null {
+  return _apiToken;
+}
+
 async function request<T>(method: Metodo, path: string, body?: unknown): Promise<T> {
-  const opts: RequestInit = { method, headers: {} };
+  const opts: RequestInit = { method, headers: {} as Record<string, string> };
+  const tk = getToken();
+  if (tk) (opts.headers as Record<string, string>)["Authorization"] = `Bearer ${tk}`;
   let url = path;
   if (body !== undefined) {
     if (method === "GET") {
@@ -752,12 +767,20 @@ async function request<T>(method: Metodo, path: string, body?: unknown): Promise
       const qs = params.toString();
       if (qs) url += "?" + qs;
     } else {
-      opts.headers = { "Content-Type": "application/json" };
+      (opts.headers as Record<string, string>)["Content-Type"] = "application/json";
       opts.body = JSON.stringify(body);
     }
   }
   const res = await fetch(url, opts);
   if (!res.ok) {
+    if (res.status === 401) {
+      // Só força re-login se HAVIA token (expirou). Sem token, deixa o erro
+      // propagar para que o gate de sessão mostre a tela de login (evita loop).
+      if (getToken()) {
+        setToken(null);
+        location.reload();
+      }
+    }
     let detail = res.statusText;
     let code: string | undefined;
     let json: Record<string, unknown> = {};
@@ -778,7 +801,10 @@ async function request<T>(method: Metodo, path: string, body?: unknown): Promise
 }
 
 async function enviarArquivo<T>(path: string, formData: FormData): Promise<T> {
-  const res = await fetch(path, { method: "POST", body: formData });
+  const headers: Record<string, string> = {};
+  const tk = getToken();
+  if (tk) headers["Authorization"] = `Bearer ${tk}`;
+  const res = await fetch(path, { method: "POST", body: formData, headers });
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -1348,6 +1374,7 @@ export const api = {
   sistemaStatus: () => request<SistemaStatus>("GET", "/api/sistema/status"),
   aplicarAtualizacoes: (risco: NivelRisco) =>
     request<SistemaStatus & { ok: boolean; nivel: string; error?: string }>("POST", "/api/sistema/updates/apply", { risco }),
+  sistemaUpdatesLog: () => request<{ log: AtualizacaoLog[] }>("GET", "/api/sistema/updates/log"),
 };
 
 export type NivelRisco = "critica" | "rotina" | "melhoria" | "todos";
@@ -1367,6 +1394,19 @@ export interface SistemaStatus {
   pending: MigracaoPendente[];
   pending_por_risco: Record<string, number>;
   atualizado: boolean;
+}
+
+export interface AtualizacaoLog {
+  id: number;
+  executado_em: string;
+  nivel: string;
+  versao_app: string;
+  schema_antes: number;
+  schema_depois: number;
+  total_aplicadas: number;
+  origem: string;
+  usuario: string | null;
+  erro: string | null;
 }
 
 export interface CategoriaTree {

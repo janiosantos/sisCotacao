@@ -48,12 +48,17 @@ jobs:
           APP_VERSION: ${{ steps.version.outputs.tag }}
         run: docker compose -f docker-compose.prod.yml up -d
 
+      - name: Aplica migrações pendentes (com log de atualização)
+        run: |
+          docker compose -f docker-compose.prod.yml exec -T backend \
+            python -m catalog_server.versioning apply --origem deploy
+
       - name: Health gate - migrações + backend
         run: |
           docker compose -f docker-compose.prod.yml exec -T backend \
             python -m scripts.pg_migrations status
           for i in $(seq 1 30); do
-            if curl -fsS http://localhost:8000/api/health >/dev/null 2>&1; then
+            if curl -fsS http://localhost/api/health >/dev/null 2>&1; then
               echo "backend OK"; exit 0
             fi
             sleep 3

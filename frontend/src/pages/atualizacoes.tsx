@@ -1,7 +1,12 @@
 // pages/atualizacoes.tsx — painel de controle de atualização e versionamento.
 
 import { useEffect, useState } from "react";
-import { api, type NivelRisco, type SistemaStatus } from "../api/client";
+import {
+  api,
+  type AtualizacaoLog,
+  type NivelRisco,
+  type SistemaStatus,
+} from "../api/client";
 import { toast } from "../ui/dom";
 import { Button, PageHeader } from "../ui/ui";
 
@@ -27,6 +32,7 @@ function riscoCor(risco: string): string {
 
 export default function Atualizacoes() {
   const [st, setSt] = useState<SistemaStatus | null>(null);
+  const [log, setLog] = useState<AtualizacaoLog[]>([]);
   const [aplicando, setAplicando] = useState<NivelRisco | null>(null);
 
   const carregar = () => {
@@ -34,6 +40,10 @@ export default function Atualizacoes() {
       .sistemaStatus()
       .then(setSt)
       .catch(() => toast("Não foi possível ler o status do sistema", "error"));
+    api
+      .sistemaUpdatesLog()
+      .then((r) => setLog(r.log))
+      .catch(() => {});
   };
 
   useEffect(() => {
@@ -47,6 +57,7 @@ export default function Atualizacoes() {
       if (res.ok) {
         toast(`Atualizações (${nivel}) aplicadas`, "success");
         setSt(res);
+        carregar();
       } else {
         toast("Falha: " + (res.error || "erro desconhecido"), "error");
       }
@@ -143,6 +154,50 @@ export default function Atualizacoes() {
                       >
                         {p.risco}
                       </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+
+        <section className="rounded-lg border border-gray-200 bg-white p-5">
+          <h2 className="mb-3 text-base font-semibold">Histórico de atualizações</h2>
+          {log.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-400">
+              Nenhuma atualização registrada ainda.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-400">
+                  <th className="py-2">Quando</th>
+                  <th>Versão</th>
+                  <th>Nível</th>
+                  <th>Schema</th>
+                  <th>Origem</th>
+                  <th>Usuário</th>
+                  <th>Erro</th>
+                </tr>
+              </thead>
+              <tbody>
+                {log.map((l) => (
+                  <tr key={l.id} className="border-t border-gray-100">
+                    <td className="py-2">{new Date(l.executado_em).toLocaleString("pt-BR")}</td>
+                    <td className="font-mono">{l.versao_app}</td>
+                    <td>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${riscoCor(l.nivel)}`}>
+                        {l.nivel}
+                      </span>
+                    </td>
+                    <td className="font-mono">
+                      {l.schema_antes} → {l.schema_depois}
+                    </td>
+                    <td>{l.origem}</td>
+                    <td>{l.usuario ?? "—"}</td>
+                    <td className="max-w-[14rem] truncate text-red-600" title={l.erro ?? ""}>
+                      {l.erro ? l.erro : "—"}
                     </td>
                   </tr>
                 ))}

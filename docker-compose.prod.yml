@@ -21,8 +21,10 @@ services:
     build:
       context: .
       dockerfile: catalog_server/Dockerfile
-    ports:
-      - "8000:8000"
+    # Apenas na rede Docker: o frontend (nginx) alcança backend:8000.
+    # Não expõe a porta no host — o acesso externo entra via proxy (:80/:6173).
+    expose:
+      - "8000"
     volumes:
       - /home/jpsantos/siscom/img:/app/images
     environment:
