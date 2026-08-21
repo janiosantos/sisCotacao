@@ -19,15 +19,16 @@ jobs:
       - name: Backup de segurança (somente se houver migration pendente)
         run: |
           mkdir -p /home/jpsantos/siscom/backups
-          PLAN=$(docker compose -f docker-compose.prod.yml exec -T backend \
-                  python -m scripts.pg_migrations plan)
-          echo "$PLAN"
-          if echo "$PLAN" | grep -q "(nenhuma)"; then
-            echo "sem migrations pendentes; pulando backup"
-          else
+          PENDING=$(docker compose -f docker-compose.prod.yml exec -T backend \
+                      python -m scripts.pg_migrations check 2>/dev/null \
+                      | sed -n 's/.*pendentes: \([0-9]*\).*/\1/p')
+          echo "migrações pendentes: ${PENDING:-0}"
+          if [ "${PENDING:-0}" != "0" ]; then
             docker compose -f docker-compose.prod.yml exec -T db pg_dump -U catalog -d catalog -Fc \
               > "/home/jpsantos/siscom/backups/prod-pre-$(date +%Y%m%d-%H%M%S).dump"
             echo "backup de segurança criado em /home/jpsantos/siscom/backups/"
+          else
+            echo "sem migrations pendentes; pulando backup"
           fi
 
       - name: Salva imagem atual (para rollback)
