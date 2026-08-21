@@ -585,13 +585,16 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
             variante_ids,
         ).fetchall()
         for r in rows:
-            name2id: dict[str, str] = {}
+            name2id: dict[str, int] = {}
             familia_id = r["familia_id"]
             if attr_defs and familia_id in attr_defs:
-                name2id = {d["label"]: str(d["id"]) for d in attr_defs[familia_id]}
-            mapped: dict[str, str] = {}
+                name2id = {d["label"]: int(d["id"]) for d in attr_defs[familia_id]}
+            mapped: dict = {}
             for nome, valor in (_parse_json_attrs(r["atributos"]) or {}).items():
-                mapped[name2id.get(nome, str(nome))] = str(valor)
+                key = name2id.get(nome)
+                if key is None:
+                    key = str(nome)
+                mapped[key] = str(valor)
             out[r["id"]] = mapped
         return out
 
@@ -677,10 +680,21 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
         package = produto["embalagem"] or None
         category = produto["categoria"] or ""
         subcategory = produto["subcategoria"] or ""
+        defs = attr_defs.get(produto["familia_id"], [])
 
         def first_image() -> str | None:
             fns = images.get(pid, [])
             return image_url(fns[0]) if fns else None
+
+        def build_spec(vattrs: dict) -> str:
+            parts: list[str] = []
+            if package:
+                parts.append(PACKAGE_LABELS.get(package, package) or package)
+            for d in defs:
+                val = vattrs.get(d["id"])
+                if val:
+                    parts.append(val)
+            return " · ".join(parts)
 
         if len(vs) == 1:
             v = vs[0]
@@ -692,6 +706,7 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
                 "ean": v["ean"] or "",
                 "name": base,
                 "base": base,
+                "spec": build_spec(vattrs),
                 "package": package,
                 "package_label": PACKAGE_LABELS.get(package, ""),
                 "attrs": vattrs,
