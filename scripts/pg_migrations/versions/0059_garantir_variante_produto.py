@@ -81,6 +81,7 @@ def forward(conn) -> None:
                 FROM produtos_cadastro p
                 LEFT JOIN familias f ON f.id = p.familia_id
                 WHERE p.id = ANY(%s)
+                ON CONFLICT (produto_id) DO NOTHING
                 """,
                 (ids,),
             )

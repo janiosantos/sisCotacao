@@ -33,6 +33,11 @@ _GRUPOS_SEED = [
 def guard(conn) -> bool:
     # Estado-alvo final: tabelas criadas, FKs presentes e seed de grupos aplicado.
     row = conn.execute(
+        "SELECT 1 FROM information_schema.tables WHERE table_name='grupos'"
+    ).fetchone()
+    if row is None:
+        return False
+    row = conn.execute(
         "SELECT 1 FROM grupos WHERE codigo='ELE'"
     ).fetchone()
     return row is not None
