@@ -11,6 +11,12 @@ from __future__ import annotations
 
 VERSION = 54
 RISCO = "rotina"
+
+# Documentação da mudança de banco (exigida pelo runner desde a v1.6.2).
+MUDANCA = {
+    "o_que": ["Popula tabelas de referência fiscal (CFOP/CST/CSOSN etc.)"],
+    "porque": ["Base dos módulos fiscal e de precificação"],
+}
 NAME = "seed_fiscal_referencia"
 
 SEED_CFOP = [

@@ -8,6 +8,12 @@ from __future__ import annotations
 
 VERSION = 61
 RISCO = "rotina"
+
+# Documentação da mudança de banco (exigida pelo runner desde a v1.6.2).
+MUDANCA = {
+    "o_que": ["Cria tabela sistema_atualizacoes"],
+    "porque": ["Histórico de atualizações do Painel de Atualizações (deploy/painel)"],
+}
 NAME = "sistema_atualizacoes"
 
 

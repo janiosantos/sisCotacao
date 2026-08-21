@@ -12,6 +12,14 @@ from __future__ import annotations
 
 VERSION = 56
 RISCO = "melhoria"
+
+# Documentação da mudança de banco (exigida pelo runner desde a v1.6.2).
+MUDANCA = {
+    "o_que": ["Adiciona familias.sku_atributos (JSONB)"],
+    "porque": [
+        "Define quais atributos da família compõem o segmento de atributos do SKU estruturado, na ordem",
+    ],
+}
 NAME = "familia_sku_template"
 
 

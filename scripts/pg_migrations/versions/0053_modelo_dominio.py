@@ -21,6 +21,23 @@ from __future__ import annotations
 
 VERSION = 53
 RISCO = "critica"
+
+# Documentação da mudança de banco (exigida pelo runner desde a v1.6.2).
+MUDANCA = {
+    "o_que": [
+        "Remove tabelas do scraper (backup em _backup_*)",
+        "Cria tabela marcas e vincula produtos_cadastro.marca_id",
+        "Adiciona variantes.atributos JSONB com backfill do EAV",
+        "Garante SKU único (índice único parcial)",
+    ],
+    "porque": [
+        "Desacopla o scraper do banco do ERP",
+        "Estrutura o modelo de domínio de catálogo, marcas e atributos",
+    ],
+    "novidades": [
+        "Scraper passa a exportar catálogo em JSON; sem gravação direta no banco",
+    ],
+}
 NAME = "modelo_dominio"
 
 # Tabelas do scraper que saem do banco do ERP (backup em _backup_*).

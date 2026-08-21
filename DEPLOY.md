@@ -191,6 +191,34 @@ Ele alimenta o **Histórico** do painel (o que mudou, por release) e a seção
 publicadas (`GET /api/sistema/releases/pendentes`). Um manifesto só é marcado
 como publicado quando o deploy o registra no log.
 
+**Toda publicação gera registro**, independente do componente: o passo final do
+workflow (`versioning publicar --componentes ...`) fecha os manifestos cujos
+componentes declarados estão contidos no escopo publicado. Regra do subconjunto:
+um manifesto `[backend, frontend]` publicado por partes não fecha — publique com
+escopo igual ao declarado ou com `todos`.
+
+#### Documentação obrigatória de migração (`MUDANCA`)
+
+Qualquer **mudança no banco de dados** vem documentada dentro da própria
+migração:
+
+```python
+VERSION = 63
+RISCO = "rotina"
+NAME = "exemplo"
+
+MUDANCA = {
+    "o_que":     ["Adiciona coluna X na tabela Y"],   # obrigatório
+    "porque":    ["Suporta o fluxo Z do módulo W"],   # obrigatório
+    "novidades": ["O que entra de novo, e por quê"],  # opcional
+}
+```
+
+- O runner **bloqueia** o apply de migração nova sem `MUDANCA` (válvula de
+  emergência: `apply --sem-docs`).
+- A documentação aparece **antes** do deploy (seção "Migrações pendentes" do
+  painel) e **depois** de aplicar (linhas expansíveis no Histórico).
+
 #### Publicar (autorização explícita)
 
 A publicação **nunca é automática**: acontece em

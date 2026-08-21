@@ -115,6 +115,14 @@ jobs:
           echo "backend não subiu após deploy"; \
             docker compose -f docker-compose.prod.yml logs backend; exit 1
 
+      # Toda publicação gera registro no Histórico — independe do componente.
+      # Manifestos cujos componentes estão contidos no escopo publicado fecham.
+      - name: Registra releases publicadas (histórico)
+        run: |
+          docker compose -f docker-compose.prod.yml exec -T backend \
+            python -m catalog_server.versioning publicar \
+            --componentes "${{ steps.comp.outputs.componentes }}"
+
       - name: Limpa imagens órfãs
         if: always()
         run: docker image prune -f

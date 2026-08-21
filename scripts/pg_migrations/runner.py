@@ -96,6 +96,30 @@ class Migration:
                 return str(r).strip().lower()
         return "n/c"
 
+    @property
+    def mudanca(self) -> dict | None:
+        """Documentação obrigatória da mudança de banco.
+
+        Esperado no módulo:
+            MUDANCA = {
+                "o_que":     ["..."],     # o que foi alterado/criado
+                "porque":    ["..."],     # por que foi alterado
+                "novidades": ["..."],     # opcional: o que entra de novo e por quê
+            }
+        Retorna None quando ausente/vazio.
+        """
+        if self.kind != "py":
+            return None
+        m = getattr(self.module, "MUDANCA", None)
+        if not isinstance(m, dict):
+            return None
+        limpo = {
+            k: [str(x) for x in v if str(x).strip()]
+            for k, v in m.items()
+            if isinstance(v, list) and v
+        }
+        return limpo or None
+
     def guard(self, conn) -> bool:
         if self.kind == "py":
             g = getattr(self.module, "guard", None)
@@ -186,6 +210,7 @@ def apply(
     url: str,
     up_to: int | None = None,
     riscos: list[str] | None = None,
+    sem_docs: bool = False,
 ) -> list[int]:
     """Aplica as migrações pendentes (<= up_to) e devolve as versões aplicadas.
 
@@ -194,6 +219,9 @@ def apply(
 
     Se `riscos` for informado, só aplica migrações cujo `risco` esteja nessa
     lista (controle de atualização por criticidade).
+
+    Disciplina de documentação: migração nova SEM `MUDANCA` (o_que/porque)
+    bloqueia o apply — exceto com `sem_docs=True` (emergência declarada).
     """
     conn = _connect(url)
     try:
@@ -203,12 +231,24 @@ def apply(
         conn.execute("SELECT pg_advisory_lock(%s)", (ADVISORY_LOCK_KEY,))
         conn.commit()
         done = applied_versions(conn)
+        pendentes = [
+            m
+            for m in load_migrations()
+            if m.version not in done
+            and (up_to is None or m.version <= up_to)
+            and (riscos is None or m.risco in riscos)
+        ]
+        if not sem_docs:
+            sem_doc = [m for m in pendentes if m.mudanca is None]
+            if sem_doc:
+                raise MigrationError(
+                    "Migrações sem documentação MUDANCA (o_que/porque): "
+                    + ", ".join(m.path.name for m in sem_doc)
+                    + " — documente as mudanças ou use --sem-docs "
+                    + "(apenas emergência declarada)."
+                )
         applied_here: list[int] = []
-        for mig in load_migrations():
-            if mig.version in done or (up_to is not None and mig.version > up_to):
-                continue
-            if riscos is not None and mig.risco not in riscos:
-                continue
+        for mig in pendentes:
             try:
                 already = mig.guard(conn)
             except Exception:
@@ -321,6 +361,11 @@ def main(argv: list[str] | None = None) -> int:
     p_status = sub.add_parser("status", help="lista as versões aplicadas/pendentes")
     p_apply = sub.add_parser("apply", help="aplica as migrações pendentes")
     p_apply.add_argument("--up-to", type=int, default=None)
+    p_apply.add_argument(
+        "--sem-docs",
+        action="store_true",
+        help="válvula de emergência: aplica mesmo migrações sem MUDANCA documentada",
+    )
     p_roll = sub.add_parser("rollback", help="desfaz versões (somente .py)")
     p_roll.add_argument("--to", type=int, default=None)
     sub.add_parser("plan", help="lista migrações pendentes (controle de update)")
@@ -334,7 +379,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "status":
         print(status(args.url))
     elif args.cmd == "apply":
-        done = apply(args.url, up_to=args.up_to)
+        done = apply(args.url, up_to=args.up_to, sem_docs=args.sem_docs)
         print(f"versões aplicadas: {done}")
         print(status(args.url))
     elif args.cmd == "rollback":

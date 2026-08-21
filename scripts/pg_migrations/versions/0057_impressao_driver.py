@@ -9,6 +9,12 @@ from __future__ import annotations
 
 VERSION = 57
 RISCO = "melhoria"
+
+# Documentação da mudança de banco (exigida pelo runner desde a v1.6.2).
+MUDANCA = {
+    "o_que": ["Adiciona impressao_config.driver (default escpos_tcp)"],
+    "porque": ["Suporte a drivers de impressão sem mudar o comportamento atual"],
+}
 NAME = "impressao_driver"
 
 

@@ -1,0 +1,13 @@
+{
+  "versao": "v1.6.2",
+  "componentes": ["backend", "frontend"],
+  "correcoes": [
+    "Release só-frontend não gerava registro no Histórico — agora TODA publicação registra (o registro foi desacoplado das migrações); a v1.6.1 faltante é backfillada automaticamente nesta publicação"
+  ],
+  "melhorias": [],
+  "recursos": [
+    "Manifesto de mudança de banco: cada migração nova documenta o_que/porque/novidades via MUDANCA",
+    "Documentação visível antes de autorizar o deploy (seção pendentes) e depois de aplicar (linhas expansíveis no Histórico)",
+    "Disciplina com válvula: runner bloqueia migração nova sem MUDANCA; exceção apenas com --sem-docs (emergência declarada)"
+  ]
+}

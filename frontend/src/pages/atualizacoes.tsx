@@ -75,6 +75,16 @@ export default function Atualizacoes() {
     [],
   );
   const [aplicando, setAplicando] = useState<NivelRisco | null>(null);
+  const [expandidos, setExpandidos] = useState<Set<number>>(new Set());
+
+  const alternarExpansao = (id: number) => {
+    setExpandidos((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const carregar = () => {
     api
@@ -217,32 +227,30 @@ export default function Atualizacoes() {
               Nenhuma migração pendente.
             </p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-400">
-                  <th className="py-2">Versão</th>
-                  <th>Arquivo</th>
-                  <th>Risco</th>
-                </tr>
-              </thead>
-              <tbody>
-                {st.pending.map((p) => (
-                  <tr key={p.version} className="border-t border-gray-100">
-                    <td className="py-2 font-mono">{p.version}</td>
-                    <td className="font-mono text-gray-700">{p.name}</td>
-                    <td>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${riscoCor(
-                          p.risco,
-                        )}`}
-                      >
-                        {p.risco}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="space-y-3">
+              {st.pending.map((p) => (
+                <div key={p.version} className="rounded-md border border-gray-200 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono font-semibold">{p.version}</span>
+                    <span className="font-mono text-sm text-gray-700">{p.name}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${riscoCor(p.risco)}`}>
+                      {p.risco}
+                    </span>
+                  </div>
+                  {p.mudanca ? (
+                    <div className="mt-2 space-y-1 text-xs text-gray-600">
+                      <ListaNotas titulo="O que" cor="text-gray-800" itens={p.mudanca.o_que} />
+                      <ListaNotas titulo="Porque" cor="text-blue-700" itens={p.mudanca.porque} />
+                      <ListaNotas titulo="Novidades" cor="text-emerald-700" itens={p.mudanca.novidades} />
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs font-medium text-red-600">
+                      ⚠ Sem descrição MUDANCA — o apply será bloqueado até documentar.
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </section>
 
@@ -270,6 +278,15 @@ export default function Atualizacoes() {
                   <Fragment key={l.id}>
                     <tr className="border-t border-gray-100">
                       <td className="py-2">
+                        {l.origem !== "release" && (l.detalhes?.migracoes?.length ?? 0) > 0 ? (
+                          <button
+                            type="button"
+                            className="mr-1 text-brand-600 hover:underline"
+                            onClick={() => alternarExpansao(l.id)}
+                          >
+                            {expandidos.has(l.id) ? "▾" : "▸"}
+                          </button>
+                        ) : null}
                         {new Date(l.executado_em).toLocaleString("pt-BR")}
                       </td>
                       <td className="font-mono">
@@ -319,6 +336,30 @@ export default function Atualizacoes() {
                         </td>
                       </tr>
                     )}
+                    {l.origem !== "release" &&
+                      expandidos.has(l.id) &&
+                      (l.detalhes?.migracoes?.map((mig, idx) => (
+                        <tr key={`${l.id}-mig-${idx}`} className="border-t border-gray-50 bg-gray-50/60">
+                          <td colSpan={7}>
+                            <div className="space-y-1 py-2 text-xs text-gray-600">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono font-semibold text-gray-800">
+                                  {mig.nome ?? ""}
+                                </span>
+                                {mig.risco ? (
+                                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${riscoCor(mig.risco)}`}>
+                                    {mig.risco}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <ListaNotas titulo="O que" cor="text-gray-800" itens={mig.o_que} />
+                              <ListaNotas titulo="Porque" cor="text-blue-700" itens={mig.porque} />
+                              <ListaNotas titulo="Novidades" cor="text-emerald-700" itens={mig.novidades} />
+                            </div>
+                          </td>
+                        </tr>
+                      )) ||
+                        null)}
                   </Fragment>
                 ))}
               </tbody>

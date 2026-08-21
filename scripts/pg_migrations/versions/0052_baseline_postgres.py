@@ -10,6 +10,12 @@ VERSION = 52
 NAME = "baseline_postgres"
 RISCO = "critica"
 
+# Documentação da mudança de banco (exigida pelo runner desde a v1.6.2).
+MUDANCA = {
+    "o_que": ["Cria o schema completo do ERP no Postgres a partir de scripts/postgres_schema.sql"],
+    "porque": ["Migração do armazenamento local para banco único PostgreSQL"],
+}
+
 
 def _schema_statements():
     from scripts.pg_migrations.runner import SCHEMA_FILE

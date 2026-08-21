@@ -10,6 +10,12 @@ from __future__ import annotations
 
 VERSION = 58
 RISCO = "melhoria"
+
+# Documentação da mudança de banco (exigida pelo runner desde a v1.6.2).
+MUDANCA = {
+    "o_que": ["Adiciona familia_atributos.validacao (texto|numero|alphanumerico)"],
+    "porque": ["Validar valores digitados de atributos livres no cadastro de produtos"],
+}
 NAME = "familia_atributo_validacao"
 
 

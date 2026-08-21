@@ -9,6 +9,14 @@ from __future__ import annotations
 
 VERSION = 59
 RISCO = "critica"
+
+# Documentação da mudança de banco (exigida pelo runner desde a v1.6.2).
+MUDANCA = {
+    "o_que": [
+        "Cria variante padrão (preço 0, SKU SKU-<produto>-<id>) para produto sem variante e sincroniza FTS",
+    ],
+    "porque": ["Todo produto precisa de ao menos uma variante para venda e busca"],
+}
 NAME = "garantir_variante_produto"
 
 

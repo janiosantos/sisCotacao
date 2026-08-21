@@ -1452,6 +1452,11 @@ export interface MigracaoPendente {
   version: number;
   name: string;
   risco: string;
+  mudanca?: {
+    o_que?: string[];
+    porque?: string[];
+    novidades?: string[];
+  } | null;
 }
 
 export interface SistemaStatus {
@@ -1481,6 +1486,17 @@ export interface AtualizacaoLog {
   correcoes?: string[] | null;
   melhorias?: string[] | null;
   recursos?: string[] | null;
+  detalhes?: {
+    aplicadas?: number[];
+    manifesto?: string;
+    migracoes?: {
+      nome?: string;
+      risco?: string;
+      o_que?: string[];
+      porque?: string[];
+      novidades?: string[];
+    }[];
+  } | null;
 }
 
 export interface ReleaseManifesto {

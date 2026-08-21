@@ -21,6 +21,19 @@ from __future__ import annotations
 
 VERSION = 55
 RISCO = "melhoria"
+
+# Documentação da mudança de banco (exigida pelo runner desde a v1.6.2).
+MUDANCA = {
+    "o_que": [
+        "Cria tabelas grupos e subgrupos",
+        "Adiciona grupo_id/subgrupo_id em produtos_cadastro",
+        "Adiciona coluna codigo em marcas, categorias e subcategorias",
+        "Seed dos grupos iniciais",
+    ],
+    "porque": [
+        "Taxonomia e códigos curtos para o SKU estruturado [GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS]",
+    ],
+}
 NAME = "grupos_subgrupos_skus"
 
 _GRUPOS_SEED = [

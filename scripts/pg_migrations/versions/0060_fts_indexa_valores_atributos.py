@@ -11,6 +11,17 @@ VERSION = 60
 NAME = "fts_indexa_valores_atributos"
 RISCO = "critica"
 
+# Documentação da mudança de banco (exigida pelo runner desde a v1.6.2).
+MUDANCA = {
+    "o_que": [
+        "Recria produtos_fts com a coluna atributos no tsvector",
+        "Garante f_unaccent IMMUTABLE antes do índice",
+    ],
+    "porque": [
+        "Busca full-text encontra produtos pelo VALOR dos atributos (ex.: verde, 2,5mm)",
+    ],
+}
+
 # DDL recriada com a coluna `atributos` no tsvector (espelho de fts.py).
 _FTS_DDL = """
 CREATE TABLE IF NOT EXISTS produtos_fts (

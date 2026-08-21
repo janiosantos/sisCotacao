@@ -103,7 +103,12 @@ def system_status() -> dict:
     applied_set = set(applied)
     schema_version = max(applied) if applied else 0
     pending = [
-        {"version": m.version, "name": m.name, "risco": m.risco}
+        {
+            "version": m.version,
+            "name": m.name,
+            "risco": m.risco,
+            "mudanca": m.mudanca,
+        }
         for m in migs
         if m.version not in applied_set
     ]
@@ -186,16 +191,31 @@ def apply_updates(
     riscos: list[str] | None = None,
     origem: str = "deploy",
     usuario: str | None = None,
+    sem_docs: bool = False,
 ) -> dict:
     """Aplica migrações pendentes (filtradas por `riscos`) e registra o evento.
 
     Usado pelo deploy (origem="deploy") e pelo painel (origem="painel").
+    O registro de RELEASES publicadas é feito por `registrar_publicacao()`,
+    desacoplado das migrações — assim deploys só-frontend também geram log.
     """
     antes = _schema_version()
     nivel = _nivel_label(riscos)
     try:
-        applied = apply(_dsn(), riscos=riscos)
+        applied = apply(_dsn(), riscos=riscos, sem_docs=sem_docs)
         st = system_status()
+        # Documentação das migrações aplicadas (o_que/porque/novidades).
+        docs: dict[int, dict] = {}
+        if applied:
+            docs = {
+                m.version: {
+                    "nome": m.name,
+                    "risco": m.risco,
+                    **(m.mudanca or {}),
+                }
+                for m in load_migrations()
+                if m.version in applied
+            }
         _registrar_log(
             nivel=nivel,
             versao_app=st["app_version"],
@@ -204,27 +224,11 @@ def apply_updates(
             total_aplicadas=len(applied),
             origem=origem,
             usuario=usuario,
-            detalhes={"aplicadas": applied},
+            detalhes={
+                "aplicadas": applied,
+                "migracoes": [docs[v] for v in sorted(docs)] if docs else [],
+            },
         )
-        # Publicação via deploy: registra um evento por manifesto pendente,
-        # na sequência das versões — o Histórico mostra O QUE foi lançado.
-        if origem == "deploy":
-            for m in listar_manifestos_pendentes():
-                _registrar_log(
-                    nivel="release",
-                    versao_app=st["app_version"],
-                    schema_antes=antes,
-                    schema_depois=st["schema_version"],
-                    total_aplicadas=0,
-                    origem="release",
-                    usuario=usuario,
-                    detalhes={"manifesto": m.get("versao")},
-                    versao_release=m.get("versao"),
-                    componentes=m.get("componentes"),
-                    correcoes=m.get("correcoes"),
-                    melhorias=m.get("melhorias"),
-                    recursos=m.get("recursos"),
-                )
         return st
     except Exception as e:
         erro = str(e)
@@ -246,6 +250,43 @@ def apply_updates(
         raise
 
 
+def registrar_publicacao(
+    componentes_deploy: list[str],
+    usuario: str | None = None,
+) -> list[str]:
+    """Registra no Histórico os manifestos cobertos pelo escopo publicado.
+
+    Regra do subconjunto: um manifesto fecha quando TODOS os componentes que
+    ele declara estão contidos nos `componentes_deploy` (ou quando o deploy é
+    'todos'). Publicação parcial de um manifesto misto não o fecha.
+    """
+    versao_app = os.getenv("APP_VERSION") or "dev"
+    agora = _schema_version()
+    escopo = set(componentes_deploy)
+    publicadas: list[str] = []
+    for m in listar_manifestos_pendentes():
+        comps = set(m.get("componentes") or [])
+        if comps and not comps <= escopo:
+            continue
+        _registrar_log(
+            nivel="release",
+            versao_app=versao_app,
+            schema_antes=agora,
+            schema_depois=agora,
+            total_aplicadas=0,
+            origem="release",
+            usuario=usuario,
+            detalhes={"manifesto": m.get("versao")},
+            versao_release=m.get("versao"),
+            componentes=m.get("componentes"),
+            correcoes=m.get("correcoes"),
+            melhorias=m.get("melhorias"),
+            recursos=m.get("recursos"),
+        )
+        publicadas.append(str(m.get("versao")))
+    return publicadas
+
+
 def listar_log(limite: int = 50) -> list[dict]:
     """Retorna os últimos eventos de atualização (tolerante a tabela ausente)."""
     try:
@@ -254,7 +295,8 @@ def listar_log(limite: int = 50) -> list[dict]:
                 """
                 SELECT id, executado_em, nivel, versao_app, schema_antes,
                        schema_depois, total_aplicadas, origem, usuario, erro,
-                       versao_release, componentes, correcoes, melhorias, recursos
+                       versao_release, componentes, correcoes, melhorias,
+                       recursos, detalhes
                 FROM sistema_atualizacoes
                 ORDER BY executado_em DESC, id DESC
                 LIMIT %s
@@ -277,6 +319,7 @@ def listar_log(limite: int = 50) -> list[dict]:
             "correcoes",
             "melhorias",
             "recursos",
+            "detalhes",
         ]
         return [dict(zip(cols, r)) for r in rows]
     except Exception:
@@ -290,21 +333,52 @@ _RISCO_CLI = {
     "todos": None,
 }
 
+_COMPONENTES_TODOS = ["backend", "frontend", "schema"]
+
 
 def _main() -> int:
-    p = argparse.ArgumentParser(description="Aplica migrações e registra o log.")
-    p.add_argument("command", nargs="?", choices=["apply"], default="apply")
-    p.add_argument("--origem", default="deploy")
-    p.add_argument(
+    p = argparse.ArgumentParser(description="Aplica migrações / registra releases.")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    p_apply = sub.add_parser("apply", help="aplica migrações pendentes e loga o evento")
+    p_apply.add_argument("--origem", default="deploy")
+    p_apply.add_argument(
         "--risco", default="todos", choices=["critica", "rotina", "melhoria", "todos"]
     )
-    p.add_argument("--usuario", default=None)
+    p_apply.add_argument("--usuario", default=None)
+    p_apply.add_argument(
+        "--sem-docs",
+        action="store_true",
+        help="válvula de emergência: aplica mesmo sem MUDANCA documentada",
+    )
+
+    p_pub = sub.add_parser("publicar", help="registra releases (manifestos) no Histórico")
+    p_pub.add_argument(
+        "--componentes",
+        default="todos",
+        help="'todos' ou CSV: backend,frontend,schema",
+    )
+    p_pub.add_argument("--usuario", default=None)
+
     args = p.parse_args()
     try:
-        st = apply_updates(
-            riscos=_RISCO_CLI[args.risco], origem=args.origem, usuario=args.usuario
+        if args.cmd == "apply":
+            st = apply_updates(
+                riscos=_RISCO_CLI[args.risco],
+                origem=args.origem,
+                usuario=args.usuario,
+                sem_docs=args.sem_docs,
+            )
+            print(json.dumps(st))
+            return 0
+        # publicar
+        comps = (
+            _COMPONENTES_TODOS
+            if args.componentes.strip().lower() == "todos"
+            else [c.strip() for c in args.componentes.split(",") if c.strip()]
         )
-        print(json.dumps(st))
+        publicadas = registrar_publicacao(comps, usuario=args.usuario)
+        print(json.dumps({"ok": True, "releases_registradas": publicadas}))
         return 0
     except Exception as e:  # noqa: BLE001
         print(json.dumps({"ok": False, "error": str(e)}), file=sys.stderr)

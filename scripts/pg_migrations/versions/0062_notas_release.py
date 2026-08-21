@@ -9,6 +9,14 @@ from __future__ import annotations
 
 VERSION = 62
 RISCO = "rotina"
+
+# Documentação da mudança de banco (exigida pelo runner desde a v1.6.2).
+MUDANCA = {
+    "o_que": [
+        "Adiciona versao_release/componentes/correcoes/melhorias/recursos em sistema_atualizacoes",
+    ],
+    "porque": ["Registrar O QUE mudou por release (notas do manifesto), não apenas versões"],
+}
 NAME = "notas_release"
 
 _COLUNAS = (
