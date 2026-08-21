@@ -11,7 +11,7 @@ import os
 import psycopg
 
 from catalog_server import config
-from scripts.pg_migrations.runner import load_migrations
+from scripts.pg_migrations.runner import apply, load_migrations
 
 # Ordem canônica de classificação de risco (para o resumo do endpoint).
 RISCOS = ("critica", "melhoria", "rotina", "n/c")
@@ -58,3 +58,14 @@ def system_status() -> dict:
         "pending_por_risco": por_risco,
         "atualizado": len(pending) == 0,
     }
+
+
+def apply_updates(riscos: list[str] | None = None) -> dict:
+    """Aplica migrações pendentes (filtradas por `riscos`) e devolve o novo estado.
+
+    Usado pelo painel "Atualizações" para aplicar mudanças de forma on-demand,
+    separado do apply automático na subida do container.
+    """
+    apply(_dsn(), riscos=riscos)
+    st = system_status()
+    return st

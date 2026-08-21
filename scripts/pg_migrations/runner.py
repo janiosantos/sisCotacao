@@ -179,11 +179,18 @@ def _record(conn, mig: Migration) -> None:
     conn.commit()
 
 
-def apply(url: str, up_to: int | None = None) -> list[int]:
+def apply(
+    url: str,
+    up_to: int | None = None,
+    riscos: list[str] | None = None,
+) -> list[int]:
     """Aplica as migrações pendentes (<= up_to) e devolve as versões aplicadas.
 
     Idempotente: versões já registradas são puladas; migrações `.py` com
     `guard` True (banco já no estado-alvo) são apenas registradas.
+
+    Se `riscos` for informado, só aplica migrações cujo `risco` esteja nessa
+    lista (controle de atualização por criticidade).
     """
     conn = _connect(url)
     try:
@@ -191,6 +198,8 @@ def apply(url: str, up_to: int | None = None) -> list[int]:
         applied_here: list[int] = []
         for mig in load_migrations():
             if mig.version in done or (up_to is not None and mig.version > up_to):
+                continue
+            if riscos is not None and mig.risco not in riscos:
                 continue
             try:
                 already = mig.guard(conn)

@@ -23,6 +23,7 @@ import {
   Warehouse,
   Receipt,
   RotateCcw,
+  RefreshCw,
   ClipboardList,
   History,
   ShieldCheck,
@@ -95,6 +96,7 @@ const NAV: NavGroup[] = [
       { href: "#/historico", label: "Hist. preços", icon: History },
       { href: "#/usuarios", label: "Usuários", icon: ShieldCheck },
       { href: "#/configuracoes", label: "Configurações", icon: Settings },
+      { href: "#/atualizacoes", label: "Atualizações", icon: RefreshCw },
     ],
   },
 ];

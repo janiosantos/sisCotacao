@@ -118,6 +118,28 @@ Exemplo:
 }
 ```
 
+### Aplicação on-demand por risco (Painel "Atualizações")
+
+O frontend (menu **Admin → Atualizações**) expõe o estado e permite aplicar
+migrações pendentes **sob demanda**, separado do apply automático na subida do
+container. O backend atende `POST /api/sistema/updates/apply` com corpo:
+
+```json
+{ "risco": "critica" | "rotina" | "melhoria" | "todos" }
+```
+
+- `critica` → aplica apenas migrações `critica`.
+- `rotina` → aplica `critica` + `rotina`.
+- `melhoria` → aplica tudo (`critica` + `rotina` + `melhoria`).
+- `todos` → aplica todas as pendentes.
+
+Críticas sempre entram antes (não é possível pular a ordem de migração). O
+endpoint devolve o `system_status()` atualizado (`ok`, `nivel`, `pending`, …).
+Em caso de falha devolve `{ "ok": false, "error": "..." }` com HTTP 500.
+
+> ⚠️ O endpoint altera o schema. Como o restante da API, não há auth no app —
+> restrinja por rede/VPN ou proteja o path no proxy.
+
 ## Rollback
 - Deploy falhou no health gate: o pipeline não sobe a nova versão; para reverter
   manualmente ao estado anterior:

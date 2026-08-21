@@ -1345,7 +1345,29 @@ export const api = {
     request<{ id: number }>("POST", "/api/posvenda/garantias", data),
   atualizarStatusGarantia: (id: number, status: string) =>
     request<{ ok: boolean }>("PATCH", `/api/posvenda/garantias/${id}/status`, { status }),
+  sistemaStatus: () => request<SistemaStatus>("GET", "/api/sistema/status"),
+  aplicarAtualizacoes: (risco: NivelRisco) =>
+    request<SistemaStatus & { ok: boolean; nivel: string; error?: string }>("POST", "/api/sistema/updates/apply", { risco }),
 };
+
+export type NivelRisco = "critica" | "rotina" | "melhoria" | "todos";
+
+export interface MigracaoPendente {
+  version: number;
+  name: string;
+  risco: string;
+}
+
+export interface SistemaStatus {
+  app_version: string;
+  schema_version: number;
+  schema_max: number;
+  applied: number;
+  total_migrations: number;
+  pending: MigracaoPendente[];
+  pending_por_risco: Record<string, number>;
+  atualizado: boolean;
+}
 
 export interface CategoriaTree {
   id: number;

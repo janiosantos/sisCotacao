@@ -35,6 +35,7 @@ const Produtos = lazy(() => import("./pages/produtos"));
 const ProdutoEditor = lazy(() => import("./pages/produtos").then((m) => ({ default: m.ProdutoEditor })));
 const Pdv = lazy(() => import("./pages/pre-venda"));
 const Configuracoes = lazy(() => import("./pages/configuracoes"));
+const Atualizacoes = lazy(() => import("./pages/atualizacoes"));
 
 export const ROUTES: RouteDef[] = [
   { pattern: /^#\/dashboard$/, title: "Painel", component: Dashboard },
@@ -81,4 +82,5 @@ export const ROUTES: RouteDef[] = [
   { pattern: /^#\/usuarios$/, title: "Usuários", component: Usuarios },
   { pattern: /^#\/plano-contas$/, title: "Plano de Contas", component: PlanoContas },
   { pattern: /^#\/configuracoes$/, title: "Configurações", component: Configuracoes },
+  { pattern: /^#\/atualizacoes$/, title: "Atualizações", component: Atualizacoes },
 ];
