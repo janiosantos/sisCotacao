@@ -14,7 +14,7 @@ produção **nunca são sobrescritos** por dump/restore.
   3. `docker compose build` (incremental, cache de layers)
   4. `docker compose up -d` (backend sobe e aplica migrações online; volume
      `siscom_postgres-data` preservado → dados intactos)
-  5. Health gate: `pg_migrations status` + `curl` no backend (até 30×3s)
+  5. Health gate: `pg_migrations status` + `curl` em `/api/health` no backend (até 30×3s)
   6. `docker image prune -f`
 - Rollback de imagem: `docker tag siscom-backend:prev siscom-backend:latest &&
   docker compose -f docker-compose.prod.yml up -d`

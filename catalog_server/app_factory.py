@@ -121,6 +121,10 @@ def create_app() -> Flask:
     def images(name: str):
         return send_from_directory(config.IMAGES_DIR, name)
 
+    @app.get("/api/health")
+    def health():
+        return {"status": "ok"}, 200
+
     # Retaguarda de impressão: passa a drenar a fila de cupons assim que o
     # sistema estiver de pé.
     impressao_service.start_worker()
