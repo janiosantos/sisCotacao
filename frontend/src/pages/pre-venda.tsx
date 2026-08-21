@@ -664,7 +664,7 @@ export default function PreVenda() {
                     <span>
                       {qtdDigitada > 1 ? <span className={`mr-1 rounded px-1.5 text-xs font-semibold ${i === focoLista ? "bg-orange-600 text-white" : "bg-orange-100 text-orange-700"}`}>{qtdDigitada}x</span> : null}
                       <span className="font-medium">{p.name}</span>
-                      <span className={`block text-xs ${i === focoLista ? "text-orange-100" : "text-gray-400"}`}>{[p.sku, p.brand, p.unidade_venda].filter(Boolean).join(" · ")}</span>
+                      <span className={`block text-xs ${i === focoLista ? "text-orange-100" : "text-gray-400"}`}>{[p.sku, p.spec, p.brand, p.unidade_venda].filter(Boolean).join(" · ")}</span>
                     </span>
                     <span className="font-semibold">{fmtMoney(p.price)}</span>
                   </button>
@@ -673,6 +673,9 @@ export default function PreVenda() {
             )}
           </div>
           <h1 className="py-1 text-center text-2xl font-bold text-black">{linhaAtual?.nome || "Informe um produto para iniciar a venda"}</h1>
+          {linhaAtual?.especificacao ? (
+            <p className="text-center text-sm text-gray-500">{linhaAtual.especificacao}</p>
+          ) : null}
         </div>
 
         {/* Três colunas */}
@@ -736,7 +739,7 @@ export default function PreVenda() {
                     className={`grid cursor-pointer grid-cols-[80px_1fr_60px_84px_84px_24px] items-center gap-1 border-b border-gray-100 py-1.5 ${linhaAtiva === i ? "bg-orange-100" : ""}`}
                   >
                     <span className="truncate text-xs">{l.sku || "#" + (i + 1)}</span>
-                    <span className="truncate">{l.nome}</span>
+                    <span className="truncate">{[l.nome, l.especificacao].filter(Boolean).join(" · ")}</span>
                     <span className="text-right text-xs">{l.quantidade}</span>
                     <span className="text-right text-xs">{fmtMoney(l.preco_unitario)}</span>
                     <span className="text-right font-semibold">{fmtMoney(l.subtotal)}</span>
