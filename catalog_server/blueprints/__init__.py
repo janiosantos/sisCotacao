@@ -10,6 +10,7 @@ from catalog_server.blueprints.api_plano_contas import api_plano_contas_bp
 from catalog_server.blueprints.api_produtos import api_produtos_bp
 from catalog_server.blueprints.api_quotes import api_quotes_bp
 from catalog_server.blueprints.api_relatorios import api_relatorios_bp
+from catalog_server.blueprints.api_sistema import api_sistema_bp
 from catalog_server.blueprints.api_suppliers import api_suppliers_bp
 from catalog_server.blueprints.api_usuarios import api_usuarios_bp
 from catalog_server.blueprints.api_vendedores import api_vendedores_bp
