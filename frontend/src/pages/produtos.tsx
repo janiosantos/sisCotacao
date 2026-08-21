@@ -1,6 +1,6 @@
 // pages/produtos.tsx — cadastro de produtos (famílias + produto pai + variações + imagens).
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import {
   api,
   type Familia,
@@ -8,8 +8,11 @@ import {
   type FamiliaPayload,
   type Fornecedor,
   type FornecedorVariantePayload,
+  type Grupo,
   type ItemListaCadastro,
+  type Marca,
   type ProdutoCadastro,
+  type Subgrupo,
   type ProdutoCadastroPayload,
   type ProdutoPreview,
   type UnidadeCompra,
@@ -46,29 +49,57 @@ interface FornecedorRow {
   variante_idx: number;
 }
 
-const PADRAO_ATTRS = [
-  "bitola", "tensao", "tensão", "capacidade", "potencia", "potência",
-  "vazao", "vazão", "diametro", "diâmetro", "material", "cor",
-  "espessura", "comprimento", "tamanho", "medida", "rolo", "voltagem",
-];
 const CA_RE = /(^|[^a-z0-9])(n\s?[º°]?\s?ca|ca|certificado|aprovacao)([^a-z0-9]|$)/i;
 
 function normalize(str: string): string {
   return String(str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-function ehAttrPadrao(nome: string): boolean {
-  const n = normalize(nome);
-  if (CA_RE.test(nome)) return true;
-  return PADRAO_ATTRS.some((k) => n.includes(k));
-}
-
-function cartesiano(arrays: string[][]): string[][] {
-  return arrays.reduce((acc, cur) => acc.flatMap((a) => cur.map((c) => [...a, c])), [[]] as string[][]);
-}
-
 function varianteLabel(v: VarianteLocal, atributos: FamiliaAtributo[], idx: number): string {
   return atributos.map((a) => v.valores[String(a.id)]).filter(Boolean).join(" · ") || `Variação ${idx + 1}`;
+}
+
+/** Reduz um texto a um trecho curto, só letras/números, maiúsculo — usado
+ * para montar SKUs legíveis a partir do nome do produto e dos valores dos
+ * atributos (ex.: "Cabo Flexível" + Cor=Azul + Bitola=2,5mm → CABOFL-AZUL-25MM). */
+function slugify(str: string, maxLen: number): string {
+  return normalize(str).replace(/[^a-z0-9]+/g, "").toUpperCase().slice(0, maxLen);
+}
+
+// Segmento de atributos do SKU estruturado ([GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS]).
+// `template` = familia.sku_atributos (nomes na ordem que compõem o SKU); vazio/nulo = usa todos.
+function gerarSkuAtributos(valores: Record<string, string>, atributos: FamiliaAtributo[], template?: string[] | null): string {
+  let selecionados: FamiliaAtributo[];
+  if (template && template.length) {
+    selecionados = template
+      .map((nome) => atributos.find((a) => a.nome.trim().toLowerCase() === nome.trim().toLowerCase()))
+      .filter((a): a is FamiliaAtributo => !!a);
+  } else {
+    selecionados = atributos;
+  }
+  const partes = selecionados.map((a) => slugify(valores[String(a.id)] || "", 12)).filter(Boolean);
+  return partes.join("-");
+}
+
+// Regras de validação de atributo "livre".
+
+function validacaoLabel(v?: string): string {
+  return v === "numero" ? "Somente números" : v === "alphanumerico" ? "Letras e números" : "Texto livre";
+}
+
+// Valida um valor digitado conforme o tipo/validação do atributo.
+// Devolve "" se válido ou uma mensagem de erro.
+function validarValorAtributo(tipo: string, validacao: string | undefined, valor: string): string {
+  const v = valor.trim();
+  if (!v) return "";
+  if (tipo !== "livre") return "";
+  if (validacao === "numero") {
+    return /^\d+(?:[.,]\d{1,3})?$/.test(v) ? "" : "Informe apenas números (ex.: 2,5 ou 2500).";
+  }
+  if (validacao === "alphanumerico") {
+    return /^[a-zA-Z0-9À-ÿ ]+$/.test(v) ? "" : "Use apenas letras e números (sem símbolos).";
+  }
+  return "";
 }
 
 // ===================================================================
@@ -87,6 +118,7 @@ export default function Produtos() {
   const [modalFamilias, setModalFamilias] = useState(false);
   const [modalUrl, setModalUrl] = useState(false);
   const [modalEtiquetas, setModalEtiquetas] = useState(false);
+  const [modalImportar, setModalImportar] = useState(false);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -200,6 +232,9 @@ export default function Produtos() {
         <Button variant="outline" onClick={() => setModalEtiquetas(true)}>
           Etiquetas
         </Button>
+        <Button variant="outline" onClick={() => setModalImportar(true)}>
+          Importar catálogo
+        </Button>
         <Button variant="outline" onClick={() => setModalUrl(true)}>
           Novo via URL
         </Button>
@@ -273,6 +308,7 @@ export default function Produtos() {
 
       <ModalFamilias familias={familias} open={modalFamilias} onClose={() => setModalFamilias(false)} onChanged={carregarFamilias} />
       <ModalImportarUrl open={modalUrl} onClose={() => setModalUrl(false)} />
+      <ModalImportarCatalogo open={modalImportar} onClose={() => setModalImportar(false)} />
       <ModalEtiquetas open={modalEtiquetas} onClose={() => setModalEtiquetas(false)} />
     </div>
   );
@@ -318,9 +354,22 @@ function ModalFamilias({
               <div key={f.id} className="flex items-center gap-2 rounded-md border border-gray-100 p-2">
                 <div className="flex-1">
                   <strong className="text-sm">{f.nome}</strong>
-                  <div className="text-xs text-gray-400">
-                    {f.atributos.length} atributo(s): {f.atributos.map((a) => a.nome).join(", ")}
-                  </div>
+                  {f.atributos.length === 0 ? (
+                    <div className="text-xs text-gray-400">Sem atributos.</div>
+                  ) : (
+                    <div className="mt-0.5 text-xs text-gray-500">
+                      {f.atributos.map((a) => (
+                        <span key={a.id} className="mr-2 inline-block">
+                          <span className="font-medium text-gray-700">{a.nome}</span>
+                          {a.tipo === "lista" && a.opcoes.length > 0 ? (
+                            <span className="text-gray-400">: {a.opcoes.join(", ")}</span>
+                          ) : a.tipo === "livre" ? (
+                            <span className="text-blue-500"> ({validacaoLabel(a.validacao)})</span>
+                          ) : null}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <Button size="sm" onClick={() => setFormDe(f)}>
                   Editar
@@ -361,15 +410,48 @@ function ModalFamilias({
   );
 }
 
+function OpcoesEditor({ opcoes, onAdd, onRemove }: { opcoes: string[]; onAdd: (v: string) => void; onRemove: (v: string) => void }) {
+  const [v, setV] = useState("");
+  const adicionar = () => {
+    const val = v.trim();
+    if (!val) return;
+    onAdd(val);
+    setV("");
+  };
+  return (
+    <div>
+      {opcoes.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {opcoes.map((o) => (
+            <span key={o} className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs text-gray-700">
+              {o}
+              <button type="button" className="text-gray-400 hover:text-red-600" onClick={() => onRemove(o)}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Input className="flex-1" placeholder="Digite uma opção e Enter (ex.: azul)" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); adicionar(); } }} />
+        <Button size="sm" variant="ghost" onClick={adicionar}>
+          Adicionar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | null; onClose: () => void; onSaved: () => void }) {
   const [nome, setNome] = useState(familia?.nome ?? "");
   const [descricao, setDescricao] = useState(familia?.descricao ?? "");
   const [ncm, setNcm] = useState(familia?.ncm_padrao ?? "");
   const [unidade, setUnidade] = useState(familia?.unidade_padrao ?? "UN");
-  const [atributos, setAtributos] = useState<{ id: number | null; nome: string; tipo: "lista" | "livre"; opcoes: string[]; obrigatorio: boolean }[]>(() => {
-    const a = (familia ? familia.atributos : []).map((x) => ({ id: x.id, nome: x.nome, tipo: x.tipo, opcoes: x.opcoes || [], obrigatorio: !!x.obrigatorio }));
-    return a.length ? a : [{ id: null, nome: "", tipo: "lista", opcoes: [], obrigatorio: false }];
+  const [atributos, setAtributos] = useState<{ id: number | null; nome: string; tipo: "lista" | "livre"; opcoes: string[]; obrigatorio: boolean; validacao: string }[]>(() => {
+    const a = (familia ? familia.atributos : []).map((x) => ({ id: x.id, nome: x.nome, tipo: x.tipo, opcoes: x.opcoes || [], obrigatorio: !!x.obrigatorio, validacao: x.validacao || "texto" }));
+    return a.length ? a : [{ id: null, nome: "", tipo: "lista", opcoes: [], obrigatorio: false, validacao: "texto" }];
   });
+  const [skuAtributos, setSkuAtributos] = useState<string[]>(() => (familia?.sku_atributos || []).map((s) => s.trim()).filter(Boolean));
 
   const salvar = async () => {
     if (!nome.trim()) {
@@ -382,8 +464,9 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
       ncm_padrao: ncm.trim(),
       unidade_padrao: unidade.trim() || "UN",
       atributos: atributos
-        .map((a) => ({ id: a.id, nome: a.nome.trim(), tipo: a.tipo, opcoes: a.opcoes, obrigatorio: a.obrigatorio }))
+        .map((a) => ({ id: a.id, nome: a.nome.trim(), tipo: a.tipo, opcoes: a.opcoes, obrigatorio: a.obrigatorio, validacao: a.validacao || "texto" }))
         .filter((a) => a.nome),
+      sku_atributos: skuAtributos.map((s) => s.trim()).filter(Boolean),
     };
     try {
       if (familia) await api.atualizarFamilia(familia.id, payload);
@@ -426,32 +509,100 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
           </Field>
         </div>
         <Field label="Atributos (características das variações)">
-          <div className="space-y-2">
+          <div className="space-y-3">
             {atributos.map((a, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Input className="flex-1" placeholder="Nome do atributo (ex.: Cor)" value={a.nome} onChange={(e) => setAtributos((arr) => arr.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)))} />
-                <Select
-                  className="w-40"
-                  value={a.tipo}
-                  onChange={(e) => setAtributos((arr) => arr.map((x, j) => (j === i ? { ...x, tipo: e.target.value as "lista" | "livre" } : x)))}
-                >
-                  <option value="lista">Lista de opções</option>
-                  <option value="livre">Valor livre</option>
-                </Select>
-                <Input className="flex-1" placeholder="azul, vermelho, preto (separado por vírgula)" value={a.opcoes.join(", ")} onChange={(e) => setAtributos((arr) => arr.map((x, j) => (j === i ? { ...x, opcoes: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) } : x)))} />
-                <label className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-600">
-                  <input type="checkbox" checked={a.obrigatorio} onChange={(e) => setAtributos((arr) => arr.map((x, j) => (j === i ? { ...x, obrigatorio: e.target.checked } : x)))} />
-                  Obrig.
-                </label>
-                <button className="text-gray-400 hover:text-red-600" onClick={() => setAtributos((arr) => arr.filter((_, j) => j !== i))}>
-                  ×
-                </button>
+              <div key={i} className="rounded-md border border-gray-200 p-3">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-800">{a.nome.trim() || `Atributo ${i + 1}`}</span>
+                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">{a.tipo === "lista" ? "Lista de opções" : "Valor livre"}</span>
+                  {a.tipo === "livre" && <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600">{validacaoLabel(a.validacao)}</span>}
+                  <span className="flex-1" />
+                  <button className="text-xs text-gray-400 hover:text-red-600" onClick={() => setAtributos((arr) => arr.filter((_, j) => j !== i))}>
+                    × remover
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Input className="min-w-[200px] flex-1" placeholder="Nome do atributo (ex.: Cor)" value={a.nome} onChange={(e) => setAtributos((arr) => arr.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)))} />
+                    <Select
+                      className="w-44"
+                      value={a.tipo}
+                      onChange={(e) => setAtributos((arr) => arr.map((x, j) => (j === i ? { ...x, tipo: e.target.value as "lista" | "livre" } : x)))}
+                    >
+                      <option value="lista">Lista de opções</option>
+                      <option value="livre">Valor livre</option>
+                    </Select>
+                  </div>
+                  {a.tipo === "livre" ? (
+                    <Select
+                      className="w-64"
+                      value={a.validacao || "texto"}
+                      title="Validação do valor digitado no cadastro do produto"
+                      onChange={(e) => setAtributos((arr) => arr.map((x, j) => (j === i ? { ...x, validacao: e.target.value } : x)))}
+                    >
+                      <option value="texto">Texto livre (qualquer valor)</option>
+                      <option value="numero">Somente números (inteiro ou decimal)</option>
+                      <option value="alphanumerico">Letras e números (sem símbolos)</option>
+                    </Select>
+                  ) : (
+                    <OpcoesEditor
+                      opcoes={a.opcoes}
+                      onAdd={(v) => setAtributos((arr) => arr.map((x, j) => (j === i ? { ...x, opcoes: x.opcoes.includes(v) ? x.opcoes : [...x.opcoes, v] } : x)))}
+                      onRemove={(v) => setAtributos((arr) => arr.map((x, j) => (j === i ? { ...x, opcoes: x.opcoes.filter((o) => o !== v) } : x)))}
+                    />
+                  )}
+                  <label className="flex items-center gap-2 text-xs text-gray-600">
+                    <input type="checkbox" checked={a.obrigatorio} onChange={(e) => setAtributos((arr) => arr.map((x, j) => (j === i ? { ...x, obrigatorio: e.target.checked } : x)))} />
+                    Atributo obrigatório
+                  </label>
+                </div>
               </div>
             ))}
           </div>
-          <Button size="sm" variant="ghost" className="mt-2" onClick={() => setAtributos((arr) => [...arr, { id: null, nome: "", tipo: "lista", opcoes: [], obrigatorio: false }])}>
+          <Button size="sm" variant="ghost" className="mt-3" onClick={() => setAtributos((arr) => [...arr, { id: null, nome: "", tipo: "lista", opcoes: [], obrigatorio: false, validacao: "texto" }])}>
             + Adicionar atributo
           </Button>
+        </Field>
+        <Field
+          label="Atributos que compõem o SKU"
+          hint="Marque, na ordem, os atributos que entram no SKU (ex.: Bitola, Cor → ELE-CAB-SIL-25V-... ). Vazio = usa todos."
+        >
+          {atributos.filter((a) => a.nome.trim()).length === 0 ? (
+            <p className="text-xs text-gray-400">Cadastre atributos acima para configurar o SKU.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {atributos
+                .filter((a) => a.nome.trim())
+                .map((a, i) => {
+                  const nome = a.nome.trim();
+                  const marcado = skuAtributos.includes(nome);
+                  return (
+                    <label key={i} className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={marcado}
+                        onChange={(e) => {
+                          const nome2 = nome;
+                          setSkuAtributos((arr) => (e.target.checked ? [...arr.filter((x) => x !== nome2), nome2] : arr.filter((x) => x !== nome2)));
+                        }}
+                      />
+                      <span className="flex-1">{nome}</span>
+                      {marcado && (
+                        <span className="flex items-center gap-1">
+                          <button type="button" className="text-gray-400 hover:text-gray-700" title="Mover para cima" onClick={() => setSkuAtributos((arr) => { const j = arr.indexOf(nome); if (j <= 0) return arr; const c = [...arr]; [c[j - 1], c[j]] = [c[j], c[j - 1]]; return c; })}>
+                            ↑
+                          </button>
+                          <button type="button" className="text-gray-400 hover:text-gray-700" title="Mover para baixo" onClick={() => setSkuAtributos((arr) => { const j = arr.indexOf(nome); if (j === -1 || j >= arr.length - 1) return arr; const c = [...arr]; [c[j], c[j + 1]] = [c[j + 1], c[j]]; return c; })}>
+                            ↓
+                          </button>
+                          <span className="text-xs text-gray-400">pos {skuAtributos.indexOf(nome) + 1}</span>
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+            </div>
+          )}
         </Field>
       </div>
     </Modal>
@@ -570,6 +721,81 @@ function PreviewRow({ k, v }: { k: string; v?: string | null }) {
 }
 
 // ===================================================================
+// IMPORTAÇÃO DE CATÁLOGO (JSON exportado pelo scraper)
+// ===================================================================
+
+function ModalImportarCatalogo({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [importando, setImportando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [resultado, setResultado] = useState<{ produtos: number; grupos: number; criados: number; atualizados: number } | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setArquivo(null);
+      setErro("");
+      setResultado(null);
+    }
+  }, [open]);
+
+  const importar = async () => {
+    if (!arquivo) {
+      toast("Selecione o arquivo JSON exportado pelo scraper", "error");
+      return;
+    }
+    setImportando(true);
+    setErro("");
+    setResultado(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", arquivo);
+      const res = await api.importarCatalogo(fd);
+      setResultado(res);
+      toast("Catálogo importado com sucesso", "success");
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setImportando(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Importar catálogo (scraper)"
+      footer={
+        <>
+          <Button onClick={onClose}>Fechar</Button>
+          <Button variant="primary" onClick={() => void importar()} disabled={importando || !arquivo}>
+            {importando ? "Importando…" : "Importar arquivo"}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Field label="Arquivo JSON (output/catalogo.json)">
+          <Input type="file" accept=".json,application/json" onChange={(e) => setArquivo(e.target.files?.[0] ?? null)} />
+        </Field>
+        <p className="text-xs text-gray-500">
+          O scraper exporta o catálogo em JSON (100% local). A importação é idempotente: produtos já importados são
+          atualizados, variantes sumidas são removidas e o histórico nunca é apagado.
+        </p>
+        {erro ? <p className="text-sm text-red-500">Erro: {erro}</p> : null}
+        {resultado ? (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm">
+            <p>
+              <strong>{resultado.grupos}</strong> produtos ({resultado.produtos} itens) ·{" "}
+              <strong>{resultado.criados}</strong> criados · <strong>{resultado.atualizados}</strong> atualizados
+            </p>
+          </div>
+        ) : null}
+      </div>
+    </Modal>
+  );
+}
+
+// ===================================================================
 // ETIQUETAS
 // ===================================================================
 
@@ -612,16 +838,96 @@ function ModalEtiquetas({ open, onClose }: { open: boolean; onClose: () => void 
 // EDITOR DE PRODUTO
 // ===================================================================
 
+function ModalQuickAdd({
+  tipo,
+  grupoId,
+  onClose,
+  onSaved,
+}: {
+  tipo: "marca" | "grupo" | "subgrupo";
+  grupoId: number | null;
+  onClose: () => void;
+  onSaved: (id: number, nome: string) => void;
+}) {
+  const [codigo, setCodigo] = useState("");
+  const [nome, setNome] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  const titulo = tipo === "marca" ? "Nova marca" : tipo === "grupo" ? "Novo grupo" : "Novo subgrupo";
+
+  const salvar = async () => {
+    const n = nome.trim();
+    if (!n) {
+      toast("Informe o nome", "error");
+      return;
+    }
+    if (tipo === "subgrupo" && !grupoId) {
+      toast("Selecione o grupo antes de criar o subgrupo.", "error");
+      return;
+    }
+    setSalvando(true);
+    try {
+      if (tipo === "marca") {
+        const m = await api.criarMarca(n);
+        if (codigo.trim()) await api.atualizarCodigoMarca(m.id, codigo.trim());
+        onSaved(m.id, m.nome);
+      } else if (tipo === "grupo") {
+        const g = await api.criarGrupo(codigo.trim() || n, n);
+        onSaved(g.id, g.nome);
+      } else {
+        const s = await api.criarSubgrupo(grupoId!, codigo.trim() || n, n);
+        onSaved(s.id, s.nome);
+      }
+      toast("Cadastrado com sucesso", "success");
+      onClose();
+    } catch (e) {
+      toast("Erro: " + (e as Error).message, "error");
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={titulo}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancelar</Button>
+          <Button variant="primary" disabled={salvando} onClick={() => void salvar()}>
+            Salvar
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-xs text-gray-500">
+          O <strong>código</strong> entra no SKU estruturado (ex.: <code>ELE-CAB-SIL-25V</code>). Se vazio, usa o nome.
+        </p>
+        <Field label="Código (curto)">
+          <Input placeholder={tipo === "marca" ? "Ex.: VOT" : tipo === "grupo" ? "Ex.: ELE" : "Ex.: CAB"} value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} />
+        </Field>
+        <Field label="Nome *">
+          <Input placeholder={tipo === "marca" ? "Ex.: Voltini" : tipo === "grupo" ? "Ex.: Elétrico" : "Ex.: Cabo Flexível"} value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
+        </Field>
+      </div>
+    </Modal>
+  );
+}
+
 export function ProdutoEditor() {
   const m = location.hash.match(/^#\/produtos\/(\d+)$/);
   const id = m ? Number(m[1]) : null;
 
   const [familias, setFamilias] = useState<Familia[]>([]);
   const [categoriasTree, setCategoriasTree] = useState<Record<string, string[]>>({});
+  const [marcas, setMarcas] = useState<Marca[]>([]);
+  const [grupos, setGrupos] = useState<Grupo[]>([]);
+  const [subgrupos, setSubgrupos] = useState<Subgrupo[]>([]);
   const [produto, setProduto] = useState<ProdutoCadastro | null>(null);
-  const [form, setForm] = useState({ familia_id: "", marca: "", external_id: "", nome: "", categoria: "", subcategoria: "", descricao: "", termos_busca: "" });
+  const [form, setForm] = useState({ familia_id: "", marca: "", marca_id: "", external_id: "", nome: "", categoria: "", subcategoria: "", grupo_id: "", subgrupo_id: "", descricao: "", termos_busca: "" });
   const [atributos, setAtributos] = useState<FamiliaAtributo[]>([]);
-  const [valores, setValores] = useState<Record<number, Set<string>>>({});
   const [variantes, setVariantes] = useState<VarianteLocal[]>([]);
   const [tab, setTab] = useState<"gerais" | "atributos" | "variacoes" | "imagens">("gerais");
   const [carregando, setCarregando] = useState(true);
@@ -630,6 +936,8 @@ export function ProdutoEditor() {
   const [unidadesCompra, setUnidadesCompra] = useState<UnidadeCompra[]>([]);
   const [fornecedorRows, setFornecedorRows] = useState<FornecedorRow[]>([]);
   const fornecedorSeq = useRef(0);
+  const [skuAvisos, setSkuAvisos] = useState<Record<number, string>>({});
+  const [quickAdd, setQuickAdd] = useState<"marca" | "grupo" | "subgrupo" | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -649,6 +957,22 @@ export function ProdutoEditor() {
       }
       setCategoriasTree(tree);
 
+      let marcas: Marca[] = [];
+      try {
+        marcas = await api.listarMarcas();
+      } catch {
+        marcas = [];
+      }
+      setMarcas(marcas);
+
+      let grupos: Grupo[] = [];
+      try {
+        grupos = await api.listarGrupos();
+      } catch {
+        grupos = [];
+      }
+      setGrupos(grupos);
+
       let prod: ProdutoCadastro | null = null;
       if (id) {
         try {
@@ -665,17 +989,29 @@ export function ProdutoEditor() {
       setForm({
         familia_id: String(familiaId ?? ""),
         marca: prod?.marca ?? "",
+        marca_id: prod?.marca_id ? String(prod.marca_id) : "",
         external_id: prod?.external_id ?? "",
         nome: prod?.nome ?? "",
         categoria: prod?.categoria ?? "",
         subcategoria: prod?.subcategoria ?? "",
+        grupo_id: prod?.grupo_id ? String(prod.grupo_id) : "",
+        subgrupo_id: prod?.subgrupo_id ? String(prod.subgrupo_id) : "",
         descricao: prod?.descricao ?? "",
         termos_busca: prod?.termos_busca ?? "",
       });
 
+      if (prod?.grupo_id) {
+        try {
+          setSubgrupos(await api.listarSubgrupos(prod.grupo_id));
+        } catch {
+          setSubgrupos([]);
+        }
+      } else {
+        setSubgrupos([]);
+      }
+
       const st = buildAtributosState(fs, familiaId, prod);
       setAtributos(st.atributos);
-      setValores(st.valores);
       setVariantes(st.variantes);
 
       if (prod) {
@@ -697,120 +1033,196 @@ export function ProdutoEditor() {
     setForm((f) => ({ ...f, familia_id: String(familiaId ?? "") }));
     const st = buildAtributosState(familias, familiaId, null);
     setAtributos(st.atributos);
-    setValores(st.valores);
     setVariantes(st.variantes);
   };
 
-  const montarNomePadrao = () => {
-    const base = form.nome.trim();
-    const specs = atributos.filter((a) => ehAttrPadrao(a.nome)).map((a) => [...(valores[a.id] || [])].join("/")).filter(Boolean);
-    const montado = [base, ...specs, form.marca.trim()].filter(Boolean).join(" ");
-    if (!montado) {
-      toast("Informe o nome base ou selecione valores de atributos para montar.", "error");
-    } else {
-      setForm((f) => ({ ...f, nome: montado }));
-      toast("Nome montado pelo padrão da família. Ajuste se necessário.", "success");
-    }
-  };
-
-  const toggleValor = (attrId: number, val: string, on: boolean) => {
-    setValores((prev) => {
-      const set = new Set(prev[attrId] || []);
-      if (on) set.add(val);
-      else set.delete(val);
-      return { ...prev, [attrId]: set };
-    });
-  };
-
-  const addValor = (attrId: number, val: string) => {
-    const v = val.trim();
-    if (!v) return;
-    setValores((prev) => {
-      const set = new Set(prev[attrId] || []);
-      set.add(v);
-      return { ...prev, [attrId]: set };
-    });
-  };
-
-  const gerarVariacoes = () => {
-    const keys = atributos.map((a) => a.id);
-    const vazios = atributos.filter((a) => !valores[a.id] || valores[a.id].size === 0);
-    if (vazios.length) {
-      toast(`Selecione ao menos um valor para: ${vazios.map((a) => a.nome).join(", ")}`, "error");
+  const trocarGrupo = (grupoId: string) => {
+    setForm((f) => ({ ...f, grupo_id: grupoId, subgrupo_id: "" }));
+    if (!grupoId) {
+      setSubgrupos([]);
       return;
     }
-    const arrays = keys.map((k) => [...(valores[k] || [])]);
-    const combos = cartesiano(arrays);
-    const existentes: Record<string, VarianteLocal> = {};
-    variantes.forEach((v) => {
-      existentes[JSON.stringify(v.valores)] = v;
-    });
-    const next = combos.map((vals) => {
-      const attr: Record<string, string> = {};
-      keys.forEach((k, j) => {
-        attr[String(k)] = vals[j];
-      });
-      const prev = existentes[JSON.stringify(attr)];
-      return {
-        id: prev ? prev.id : undefined,
-        sku: prev ? prev.sku : "",
-        ean: prev ? prev.ean : "",
-        preco: prev ? prev.preco : "",
-        prom: prev ? prev.prom : "",
-        peso: prev ? prev.peso : "",
-        dimensoes: prev ? prev.dimensoes : "",
-        unidade_venda: prev ? prev.unidade_venda : "",
-        embalagem: prev ? prev.embalagem : "",
-        fator_conversao: prev ? prev.fator_conversao : "",
-        localizacao: prev ? prev.localizacao : "",
-        ncm: prev ? prev.ncm : "",
-        unidade_tributavel: prev ? prev.unidade_tributavel : "",
-        valores: attr,
-      };
-    });
-    setVariantes(next);
-    toast(`${next.length} variação(ões) gerada(s)`, "success");
+    void (async () => {
+      try {
+        setSubgrupos(await api.listarSubgrupos(Number(grupoId)));
+      } catch {
+        setSubgrupos([]);
+      }
+    })();
+  };
+
+  const aoSalvarMarca = async (id: number, nome: string) => {
+    setForm((f) => ({ ...f, marca: nome, marca_id: String(id) }));
+    setMarcas(await api.listarMarcas().catch(() => []));
+  };
+
+  const aoSalvarGrupo = async (id: number, _nome: string) => {
+    setGrupos(await api.listarGrupos().catch(() => []));
+    setForm((f) => ({ ...f, grupo_id: String(id), subgrupo_id: "" }));
+    setSubgrupos(await api.listarSubgrupos(id).catch(() => []));
+  };
+
+  const aoSalvarSubgrupo = async (id: number, _nome: string) => {
+    if (form.grupo_id) setSubgrupos(await api.listarSubgrupos(Number(form.grupo_id)).catch(() => []));
+    setForm((f) => ({ ...f, subgrupo_id: String(id) }));
+  };
+
+  // Cadastro individual de variações: cada variante carrega seus próprios
+  // valores de atributo (subgrid na aba Variações).
+
+  const adicionarVariante = () => {
+    setVariantes((arr) => [
+      ...arr,
+      {
+        sku: "",
+        ean: "",
+        preco: "",
+        prom: "",
+        peso: "",
+        dimensoes: "",
+        unidade_venda: "",
+        embalagem: "",
+        fator_conversao: "",
+        localizacao: "",
+        ncm: "",
+        unidade_tributavel: "",
+        valores: {},
+      },
+    ]);
+  };
+
+  const removerVariante = (idx: number) => {
+    setVariantes((arr) => arr.filter((_, i) => i !== idx));
+  };
+
+  const atualizarValorVariante = (idx: number, attrId: number, value: string) => {
+    setVariantes((arr) =>
+      arr.map((v, i) => {
+        if (i !== idx) return v;
+        const novos = { ...v.valores };
+        if (value.trim()) novos[String(attrId)] = value.trim();
+        else delete novos[String(attrId)];
+        return { ...v, valores: novos };
+      })
+    );
   };
 
   const atualizarVariante = (idx: number, field: keyof VarianteLocal, value: string) => {
     setVariantes((arr) => arr.map((v, i) => (i === idx ? { ...v, [field]: value } : v)));
+    if (field === "sku") {
+      setSkuAvisos((a) => ({ ...a, [idx]: "" }));
+    }
+  };
+
+  const aplicarParaTodos = (field: keyof VarianteLocal) => {
+    if (variantes.length < 2) return;
+    const valorBase = variantes[0][field];
+    setVariantes((arr) => arr.map((v) => ({ ...v, [field]: valorBase })));
+    toast(`Valor da 1ª linha aplicado a todas as variações.`, "success");
+  };
+
+  const gerarSkus = async () => {
+    if (!variantes.length) return;
+    const nomeBase = (form.nome || form.marca || "").trim();
+    const grupo = grupos.find((g) => String(g.id) === form.grupo_id);
+    const subgrupo = subgrupos.find((s) => String(s.id) === form.subgrupo_id);
+    const marcaCod =
+      marcas.find((m) =>
+        form.marca_id ? m.id === Number(form.marca_id) : m.nome === form.marca
+      )?.codigo || "";
+    const estruturado = !!(grupo?.codigo || subgrupo?.codigo || marcaCod);
+    try {
+      const res = await api.previewSkus({
+        base: nomeBase || "SKU",
+        produto_id: produto?.id ?? null,
+        grupo_cod: grupo?.codigo || "",
+        subgrupo_cod: subgrupo?.codigo || "",
+        marca_cod: marcaCod,
+        variantes: variantes.map((v) => {
+          const familiaObj = familias.find((f) => String(f.id) === form.familia_id);
+          const attrs = gerarSkuAtributos(v.valores, atributos, familiaObj?.sku_atributos);
+          return {
+            id: v.id ?? null,
+            sku: attrs,
+            attrs,
+          };
+        }),
+      });
+      const avisos: Record<number, string> = {};
+      setVariantes((arr) =>
+        arr.map((v, i) => {
+          const r = res.skus[i];
+          if (!r) return v;
+          v = { ...v, sku: r.sku || v.sku };
+          if (r.aviso) avisos[i] = r.aviso;
+          return v;
+        })
+      );
+      setSkuAvisos(avisos);
+      const nAvisos = Object.keys(avisos).length;
+      if (nAvisos)
+        toast(
+          `${nAvisos} SKU(s): vazio/duplicado/inválido ou emitido (mantido).`,
+          "warn"
+        );
+      else if (estruturado)
+        toast("SKUs estruturados gerados: [GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS].", "success");
+      else
+        toast("SKUs gerados a partir dos atributos.", "success");
+    } catch {
+      toast("Não foi possível gerar os SKUs.", "error");
+    }
   };
 
   const salvar = async () => {
-    const familia_id = Number(form.familia_id);
-    if (!familia_id) {
-      toast("Selecione a família", "error");
-      return;
-    }
     if (!form.nome.trim()) {
       toast("Informe o nome base do produto", "error");
       return;
     }
-    const semsValor = atributos.filter((a) => a.obrigatorio && (!valores[a.id] || valores[a.id].size === 0));
-    if (semsValor.length) {
-      toast("Preencha os atributos obrigatórios: " + semsValor.map((a) => a.nome).join(", "), "error");
-      setTab("atributos");
+    if (!variantes.length) {
+      toast("Adicione ao menos uma variação", "error");
+      setTab("variacoes");
       return;
     }
-    const caAttrs = atributos.filter((a) => CA_RE.test(a.nome));
-    for (const a of caAttrs) {
-      for (const v of valores[a.id] || []) {
-        if (!/^[\d.\s]+$/.test(String(v).trim())) {
-          toast(`O atributo "${a.nome}" deve ser um número de CA válido (ex.: 12345 ou 12.345).`, "error");
-          setTab("atributos");
+    // Validação por variante: atributos obrigatórios devem estar preenchidos
+    // (aplicável apenas quando a família define atributos).
+    const obr = atributos.filter((a) => a.obrigatorio);
+    if (obr.length) {
+      for (let i = 0; i < variantes.length; i++) {
+        const faltando = obr.filter((a) => !(variantes[i].valores[String(a.id)] || "").trim());
+        if (faltando.length) {
+          toast(`Variação ${i + 1}: preencha os atributos obrigatórios: ${faltando.map((a) => a.nome).join(", ")}`, "error");
+          setTab("variacoes");
           return;
         }
       }
     }
+    const caAttrs = atributos.filter((a) => CA_RE.test(a.nome));
+    if (caAttrs.length) {
+      for (let i = 0; i < variantes.length; i++) {
+        for (const a of caAttrs) {
+          const v = variantes[i].valores[String(a.id)];
+          if (v && !/^[\d.\s]+$/.test(String(v).trim())) {
+            toast(`Variação ${i + 1}: o atributo "${a.nome}" deve ser um número de CA válido (ex.: 12345 ou 12.345).`, "error");
+            setTab("variacoes");
+            return;
+          }
+        }
+      }
+    }
+    const familia_id = Number(form.familia_id) || null;
     const payload: ProdutoCadastroPayload = {
       familia_id,
       nome: form.nome.trim(),
       marca: form.marca.trim(),
+      marca_id: form.marca_id ? Number(form.marca_id) : null,
       external_id: form.external_id.trim() || null,
       descricao: form.descricao.trim(),
       termos_busca: form.termos_busca.trim(),
       categoria: form.categoria.trim(),
       subcategoria: form.subcategoria.trim(),
+      grupo_id: form.grupo_id ? Number(form.grupo_id) : null,
+      subgrupo_id: form.subgrupo_id ? Number(form.subgrupo_id) : null,
       variantes: variantes.map((v) => ({
         id: v.id,
         sku: v.sku || "",
@@ -832,19 +1244,29 @@ export function ProdutoEditor() {
     try {
       let novoId = produto ? produto.id : null;
       let desativadas = 0;
+      let bloqueadas = 0;
+      let criadas = 0;
+      let atributosFaltantes = 0;
       if (produto) {
         const res = await api.atualizarProdutoCadastro(produto.id, payload);
         desativadas = res.variantes?.desativadas || 0;
+        bloqueadas = res.variantes?.bloqueadas || 0;
+        criadas = res.variantes?.criadas || 0;
+        atributosFaltantes = res.variantes?.atributos_faltantes || 0;
       } else {
         const res = await api.criarProdutoCadastro(payload);
         novoId = res.id;
       }
-      toast(
-        desativadas
-          ? `Produto salvo. ${desativadas} variação(ões) removida(s) foram desativadas por possuírem estoque/preço/fornecedor — nenhum dado foi excluído.`
-          : "Produto salvo",
-        desativadas ? "warn" : "success"
-      );
+      if (atributosFaltantes) {
+        toast(`Não foi possível salvar: ${atributosFaltantes} variação(ões) sem os atributos obrigatórios da família.`, "error");
+        setTab("variacoes");
+        return;
+      }
+      const avisos: string[] = [];
+      if (desativadas) avisos.push(`${desativadas} variação(ões) removida(s) foram desativadas por possuírem estoque/preço/fornecedor (nenhum dado foi excluído)`);
+      if (bloqueadas) avisos.push(`não foi possível remover ${bloqueadas} variação(ões): todo produto precisa de ao menos uma variação ativa`);
+      if (criadas) avisos.push(`${criadas} variação(ões) padrão criada(s) automaticamente`);
+      toast(avisos.length ? "Produto salvo. " + avisos.join("; ") : "Produto salvo", avisos.length ? "warn" : "success");
       location.hash = `#/produtos/${novoId}`;
     } catch (e) {
       toast("Erro ao salvar: " + (e as Error).message, "error");
@@ -937,9 +1359,10 @@ export function ProdutoEditor() {
       {tab === "gerais" && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-4 lg:col-span-2">
-            <Field label="Família *">
+            <Field label="Família (opcional)">
               <div className="flex gap-2">
                 <Select value={form.familia_id} onChange={(e) => trocarFamilia(Number(e.target.value) || null)} className="flex-1">
+                  <option value="">— sem família —</option>
                   {familias.map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.nome}
@@ -950,7 +1373,17 @@ export function ProdutoEditor() {
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Marca">
-                <Input placeholder="Ex.: Corfio" value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} />
+                <div className="flex gap-2">
+                  <Input list="dlMarcas" placeholder="Ex.: Corfio" value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} className="flex-1" />
+                  <Button size="sm" variant="ghost" title="Cadastrar nova marca" onClick={() => setQuickAdd("marca")}>
+                    +
+                  </Button>
+                </div>
+                <datalist id="dlMarcas">
+                  {marcas.map((m) => (
+                    <option key={m.id} value={m.nome} />
+                  ))}
+                </datalist>
               </Field>
               <Field label="Código Fabricante">
                 <Input placeholder="Ex.: B-66874" value={form.external_id} onChange={(e) => setForm({ ...form, external_id: e.target.value })} />
@@ -958,13 +1391,8 @@ export function ProdutoEditor() {
             </div>
             <Field label="Nome base do produto *">
               <Input placeholder="Ex.: Cabo Flexível 750V Antichama" value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
-              <div className="mt-1 flex items-center justify-between gap-2">
-                <span className="text-xs text-gray-400" title="Padrão de nomenclatura de fábrica">
-                  {padraoText}
-                </span>
-                <Button size="sm" variant="ghost" onClick={montarNomePadrao}>
-                  Montar pelo padrão
-                </Button>
+              <div className="mt-1 text-xs text-gray-400" title="Padrão de nomenclatura de fábrica">
+                {padraoText}
               </div>
             </Field>
             <div className="grid grid-cols-2 gap-3">
@@ -985,6 +1413,38 @@ export function ProdutoEditor() {
                 </datalist>
               </Field>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Grupo (SKU)" hint="1º segmento do SKU estruturado">
+                <div className="flex gap-2">
+                  <Select value={form.grupo_id} onChange={(e) => trocarGrupo(e.target.value)} className="flex-1">
+                    <option value="">—</option>
+                    {grupos.map((g) => (
+                      <option key={g.id} value={String(g.id)}>{g.codigo} · {g.nome}</option>
+                    ))}
+                  </Select>
+                  <Button size="sm" variant="ghost" title="Cadastrar novo grupo" onClick={() => setQuickAdd("grupo")}>
+                    +
+                  </Button>
+                </div>
+              </Field>
+              <Field label="Subgrupo (SKU)" hint="2º segmento do SKU estruturado">
+                <div className="flex gap-2">
+                  <Select value={form.subgrupo_id} onChange={(e) => setForm({ ...form, subgrupo_id: e.target.value })} className="flex-1" disabled={!form.grupo_id}>
+                    <option value="">—</option>
+                    {subgrupos.map((s) => (
+                      <option key={s.id} value={String(s.id)}>{s.codigo} · {s.nome}</option>
+                    ))}
+                  </Select>
+                  <Button size="sm" variant="ghost" title="Cadastrar novo subgrupo" disabled={!form.grupo_id} onClick={() => setQuickAdd("subgrupo")}>
+                    +
+                  </Button>
+                </div>
+              </Field>
+            </div>
+            <p className="text-xs text-gray-400">
+              SKU estruturado: <code>[GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS]</code> (ex.: ELE-CAB-SIL-25V).
+              Grupo e subgrupo têm código próprio; a marca e os atributos completam o SKU.
+            </p>
             <Field label="Descrição (opcional)">
               <Input value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
             </Field>
@@ -1002,36 +1462,23 @@ export function ProdutoEditor() {
 
       {tab === "atributos" && (
         <div>
-          <p className="mb-3 text-sm text-gray-500">Combine os valores dos atributos da família selecionada. Os marcados ficam ativos na aba de variações.</p>
-          {atributos.length === 0 ? (
+          <p className="mb-3 text-sm text-gray-500">Atributos definidos pela família selecionada (referência). Os valores de cada atributo são informados em cada variação, na aba Variações.</p>
+          {!form.familia_id ? (
+            <p className="py-8 text-center text-sm text-gray-400">Sem família — este produto não possui atributos.</p>
+          ) : atributos.length === 0 ? (
             <p className="py-8 text-center text-sm text-gray-400">Essa família não tem atributos. Edite a família para adicioná-los.</p>
           ) : (
             <div className="space-y-3">
-              {atributos.map((a) => {
-                const set = valores[a.id] || new Set<string>();
-                const opts = a.tipo === "lista" ? [...a.opcoes] : [];
-                const custom = [...set].filter((v) => !opts.includes(v));
-                const display = [...opts, ...custom];
-                return (
-                  <div key={a.id} className="rounded-lg border border-gray-200 bg-white p-3">
-                    <div className="mb-2 text-sm font-medium text-gray-900">
-                      {a.nome} {a.obrigatorio ? <span className="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-600">* obrigatório</span> : null}
-                    </div>
-                    {display.length > 0 && (
-                      <div className="mb-2 flex flex-wrap gap-2">
-                        {display.map((v) => (
-                          <label key={v} className={`flex cursor-pointer items-center gap-1 rounded-full border px-3 py-1 text-sm ${set.has(v) ? "border-brand-600 bg-brand-50 text-brand-700" : "border-gray-200 text-gray-600"}`}>
-                            <input type="checkbox" checked={set.has(v)} onChange={(e) => toggleValor(a.id, v, e.target.checked)} className="hidden" />
-                            {set.has(v) ? "✓ " : ""}
-                            {v}
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                    <AttrAddInput onAdd={(v) => addValor(a.id, v)} />
+              {atributos.map((a) => (
+                <div key={a.id} className="rounded-lg border border-gray-200 bg-white p-3">
+                  <div className="mb-1 text-sm font-medium text-gray-900">
+                    {a.nome} {a.obrigatorio ? <span className="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-600">* obrigatório</span> : null}
                   </div>
-                );
-              })}
+                  <div className="text-xs text-gray-500">
+                    {a.tipo === "lista" ? `Lista de opções: ${(a.opcoes || []).join(", ") || "—"}` : `Valor livre (${validacaoLabel(a.validacao)})`}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -1039,12 +1486,18 @@ export function ProdutoEditor() {
 
       {tab === "variacoes" && (
         <div>
-          <div className="mb-3 flex items-center gap-3">
-            <Button variant="primary" onClick={gerarVariacoes}>
-              Gerar Variações
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <Button variant="primary" onClick={adicionarVariante}>
+              ＋ Adicionar variação
             </Button>
-            {variantes.length > 0 && <span className="text-xs text-gray-500">{variantes.length} variação(ões) · atributos: {atributos.map((a) => a.nome).join(" · ")}</span>}
-            {!variantes.length && atributos.length > 0 && <span className="text-xs text-gray-500">Selecione os valores dos atributos e clique em "Gerar Variações".</span>}
+            {variantes.length > 0 && (
+              <Button variant="secondary" onClick={() => void gerarSkus()}>
+                Gerar SKUs
+              </Button>
+            )}
+            {variantes.length > 0 && <span className="text-xs text-gray-500">{variantes.length} variação(ões)</span>}
+            {!variantes.length && <span className="text-xs text-gray-500">Clique em "Adicionar variação" para cadastrar cada variação individualmente.</span>}
+            {atributos.length > 0 && <span className="text-xs text-gray-400">Atributos da família: {atributos.map((a) => a.nome + (a.obrigatorio ? "*" : "")).join(" · ")}</span>}
           </div>
 
           {variantes.length > 0 && (
@@ -1052,35 +1505,110 @@ export function ProdutoEditor() {
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    {["Variação", "SKU", "EAN", "Preço", "Promo.", "Peso", "Dimensões", "Unid.", "Emb.", "Fator", "Localização", "NCM", "Unid. Trib.", ""].map((h) => (
+                    {(
+                      [
+                        ["Variação", null],
+                        ["SKU", null],
+                        ["EAN", null],
+                        ["Preço", "preco"],
+                        ["Promo.", "prom"],
+                        ["Peso", "peso"],
+                        ["Dimensões", "dimensoes"],
+                        ["Unid.", "unidade_venda"],
+                        ["Emb.", "embalagem"],
+                        ["Fator", "fator_conversao"],
+                        ["Localização", "localizacao"],
+                        ["NCM", "ncm"],
+                        ["Unid. Trib.", "unidade_tributavel"],
+                        ["", null],
+                      ] as [string, keyof VarianteLocal | null][]
+                    ).map(([h, field]) => (
                       <th key={h} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        {h}
+                        <span className="inline-flex items-center gap-1">
+                          {h}
+                          {field && variantes.length > 1 && (
+                            <button
+                              type="button"
+                              title="Copiar o valor da 1ª linha para todas as variações"
+                              className="text-gray-400 hover:text-brand-600"
+                              onClick={() => aplicarParaTodos(field)}
+                            >
+                              ↓⁝
+                            </button>
+                          )}
+                        </span>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {variantes.map((v, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-3 py-1.5 font-medium">{varianteLabel(v, atributos, idx)}</td>
-                      <td className="px-3 py-1.5"><CellInput value={String(v.sku)} onChange={(x) => atualizarVariante(idx, "sku", x)} placeholder="SKU" /></td>
-                      <td className="px-3 py-1.5"><CellInput value={String(v.ean)} onChange={(x) => atualizarVariante(idx, "ean", x)} placeholder="EAN" /></td>
-                      <td className="px-3 py-1.5"><CellInput type="number" value={num(v.preco)} onChange={(x) => atualizarVariante(idx, "preco", x)} placeholder="R$" /></td>
-                      <td className="px-3 py-1.5"><CellInput type="number" value={num(v.prom)} onChange={(x) => atualizarVariante(idx, "prom", x)} placeholder="Promo" /></td>
-                      <td className="px-3 py-1.5"><CellInput type="number" value={num(v.peso)} onChange={(x) => atualizarVariante(idx, "peso", x)} placeholder="kg" /></td>
-                      <td className="px-3 py-1.5"><CellInput value={String(v.dimensoes)} onChange={(x) => atualizarVariante(idx, "dimensoes", x)} placeholder="CxLxA" /></td>
-                      <td className="px-3 py-1.5"><CellInput value={String(v.unidade_venda)} onChange={(x) => atualizarVariante(idx, "unidade_venda", x)} placeholder="UN" /></td>
-                      <td className="px-3 py-1.5"><CellInput type="number" value={num(v.embalagem)} onChange={(x) => atualizarVariante(idx, "embalagem", x)} placeholder="unid/cx" /></td>
-                      <td className="px-3 py-1.5"><CellInput type="number" value={num(v.fator_conversao)} onChange={(x) => atualizarVariante(idx, "fator_conversao", x)} placeholder="cx →" /></td>
-                      <td className="px-3 py-1.5"><CellInput value={String(v.localizacao)} onChange={(x) => atualizarVariante(idx, "localizacao", x)} placeholder="Endereço" /></td>
-                      <td className="px-3 py-1.5"><CellInput value={String(v.ncm)} onChange={(x) => atualizarVariante(idx, "ncm", x)} placeholder="NCM" /></td>
-                      <td className="px-3 py-1.5"><CellInput value={String(v.unidade_tributavel)} onChange={(x) => atualizarVariante(idx, "unidade_tributavel", x)} placeholder="UN" /></td>
-                      <td className="px-3 py-1.5">
-                        <button className="text-gray-400 hover:text-red-600" onClick={() => setVariantes((arr) => arr.filter((_, i) => i !== idx))}>
-                          ×
-                        </button>
-                      </td>
-                    </tr>
+                    <Fragment key={idx}>
+                      <tr className="hover:bg-gray-50">
+                        <td className="px-3 py-1.5 font-medium">{varianteLabel(v, atributos, idx)}</td>
+                        <td className="px-3 py-1.5">
+                          <CellInput value={String(v.sku)} onChange={(x) => atualizarVariante(idx, "sku", x)} placeholder="SKU" error={!!skuAvisos[idx]} title={skuAvisos[idx]} />
+                        </td>
+                        <td className="px-3 py-1.5"><CellInput value={String(v.ean)} onChange={(x) => atualizarVariante(idx, "ean", x)} placeholder="EAN" /></td>
+                        <td className="px-3 py-1.5"><CellInput type="number" value={num(v.preco)} onChange={(x) => atualizarVariante(idx, "preco", x)} placeholder="R$" /></td>
+                        <td className="px-3 py-1.5"><CellInput type="number" value={num(v.prom)} onChange={(x) => atualizarVariante(idx, "prom", x)} placeholder="Promo" /></td>
+                        <td className="px-3 py-1.5"><CellInput type="number" value={num(v.peso)} onChange={(x) => atualizarVariante(idx, "peso", x)} placeholder="kg" /></td>
+                        <td className="px-3 py-1.5"><CellInput value={String(v.dimensoes)} onChange={(x) => atualizarVariante(idx, "dimensoes", x)} placeholder="CxLxA" /></td>
+                        <td className="px-3 py-1.5"><CellInput value={String(v.unidade_venda)} onChange={(x) => atualizarVariante(idx, "unidade_venda", x)} placeholder="UN" /></td>
+                        <td className="px-3 py-1.5"><CellInput type="number" value={num(v.embalagem)} onChange={(x) => atualizarVariante(idx, "embalagem", x)} placeholder="unid/cx" /></td>
+                        <td className="px-3 py-1.5"><CellInput type="number" value={num(v.fator_conversao)} onChange={(x) => atualizarVariante(idx, "fator_conversao", x)} placeholder="cx →" /></td>
+                        <td className="px-3 py-1.5"><CellInput value={String(v.localizacao)} onChange={(x) => atualizarVariante(idx, "localizacao", x)} placeholder="Endereço" /></td>
+                        <td className="px-3 py-1.5"><CellInput value={String(v.ncm)} onChange={(x) => atualizarVariante(idx, "ncm", x)} placeholder="NCM" /></td>
+                        <td className="px-3 py-1.5"><CellInput value={String(v.unidade_tributavel)} onChange={(x) => atualizarVariante(idx, "unidade_tributavel", x)} placeholder="UN" /></td>
+                        <td className="px-3 py-1.5">
+                          <button className="text-gray-400 hover:text-red-600" onClick={() => removerVariante(idx)}>
+                            ×
+                          </button>
+                        </td>
+                      </tr>
+                      {atributos.length > 0 && (
+                        <tr>
+                          <td colSpan={14} className="bg-gray-50/60 px-3 py-2">
+                            <div className="flex flex-wrap gap-3">
+                              {atributos.map((a) => {
+                                const val = v.valores[String(a.id)] || "";
+                                const err = a.tipo === "livre" && val ? validarValorAtributo(a.tipo, a.validacao, val) : "";
+                                return (
+                                  <div key={a.id} className="min-w-[150px] flex-1">
+                                    <label className="mb-0.5 block text-xs font-medium text-gray-600">
+                                      {a.nome} {a.obrigatorio ? <span className="text-red-500">*</span> : null}
+                                    </label>
+                                    {a.tipo === "lista" ? (
+                                      <select
+                                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs"
+                                        value={val}
+                                        onChange={(e) => atualizarValorVariante(idx, a.id, e.target.value)}
+                                      >
+                                        <option value="">—</option>
+                                        {(a.opcoes || []).map((o) => (
+                                          <option key={o} value={o}>{o}</option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <div>
+                                        <input
+                                          className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
+                                          inputMode={a.validacao === "numero" ? "decimal" : "text"}
+                                          value={val}
+                                          placeholder={a.validacao === "numero" ? "número" : a.validacao === "alphanumerico" ? "letras e números" : "texto"}
+                                          onChange={(e) => atualizarValorVariante(idx, a.id, e.target.value)}
+                                        />
+                                        {err && <p className="mt-0.5 text-[10px] text-red-500">{err}</p>}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -1126,6 +1654,15 @@ export function ProdutoEditor() {
           Salvar produto
         </Button>
       </div>
+
+      {quickAdd && (
+        <ModalQuickAdd
+          tipo={quickAdd}
+          grupoId={form.grupo_id ? Number(form.grupo_id) : null}
+          onClose={() => setQuickAdd(null)}
+          onSaved={quickAdd === "marca" ? aoSalvarMarca : quickAdd === "grupo" ? aoSalvarGrupo : aoSalvarSubgrupo}
+        />
+      )}
     </div>
   );
 }
@@ -1134,50 +1671,16 @@ function num(x: string | number): string {
   return x !== "" && x != null ? String(x) : "";
 }
 
-function CellInput({ value, onChange, placeholder, type }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
+function CellInput({ value, onChange, placeholder, type, error, title }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string; error?: boolean; title?: string }) {
   return (
     <input
       type={type || "text"}
-      className="w-24 rounded border border-gray-200 px-2 py-1 text-xs focus:border-brand-500 focus:outline-none"
+      className={`w-24 rounded border px-2 py-1 text-xs focus:outline-none ${error ? "border-red-400 bg-red-50 focus:border-red-500" : "border-gray-200 focus:border-brand-500"}`}
       placeholder={placeholder}
       value={value}
+      title={title}
       onChange={(e) => onChange(e.target.value)}
     />
-  );
-}
-
-function AttrAddInput({ onAdd }: { onAdd: (v: string) => void }) {
-  const [v, setV] = useState("");
-  return (
-    <div className="flex gap-2">
-      <Input
-        className="flex-1"
-        placeholder="Adicionar valor…"
-        value={v}
-        onChange={(e) => setV(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            if (v.trim()) {
-              onAdd(v.trim());
-              setV("");
-            }
-          }
-        }}
-      />
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => {
-          if (v.trim()) {
-            onAdd(v.trim());
-            setV("");
-          }
-        }}
-      >
-        Adicionar
-      </Button>
-    </div>
   );
 }
 
@@ -1406,20 +1909,13 @@ function Imagens({ produto, setProduto }: { produto: ProdutoCadastro; setProduto
 function buildAtributosState(familias: Familia[], familiaId: number | null, produto: ProdutoCadastro | null) {
   let atributos: FamiliaAtributo[] = familias.find((x) => x.id === familiaId)?.atributos || [];
   if (produto && produto.atributos && produto.familia_id === familiaId) atributos = produto.atributos;
-  const valores: Record<number, Set<string>> = {};
-  atributos.forEach((a) => {
-    valores[a.id] = new Set();
-  });
   const variantes: VarianteLocal[] = [];
   if (produto && produto.familia_id === familiaId) {
     (produto.variantes || []).forEach((v) => {
       const vals: Record<string, string> = {};
       atributos.forEach((a) => {
         const val = v.atributos ? v.atributos[String(a.id)] : undefined;
-        if (val) {
-          valores[a.id].add(val);
-          vals[String(a.id)] = val;
-        }
+        if (val) vals[String(a.id)] = val;
       });
       variantes.push({
         id: v.id,
@@ -1439,7 +1935,7 @@ function buildAtributosState(familias: Familia[], familiaId: number | null, prod
       });
     });
   }
-  return { atributos, valores, variantes };
+  return { atributos, variantes };
 }
 
 function seedFornecedorRows(produto: ProdutoCadastro, variantes: VarianteLocal[], seq: React.MutableRefObject<number>): FornecedorRow[] {

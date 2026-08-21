@@ -530,6 +530,7 @@ export interface FamiliaAtributo {
   tipo: "lista" | "livre";
   opcoes: string[];
   obrigatorio: number | boolean;
+  validacao?: string;
 }
 
 export interface Familia {
@@ -541,6 +542,7 @@ export interface Familia {
   ncm_padrao?: string;
   unidade_padrao?: string;
   atributos: FamiliaAtributo[];
+  sku_atributos?: string[] | null;
 }
 
 export interface FamiliaAtributoPayload {
@@ -549,6 +551,7 @@ export interface FamiliaAtributoPayload {
   tipo: string;
   opcoes: string[];
   obrigatorio: boolean;
+  validacao?: string;
 }
 
 export interface FamiliaPayload {
@@ -557,6 +560,7 @@ export interface FamiliaPayload {
   ncm_padrao?: string;
   unidade_padrao?: string;
   atributos: FamiliaAtributoPayload[];
+  sku_atributos?: string[] | null;
 }
 
 export interface ImagemProduto {
@@ -566,6 +570,28 @@ export interface ImagemProduto {
   url: string;
   url_origem?: string;
   ordem: number;
+}
+
+export interface Marca {
+  id: number;
+  nome: string;
+  codigo?: string | null;
+  ativo: number | boolean;
+}
+
+export interface Grupo {
+  id: number;
+  codigo: string;
+  nome: string;
+  ativo: number | boolean;
+}
+
+export interface Subgrupo {
+  id: number;
+  grupo_id: number;
+  codigo: string;
+  nome: string;
+  ativo: number | boolean;
 }
 
 export interface VarianteCadastro {
@@ -612,9 +638,17 @@ export interface ProdutoCadastro {
   familia_nome: string;
   nome: string;
   marca: string;
+  marca_id?: number | null;
+  marca_codigo?: string;
   descricao: string;
   categoria: string;
   subcategoria: string;
+  grupo_id?: number | null;
+  subgrupo_id?: number | null;
+  grupo?: string;
+  subgrupo?: string;
+  grupo_codigo?: string;
+  subgrupo_codigo?: string;
   termos_busca: string;
   external_id: string | null;
   criado_em: string;
@@ -651,13 +685,16 @@ export interface VarianteCadastroPayload {
 }
 
 export interface ProdutoCadastroPayload {
-  familia_id: number;
+  familia_id: number | null;
   nome: string;
   marca: string;
+  marca_id?: number | null;
   descricao: string;
   termos_busca: string;
   categoria: string;
   subcategoria: string;
+  grupo_id?: number | null;
+  subgrupo_id?: number | null;
   external_id?: string | null;
   variantes: VarianteCadastroPayload[];
 }
@@ -854,7 +891,7 @@ export const api = {
   criarProdutoCadastro: (payload: ProdutoCadastroPayload) =>
     request<{ id: number }>("POST", "/api/produtos-cadastro", payload),
   atualizarProdutoCadastro: (id: number, payload: ProdutoCadastroPayload) =>
-    request<{ ok: boolean; variantes: { excluidas: number; desativadas: number } }>("PUT", `/api/produtos-cadastro/${id}`, payload),
+    request<{ ok: boolean; variantes: { excluidas: number; desativadas: number; bloqueadas: number; criadas: number; atributos_faltantes: number } }>("PUT", `/api/produtos-cadastro/${id}`, payload),
   excluirProdutoCadastro: (id: number) =>
     request<{ ok: boolean; excluidas: number; desativadas: number }>("DELETE", `/api/produtos-cadastro/${id}`),
   parseUrlProduto: (url: string) =>
@@ -884,6 +921,52 @@ export const api = {
       "PUT",
       `/api/produtos-cadastro/${produtoId}/fornecedor-variantes`,
       { fornecedor_id: fornecedorId, itens }
+    ),
+  importarCatalogo: (formData: FormData) =>
+    enviarArquivo<{ ok: boolean; produtos: number; grupos: number; criados: number; atualizados: number }>(
+      "/api/produtos-cadastro/importar-catalogo",
+      formData
+    ),
+
+  // Marcas
+  listarMarcas: (somenteAtivas = false) =>
+    request<Marca[]>("GET", "/api/marcas" + qs({ ativas: somenteAtivas })),
+  criarMarca: (nome: string) =>
+    request<Marca>("POST", "/api/marcas", { nome }),
+  atualizarCodigoMarca: (marcaId: number, codigo: string) =>
+    request<{ ok: boolean }>("PUT", `/api/marcas/${marcaId}/codigo`, { codigo }),
+
+  // Grupos e subgrupos (SKU estruturado)
+  listarGrupos: (somenteAtivos = false) =>
+    request<Grupo[]>("GET", "/api/grupos" + qs({ ativas: somenteAtivos })),
+  criarGrupo: (codigo: string, nome: string) =>
+    request<Grupo>("POST", "/api/grupos", { codigo, nome }),
+  atualizarGrupo: (id: number, codigo: string, nome: string, ativo = 1) =>
+    request<{ ok: boolean }>("PUT", `/api/grupos/${id}`, { codigo, nome, ativo }),
+  excluirGrupo: (id: number) =>
+    request<{ ok: boolean }>("DELETE", `/api/grupos/${id}`),
+  listarSubgrupos: (grupoId: number, somenteAtivos = false) =>
+    request<Subgrupo[]>("GET", `/api/grupos/${grupoId}/subgrupos` + qs({ ativas: somenteAtivos })),
+  criarSubgrupo: (grupoId: number, codigo: string, nome: string) =>
+    request<Subgrupo>("POST", `/api/grupos/${grupoId}/subgrupos`, { codigo, nome }),
+  atualizarSubgrupo: (id: number, codigo: string, nome: string, ativo = 1) =>
+    request<{ ok: boolean }>("PUT", `/api/subgrupos/${id}`, { codigo, nome, ativo }),
+  excluirSubgrupo: (id: number) =>
+    request<{ ok: boolean }>("DELETE", `/api/subgrupos/${id}`),
+
+  // SKUs
+  previewSkus: (payload: {
+    base?: string;
+    produto_id?: number | null;
+    grupo_cod?: string;
+    subgrupo_cod?: string;
+    marca_cod?: string;
+    variantes: { id?: number | null; sku?: string; attrs?: string }[];
+  }) =>
+    request<{ skus: { sku: string; aviso: string; emitido?: boolean }[] }>(
+      "POST",
+      "/api/produtos-cadastro/skus/preview",
+      payload
     ),
 
   // Categorias
@@ -1367,6 +1450,7 @@ export interface TecnospeedConfig {
 }
 
 export interface ConfigImpressao {
+  driver: string;
   host: string;
   porta: number;
   papel_mm: number;

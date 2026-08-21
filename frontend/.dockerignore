@@ -4,4 +4,3 @@ dist
 *.mjs
 Dockerfile
 Dockerfile.prod
-nginx.conf

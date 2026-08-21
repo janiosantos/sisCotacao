@@ -45,3 +45,9 @@ cotacoes-ia-importer/
 
 # Dados gerados em runtime
 backend/app/data/
+
+# Artefatos de deploy (não versionar)
+deploy-images.tar
+catalog-data.dump
+prod-backup-*.dump
+backups/

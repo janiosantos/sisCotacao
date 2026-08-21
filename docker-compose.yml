@@ -1,4 +1,21 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=catalog
+      - POSTGRES_PASSWORD=catalog
+      - POSTGRES_DB=catalog
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catalog -d catalog"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   backend:
     build:
       context: .
@@ -6,14 +23,15 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - server-data:/app/catalog_server/data
       - ./images:/app/images
       - ./catalog_server:/app/catalog_server
     environment:
       - FLASK_ENV=development
-      - SYSTEM_DB=/app/catalog_server/data/server.db
-      - CACHE_DB=/app/catalog_server/data/server_cache.db
       - IMAGES_DIR=/app/images
+      - DATABASE_URL=postgresql+psycopg://catalog:catalog@db:5432/catalog
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -34,4 +52,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  server-data:
+  postgres-data:

@@ -162,10 +162,12 @@ export function EmptyRow({ colSpan, message }: { colSpan: number; message: strin
 
 export function Field({
   label,
+  hint,
   children,
   className = "",
 }: {
   label: string;
+  hint?: string;
   children: ReactNode;
   className?: string;
 }) {
@@ -173,6 +175,7 @@ export function Field({
     <div className={className}>
       <label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>
       {children}
+      {hint ? <p className="mt-1 text-xs text-gray-400">{hint}</p> : null}
     </div>
   );
 }

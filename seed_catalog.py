@@ -1,7 +1,7 @@
 """Popula o Qdrant (via microserviço Cotações IA Importer) com o catálogo real.
 
-Lê as variantes ativas do `catalog_server/data/server.db` (mesma base usada
-pelo catálogo e pelas cotações) e envia em lotes para `POST /api/catalog/seed`.
+Lê as variantes ativas do banco PostgreSQL do ERP (mesma base usada pelo
+catálogo e pelas cotações) e envia em lotes para `POST /api/catalog/seed`.
 
 Uso:
   python seed_catalog.py                        # catálogo completo (reset na 1ª leva)
@@ -15,14 +15,17 @@ from __future__ import annotations
 
 import argparse
 import json
-import sqlite3
 import sys
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any
 
-SERVER_DB = Path(__file__).resolve().parent / "catalog_server" / "data" / "server.db"
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+
+from catalog_server.db import system_conn
 
 # Variantes ativas + campos para montar o texto enriquecido de cada item.
 SQL_VARIANTES = """
@@ -43,7 +46,7 @@ SQL_ATRIBUTOS = """
     ORDER BY va.variante_id, fa.ordem
 """
 
-LOG: Path = Path(__file__).resolve().parent / "seed_catalog.log"
+LOG: Path = ROOT / "seed_catalog.log"
 
 
 def info(msg: str) -> None:
@@ -67,7 +70,7 @@ def post(url: str, payload: dict) -> dict:
         raise RuntimeError(f"não acessei o microserviço ({url}): {exc.reason}") from exc
 
 
-def montar_descricao(itens: list[sqlite3.Row], atributos: list[sqlite3.Row]) -> list[dict]:
+def montar_descricao(itens: list[Any], atributos: list[Any]) -> list[dict]:
     """Constrói o texto rico de cada variante: nome base + marca + embalagem +
     atributos (cor, bitola…), p/ o embed identificar a variante exata."""
     attrs: dict[int, list[str]] = {}
@@ -102,15 +105,9 @@ def main() -> int:
     args = ap.parse_args()
 
     sql = SQL_VARIANTES + (f" LIMIT {int(args.limit)}" if args.limit > 0 else "")
-    conn = sqlite3.connect(f"file:{SERVER_DB}?mode=ro", uri=True)
-    conn.row_factory = sqlite3.Row
-
-    inicio = time.time()
-    try:
-        itens = conn.execute(sql).fetchall()
-        atributos = conn.execute(SQL_ATRIBUTOS).fetchall()
-    finally:
-        conn.close()
+    with system_conn() as conn:
+        itens = list(conn.execute(sql))
+        atributos = list(conn.execute(SQL_ATRIBUTOS))
 
     produtos = montar_descricao(itens, atributos)
     total = len(produtos)

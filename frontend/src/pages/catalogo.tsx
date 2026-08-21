@@ -288,7 +288,7 @@ export default function Catalogo() {
         ordenar: filters.ordenar,
         offset: (page - 1) * PAGE,
         limit: PAGE,
-        agrupado: agrupado ? 1 : 0,
+        agrupado: agrupado && !filters.q ? 1 : 0,
       })
       .then((res: ListCatalogo) => {
         if (!alive) return;

@@ -1,0 +1,141 @@
+"""Fixtures de teste: PostgreSQL (catalog_test) — banco único do ERP.
+
+Os testes exigem `TEST_PG_URL` com a URL de um banco de teste (ex.:
+`postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test`). O schema é
+aplicado uma vez por sessão e cada teste recebe um banco zerado via
+`TRUNCATE ... RESTART IDENTITY CASCADE`.
+"""
+from __future__ import annotations
+
+import os
+
+import pytest
+
+TEST_PG_URL = os.getenv("TEST_PG_URL", "")
+
+if not TEST_PG_URL:
+    pytest.exit(
+        "TEST_PG_URL é obrigatória: os testes do ERP rodam somente contra "
+        "PostgreSQL (ex.: TEST_PG_URL='postgresql+psycopg://catalog:catalog@"
+        "localhost:5432/catalog_test')",
+        returncode=2,
+    )
+
+# O ERP é 100% PostgreSQL: `catalog_server.db` lê `DATABASE_URL` no import.
+os.environ["DATABASE_URL"] = TEST_PG_URL
+
+from catalog_server import db as db_mod  # noqa: E402
+
+
+@pytest.fixture(scope="session")
+def pg_schema():
+    """Aplica o schema Postgres (baseline + migrações) uma vez por sessão."""
+    import sqlalchemy
+
+    engine = sqlalchemy.create_engine(TEST_PG_URL)
+    with engine.connect() as conn:
+        conn.exec_driver_sql("DROP SCHEMA public CASCADE")
+        conn.exec_driver_sql("CREATE SCHEMA public")
+        conn.commit()
+    engine.dispose()
+
+    from scripts.pg_migrations.runner import apply as pg_apply
+
+    applied = pg_apply(TEST_PG_URL)
+    assert applied, "nenhuma migração aplicada no banco de teste PG"
+
+    engine = sqlalchemy.create_engine(TEST_PG_URL)
+    with engine.connect() as conn:
+        # Seeds replicados das migrações (estado pós-migração):
+        conn.exec_driver_sql("INSERT INTO depositos (nome) VALUES ('Matriz')")
+        conn.exec_driver_sql("INSERT INTO tabelas_preco (nome, tipo) VALUES ('Tabela Padrão', 'varejo')")
+        conn.commit()
+    engine.dispose()
+    return True
+
+
+@pytest.fixture()
+def system_db(pg_schema):
+    """Zera as tabelas do banco de teste PG antes de cada teste.
+
+    Os testes assumem banco vazio; `DATABASE_URL` já aponta para `TEST_PG_URL`
+    (definido no conftest) e as migrações são aplicadas uma vez por processo.
+    """
+    _truncate_all(TEST_PG_URL)
+    _seed_pg(TEST_PG_URL)
+    return None
+
+
+def _truncate_all(url: str) -> None:
+    import sqlalchemy
+
+    engine = sqlalchemy.create_engine(url)
+    with engine.connect() as conn:
+        tables = [
+            r[0]
+            for r in conn.exec_driver_sql(
+                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+            ).fetchall()
+        ]
+        if tables:
+            conn.exec_driver_sql(
+                f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE"
+            )
+        conn.commit()
+    engine.dispose()
+
+
+def _seed_pg(url: str) -> None:
+    import sqlalchemy
+
+    engine = sqlalchemy.create_engine(url)
+    with engine.connect() as conn:
+        conn.exec_driver_sql("INSERT INTO depositos (nome) VALUES ('Matriz')")
+        conn.exec_driver_sql("INSERT INTO tabelas_preco (nome, tipo) VALUES ('Tabela Padrão', 'varejo')")
+        # Seeds de referência fiscal (replicados da migração 0054 — o TRUNCATE
+        # por teste apaga os dados aplicados pela migração).
+        conn.exec_driver_sql(
+            "INSERT INTO cfop (codigo, descricao, tipo) VALUES "
+            "('1.102','Compra para industrialização','entrada'),"
+            "('1.111','Compra para revenda','entrada'),"
+            "('5.102','Venda de mercadoria adquirida','saida')"
+            " ON CONFLICT (codigo) DO NOTHING"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO cst_icms (codigo, descricao) VALUES "
+            "('00','Tributada integralmente'),('10','Tributada com ST'),('20','Base reduzida')"
+            " ON CONFLICT (codigo) DO NOTHING"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO cst_pis (codigo, descricao) VALUES "
+            "('01','Operação Tributável - Alíquota Básica'),('02','Operação Tributável - Diferenciada')"
+            " ON CONFLICT (codigo) DO NOTHING"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO cst_cofins (codigo, descricao) VALUES "
+            "('01','Operação Tributável - Alíquota Básica'),('02','Operação Tributável - Diferenciada')"
+            " ON CONFLICT (codigo) DO NOTHING"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO csosn (codigo, descricao) VALUES "
+            "('101','Tributada pelo Simples Nacional com permissão de crédito'),"
+            "('102','Tributada pelo Simples Nacional sem permissão de crédito'),"
+            "('900','Outros')"
+            " ON CONFLICT (codigo) DO NOTHING"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO beneficios_fiscais (codigo, descricao, tipo, valor_default) VALUES "
+            "('ISENCAO','Isenção de ICMS','isencao',0),"
+            "('RED_BASE','Redução de base de cálculo ICMS','reducao_base',20),"
+            "('CRED_PRES','Crédito presumido de ICMS','credito_presumido',0)"
+            " ON CONFLICT (codigo) DO NOTHING"
+        )
+        conn.commit()
+    engine.dispose()
+
+
+@pytest.fixture()
+def conn(system_db):
+    """Conexão aberta com o banco de teste (mesmo contrato do `system_conn`)."""
+    with db_mod.system_conn() as c:
+        yield c

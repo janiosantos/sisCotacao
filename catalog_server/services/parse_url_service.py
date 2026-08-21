@@ -16,6 +16,8 @@ O fluxo é dividido em duas etapas:
 1. `parse_url(url)` — só lê a página e devolve um "preview" dos dados
    (usado para o usuário conferir antes de confirmar).
 2. `criar_produto_por_url(url)` — reparseia e cria tudo, devolvendo o id.
+
+O serviço sempre baixa a página da loja (não há cache de páginas-fonte).
 """
 from __future__ import annotations
 
@@ -32,7 +34,6 @@ from app.parsers.product_parser_casamattos import ProductParserCasaMattos
 from catalog_server import fts
 from catalog_server import categorias
 from catalog_server import classification
-from catalog_server import source_cache
 from catalog_server.db import system_conn
 from catalog_server.grouping import (
     FAMILY_ATTRS,
@@ -42,6 +43,7 @@ from catalog_server.grouping import (
     extract_brand,
 )
 from catalog_server.services import imagens_service
+from catalog_server.services.sku_service import reservar as reservar_sku
 
 _UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -86,24 +88,13 @@ def _quote_url(url: str) -> str:
     return quote(url, safe=":/?#[]@!$&'()*+,;=%~-._")
 
 
-def _fetch_html(url: str, use_cache: bool = True) -> tuple[str, str]:
-    """Baixa a página (ou usa a fonte salva no cache, se disponível).
-
-    Devolve (html, url_final). Quando vem do cache, `url_final` é a própria URL
-    solicitada; a fonte é armazenada automaticamente em `paginas_fonte`.
-    """
-    if use_cache:
-        cached = source_cache.buscar(url)
-        if cached is not None:
-            return cached, url
+def _fetch_html(url: str) -> tuple[str, str]:
+    """Baixa a página e devolve (html, url_final)."""
     resp = requests.get(_quote_url(url), timeout=40, headers=_HEADERS)
     resp.raise_for_status()
     if not resp.text or not resp.text.strip():
         raise ParseError("A página não retornou conteúdo.")
-    html = resp.text
-    if use_cache:
-        source_cache.salvar(url, html, origem="parse_url", url_final=resp.url)
-    return html, resp.url
+    return resp.text, resp.url
 
 
 def parse_url(url: str) -> dict:
@@ -259,7 +250,11 @@ def _baixar_imagem(produto_id: int, img_url: str, page_url: str) -> Path | None:
         return None
 
 
-def criar_produto_por_url(url: str, categoria: str = "", subcategoria: str = "") -> dict:
+def criar_produto_por_url(
+    url: str,
+    categoria: str = "",
+    subcategoria: str = "",
+) -> dict:
     """Cria família, produto, variação, atributos e fotos a partir de uma URL."""
     data = parse_url(url)
     attrs = data.get("attrs") or {}
@@ -304,29 +299,37 @@ def criar_produto_por_url(url: str, categoria: str = "", subcategoria: str = "")
 
         vid = conn.execute(
             "INSERT INTO variantes (produto_id, sku, ean, preco, preco_promocional, old_price,"
-            " pix_price, installment, url, marca)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (produto_id, data.get("sku") or "", data.get("ean") or "", preco, pix, old,
-             pix, data.get("installment") or "", url_final, marca),
+            " pix_price, installment, url, marca, atributos)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (produto_id, "", data.get("ean") or "", preco, pix, old,
+             pix, data.get("installment") or "", url_final, marca,
+             json.dumps({}, ensure_ascii=False)),
         ).lastrowid
 
         labels = dict(FAMILY_ATTRS.get(family_key, []))
+        attrs_json: dict[str, str] = {}
         for aid, val in variation_attrs.items():
             label = labels.get(aid)
+            if label:
+                attrs_json[label] = str(val)
             faid = label_to_id.get(label) if label else None
             if faid:
                 conn.execute(
                     "INSERT INTO variante_atributos (variante_id, atributo_id, valor) VALUES (?,?,?)",
                     (vid, faid, str(val)),
                 )
+        sku, _aviso = reservar_sku(
+            data.get("sku") or "", produto_id, vid, base=base, conn=conn,
+        )
+        conn.execute(
+            "UPDATE variantes SET sku=?, atributos=? WHERE id=?",
+            (sku, json.dumps(attrs_json, ensure_ascii=False), vid),
+        )
 
         fts.sync_product(conn, produto_id)
 
-    # Vincula a página-fonte já salva no cache ao produto/variante criados.
-    source_cache.referenciar(url_final, produto_id=produto_id, variante_id=vid)
-
     # Downloads de imagem ficam FORA da transação: não seguram o lock de
-    # escrita do SQLite durante requisições de rede (evita "database is locked"
+    # escrita durante requisições de rede (evita "database is locked"
     # para as outras escritas do sistema).
     imagens = _absolute_images(data.get("images") or [], data.get("final_url") or url)
     baixadas = 0

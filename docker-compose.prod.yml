@@ -1,29 +1,61 @@
 services:
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=catalog
+      - POSTGRES_PASSWORD=catalog
+      - POSTGRES_DB=catalog
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catalog -d catalog"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   backend:
+    image: siscom-backend:latest
     build:
       context: .
       dockerfile: catalog_server/Dockerfile
     ports:
       - "8000:8000"
     volumes:
-      - server-data:/app/catalog_server/data
-      - ./images:/app/images
+      - /home/jpsantos/siscom/img:/app/images
     environment:
-      - SYSTEM_DB=/app/catalog_server/data/server.db
-      - CACHE_DB=/app/catalog_server/data/server_cache.db
       - IMAGES_DIR=/app/images
       - CATALOG_HOST=0.0.0.0
+      - DATABASE_URL=postgresql+psycopg://catalog:catalog@db:5432/catalog
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; req=urllib.request.urlopen('http://localhost:8000/api/health'); sys.exit(0 if req.status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
     restart: unless-stopped
 
   frontend:
+    image: siscom-frontend:latest
     build:
       context: frontend
       dockerfile: Dockerfile.prod
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
 volumes:
-  server-data:
+  postgres-data:

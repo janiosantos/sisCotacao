@@ -34,6 +34,7 @@ function Impressora() {
     setSalvando(true);
     try {
       await api.setConfigImpressao({
+        driver: cfg.driver || "escpos_tcp",
         host: cfg.host.trim(),
         porta: cfg.porta,
         papel_mm: cfg.papel_mm,
@@ -61,19 +62,25 @@ function Impressora() {
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-5">
-      <h2 className="mb-1 text-base font-semibold text-gray-900">Retaguarda de impressão (ESC/POS)</h2>
-      <p className="mb-4 text-sm text-gray-500">O cupom é enviado direto (ESC/POS) a esta impressora, sem diálogo.</p>
+      <h2 className="mb-1 text-base font-semibold text-gray-900">Retaguarda de impressão</h2>
+      <p className="mb-4 text-sm text-gray-500">O cupom é entregue ao driver escolhido abaixo, sem diálogo de impressora.</p>
 
       {!cfg ? (
         <p className="py-6 text-center text-sm text-gray-400">Carregando…</p>
       ) : (
         <div className="space-y-4">
+          <Field label="Tipo de impressora (driver)">
+            <Select value={cfg.driver || "escpos_tcp"} onChange={(e) => setCfg({ ...cfg, driver: e.target.value })}>
+              <option value="escpos_tcp">ESC/POS via rede (TCP) — porta 9100</option>
+              <option value="arquivo">Arquivo (grava o cupom em binário, para teste)</option>
+            </Select>
+          </Field>
           <div className="grid grid-cols-3 gap-3">
             <Field label="Host">
-              <Input value={cfg.host} onChange={(e) => setCfg({ ...cfg, host: e.target.value })} />
+              <Input value={cfg.host} onChange={(e) => setCfg({ ...cfg, host: e.target.value })} disabled={(cfg.driver || "escpos_tcp") !== "escpos_tcp"} />
             </Field>
             <Field label="Porta">
-              <Input type="number" min={1} max={65535} value={cfg.porta} onChange={(e) => setCfg({ ...cfg, porta: parseInt(e.target.value, 10) || 0 })} />
+              <Input type="number" min={1} max={65535} value={cfg.porta} onChange={(e) => setCfg({ ...cfg, porta: parseInt(e.target.value, 10) || 0 })} disabled={(cfg.driver || "escpos_tcp") !== "escpos_tcp"} />
             </Field>
             <Field label="Papel (mm)">
               <Select value={String(cfg.papel_mm)} onChange={(e) => setCfg({ ...cfg, papel_mm: parseInt(e.target.value, 10) })}>
@@ -82,6 +89,10 @@ function Impressora() {
               </Select>
             </Field>
           </div>
+          <p className="text-xs text-gray-400">
+            Em Docker, o host <code>127.0.0.1</code> é enviado automaticamente para a máquina do emulador
+            (<code>host.docker.internal</code>) — a impressora/emulador deve estar rodando no computador hospedeiro.
+          </p>
           <label className="flex items-center gap-2 text-sm text-gray-600">
             <input
               type="checkbox"

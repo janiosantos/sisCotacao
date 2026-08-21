@@ -4,9 +4,15 @@ from __future__ import annotations
 import requests
 from flask import Blueprint, jsonify, request
 
-from catalog_server.repositories import produto_repo
-from catalog_server.services import imagens_service, parse_url_service
 from catalog_server import categorias as cat_svc, unidades as unidades_svc
+from catalog_server.importar_catalogo import importar_json_conteudo
+from catalog_server.repositories import (
+    produto_repo,
+    marcas as marcas_repo,
+    grupos as grupos_repo,
+)
+from catalog_server.services import imagens_service, parse_url_service
+from catalog_server.services import sku_service
 from catalog_server.db import system_conn
 from catalog_server.utils import image_url
 
@@ -40,6 +46,7 @@ def create_familia():
         nome, (data.get("descricao") or "").strip(), data.get("atributos") or [],
         ncm_padrao=(data.get("ncm_padrao") or "").strip(),
         unidade_padrao=(data.get("unidade_padrao") or "").strip(),
+        sku_atributos=[str(x).strip() for x in (data.get("sku_atributos") or []) if str(x).strip()],
     )
     return jsonify({"id": familia_id}), 201
 
@@ -62,6 +69,7 @@ def update_familia(familia_id: int):
         familia_id, nome, (data.get("descricao") or "").strip(), data.get("atributos") or [],
         ncm_padrao=(data.get("ncm_padrao") or "").strip(),
         unidade_padrao=(data.get("unidade_padrao") or "").strip(),
+        sku_atributos=[str(x).strip() for x in (data.get("sku_atributos") or []) if str(x).strip()],
     ):
         return jsonify({"error": "Família não encontrada"}), 404
     return jsonify({"ok": True})
@@ -115,6 +123,8 @@ def create_product():
         (data.get("subcategoria") or "").strip(),
         (data.get("termos_busca") or "").strip(),
         external_id=data.get("external_id"),
+        grupo_id=int(data["grupo_id"]) if data.get("grupo_id") else None,
+        subgrupo_id=int(data["subgrupo_id"]) if data.get("subgrupo_id") else None,
     )
     return jsonify({"id": produto_id}), 201
 
@@ -145,6 +155,8 @@ def update_product(produto_id: int):
         (data.get("subcategoria") or "").strip(),
         (data.get("termos_busca") or "").strip(),
         external_id=data.get("external_id"),
+        grupo_id=int(data["grupo_id"]) if data.get("grupo_id") else None,
+        subgrupo_id=int(data["subgrupo_id"]) if data.get("subgrupo_id") else None,
     )
     if not ok:
         return jsonify({"error": "Produto não encontrado"}), 404
@@ -193,6 +205,32 @@ def create_from_url():
     except requests.RequestException as exc:
         return jsonify({"error": f"Falha ao acessar a URL: {exc}"}), 502
     return jsonify(criado), 201
+
+
+# ----------------------------------------------------------------------
+# Importação do catálogo (JSON exportado pelo scraper)
+# ----------------------------------------------------------------------
+
+@api_produtos_bp.post("/api/produtos-cadastro/importar-catalogo")
+def importar_catalogo():
+    """Importa o JSON exportado pelo scraper (upload multipart `file` ou body JSON)."""
+    data = request.get_json(silent=True)
+    if data is not None:
+        try:
+            resultado = importar_json_conteudo(request.get_data(as_text=True))
+        except (ValueError, TypeError) as exc:
+            return jsonify({"error": f"JSON inválido: {exc}"}), 400
+        return jsonify({"ok": True, **resultado}), 201
+
+    arquivo = request.files.get("file")
+    if arquivo is None:
+        return jsonify({"error": "Envie o arquivo JSON no campo 'file' ou um body JSON"}), 400
+    try:
+        conteudo = arquivo.read().decode("utf-8")
+        resultado = importar_json_conteudo(conteudo)
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": f"JSON inválido: {exc}"}), 400
+    return jsonify({"ok": True, **resultado}), 201
 
 
 # ----------------------------------------------------------------------
@@ -407,3 +445,157 @@ def reclassificar():
         return jsonify({"error": "Informe categoria ou subcategoria de destino"}), 400
     count = cat_svc.reclassificar_produtos(produto_ids, categoria, subcategoria)
     return jsonify({"ok": True, "count": count})
+
+
+# ----------------------------------------------------------------------
+# Marcas
+# ----------------------------------------------------------------------
+
+
+@api_produtos_bp.get("/api/marcas")
+def listar_marcas():
+    with system_conn() as conn:
+        items = marcas_repo.listar(conn, somente_ativas=request.args.get("ativas") == "1")
+    return jsonify(items)
+
+
+@api_produtos_bp.post("/api/marcas")
+def criar_marca():
+    data = request.get_json(silent=True) or {}
+    nome = (data.get("nome") or "").strip()
+    if not nome:
+        return jsonify({"error": "Informe o nome da marca"}), 400
+    with system_conn() as conn:
+        marca = marcas_repo.criar(conn, nome)
+    return jsonify(marca), 201
+
+
+@api_produtos_bp.put("/api/marcas/<int:marca_id>/codigo")
+def atualizar_codigo_marca(marca_id: int):
+    data = request.get_json(silent=True) or {}
+    codigo = (data.get("codigo") or "").strip()
+    with system_conn() as conn:
+        ok = marcas_repo.atualizar_codigo(conn, marca_id, codigo)
+    if not ok:
+        return jsonify({"error": "Marca não encontrada"}), 404
+    return jsonify({"ok": True})
+
+
+# ----------------------------------------------------------------------
+# Grupos e subgrupos (taxonomia do SKU estruturado)
+# ----------------------------------------------------------------------
+
+
+@api_produtos_bp.get("/api/grupos")
+def listar_grupos():
+    with system_conn() as conn:
+        ativas = request.args.get("ativas") == "1"
+        items = grupos_repo.listar_grupos(conn, somente_ativos=ativas)
+    return jsonify(items)
+
+
+@api_produtos_bp.post("/api/grupos")
+def criar_grupo():
+    data = request.get_json(silent=True) or {}
+    codigo = (data.get("codigo") or "").strip()
+    nome = (data.get("nome") or "").strip()
+    if not codigo or not nome:
+        return jsonify({"error": "Informe código e nome do grupo"}), 400
+    with system_conn() as conn:
+        grupo = grupos_repo.criar_grupo(conn, codigo, nome)
+    return jsonify(grupo), 201
+
+
+@api_produtos_bp.put("/api/grupos/<int:grupo_id>")
+def editar_grupo(grupo_id: int):
+    data = request.get_json(silent=True) or {}
+    codigo = (data.get("codigo") or "").strip()
+    nome = (data.get("nome") or "").strip()
+    ativo = int(data.get("ativo", 1))
+    if not codigo or not nome:
+        return jsonify({"error": "Informe código e nome do grupo"}), 400
+    with system_conn() as conn:
+        ok = grupos_repo.atualizar_grupo(conn, grupo_id, codigo, nome, ativo)
+    if not ok:
+        return jsonify({"error": "Grupo não encontrado"}), 404
+    return jsonify({"ok": True})
+
+
+@api_produtos_bp.delete("/api/grupos/<int:grupo_id>")
+def remover_grupo(grupo_id: int):
+    with system_conn() as conn:
+        ok, msg = grupos_repo.excluir_grupo(conn, grupo_id)
+    if not ok:
+        return jsonify({"error": msg}), 400
+    return jsonify({"ok": True})
+
+
+@api_produtos_bp.get("/api/grupos/<int:grupo_id>/subgrupos")
+def listar_subgrupos(grupo_id: int):
+    with system_conn() as conn:
+        ativas = request.args.get("ativas") == "1"
+        items = grupos_repo.listar_subgrupos(conn, grupo_id, somente_ativos=ativas)
+    return jsonify(items)
+
+
+@api_produtos_bp.post("/api/grupos/<int:grupo_id>/subgrupos")
+def criar_subgrupo(grupo_id: int):
+    data = request.get_json(silent=True) or {}
+    codigo = (data.get("codigo") or "").strip()
+    nome = (data.get("nome") or "").strip()
+    if not codigo or not nome:
+        return jsonify({"error": "Informe código e nome do subgrupo"}), 400
+    with system_conn() as conn:
+        sub = grupos_repo.criar_subgrupo(conn, grupo_id, codigo, nome)
+    return jsonify(sub), 201
+
+
+@api_produtos_bp.put("/api/subgrupos/<int:subgrupo_id>")
+def editar_subgrupo(subgrupo_id: int):
+    data = request.get_json(silent=True) or {}
+    codigo = (data.get("codigo") or "").strip()
+    nome = (data.get("nome") or "").strip()
+    ativo = int(data.get("ativo", 1))
+    if not codigo or not nome:
+        return jsonify({"error": "Informe código e nome do subgrupo"}), 400
+    with system_conn() as conn:
+        ok = grupos_repo.atualizar_subgrupo(conn, subgrupo_id, codigo, nome, ativo)
+    if not ok:
+        return jsonify({"error": "Subgrupo não encontrado"}), 404
+    return jsonify({"ok": True})
+
+
+@api_produtos_bp.delete("/api/subgrupos/<int:subgrupo_id>")
+def remover_subgrupo(subgrupo_id: int):
+    with system_conn() as conn:
+        ok, msg = grupos_repo.excluir_subgrupo(conn, subgrupo_id)
+    if not ok:
+        return jsonify({"error": msg}), 400
+    return jsonify({"ok": True})
+
+
+# ----------------------------------------------------------------------
+# Geração/validação de SKUs (interface de cadastro)
+# ----------------------------------------------------------------------
+
+
+@api_produtos_bp.post("/api/produtos-cadastro/skus/preview")
+def preview_skus():
+    data = request.get_json(silent=True) or {}
+    base = (data.get("base") or "").strip()
+    produto_id = int(data.get("produto_id") or 0)
+    itens = data.get("variantes") or []
+    grupo_cod = (data.get("grupo_cod") or "").strip()
+    subgrupo_cod = (data.get("subgrupo_cod") or "").strip()
+    marca_cod = (data.get("marca_cod") or "").strip()
+    with system_conn() as conn:
+        skus = sku_service.gerar_lote(
+            base,
+            itens,
+            produto_id=produto_id,
+            conn=conn,
+            grupo_cod=grupo_cod or None,
+            subgrupo_cod=subgrupo_cod or None,
+            marca_cod=marca_cod or None,
+        )
+    return jsonify({"skus": skus})

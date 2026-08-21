@@ -1,6 +1,6 @@
 """Detecta anomalias de preço nos dados do catálogo para revisão manual.
 
-Não altera a base — apenas lê `server.db` e reporta suspeitas. Exemplo clássico:
+Não altera a base — apenas lê o banco PostgreSQL do ERP e reporta suspeitas. Exemplo clássico:
 a mesma Haste Magnética (mesmo EAN) com preços R$ 17 vs R$ 78 entre lojas, ou
 dois cabos da MESMA bitola com preços R$ 7 vs R$ 42 — sinais de preço capturado
 de um produto "relacionado" no site (quando o item real está sob consulta/esgotado).
@@ -23,10 +23,10 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import sqlite3
 import unicodedata
+from typing import Any
 
-DB = r"C:\Users\jpsantos\Documents\Projetos\ecommerce_scraper\catalog_server\data\server.db"
+from catalog_server.db import system_conn
 
 _BITOLA_KEYS = {"bitola", "diametro"}
 
@@ -46,7 +46,7 @@ def _ratio(min_p: float, max_p: float) -> float:
     return max_p / min_p
 
 
-def ean_duplicatas(conn: sqlite3.Connection, limite: float) -> list[dict]:
+def ean_duplicatas(conn: Any, limite: float) -> list[dict]:
     rows = conn.execute(
         """
         SELECT v.ean, v.id AS variante_id, v.sku, v.preco, v.marca,
@@ -92,7 +92,7 @@ def ean_duplicatas(conn: sqlite3.Connection, limite: float) -> list[dict]:
     return out
 
 
-def bitola_no_produto(conn: sqlite3.Connection, limite: float) -> list[dict]:
+def bitola_no_produto(conn: Any, limite: float) -> list[dict]:
     bitola_ids = [
         a["id"]
         for a in conn.execute("SELECT id, nome FROM familia_atributos").fetchall()
@@ -163,20 +163,16 @@ def main() -> None:
     ap.add_argument("--json", default="", help="opcional: também exporta o relatório em JSON")
     args = ap.parse_args()
 
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
-    try:
+    with system_conn() as conn:
         por_ean = ean_duplicatas(conn, args.ratio)
         por_bitola = bitola_no_produto(conn, args.ratio)
-    finally:
-        conn.close()
 
     todos = por_ean + por_bitola
     suspeitos = [g for g in todos if g["anomalia"]]
 
     print("=" * 78)
     print("ANOMALIAS DE PREÇO — revisão manual")
-    print(f"Limite de razão: {args.ratio}x | base: {DB}")
+    print(f"Limite de razão: {args.ratio}x | base: PostgreSQL")
     print("=" * 78)
 
     def imprime_grupo(g):

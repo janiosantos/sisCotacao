@@ -7,13 +7,9 @@ MODULE_DIR = Path(__file__).resolve().parent
 
 PROJECT_DIR = MODULE_DIR.parent
 
-CATALOG_DB = PROJECT_DIR / "database" / "crawler.db"
-
-SYSTEM_DB = Path(os.getenv("SYSTEM_DB", str(MODULE_DIR / "data" / "server.db")))
-
-# Cache de páginas-fonte (HTML) em banco separado, para manter o banco de
-# dados principal enxuto e rápido (evita que os blobs de HTML inflem o DB).
-CACHE_DB = Path(os.getenv("CACHE_DB", str(MODULE_DIR / "data" / "server_cache.db")))
+# PostgreSQL é o ÚNICO banco do ERP. Formato:
+# postgresql+psycopg://usuario:senha@host:porta/banco
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 IMAGES_DIR = Path(os.getenv("IMAGES_DIR", str(PROJECT_DIR / "images")))
 

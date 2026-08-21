@@ -93,6 +93,6 @@ def top_vendas(limit: int = 5) -> list[dict]:
             "  AND o.status IN ('faturado','fechado','recebido') AND date(o.criado_em)>=?"
             " JOIN variantes v ON v.id=oi.produto_id"
             " JOIN produtos_cadastro p ON p.id=v.produto_id"
-            " GROUP BY oi.produto_id ORDER BY receita DESC LIMIT ?",
+            " GROUP BY oi.produto_id, p.nome, v.sku ORDER BY receita DESC LIMIT ?",
             (dias30, limit),
         ).fetchall()]

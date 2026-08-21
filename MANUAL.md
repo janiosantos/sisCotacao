@@ -723,6 +723,71 @@ A tela de PDV foi projetada para uso sem mouse. Os atalhos são:
 | "Status inválido" | Usou "fechado" em vez de "faturado" | Use o menu de orçamentos para alterar status |
 | "FOREIGN KEY" | Referência a registro inexistente | Cadastre o registro antes de referenciá-lo |
 
+### Desenvolvimento
+
+**Rodar os testes de regressão** (exigem PostgreSQL — banco único do ERP):
+
+```bash
+$env:TEST_PG_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test"
+.venv\Scripts\python.exe -m pytest tests\ -q
+```
+
+O ERP não usa mais SQLite: o banco é exclusivamente PostgreSQL (`DATABASE_URL`).
+O scraper (`app/`) continua local em SQLite e exporta o catálogo em JSON, que é
+importado pelo ERP (`catalog_server.importar_catalogo`).
+
+**Backup do banco (Postgres):** use o dump nativo do Postgres (ex. `pg_dump`).
+Não existem mais bancos em arquivo (`server.db`, `server_cache.db`) para copiar.
+
+### PostgreSQL (banco único do ERP)
+
+O serviço `db` do `docker-compose.yml` sobe um PostgreSQL 16 com a URL
+`postgresql+psycopg://catalog:catalog@db:5432/catalog`. A variável `DATABASE_URL`
+é **obrigatória** para o ERP: sem ela, `system_conn()` falha com mensagem clara.
+
+O sistema roda sobre o Postgres: `db.system_conn()` usa a camada de
+compatibilidade `catalog_server/pgsql.py` (mantida apenas como ponte de API do
+sqlite3 usado nos repositórios), traduzindo o SQL na hora da execução
+(`?`→`%s`, `datetime('now')`→`to_char`, `INSERT OR IGNORE`→`ON CONFLICT DO
+NOTHING`, `LIKE ... COLLATE NOCASE`→`ILIKE`, `GROUP_CONCAT`→`string_agg`, etc.).
+
+O schema do Postgres evolui por **migrações versionadas** próprias
+(`scripts/pg_migrations/`): a versão `0052_baseline_postgres` aplica o
+`scripts/postgres_schema.sql` (schema completo do sistema) + o schema do scraper;
+mudanças futuras entram como arquivos `0053+` em
+`scripts/pg_migrations/versions/`, aplicados incrementalmente e registrados na
+tabela `schema_migrations`. O `init_db` (startup do servidor) aplica as
+pendentes automaticamente.
+
+```bash
+# CLI do runner PG:
+$env:DATABASE_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog"
+.venv\Scripts\python.exe -m scripts.pg_migrations status
+.venv\Scripts\python.exe -m scripts.pg_migrations check
+.venv\Scripts\python.exe -m scripts.pg_migrations apply
+```
+
+```bash
+docker compose up -d db
+# rodar o backend sobre o Postgres:
+$env:DATABASE_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog"
+.venv\Scripts\python.exe -m catalog_server.app
+```
+
+A tabela `produtos_fts` (índice de busca) é criada no primeiro `ensure_fts()`
+(startup do servidor) usando `tsvector` + `pg_trgm` — coluna `fts` gerada com
+`to_tsvector('simple', f_unaccent(...))` (remover acentos) e função
+`fts5_to_tsquery()` que converte a query (`parafuso* AND 5x50*`) para tsquery de
+prefixo. O `rebuild()` roda no startup para popular o índice.
+
+**Validar a camada Postgres com a suíte de testes** (a suíte inteira roda
+somente contra o PG; cada teste zera as tabelas e replica os seeds):
+
+```bash
+$env:TEST_PG_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test"
+.venv\Scripts\python.exe -m pytest tests\ -q
+```
+
 ### Suporte
 
 Para dúvidas ou problemas, entre em contato com o suporte técnico.

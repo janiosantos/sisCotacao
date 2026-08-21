@@ -1,0 +1,138 @@
+--- sisCotacao-main/frontend/src/pages/produtos.tsx	2026-08-16 18:56:34.000000000 +0000
++++ sisCotacao-main/frontend/src/pages/produtos.tsx	2026-08-17 22:36:35.668549661 +0000
+@@ -71,6 +71,19 @@
+   return atributos.map((a) => v.valores[String(a.id)]).filter(Boolean).join(" · ") || `Variação ${idx + 1}`;
+ }
+ 
++/** Reduz um texto a um trecho curto, só letras/números, maiúsculo — usado
++ * para montar SKUs legíveis a partir do nome do produto e dos valores dos
++ * atributos (ex.: "Cabo Flexível" + Cor=Azul + Bitola=2,5mm → CABOFL-AZUL-25MM). */
++function slugify(str: string, maxLen: number): string {
++  return normalize(str).replace(/[^a-z0-9]+/g, "").toUpperCase().slice(0, maxLen);
++}
++
++function gerarSkuBase(nomeBase: string, valores: Record<string, string>, atributos: FamiliaAtributo[]): string {
++  const base = slugify(nomeBase, 6) || "PROD";
++  const partes = atributos.map((a) => slugify(valores[String(a.id)] || "", 4)).filter(Boolean);
++  return [base, ...partes].filter(Boolean).join("-");
++}
++
+ // ===================================================================
+ // LISTA
+ // ===================================================================
+@@ -772,6 +785,37 @@
+     toast(`${next.length} variação(ões) gerada(s)`, "success");
+   };
+ 
++  const gerarSkusAutomaticos = () => {
++    if (!variantes.length) return;
++    const usados = new Set(variantes.map((v) => v.sku).filter(Boolean));
++    let preenchidos = 0;
++    const next = variantes.map((v) => {
++      if (v.sku) return v;
++      let sku = gerarSkuBase(form.nome || form.marca, v.valores, atributos);
++      let n = 2;
++      while (usados.has(sku)) {
++        sku = `${gerarSkuBase(form.nome || form.marca, v.valores, atributos)}-${n}`;
++        n++;
++      }
++      usados.add(sku);
++      preenchidos++;
++      return { ...v, sku };
++    });
++    if (preenchidos === 0) {
++      toast("Todas as variações já têm SKU preenchido.", "");
++      return;
++    }
++    setVariantes(next);
++    toast(`${preenchidos} SKU(s) gerado(s) automaticamente — revise antes de salvar.`, "success");
++  };
++
++  const aplicarParaTodos = (field: keyof VarianteLocal) => {
++    if (variantes.length < 2) return;
++    const valorBase = variantes[0][field];
++    setVariantes((arr) => arr.map((v) => ({ ...v, [field]: valorBase })));
++    toast("Valor da 1ª linha aplicado a todas as variações.", "success");
++  };
++
+   const atualizarVariante = (idx: number, field: keyof VarianteLocal, value: string) => {
+     setVariantes((arr) => arr.map((v, i) => (i === idx ? { ...v, [field]: value } : v)));
+   };
+@@ -802,6 +846,19 @@
+         }
+       }
+     }
++    const skusVistos = new Map<string, number>();
++    const duplicados = new Set<string>();
++    variantes.forEach((v) => {
++      const sku = (v.sku || "").trim();
++      if (!sku) return;
++      if (skusVistos.has(sku)) duplicados.add(sku);
++      skusVistos.set(sku, (skusVistos.get(sku) || 0) + 1);
++    });
++    if (duplicados.size) {
++      toast(`SKU repetido entre variações: ${[...duplicados].join(", ")} — corrija antes de salvar.`, "error");
++      setTab("variacoes");
++      return;
++    }
+     const payload: ProdutoCadastroPayload = {
+       familia_id,
+       nome: form.nome.trim(),
+@@ -1039,10 +1096,15 @@
+ 
+       {tab === "variacoes" && (
+         <div>
+-          <div className="mb-3 flex items-center gap-3">
++          <div className="mb-3 flex flex-wrap items-center gap-3">
+             <Button variant="primary" onClick={gerarVariacoes}>
+               Gerar Variações
+             </Button>
++            {variantes.length > 0 && (
++              <Button variant="ghost" onClick={gerarSkusAutomaticos} title="Preenche só as variações sem SKU — não sobrescreve o que já foi digitado">
++                Gerar SKUs automaticamente
++              </Button>
++            )}
+             {variantes.length > 0 && <span className="text-xs text-gray-500">{variantes.length} variação(ões) · atributos: {atributos.map((a) => a.nome).join(" · ")}</span>}
+             {!variantes.length && atributos.length > 0 && <span className="text-xs text-gray-500">Selecione os valores dos atributos e clique em "Gerar Variações".</span>}
+           </div>
+@@ -1052,9 +1114,38 @@
+               <table className="min-w-full divide-y divide-gray-200 text-sm">
+                 <thead className="bg-gray-50">
+                   <tr>
+-                    {["Variação", "SKU", "EAN", "Preço", "Promo.", "Peso", "Dimensões", "Unid.", "Emb.", "Fator", "Localização", "NCM", "Unid. Trib.", ""].map((h) => (
++                    {(
++                      [
++                        ["Variação", null],
++                        ["SKU", null],
++                        ["EAN", null],
++                        ["Preço", "preco"],
++                        ["Promo.", "prom"],
++                        ["Peso", "peso"],
++                        ["Dimensões", "dimensoes"],
++                        ["Unid.", "unidade_venda"],
++                        ["Emb.", "embalagem"],
++                        ["Fator", "fator_conversao"],
++                        ["Localização", "localizacao"],
++                        ["NCM", "ncm"],
++                        ["Unid. Trib.", "unidade_tributavel"],
++                        ["", null],
++                      ] as [string, keyof VarianteLocal | null][]
++                    ).map(([h, field]) => (
+                       <th key={h} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+-                        {h}
++                        <span className="inline-flex items-center gap-1">
++                          {h}
++                          {field && variantes.length > 1 && (
++                            <button
++                              type="button"
++                              title="Copiar o valor da 1ª linha para todas as variações"
++                              className="text-gray-400 hover:text-brand-600"
++                              onClick={() => aplicarParaTodos(field)}
++                            >
++                              ↓⁝
++                            </button>
++                          )}
++                        </span>
+                       </th>
+                     ))}
+                   </tr>

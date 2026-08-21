@@ -13,23 +13,16 @@ Uso:
 from __future__ import annotations
 
 import argparse
-import shutil
 import sys
-from datetime import datetime
-from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 from catalog_server import abc  # noqa: E402
-from catalog_server.db import SYSTEM_DB  # noqa: E402
 
 
 def _backup() -> str:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dest = Path(SYSTEM_DB).with_name(f"server_backup_abc_{ts}.db")
-    shutil.copy2(SYSTEM_DB, dest)
-    return str(dest)
+    return "Postgres (backup não se aplica a arquivo)"
 
 
 def main() -> None:

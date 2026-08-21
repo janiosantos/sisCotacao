@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
-from typing import Optional
 
 from app.config.settings import DATABASE_FOLDER
 
@@ -12,6 +10,10 @@ class Database:
     def __init__(self):
 
         self.db_path = DATABASE_FOLDER / "crawler.db"
+
+        # O scraper é uma aplicação 100% local (SQLite). O ERP consome os
+        # produtos por arquivo de exportação (JSON), não por este banco.
+        self.is_pg = False
 
         self.conn = sqlite3.connect(
             self.db_path,
@@ -184,15 +186,13 @@ class Database:
 
     def execute(self, sql, values=None):
 
-        cur = self.conn.cursor()
-
         if values:
 
-            cur.execute(sql, values)
+            cur = self.conn.execute(sql, values)
 
         else:
 
-            cur.execute(sql)
+            cur = self.conn.execute(sql)
 
         self.conn.commit()
 
@@ -219,14 +219,12 @@ class Database:
     def close(self):
 
         self.conn.close()
-        
+
     # --------------------------------------------------
 
     def insert(self, sql, values):
 
-        cursor = self.conn.cursor()
-
-        cursor.execute(sql, values)
+        cursor = self.conn.execute(sql, values)
 
         self.conn.commit()
 
@@ -236,9 +234,7 @@ class Database:
 
     def executemany(self, sql, values):
 
-        cursor = self.conn.cursor()
-
-        cursor.executemany(sql, values)
+        self.conn.executemany(sql, values)
 
         self.conn.commit()
 
