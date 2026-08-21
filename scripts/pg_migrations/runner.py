@@ -17,6 +17,7 @@ Formato `.sql` : script SQL idempotente (CREATE TABLE/INDEX IF NOT EXISTS).
 Formato `.py`  : módulo com o contrato:
     VERSION: int
     NAME: str
+    RISCO: str                 # 'critica' | 'melhoria' | 'rotina' | 'n/c' (controle de update)
     guard(conn) -> bool        # True quando o banco JÁ está no estado-alvo
     forward(conn) -> None      # aplica (pode abrir BEGIN/COMMIT próprios)
     backward(conn) -> None     # opcional; desfaz
@@ -77,6 +78,21 @@ class Migration:
             self._mod = mod
         return self._mod
 
+    @property
+    def risco(self) -> str:
+        """Classificação de risco da migração (controle de update).
+
+        'critica'   — muda estrutura central, recria tabelas ou altera dados em massa.
+        'melhoria'  — nova funcionalidade aditiva / não-quebrante.
+        'rotina'    — seed idempotente / ajuste pequeno de baixo risco.
+        'n/c'       — não classificada (valor padrão quando ausente).
+        """
+        if self.kind == "py":
+            r = getattr(self.module, "RISCO", None)
+            if r:
+                return str(r).strip().lower()
+        return "n/c"
+
     def guard(self, conn) -> bool:
         if self.kind == "py":
             g = getattr(self.module, "guard", None)
@@ -135,9 +151,14 @@ def _ensure_tracking(conn) -> None:
             version      INTEGER PRIMARY KEY,
             name         TEXT NOT NULL,
             checksum     TEXT NOT NULL,
+            risco        TEXT NOT NULL DEFAULT 'n/c',
             applied_at   TEXT NOT NULL DEFAULT (to_char(now(),'YYYY-MM-DD HH24:MI:SS'))
         );
         """
+    )
+    # Tabelas já existentes (em produção) ganham a coluna de risco sem perda de dados.
+    conn.execute(
+        "ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS risco TEXT NOT NULL DEFAULT 'n/c'"
     )
     conn.commit()
 
@@ -150,10 +171,10 @@ def applied_versions(conn) -> dict[int, str]:
 
 def _record(conn, mig: Migration) -> None:
     conn.execute(
-        "INSERT INTO schema_migrations (version, name, checksum) VALUES (%s, %s, %s)"
+        "INSERT INTO schema_migrations (version, name, checksum, risco) VALUES (%s, %s, %s, %s)"
         " ON CONFLICT (version) DO UPDATE SET name = EXCLUDED.name,"
-        " checksum = EXCLUDED.checksum",
-        (mig.version, mig.name, mig.checksum),
+        " checksum = EXCLUDED.checksum, risco = EXCLUDED.risco",
+        (mig.version, mig.name, mig.checksum, mig.risco),
     )
     conn.commit()
 
@@ -227,7 +248,7 @@ def plan_pending(url: str) -> str:
             if mig.version in done:
                 continue
             any_pending = True
-            lines.append(f"  -> {mig.version:>5}  {mig.name}")
+            lines.append(f"  -> {mig.version:>5}  [{mig.risco:<8}] {mig.name}")
         if not any_pending:
             lines.append("  (nenhuma)")
         return "\n".join(lines)
@@ -256,16 +277,15 @@ def status(url: str) -> str:
     conn = _connect(url)
     try:
         done = applied_versions(conn)
-        lines = [f"{'VERS':>5} {'SITUAÇÃO':<10} {'MIGRAÇÃO':<40} CHECKSUM"]
-        lines.append("-" * 92)
+        lines = [f"{'VERS':>5} {'SITUAÇÃO':<10} {'RISCO':<9} {'MIGRAÇÃO':<38} CHECKSUM"]
+        lines.append("-" * 96)
         for mig in load_migrations():
+            r = mig.risco
             if mig.version in done:
                 ok = "ok" if done[mig.version] == mig.checksum else "checksum≠"
-                lines.append(
-                    f"{mig.version:>5} {'Aplicada':<10} {mig.name:<40} {ok}"
-                )
+                lines.append(f"{mig.version:>5} {'Aplicada':<10} {r:<9} {mig.name:<38} {ok}")
             else:
-                lines.append(f"{mig.version:>5} {'Pendente':<10} {mig.name:<40}")
+                lines.append(f"{mig.version:>5} {'Pendente':<10} {r:<9} {mig.name:<38}")
         return "\n".join(lines)
     finally:
         conn.close()

@@ -20,6 +20,7 @@ remove as colunas/tabelas novas.
 from __future__ import annotations
 
 VERSION = 53
+RISCO = "critica"
 NAME = "modelo_dominio"
 
 # Tabelas do scraper que saem do banco do ERP (backup em _backup_*).

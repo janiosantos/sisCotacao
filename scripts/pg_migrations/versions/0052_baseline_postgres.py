@@ -8,6 +8,7 @@ from __future__ import annotations
 
 VERSION = 52
 NAME = "baseline_postgres"
+RISCO = "critica"
 
 
 def _schema_statements():

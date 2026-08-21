@@ -8,6 +8,7 @@ de busca (`produtos_fts`).
 from __future__ import annotations
 
 VERSION = 59
+RISCO = "critica"
 NAME = "garantir_variante_produto"
 
 

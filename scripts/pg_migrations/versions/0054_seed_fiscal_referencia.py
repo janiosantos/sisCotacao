@@ -10,6 +10,7 @@ Idempotente: reaplicável a qualquer momento sem duplicar registros.
 from __future__ import annotations
 
 VERSION = 54
+RISCO = "rotina"
 NAME = "seed_fiscal_referencia"
 
 SEED_CFOP = [

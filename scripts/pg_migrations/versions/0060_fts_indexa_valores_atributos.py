@@ -9,6 +9,7 @@ from __future__ import annotations
 
 VERSION = 60
 NAME = "fts_indexa_valores_atributos"
+RISCO = "critica"
 
 # DDL recriada com a coluna `atributos` no tsvector (espelho de fts.py).
 _FTS_DDL = """

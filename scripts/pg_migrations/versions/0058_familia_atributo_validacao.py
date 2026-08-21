@@ -9,6 +9,7 @@ tipo "livre" (valor digitado no cadastro do produto):
 from __future__ import annotations
 
 VERSION = 58
+RISCO = "melhoria"
 NAME = "familia_atributo_validacao"
 
 

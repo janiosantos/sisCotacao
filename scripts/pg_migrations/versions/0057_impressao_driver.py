@@ -8,6 +8,7 @@ comportamento atual (envio direto via socket TCP para host:porta).
 from __future__ import annotations
 
 VERSION = 57
+RISCO = "melhoria"
 NAME = "impressao_driver"
 
 

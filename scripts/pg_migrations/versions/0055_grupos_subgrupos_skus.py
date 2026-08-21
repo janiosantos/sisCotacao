@@ -20,6 +20,7 @@ migração apenas disponibiliza os dados.
 from __future__ import annotations
 
 VERSION = 55
+RISCO = "melhoria"
 NAME = "grupos_subgrupos_skus"
 
 _GRUPOS_SEED = [

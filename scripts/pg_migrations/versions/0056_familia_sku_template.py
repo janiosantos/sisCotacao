@@ -11,6 +11,7 @@ o comportamento anterior (todos os atributos).
 from __future__ import annotations
 
 VERSION = 56
+RISCO = "melhoria"
 NAME = "familia_sku_template"
 
 

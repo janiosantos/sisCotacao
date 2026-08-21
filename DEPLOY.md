@@ -40,6 +40,12 @@ bash scripts/ci/setup-runner.sh <runner_registration_token>
 4. Acompanhar em GitHub → Actions → job `deploy` (roda no servidor).
 
 ## Padrão de migração (importante)
+- **Classificação de risco**: todo arquivo `.py` declara `RISCO` no topo:
+  `"critica"` (estrutura central / recria tabela / altera dados em massa),
+  `"melhoria"` (funcionalidade aditiva, não-quebrante),
+  `"rotina"` (seed idempotente / ajuste pequeno) ou `"n/c"` (ausente).
+  O `pg_migrations status`/`plan` exibem o risco; o valor é persistido em
+  `schema_migrations.risco`. Use para destacar atualizações críticas x melhorias.
 - **Idempotente**: `DROP COLUMN IF EXISTS`, `CREATE TABLE IF NOT EXISTS`,
   `CREATE INDEX IF NOT EXISTS`; `guard` deve detectar estado parcial.
 - **DROP COLUMN / RENAME**: seguros (app não atende durante o restart do container).
