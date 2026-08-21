@@ -1,0 +1,11 @@
+{
+  "versao": "v1.6.4",
+  "componentes": ["frontend"],
+  "correcoes": [
+    "Cache imutável de 1 ano era aplicado ao index.html e ao fallback da SPA: URLs abertas antes do fix das impressões (ex.: orçamento 29) ficavam 'envenenadas' no navegador, mostrando o login mesmo com o servidor correto"
+  ],
+  "melhorias": [
+    "Política de cache correta: apenas /assets/ (arquivos com hash no nome) recebem cache imutável; index/fallback revalidam sempre — deploys passam a aparecer sem Ctrl+F5"
+  ],
+  "recursos": []
+}

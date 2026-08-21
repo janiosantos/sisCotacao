@@ -307,6 +307,19 @@ db      → postgres (dados no volume postgres-data)
   versão em cache (HMR/F5 não refletem edições).
 - Subir: `docker compose up -d` → sistema em `http://localhost:8080`.
 
+### Política de cache do frontend (produção)
+
+- `/assets/*` — arquivos com hash no nome: `Cache-Control: public, immutable`
+  (1 ano). Conteúdo novo recebe nome novo, então é seguro.
+- `location /` (index.html **e qualquer fallback da SPA**) →
+  `Cache-Control: no-cache`: o navegador revalida a cada acesso. Garante que um
+  deploy novo apareça sem hard-refresh.
+
+> Histórico: até a v1.6.3 o fallback respondia `immutable` por 1 ano; URLs de
+> impressão abertas nesse período ficaram "envenenadas" no navegador do usuário
+> (serviam a SPA/login mesmo com o servidor correto). Procedimento para URL
+> afetada: **Ctrl+F5** na aba (hard reload ignora immutable) — uma única vez.
+
 ## Rollback
 - Deploy falhou no health gate: o pipeline não sobe a nova versão; para reverter
   manualmente ao estado anterior:
