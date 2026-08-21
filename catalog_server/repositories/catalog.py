@@ -1,4 +1,4 @@
-﻿"""RepositÃ³rio do catÃ¡logo â€” lÃª da base Ãºnica (`server.db`).
+﻿"""Repositório do catálogo — lê da base única (PostgreSQL).
 
 O catÃ¡logo agora consome o mesmo cadastro de produtos (`produtos_cadastro` +
 `variantes`) alimentado pelo scraper e pelo CRUD manual. Cada
@@ -7,6 +7,7 @@ variaÃ§Ãµes (cor/bitola/potÃªnciaâ€¦) exibidas no seletor.
 """
 from __future__ import annotations
 
+import json
 import re
 
 from catalog_server import fts
@@ -21,6 +22,18 @@ _CODE_RE = re.compile(r"^[A-Za-z0-9./-]{1,16}$")
 def _is_code_query(q: str) -> bool:
     """Verdadeiro quando a busca parece um cÃ³digo (SKU/EAN) e nÃ£o um nome."""
     return bool(q) and any(c.isdigit() for c in q) and bool(_CODE_RE.fullmatch(q))
+
+
+def _parse_json_attrs(value) -> dict:
+    """Coluna `variantes.atributos` (JSONB) -> dict `{nome: valor}`."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return json.loads(value)
+        except ValueError:
+            return {}
+    return {}
 
 
 def _order_abc(ordenar: str = "", prefix: str = "", extra: str = "") -> str:
@@ -80,9 +93,9 @@ class CatalogRepository:
                 produto_ids = [r["id"] for r in rows]
                 variants = self._load_variants(conn, produto_ids)
                 variante_ids = [v["id"] for v in variants]
-                attrs = self._load_variant_attrs(conn, variante_ids)
-                images = self._load_images(conn, produto_ids)
                 attr_defs = self._load_attr_defs(conn, [r["familia_id"] for r in rows])
+                attrs = self._load_variant_attrs(conn, variante_ids, attr_defs)
+                images = self._load_images(conn, produto_ids)
                 suppliers = self._load_variant_suppliers(conn, variante_ids)
 
             cards = []
@@ -97,9 +110,9 @@ class CatalogRepository:
                 else:
                     rows, total = self._browse_flat(conn, categoria, subcategoria, q, classe, em_linha, offset, limit, ordenar)
                 variant_ids = [r["id"] for r in rows]
-                attrs = self._load_variant_attrs(conn, variant_ids)
-                images = self._load_images(conn, [r["produto_id"] for r in rows])
                 attr_defs = self._load_attr_defs(conn, [r["familia_id"] for r in rows])
+                attrs = self._load_variant_attrs(conn, variant_ids, attr_defs)
+                images = self._load_images(conn, [r["produto_id"] for r in rows])
                 suppliers = self._load_variant_suppliers(conn, variant_ids)
                 cards = [self._flat_card(r, attrs, images, attr_defs, suppliers) for r in rows]
         return cards, total
@@ -443,22 +456,21 @@ params + [limit, offset],
             color = ""
             color_row = conn.execute(
                 """
-                SELECT va.valor FROM variante_atributos va
-                JOIN familia_atributos fa ON fa.id=va.atributo_id
-                WHERE va.variante_id=? AND LOWER(fa.nome) LIKE '%cor%'
+                SELECT kv.value FROM variantes v, jsonb_each_text(v.atributos) AS kv(key, value)
+                WHERE v.id=? AND LOWER(kv.key) LIKE '%cor%'
                 LIMIT 1
                 """,
                 (product_id,),
             ).fetchone()
             if color_row:
-                color = color_row["valor"]
+                color = color_row["value"]
 
         return {
             "id": row["id"],
             "sku": row["sku"] or "",
             "ean": row["ean"] or "",
             "name": row["nome"] or "",
-            "brand": row["marca"] or row["produto_marca"] or "",
+            "brand": row["produto_marca"] or row["marca"] or "",
             "color": color,
             "price": row["preco"] or 0,
             "old_price": row["old_price"],
@@ -501,7 +513,7 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
                         "id": r["id"],
                         "sku": r["sku"] or "",
                         "name": r["nome"] or "",
-                        "brand": r["marca"] or r["produto_marca"] or "",
+                        "brand": r["produto_marca"] or r["marca"] or "",
                         "category": r["categoria"] or "",
                         "subcategory": r["subcategoria"] or "",
                         "imagem_url": image_url(r["imagem_filename"]),
@@ -551,22 +563,36 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
         ]
 
     @staticmethod
-    def _load_variant_attrs(conn, variante_ids: list[int]) -> dict[int, dict]:
+    def _load_variant_attrs(conn, variante_ids: list[int], attr_defs: dict[int, list[dict]] | None = None) -> dict[int, dict]:
+        """Lê os atributos das variantes a partir do JSONB `variantes.atributos`.
+
+        O JSONB é indexado por **nome** do atributo; converte para o contrato do
+        catálogo (indexado por **id**) usando as definições da família
+        (`attr_defs`: familia_id -> [{id, label}]). Nomes sem id conhecido (ex.:
+        atributo renomeado/removido) são mantidos como texto, preservando a chave.
+        """
         out: dict[int, dict] = {}
         if not variante_ids:
             return out
         placeholders = ",".join("?" * len(variante_ids))
         rows = conn.execute(
             f"""
-            SELECT va.variante_id, fa.id AS atributo_id, fa.nome, va.valor
-            FROM variante_atributos va
-            JOIN familia_atributos fa ON fa.id=va.atributo_id
-            WHERE va.variante_id IN ({placeholders})
+            SELECT v.id, p.familia_id, v.atributos
+            FROM variantes v
+            JOIN produtos_cadastro p ON p.id = v.produto_id
+            WHERE v.id IN ({placeholders})
             """,
             variante_ids,
         ).fetchall()
         for r in rows:
-            out.setdefault(r["variante_id"], {})[r["atributo_id"]] = r["valor"]
+            name2id: dict[str, str] = {}
+            familia_id = r["familia_id"]
+            if attr_defs and familia_id in attr_defs:
+                name2id = {d["label"]: str(d["id"]) for d in attr_defs[familia_id]}
+            mapped: dict[str, str] = {}
+            for nome, valor in (_parse_json_attrs(r["atributos"]) or {}).items():
+                mapped[name2id.get(nome, str(nome))] = str(valor)
+            out[r["id"]] = mapped
         return out
 
     @staticmethod
@@ -669,7 +695,7 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
                 "package": package,
                 "package_label": PACKAGE_LABELS.get(package, ""),
                 "attrs": vattrs,
-                "brand": v["marca"] or produto["marca"] or "",
+                "brand": produto["marca"] or v["marca"] or "",
                 "price": v["preco"] or 0,
                 "old_price": v["old_price"],
                 "pix_price": v["pix_price"] or 0,
@@ -711,7 +737,7 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
                     "id": v["id"],
                     "sku": v["sku"] or "",
                     "name": base,
-                    "brand": v["marca"] or produto["marca"] or "",
+                    "brand": produto["marca"] or v["marca"] or "",
                     "attrs": vattrs,
                     "price": v["preco"] or 0,
                     "imagem_url": first_image(),
@@ -770,7 +796,7 @@ SELECT v.id, v.sku, v.preco, v.marca, v.external_id,
             "package": package,
             "package_label": PACKAGE_LABELS.get(package, ""),
             "attrs": vattrs,
-            "brand": row["marca_var"] or row["marca_prod"] or "",
+            "brand": row["marca_prod"] or row["marca_var"] or "",
             "price": row["preco"] or 0,
             "old_price": row["old_price"],
             "pix_price": row["pix_price"] or 0,

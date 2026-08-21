@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import csv
 import logging
-import shutil
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -34,12 +33,9 @@ sys.path.insert(0, str(ROOT))
 
 from catalog_server import classification as C  # noqa: E402
 from catalog_server import categorias  # noqa: E402
-from catalog_server.config import DATABASE_URL  # noqa: E402
-from catalog_server.db import SYSTEM_DB, system_conn  # noqa: E402
+from catalog_server.db import system_conn  # noqa: E402
 from catalog_server.services import parse_url_service  # noqa: E402
 
-DB = Path(SYSTEM_DB)
-_IS_PG = bool(DATABASE_URL)
 _LOG_DIR = ROOT / "logs"
 
 _SEM_BREADCRUMB = ("casamattos",)
@@ -47,12 +43,7 @@ _ONLINE_HOSTS = ("anhangueraferramentas", "casadosparafusos", "casadoeletricista
 
 
 def _backup() -> str:
-    if _IS_PG:
-        return "Postgres (backup não se aplica a arquivo)"
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dest = DB.with_name(f"server_backup_classificar_{ts}.db")
-    shutil.copy2(DB, dest)
-    return str(dest)
+    return "Postgres (backup não se aplica a arquivo)"
 
 
 def _host(url: str) -> str:

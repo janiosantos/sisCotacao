@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import re
-import sqlite3
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -25,27 +24,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-from catalog_server.config import DATABASE_URL  # noqa: E402
-from catalog_server.db import SYSTEM_DB, system_conn  # noqa: E402
-
-DB = str(SYSTEM_DB)
-_IS_PG = bool(DATABASE_URL)
+from catalog_server.db import system_conn  # noqa: E402
 
 
 @contextmanager
-def _open_db(db_path: str):
-    """Conexão do script: shim Postgres (quando configurado) ou SQLite."""
-    if _IS_PG:
-        with system_conn() as conn:
-            yield conn
-        return
-    conn = sqlite3.connect(db_path, timeout=30)
-    conn.row_factory = sqlite3.Row
-    try:
+def _open_db():
+    """Conexão do script com o banco PostgreSQL do ERP."""
+    with system_conn() as conn:
         yield conn
-        conn.commit()
-    finally:
-        conn.close()
 
 # ---------------------------------------------------------------------------
 # Title case / normalização de nomes
@@ -342,10 +328,9 @@ def disambiguate_names(conn, to_diff: list[tuple]) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Normaliza/deduplica a base.")
     parser.add_argument("--apply", action="store_true", help="Aplica (dry-run por padrão).")
-    parser.add_argument("--db", default=DB)
     args = parser.parse_args()
 
-    with _open_db(args.db) as conn:
+    with _open_db() as conn:
         _main(conn, args)
 
 

@@ -1,12 +1,9 @@
-"""Fixtures de teste: banco SQLite temporário ou PostgreSQL (catalog_test).
+"""Fixtures de teste: PostgreSQL (catalog_test) — banco único do ERP.
 
-Modo padrão: cada teste ganha um banco SQLite novo em arquivo temporário, com
-as 52 migrations aplicadas via `catalog_server.migrations.runner.apply`.
-
-Modo PostgreSQL (para validar a camada dual): defina `TEST_PG_URL` com a URL
-do banco de teste (ex.: `postgresql+psycopg://catalog:catalog@localhost:5432/
-catalog_test`). O schema é aplicado uma vez por sessão e cada teste recebe um
-banco zerado via `TRUNCATE ... RESTART IDENTITY CASCADE`.
+Os testes exigem `TEST_PG_URL` com a URL de um banco de teste (ex.:
+`postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test`). O schema é
+aplicado uma vez por sessão e cada teste recebe um banco zerado via
+`TRUNCATE ... RESTART IDENTITY CASCADE`.
 """
 from __future__ import annotations
 
@@ -14,16 +11,25 @@ import os
 
 import pytest
 
-from catalog_server import db as db_mod
-
 TEST_PG_URL = os.getenv("TEST_PG_URL", "")
+
+if not TEST_PG_URL:
+    pytest.exit(
+        "TEST_PG_URL é obrigatória: os testes do ERP rodam somente contra "
+        "PostgreSQL (ex.: TEST_PG_URL='postgresql+psycopg://catalog:catalog@"
+        "localhost:5432/catalog_test')",
+        returncode=2,
+    )
+
+# O ERP é 100% PostgreSQL: `catalog_server.db` lê `DATABASE_URL` no import.
+os.environ["DATABASE_URL"] = TEST_PG_URL
+
+from catalog_server import db as db_mod  # noqa: E402
 
 
 @pytest.fixture(scope="session")
 def pg_schema():
     """Aplica o schema Postgres (baseline + migrações) uma vez por sessão."""
-    if not TEST_PG_URL:
-        return None
     import sqlalchemy
 
     engine = sqlalchemy.create_engine(TEST_PG_URL)
@@ -40,7 +46,7 @@ def pg_schema():
 
     engine = sqlalchemy.create_engine(TEST_PG_URL)
     with engine.connect() as conn:
-        # Seeds replicados das migrações SQLite (estado pós-migração):
+        # Seeds replicados das migrações (estado pós-migração):
         conn.exec_driver_sql("INSERT INTO depositos (nome) VALUES ('Matriz')")
         conn.exec_driver_sql("INSERT INTO tabelas_preco (nome, tipo) VALUES ('Tabela Padrão', 'varejo')")
         conn.commit()
@@ -49,39 +55,15 @@ def pg_schema():
 
 
 @pytest.fixture()
-def db_path(tmp_path):
-    """Cria um banco SQLite temporário com as migrations aplicadas."""
-    if TEST_PG_URL:
-        return None
-    from catalog_server.migrations.runner import apply as apply_migrations
+def system_db(pg_schema):
+    """Zera as tabelas do banco de teste PG antes de cada teste.
 
-    path = tmp_path / "test.db"
-    applied = apply_migrations(path)
-    assert applied, "nenhuma migration aplicada no banco de teste"
-    return path
-
-
-@pytest.fixture()
-def system_db(db_path, pg_schema, monkeypatch):
-    """Redireciona `catalog_server.db.SYSTEM_DB` para o banco temporário.
-
-    No modo PG, aponta `DATABASE_URL`/`_PG` para o banco de teste e zera as
-    tabelas (os testes assumem banco vazio). No modo SQLite, `system_conn()`
-    lê `SYSTEM_DB` do escopo do módulo `catalog_server.db` (importado por
-    valor em `db.py`), então o monkeypatch precisa ser nesse módulo — e o
-    cache `_MIGRATED` precisa ser limpo para o novo path.
+    Os testes assumem banco vazio; `DATABASE_URL` já aponta para `TEST_PG_URL`
+    (definido no conftest) e as migrações são aplicadas uma vez por processo.
     """
-    if TEST_PG_URL:
-        monkeypatch.setattr(db_mod, "DATABASE_URL", TEST_PG_URL)
-        monkeypatch.setattr(db_mod, "_PG", True)
-        monkeypatch.setattr(db_mod, "_MIGRATED", set())
-        _truncate_all(TEST_PG_URL)
-        _seed_pg(TEST_PG_URL)
-        return None
-    monkeypatch.setattr(db_mod, "SYSTEM_DB", db_path)
-    monkeypatch.setattr(db_mod, "_MIGRATED", set())
-    db_mod.init_db(db_path)
-    return db_path
+    _truncate_all(TEST_PG_URL)
+    _seed_pg(TEST_PG_URL)
+    return None
 
 
 def _truncate_all(url: str) -> None:
@@ -110,6 +92,44 @@ def _seed_pg(url: str) -> None:
     with engine.connect() as conn:
         conn.exec_driver_sql("INSERT INTO depositos (nome) VALUES ('Matriz')")
         conn.exec_driver_sql("INSERT INTO tabelas_preco (nome, tipo) VALUES ('Tabela Padrão', 'varejo')")
+        # Seeds de referência fiscal (replicados da migração 0054 — o TRUNCATE
+        # por teste apaga os dados aplicados pela migração).
+        conn.exec_driver_sql(
+            "INSERT INTO cfop (codigo, descricao, tipo) VALUES "
+            "('1.102','Compra para industrialização','entrada'),"
+            "('1.111','Compra para revenda','entrada'),"
+            "('5.102','Venda de mercadoria adquirida','saida')"
+            " ON CONFLICT (codigo) DO NOTHING"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO cst_icms (codigo, descricao) VALUES "
+            "('00','Tributada integralmente'),('10','Tributada com ST'),('20','Base reduzida')"
+            " ON CONFLICT (codigo) DO NOTHING"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO cst_pis (codigo, descricao) VALUES "
+            "('01','Operação Tributável - Alíquota Básica'),('02','Operação Tributável - Diferenciada')"
+            " ON CONFLICT (codigo) DO NOTHING"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO cst_cofins (codigo, descricao) VALUES "
+            "('01','Operação Tributável - Alíquota Básica'),('02','Operação Tributável - Diferenciada')"
+            " ON CONFLICT (codigo) DO NOTHING"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO csosn (codigo, descricao) VALUES "
+            "('101','Tributada pelo Simples Nacional com permissão de crédito'),"
+            "('102','Tributada pelo Simples Nacional sem permissão de crédito'),"
+            "('900','Outros')"
+            " ON CONFLICT (codigo) DO NOTHING"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO beneficios_fiscais (codigo, descricao, tipo, valor_default) VALUES "
+            "('ISENCAO','Isenção de ICMS','isencao',0),"
+            "('RED_BASE','Redução de base de cálculo ICMS','reducao_base',20),"
+            "('CRED_PRES','Crédito presumido de ICMS','credito_presumido',0)"
+            " ON CONFLICT (codigo) DO NOTHING"
+        )
         conn.commit()
     engine.dispose()
 

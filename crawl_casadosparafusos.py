@@ -2,7 +2,7 @@
 
 Descobre os produtos pelo sitemap.xml e, para cada produto ainda não
 cadastrado (verificado por URL em `produtos_cadastro`), baixa a página,
-extrai os dados e cria família/produto/variação/atributos/fotos no `server.db`
+extrai os dados e cria família/produto/variação/atributos/fotos no PostgreSQL
 — o mesmo fluxo do botão "Novo via URL" do catálogo.
 
 Uso:
@@ -55,7 +55,7 @@ def listar_produtos(sess: requests.Session) -> list[str]:
 
 
 def carregar_cadastrados() -> set[str]:
-    """Urls de produtos já cadastrados no server.db (produto ou variação)."""
+    """Urls de produtos já cadastrados no PostgreSQL (produto ou variação)."""
     try:
         with system_conn() as conn:
             urls = {r["url"] for r in conn.execute("SELECT url FROM produtos_cadastro WHERE url <> ''")}
@@ -113,7 +113,7 @@ def main() -> None:
     t0 = time.time()
     for i, url in enumerate(pendentes, 1):
         try:
-            criado = parse_url_service.criar_produto_por_url(url, use_cache=True)
+            criado = parse_url_service.criar_produto_por_url(url)
             ok += 1
             log.info(
                 "[%d/%d] OK id=%s fotos=%s | %s",

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import sqlite3
-
 from catalog_server.db import next_cotacao_numero, system_conn
 
 

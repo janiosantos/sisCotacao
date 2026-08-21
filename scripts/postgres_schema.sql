@@ -1,5 +1,5 @@
--- Schema PostgreSQL equivalente ao SQLite do catálogo/cotações.
--- Gerado por scripts/schema_postgres.py (fonte: 52 migrations).
+-- Schema PostgreSQL do ERP (catálogo/cotações/estoque/fiscal).
+-- Referência aplicada pela migração baseline 0052.
 -- Tabelas primeiro (sem FKs), índices, e FKs via ALTER TABLE ao final
 -- para respeitar a ordem de criação no Postgres.
 
@@ -50,7 +50,25 @@ CREATE TABLE caixa_movimento (
 CREATE TABLE categorias (
   id BIGSERIAL PRIMARY KEY,
   nome TEXT NOT NULL UNIQUE,
+  codigo TEXT,
   ativo INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE grupos (
+  id BIGSERIAL PRIMARY KEY,
+  codigo TEXT NOT NULL UNIQUE,
+  nome TEXT NOT NULL,
+  ativo INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE subgrupos (
+  id BIGSERIAL PRIMARY KEY,
+  grupo_id INTEGER NOT NULL REFERENCES grupos(id) ON DELETE CASCADE,
+  codigo TEXT NOT NULL,
+  nome TEXT NOT NULL,
+  ativo INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(grupo_id, codigo),
+  UNIQUE(grupo_id, nome)
 );
 
 CREATE TABLE centros_custo (
@@ -451,6 +469,7 @@ CREATE TABLE familia_atributos (
   opcoes TEXT DEFAULT '[]',
   obrigatorio INTEGER NOT NULL DEFAULT 0,
   ordem INTEGER NOT NULL DEFAULT 0,
+  validacao TEXT DEFAULT 'texto',
   UNIQUE(familia_id, nome)
 );
 
@@ -461,7 +480,8 @@ CREATE TABLE familias (
   ativo INTEGER NOT NULL DEFAULT 1,
   criado_em TEXT NOT NULL DEFAULT (to_char(now(),'YYYY-MM-DD HH24:MI:SS')),
   ncm_padrao TEXT DEFAULT '',
-  unidade_padrao TEXT DEFAULT 'UN'
+  unidade_padrao TEXT DEFAULT 'UN',
+  sku_atributos JSONB
 );
 
 CREATE TABLE fiscal_config (
@@ -695,6 +715,7 @@ CREATE TABLE imagens_produto (
 
 CREATE TABLE impressao_config (
   id            INTEGER PRIMARY KEY CHECK (id = 1),
+  driver        TEXT NOT NULL DEFAULT 'escpos_tcp',
   host          TEXT NOT NULL DEFAULT '127.0.0.1',
   porta         INTEGER NOT NULL DEFAULT 9100,
   papel_mm      INTEGER NOT NULL DEFAULT 80,
@@ -1003,6 +1024,8 @@ CREATE TABLE produtos_cadastro (
   familia_id INTEGER ,
   nome TEXT NOT NULL,
   marca TEXT DEFAULT '',
+  grupo_id INTEGER ,
+  subgrupo_id INTEGER ,
   descricao TEXT DEFAULT '',
   categoria_id INTEGER ,
   subcategoria_id INTEGER ,
@@ -1075,6 +1098,7 @@ CREATE TABLE subcategorias (
   id BIGSERIAL PRIMARY KEY,
   categoria_id INTEGER NOT NULL ,
   nome TEXT NOT NULL,
+  codigo TEXT,
   ativo INTEGER NOT NULL DEFAULT 1,
   UNIQUE(categoria_id, nome)
 );
@@ -1177,7 +1201,8 @@ CREATE TABLE variantes (
   embalagem DOUBLE PRECISION DEFAULT 1,
   fator_conversao DOUBLE PRECISION DEFAULT 1,
   localizacao TEXT DEFAULT '',
-  unidade_tributavel TEXT DEFAULT ''
+  unidade_tributavel TEXT DEFAULT '',
+  atributos JSONB NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE vendedores (
@@ -1438,6 +1463,8 @@ ALTER TABLE produto_diagnostico_variacao ADD CONSTRAINT fk_produto_diagnostico_v
 ALTER TABLE produtos_cadastro ADD CONSTRAINT fk_produtos_cadastro_familia_id FOREIGN KEY (familia_id) REFERENCES familias(id);
 ALTER TABLE produtos_cadastro ADD CONSTRAINT fk_produtos_cadastro_categoria_id FOREIGN KEY (categoria_id) REFERENCES categorias(id);
 ALTER TABLE produtos_cadastro ADD CONSTRAINT fk_produtos_cadastro_subcategoria_id FOREIGN KEY (subcategoria_id) REFERENCES subcategorias(id);
+ALTER TABLE produtos_cadastro ADD CONSTRAINT fk_produtos_cadastro_grupo_id FOREIGN KEY (grupo_id) REFERENCES grupos(id);
+ALTER TABLE produtos_cadastro ADD CONSTRAINT fk_produtos_cadastro_subgrupo_id FOREIGN KEY (subgrupo_id) REFERENCES subgrupos(id);
 ALTER TABLE promocao_itens ADD CONSTRAINT fk_promocao_itens_promocao_id FOREIGN KEY (promocao_id) REFERENCES promocoes(id) ON DELETE CASCADE;
 ALTER TABLE promocao_itens ADD CONSTRAINT fk_promocao_itens_variante_id FOREIGN KEY (variante_id) REFERENCES variantes(id);
 ALTER TABLE solicitacao_compra ADD CONSTRAINT fk_solicitacao_compra_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuarios(id);

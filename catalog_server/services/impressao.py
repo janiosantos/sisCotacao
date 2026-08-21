@@ -1,18 +1,31 @@
 """Retaguarda de impressão (PDV).
 
-Gera cupom ESC/POS a partir do orçamento e envia para a impressora térmica
-destino (emulador 127.0.0.1:9100 em desembolso; troque host/porta para uma
-impressora real de rede). A fila em `impressao_fila` é processada por um
-worker em thread: o sistema fica aguardando e drenando trabalhos sem
-interação — ao salvar (ou ao clicar em Imprimir) o cupom vai direto à porta,
-sem diálogo de impressora.
+Gera cupom ESC/POS a partir do orçamento e o entrega a um *driver* de
+impressão escolhido em `impressao_config.driver`. O envio é independente do
+documento: o cupom é sempre montado em bytes ESC/POS e cada driver cuida do
+transporte (rede TCP, arquivo, futuramente USB/Windows/HTTP), permitindo
+usar qualquer impressora sem alterar o restante do sistema.
+
+Drivers disponíveis (registry `_DRIVERS`):
+  - `escpos_tcp` : envia via socket TCP para host:porta (impressora de rede /
+                    emulador 127.0.0.1:9100). Em Docker, o host 127.0.0.1 é
+                    redirecionado automaticamente para o host da máquina
+                    (host.docker.internal).
+  - `arquivo`    : grava os bytes em um arquivo (IMPRESSAO_ARQUIVO ou
+                    ./cupom_impresso.bin) — útil para depuração sem impressora.
+
+A fila em `impressao_fila` é processada por um worker em thread: o sistema
+fica aguardando e drenando trabalhos sem interação — ao clicar em Imprimir o
+cupom vai direto ao driver, sem diálogo de impressora.
 """
 from __future__ import annotations
 
 import json
+import os
 import socket
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 from catalog_server.db import system_conn
@@ -94,12 +107,93 @@ def orcamento_para_escpos(orc: dict, papel_mm: int = 80) -> bytes:
     return bytes(out)
 
 
+# ---------------------------------------------------------------------------
+# Drivers de impressão (transporte)
+# ---------------------------------------------------------------------------
+
+def _host_destino(host: str) -> str:
+    """Resolve o host para onde o bytecode deve ser enviado.
+
+    Quando o backend roda em Docker e o usuário configurou o loopback
+    (127.0.0.1/localhost) — que dentro do container aponta para o próprio
+    container — redireciona para o host da máquina (host.docker.internal),
+    onde normalmente está a impressora/emulador.
+    """
+    if host in ("", "127.0.0.1", "localhost") and Path("/.dockerenv").exists():
+        return "host.docker.internal"
+    return host
+
+
+class DriverImpressao:
+    """Contrato dos drivers de transporte de impressão.
+
+    Um driver recebe a configuração salva (`cfg`) e os bytes ESC/POS do
+    documento (`dados`) e cuida da entrega física. Para suportar uma nova
+    impressora, basta criar uma subclasse, registrá-la em `_DRIVERS` e
+    escolhê-la na tela de configuração — nada no restante do sistema muda.
+    """
+
+    name = "base"
+    label = "Base"
+    usa_host = True
+
+    def imprimir(self, cfg: dict, dados: bytes) -> None:  # pragma: no cover
+        raise NotImplementedError
+
+
+class DriverEscposTcp(DriverImpressao):
+    name = "escpos_tcp"
+    label = "ESC/POS via rede (TCP) — impressora ou emulador na porta 9100"
+    usa_host = True
+
+    def imprimir(self, cfg: dict, dados: bytes) -> None:
+        host = _host_destino(str(cfg.get("host") or "127.0.0.1"))
+        porta = int(cfg.get("porta") or 9100)
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(6)
+                s.connect((host, porta))
+                s.sendall(dados)
+        except OSError as exc:
+            raise ConnectionError(
+                f"Não foi possível conectar à impressora {host}:{porta} "
+                f"(verifique se o emulador/impressora está ativo). {exc}"
+            ) from exc
+
+
+class DriverArquivo(DriverImpressao):
+    """Grava o bytecode em um arquivo (depuração sem impressora).
+
+    Caminho: env `IMPRESSAO_ARQUIVO` ou `./cupom_impresso.bin`.
+    """
+
+    name = "arquivo"
+    label = "Arquivo (grava o cupom em binário — para teste)"
+    usa_host = False
+
+    def imprimir(self, cfg: dict, dados: bytes) -> None:
+        caminho = os.environ.get("IMPRESSAO_ARQUIVO", "./cupom_impresso.bin")
+        Path(caminho).parent.mkdir(parents=True, exist_ok=True)
+        with open(caminho, "wb") as f:
+            f.write(dados)
+
+
+_DRIVERS: dict[str, DriverImpressao] = {
+    d.name: d for d in (DriverEscposTcp(), DriverArquivo())
+}
+
+
+def driver_por_nome(nome: str | None) -> DriverImpressao:
+    return _DRIVERS.get(nome or "") or _DRIVERS["escpos_tcp"]
+
+
 class ImpressaoService:
     """Config singleton + fila de trabalhos processada em thread."""
 
     DEFAULT_HOST = "127.0.0.1"
     DEFAULT_PORTA = 9100
     DEFAULT_PAPEL = 80
+    DEFAULT_DRIVER = "escpos_tcp"
 
     def __init__(self) -> None:
         self._worker: threading.Thread | None = None
@@ -110,10 +204,11 @@ class ImpressaoService:
     def config(self) -> dict[str, Any]:
         with system_conn() as conn:
             row = conn.execute(
-                "SELECT host, porta, papel_mm, auto_impressao, ativo FROM impressao_config WHERE id=1"
+                "SELECT driver, host, porta, papel_mm, auto_impressao, ativo FROM impressao_config WHERE id=1"
             ).fetchone()
         if row is None:
             return {
+                "driver": self.DEFAULT_DRIVER,
                 "host": self.DEFAULT_HOST,
                 "porta": self.DEFAULT_PORTA,
                 "papel_mm": self.DEFAULT_PAPEL,
@@ -123,6 +218,7 @@ class ImpressaoService:
         return dict(row)
 
     def salvar_config(self, cfg: dict) -> None:
+        driver = str(cfg.get("driver") or self.DEFAULT_DRIVER)
         host = str(cfg.get("host") or self.DEFAULT_HOST)
         porta = int(cfg.get("porta") or self.DEFAULT_PORTA)
         papel = int(cfg.get("papel_mm") or self.DEFAULT_PAPEL)
@@ -131,14 +227,14 @@ class ImpressaoService:
         with system_conn() as conn:
             conn.execute(
                 """
-                INSERT INTO impressao_config (id, host, porta, papel_mm, auto_impressao, ativo, atualizado_em)
-                VALUES (1,?,?,?,?,?, datetime('now'))
+                INSERT INTO impressao_config (id, driver, host, porta, papel_mm, auto_impressao, ativo, atualizado_em)
+                VALUES (1,?,?,?,?,?,?, datetime('now'))
                 ON CONFLICT(id) DO UPDATE SET
-                    host=excluded.host, porta=excluded.porta, papel_mm=excluded.papel_mm,
+                    driver=excluded.driver, host=excluded.host, porta=excluded.porta, papel_mm=excluded.papel_mm,
                     auto_impressao=excluded.auto_impressao, ativo=excluded.ativo,
                     atualizado_em=datetime('now')
                 """,
-                (host, porta, papel, auto, ativo),
+                (driver, host, porta, papel, auto, ativo),
             )
 
     # ------------------------------------------------------------------
@@ -194,15 +290,12 @@ class ImpressaoService:
             )
 
     def _imprimir_agora(self, orc: dict) -> None:
-        """Envia o cupom ESC/POS para a impressora destino (bloqueante)."""
+        """Entrega o cupom ESC/POS ao driver de impressão configurado."""
         cfg = self.config()
         if not cfg["ativo"]:
             return
         dados = orcamento_para_escpos(orc, papel_mm=int(cfg["papel_mm"]))
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(6)
-            s.connect((cfg["host"], int(cfg["porta"])))
-            s.sendall(dados)
+        driver_por_nome(cfg.get("driver")).imprimir(cfg, dados)
 
     # ------------------------------------------------------------------
 

@@ -23,14 +23,10 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - server-data:/app/catalog_server/data
-      - ./database:/app/database
       - ./images:/app/images
       - ./catalog_server:/app/catalog_server
     environment:
       - FLASK_ENV=development
-      - SYSTEM_DB=/app/catalog_server/data/server.db
-      - CACHE_DB=/app/database/server_cache.db
       - IMAGES_DIR=/app/images
       - DATABASE_URL=postgresql+psycopg://catalog:catalog@db:5432/catalog
     depends_on:
@@ -56,5 +52,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  server-data:
   postgres-data:

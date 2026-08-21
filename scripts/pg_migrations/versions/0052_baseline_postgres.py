@@ -1,9 +1,8 @@
 """Baseline do Postgres (versão 52): o schema completo do sistema.
 
-Aplica `scripts/postgres_schema.sql` (gerado por `schema_postgres.py` a partir
-das 52 migrações SQLite) + o schema das tabelas do scraper. Numa base que já
-tem o schema (ex.: banco migrado pelo `migrar_postgres.py`), o `guard` detecta
-a tabela `categorias` e apenas registra a versão — idempotente.
+Aplica `scripts/postgres_schema.sql` (schema de referência do ERP) + o schema
+das tabelas do scraper. Numa base que já tem o schema, o `guard` detecta a
+tabela `categorias` e apenas registra a versão — idempotente.
 """
 from __future__ import annotations
 

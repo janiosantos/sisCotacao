@@ -1,6 +1,6 @@
 """Detecta anomalias de preço nos dados do catálogo para revisão manual.
 
-Não altera a base — apenas lê `server.db` e reporta suspeitas. Exemplo clássico:
+Não altera a base — apenas lê o banco PostgreSQL do ERP e reporta suspeitas. Exemplo clássico:
 a mesma Haste Magnética (mesmo EAN) com preços R$ 17 vs R$ 78 entre lojas, ou
 dois cabos da MESMA bitola com preços R$ 7 vs R$ 42 — sinais de preço capturado
 de um produto "relacionado" no site (quando o item real está sob consulta/esgotado).
@@ -26,11 +26,7 @@ import json
 import unicodedata
 from typing import Any
 
-from catalog_server.config import DATABASE_URL
-from catalog_server.db import SYSTEM_DB, system_conn
-
-DB = str(SYSTEM_DB)
-_IS_PG = bool(DATABASE_URL)
+from catalog_server.db import system_conn
 
 _BITOLA_KEYS = {"bitola", "diametro"}
 
@@ -176,7 +172,7 @@ def main() -> None:
 
     print("=" * 78)
     print("ANOMALIAS DE PREÇO — revisão manual")
-    print(f"Limite de razão: {args.ratio}x | base: {DB}" + (" (Postgres)" if _IS_PG else ""))
+    print(f"Limite de razão: {args.ratio}x | base: PostgreSQL")
     print("=" * 78)
 
     def imprime_grupo(g):

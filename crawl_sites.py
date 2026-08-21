@@ -95,13 +95,13 @@ def descobrir_produtos(sess: requests.Session, site: dict) -> list[str]:
 
 
 def carregar_cadastrados() -> set[str]:
-    """Urls de produtos já cadastrados no server.db (produto ou variação)."""
+    """Urls de produtos já cadastrados no PostgreSQL (produto ou variação)."""
     try:
         with system_conn() as conn:
             urls = {r["url"] for r in conn.execute("SELECT url FROM produtos_cadastro WHERE url <> ''")}
             urls |= {r["url"] for r in conn.execute("SELECT url FROM variantes WHERE url <> ''")}
             return urls
-    except Exception:  # noqa: BLE001 — SQLite/PG ausente não deve parar o lote
+    except Exception:  # noqa: BLE001 — PG ausente não deve parar o lote
         return set()
 
 
@@ -134,7 +134,7 @@ def _processar(log: logging.Logger, stats: Stats, site: str, url: str, delay: fl
     ultimo: Exception | None = None
     for tentativa in (1, 2):
         try:
-            criado = parse_url_service.criar_produto_por_url(url, use_cache=True)
+            criado = parse_url_service.criar_produto_por_url(url)
             stats.add(site, True)
             log.info(
                 "[OK] id=%s fotos=%s | %s",

@@ -1,9 +1,8 @@
-"""Migrações versionadas do PostgreSQL (banco do catálogo/cotações).
+"""Migrações versionadas do PostgreSQL (banco único do ERP).
 
-Espelho do runner SQLite (`catalog_server.migrations`), mas aplicado ao
-Postgres: o schema atual (`scripts/postgres_schema.sql`) vira a migração
-`baseline` e mudanças futuras entram como arquivos `NNNN_*.sql|py` em
-`versions/`, aplicados incrementalmente e registrados em `schema_migrations`.
+O schema atual (`scripts/postgres_schema.sql`) vira a migração `baseline`
+(0052) e mudanças futuras entram como arquivos `NNNN_*.sql|py` em `versions/`,
+aplicados incrementalmente e registrados em `schema_migrations`.
 
 Uso:
     python -m scripts.pg_migrations status [--url URL]

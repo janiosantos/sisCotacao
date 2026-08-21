@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import shutil
 import sys
 import threading
 import time
@@ -30,23 +29,16 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 from catalog_server.config import DATABASE_URL  # noqa: E402
-from catalog_server.db import SYSTEM_DB, system_conn  # noqa: E402
+from catalog_server.db import system_conn  # noqa: E402
 from catalog_server.services import parse_url_service  # noqa: E402
 from detect_anomalias import bitola_no_produto, ean_duplicatas  # noqa: E402
 
-DB = Path(SYSTEM_DB)
-_IS_PG = bool(DATABASE_URL)
 _LOG_DIR = ROOT / "logs"
 _LOG = _LOG_DIR / "revalidar_precos.log"
 
 
 def _backup() -> str:
-    if _IS_PG:
-        return "Postgres (backup não se aplica a arquivo)"
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dest = DB.with_name(f"server_backup_revalidar_{ts}.db")
-    shutil.copy2(DB, dest)
-    return str(dest)
+    return "Postgres (backup não se aplica a arquivo)"
 
 
 def _alvos(conn: Any, ratio: float) -> set[int]:
@@ -76,7 +68,7 @@ class Stats:
 
 def _processar(valor_id: int, url: str, apply: bool) -> tuple[int, str | None, float | None]:
     try:
-        data = parse_url_service.parse_url(url, use_cache=True)
+        data = parse_url_service.parse_url(url)
         price = data.get("price")
         if not price or price <= 0:
             return valor_id, "sem_preco", None

@@ -725,56 +725,39 @@ A tela de PDV foi projetada para uso sem mouse. Os atalhos são:
 
 ### Desenvolvimento
 
-**Rodar os testes de regressão** (banco SQLite temporário, não toca no `server.db`):
+**Rodar os testes de regressão** (exigem PostgreSQL — banco único do ERP):
 
 ```bash
+$env:TEST_PG_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test"
 .venv\Scripts\python.exe -m pytest tests\ -q
 ```
 
-**Backup do banco antes de mudanças de schema** (cópia timestampada de `server.db`, `server_cache.db` e `crawler.db` em `backups/`):
+O ERP não usa mais SQLite: o banco é exclusivamente PostgreSQL (`DATABASE_URL`).
+O scraper (`app/`) continua local em SQLite e exporta o catálogo em JSON, que é
+importado pelo ERP (`catalog_server.importar_catalogo`).
 
-```bash
-.venv\Scripts\python.exe scripts\backup_db.py
-.venv\Scripts\python.exe scripts\backup_db.py --incluir-cache   # inclui o cache de ~8 GB
-```
+**Backup do banco (Postgres):** use o dump nativo do Postgres (ex. `pg_dump`).
+Não existem mais bancos em arquivo (`server.db`, `server_cache.db`) para copiar.
 
-O `server_cache.db` vive em `database/` (fora da estrutura da aplicação), é
-usado apenas pelos scripts de scraper e fica fora do backup padrão — use
-`--incluir-cache` apenas quando precisar dele.
-
-**Baseline de qualidade dos dados** (contagens + métricas em JSON):
-
-```bash
-.venv\Scripts\python.exe scripts\baseline.py
-```
-
-**Rollback:** para desfazer uma migração de schema, restaure o backup:
-
-```bash
-Copy-Item backups\server_YYYY-MM-DD_HHMMSS.db catalog_server\data\server.db
-```
-
-### PostgreSQL (em migração)
+### PostgreSQL (banco único do ERP)
 
 O serviço `db` do `docker-compose.yml` sobe um PostgreSQL 16 com a URL
-`postgresql+psycopg://catalog:catalog@db:5432/catalog`. A variável
-`DATABASE_URL` no backend controla o destino: **vazia = SQLite** (padrão,
-produção atual); preenchida = PostgreSQL.
+`postgresql+psycopg://catalog:catalog@db:5432/catalog`. A variável `DATABASE_URL`
+é **obrigatória** para o ERP: sem ela, `system_conn()` falha com mensagem clara.
 
-O sistema já roda sobre o Postgres: `db.system_conn()` usa a camada de
-compatibilidade `catalog_server/pgsql.py` quando `DATABASE_URL` está
-configurada, traduzindo o SQL dos repositórios (escritos para SQLite) para o
-dialeto Postgres na hora da execução (`?`→`%s`, `datetime('now')`→`to_char`,
-`INSERT OR IGNORE`→`ON CONFLICT DO NOTHING`, `LIKE ... COLLATE NOCASE`→`ILIKE`,
-`GROUP_CONCAT`→`string_agg`, etc.).
+O sistema roda sobre o Postgres: `db.system_conn()` usa a camada de
+compatibilidade `catalog_server/pgsql.py` (mantida apenas como ponte de API do
+sqlite3 usado nos repositórios), traduzindo o SQL na hora da execução
+(`?`→`%s`, `datetime('now')`→`to_char`, `INSERT OR IGNORE`→`ON CONFLICT DO
+NOTHING`, `LIKE ... COLLATE NOCASE`→`ILIKE`, `GROUP_CONCAT`→`string_agg`, etc.).
 
 O schema do Postgres evolui por **migrações versionadas** próprias
 (`scripts/pg_migrations/`): a versão `0052_baseline_postgres` aplica o
-`scripts/postgres_schema.sql` (gerado das 52 migrações SQLite) + o schema do
-scraper; mudanças futuras entram como arquivos `0053+` em
+`scripts/postgres_schema.sql` (schema completo do sistema) + o schema do scraper;
+mudanças futuras entram como arquivos `0053+` em
 `scripts/pg_migrations/versions/`, aplicados incrementalmente e registrados na
-tabela `schema_migrations`. O `init_db` (startup do servidor) e o
-`migrar_postgres.py --apply-schema` aplicam as pendentes automaticamente.
+tabela `schema_migrations`. O `init_db` (startup do servidor) aplica as
+pendentes automaticamente.
 
 ```bash
 # CLI do runner PG:
@@ -791,35 +774,16 @@ $env:DATABASE_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog
 .venv\Scripts\python.exe -m catalog_server.app
 ```
 
-**Migrar os dados do SQLite para o Postgres** (schema + dados + conferência):
+A tabela `produtos_fts` (índice de busca) é criada no primeiro `ensure_fts()`
+(startup do servidor) usando `tsvector` + `pg_trgm` — coluna `fts` gerada com
+`to_tsvector('simple', f_unaccent(...))` (remover acentos) e função
+`fts5_to_tsquery()` que converte a query (`parafuso* AND 5x50*`) para tsquery de
+prefixo. O `rebuild()` roda no startup para popular o índice.
+
+**Validar a camada Postgres com a suíte de testes** (a suíte inteira roda
+somente contra o PG; cada teste zera as tabelas e replica os seeds):
 
 ```bash
-.venv\Scripts\python.exe scripts\backup_db.py                      # backup pré-migração
-$env:DATABASE_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog"
-.venv\Scripts\python.exe scripts\schema_postgres.py                # gera scripts/postgres_schema.sql
-.venv\Scripts\python.exe scripts\migrar_postgres.py --apply-schema # DROP SCHEMA + schema + import + conferência
-```
-
-O `server_cache.db` (cache de páginas-fonte) **não** é migrado — fica fora da
-estrutura de produção. A tabela `produtos_fts` (índice FTS5 de busca) também
-não vem da migração: no Postgres ela é criada automaticamente no primeiro
-`ensure_fts()` (startup do servidor) usando `tsvector` + `pg_trgm` — coluna
-`fts` gerada com `to_tsvector('simple', f_unaccent(...))` (remover acentos) e
-função `fts5_to_tsquery()` que converte a query FTS5 (`parafuso* AND 5x50*`)
-para tsquery de prefixo. O `rebuild()` roda no startup para popular o índice.
-
-O script imprime a conferência linha a linha (contagens origem → destino) e
-falha (`exit 1`) se houver divergência. Após o import, as FKs são validadas
-pelo Postgres (todas `convalidated`) e as sequences são ajustadas com
-`setval` para o maior id de cada tabela.
-
-**Validar a camada Postgres com a suíte de testes** (35 testes rodam também
-contra o PG; cada teste zera as tabelas e replica os seeds das migrações):
-
-```bash
-# SQLite (padrão):
-.venv\Scripts\python.exe -m pytest tests\ -q
-# PostgreSQL:
 $env:TEST_PG_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test"
 .venv\Scripts\python.exe -m pytest tests\ -q
 ```

@@ -8,15 +8,19 @@ correspondente.
 """
 from __future__ import annotations
 
-import sqlite3
+from typing import TYPE_CHECKING
+
 from catalog_server.db import system_conn
+
+if TYPE_CHECKING:
+    from catalog_server.pgsql import PgConnection as _Conn
 
 
 def _clean(value: str) -> str:
     return (value or "").strip()
 
 
-def resolve_categoria(conn: sqlite3.Connection, categoria: str) -> int | None:
+def resolve_categoria(conn: _Conn, categoria: str) -> int | None:
     """Devolve o id de uma categoria, criando-a se o nome ainda não existir."""
     nome = _clean(categoria)
     if not nome:
@@ -30,7 +34,7 @@ def resolve_categoria(conn: sqlite3.Connection, categoria: str) -> int | None:
 
 
 def resolve_subcategoria(
-    conn: sqlite3.Connection, categoria_id: int | None, subcategoria: str
+    conn: _Conn, categoria_id: int | None, subcategoria: str
 ) -> int | None:
     """Devolve o id de uma subcategoria dentro da categoria, criando se necessário.
 
@@ -53,7 +57,7 @@ def resolve_subcategoria(
 
 
 def resolve(
-    conn: sqlite3.Connection, categoria: str, subcategoria: str
+    conn: _Conn, categoria: str, subcategoria: str
 ) -> tuple[int | None, int | None]:
     """Resolve ambos os nomes para ids (create-or-get)."""
     categoria_id = resolve_categoria(conn, categoria)

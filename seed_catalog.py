@@ -1,7 +1,7 @@
 """Popula o Qdrant (via microserviço Cotações IA Importer) com o catálogo real.
 
-Lê as variantes ativas do `catalog_server/data/server.db` (mesma base usada
-pelo catálogo e pelas cotações) e envia em lotes para `POST /api/catalog/seed`.
+Lê as variantes ativas do banco PostgreSQL do ERP (mesma base usada pelo
+catálogo e pelas cotações) e envia em lotes para `POST /api/catalog/seed`.
 
 Uso:
   python seed_catalog.py                        # catálogo completo (reset na 1ª leva)

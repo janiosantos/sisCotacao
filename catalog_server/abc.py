@@ -21,7 +21,6 @@ impacto financeiro).
 """
 from __future__ import annotations
 
-import sqlite3
 from typing import Any
 
 from catalog_server.db import system_conn

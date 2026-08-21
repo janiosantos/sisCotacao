@@ -42,15 +42,7 @@ def create_app() -> Flask:
 
     app.secret_key = config.SECRET_KEY
 
-    # Base única: alimenta o cadastro com o que o scraper gerou (idempotente).
-    from catalog_server.sync_crawler import sync_crawler
-
-    try:
-        sync_crawler()
-    except Exception:
-        app.logger.warning("Falha ao sincronizar produtos do scraper.", exc_info=True)
-
-    # Índice de busca (FTS5): reconstrói no startup para cobrir produtos
+    # Índice de busca (tsvector): reconstrói no startup para cobrir produtos
     # cadastrados antes do índice existir.
     from catalog_server import fts
     from catalog_server.db import system_conn

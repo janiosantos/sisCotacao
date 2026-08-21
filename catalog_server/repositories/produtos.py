@@ -11,6 +11,28 @@ import json
 from catalog_server import fts
 from catalog_server import categorias
 from catalog_server.db import system_conn
+from catalog_server.repositories import marcas
+from catalog_server.services.sku_service import (
+    normalizar as normalizar_sku,
+    reservar as reservar_sku,
+    sku_emitido as sku_emitido_variante,
+)
+
+
+def _parse_json_attrs(value) -> dict:
+    """Coluna `variantes.atributos` (JSONB no PG / JSON TEXT no SQLite) -> dict.
+
+    No Postgres o psycopg devolve o JSONB já decodificado (dict); no SQLite é
+    uma string JSON. Normaliza ambos para `{nome: valor}`.
+    """
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return json.loads(value)
+        except ValueError:
+            return {}
+    return {}
 
 
 def _to_float(value):
@@ -53,6 +75,7 @@ class ProdutoRepository:
             fams = [dict(r) for r in conn.execute(sql).fetchall()]
             for f in fams:
                 f["atributos"] = _list_atributos(conn, f["id"])
+                self._normalize_sku_template(f)
             return fams
 
     def get_familia(self, familia_id: int) -> dict | None:
@@ -64,23 +87,37 @@ class ProdutoRepository:
                 return None
             f = dict(row)
             f["atributos"] = _list_atributos(conn, familia_id)
+            self._normalize_sku_template(f)
             return f
 
-    def create_familia(self, nome: str, descricao: str, atributos: list[dict], ncm_padrao: str = "", unidade_padrao: str = "") -> int:
+    @staticmethod
+    def _normalize_sku_template(f: dict) -> None:
+        raw = f.get("sku_atributos")
+        if isinstance(raw, str) and raw.strip():
+            try:
+                raw = json.loads(raw)
+            except ValueError:
+                raw = None
+        if isinstance(raw, list):
+            f["sku_atributos"] = [str(x) for x in raw if str(x).strip()]
+        else:
+            f["sku_atributos"] = None
+
+    def create_familia(self, nome: str, descricao: str, atributos: list[dict], ncm_padrao: str = "", unidade_padrao: str = "", sku_atributos: list[str] | None = None) -> int:
         with system_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO familias (nome, descricao, ncm_padrao, unidade_padrao) VALUES (?,?,?,?)",
-                (nome, descricao or "", ncm_padrao or "", unidade_padrao or "UN"),
+                "INSERT INTO familias (nome, descricao, ncm_padrao, unidade_padrao, sku_atributos) VALUES (?,?,?,?,?)",
+                (nome, descricao or "", ncm_padrao or "", unidade_padrao or "UN", json.dumps([str(x) for x in (sku_atributos or [])], ensure_ascii=False) if sku_atributos else None),
             )
             familia_id = cur.lastrowid
             self._replace_atributos(conn, familia_id, atributos)
             return familia_id
 
-    def update_familia(self, familia_id: int, nome: str, descricao: str, atributos: list[dict], ncm_padrao: str = "", unidade_padrao: str = "") -> bool:
+    def update_familia(self, familia_id: int, nome: str, descricao: str, atributos: list[dict], ncm_padrao: str = "", unidade_padrao: str = "", sku_atributos: list[str] | None = None) -> bool:
         with system_conn() as conn:
             cur = conn.execute(
-                "UPDATE familias SET nome=?, descricao=?, ncm_padrao=?, unidade_padrao=? WHERE id=?",
-                (nome, descricao or "", ncm_padrao or "", unidade_padrao or "UN", familia_id),
+                "UPDATE familias SET nome=?, descricao=?, ncm_padrao=?, unidade_padrao=?, sku_atributos=? WHERE id=?",
+                (nome, descricao or "", ncm_padrao or "", unidade_padrao or "UN", json.dumps([str(x) for x in (sku_atributos or [])], ensure_ascii=False) if sku_atributos else None, familia_id),
             )
             if cur.rowcount == 0:
                 return False
@@ -117,18 +154,19 @@ class ProdutoRepository:
             tipo = a.get("tipo") if a.get("tipo") in ("lista", "livre") else "lista"
             opcoes = json.dumps(a.get("opcoes") or [], ensure_ascii=False)
             obrigatorio = 1 if a.get("obrigatorio") else 0
+            validacao = a.get("validacao") if a.get("validacao") in ("texto", "numero", "alphanumerico") else "texto"
             aid = a.get("id")
             if aid in existing:
                 submitted.add(aid)
                 conn.execute(
-                    "UPDATE familia_atributos SET nome=?, tipo=?, opcoes=?, obrigatorio=?, ordem=? WHERE id=?",
-                    (nome, tipo, opcoes, obrigatorio, ordem, aid),
+                    "UPDATE familia_atributos SET nome=?, tipo=?, opcoes=?, obrigatorio=?, ordem=?, validacao=? WHERE id=?",
+                    (nome, tipo, opcoes, obrigatorio, ordem, validacao, aid),
                 )
             else:
                 cur = conn.execute(
-                    "INSERT INTO familia_atributos (familia_id, nome, tipo, opcoes, obrigatorio, ordem)"
-                    " VALUES (?,?,?,?,?,?)",
-                    (familia_id, nome, tipo, opcoes, obrigatorio, ordem),
+                    "INSERT INTO familia_atributos (familia_id, nome, tipo, opcoes, obrigatorio, ordem, validacao)"
+                    " VALUES (?,?,?,?,?,?,?)",
+                    (familia_id, nome, tipo, opcoes, obrigatorio, ordem, validacao),
                 )
                 submitted.add(cur.lastrowid)
         for aid in set(existing) - submitted:
@@ -257,11 +295,17 @@ class ProdutoRepository:
         with system_conn() as conn:
             row = conn.execute(
                 "SELECT p.*, f.nome AS familia_nome,"
-                " COALESCE(cat.nome,'') AS categoria, COALESCE(sub.nome,'') AS subcategoria"
+                " COALESCE(cat.nome,'') AS categoria, COALESCE(sub.nome,'') AS subcategoria,"
+                " COALESCE(g.codigo,'') AS grupo_codigo, COALESCE(g.nome,'') AS grupo,"
+                " COALESCE(sg.codigo,'') AS subgrupo_codigo, COALESCE(sg.nome,'') AS subgrupo,"
+                " COALESCE(m.codigo,'') AS marca_codigo"
                 " FROM produtos_cadastro p"
                 " LEFT JOIN familias f ON f.id=p.familia_id"
                 " LEFT JOIN categorias cat ON cat.id=p.categoria_id"
                 " LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id"
+                " LEFT JOIN grupos g ON g.id=p.grupo_id"
+                " LEFT JOIN subgrupos sg ON sg.id=p.subgrupo_id"
+                " LEFT JOIN marcas m ON m.id=p.marca_id"
                 " WHERE p.id=?",
                 (produto_id,),
             ).fetchone()
@@ -270,6 +314,7 @@ class ProdutoRepository:
             prod = dict(row)
             prod["atributos"] = _list_atributos(conn, prod["familia_id"])
             nome_por_id = {str(a["id"]): a["nome"] for a in prod["atributos"]}
+            id_por_nome = {a["nome"]: str(a["id"]) for a in prod["atributos"]}
 
             vrows = conn.execute(
                 "SELECT * FROM variantes WHERE produto_id=? ORDER BY id",
@@ -278,14 +323,24 @@ class ProdutoRepository:
             variants = []
             for v in vrows:
                 vd = dict(v)
-                avals = conn.execute(
-                    "SELECT atributo_id, valor FROM variante_atributos WHERE variante_id=?",
-                    (v["id"],),
-                ).fetchall()
-                vd["atributos"] = {str(a["atributo_id"]): a["valor"] for a in avals}
-                vd["atributos_nomes"] = {
-                    nome_por_id[str(a["atributo_id"])]: a["valor"] for a in avals
-                }
+                json_attrs = _parse_json_attrs(v["atributos"])
+                if json_attrs:
+                    # JSONB é a fonte canônica: chaves por nome do atributo.
+                    vd["atributos_nomes"] = {str(k): str(val) for k, val in json_attrs.items()}
+                    vd["atributos"] = {
+                        id_por_nome.get(str(k), str(k)): str(val)
+                        for k, val in json_attrs.items()
+                    }
+                else:
+                    avals = conn.execute(
+                        "SELECT atributo_id, valor FROM variante_atributos WHERE variante_id=?",
+                        (v["id"],),
+                    ).fetchall()
+                    vd["atributos"] = {str(a["atributo_id"]): a["valor"] for a in avals}
+                    vd["atributos_nomes"] = {
+                        nome_por_id.get(str(a["atributo_id"]), str(a["atributo_id"])): a["valor"]
+                        for a in avals
+                    }
                 variants.append(vd)
             prod["variantes"] = variants
 
@@ -308,22 +363,28 @@ class ProdutoRepository:
         subcategoria: str = "",
         termos_busca: str = "",
         external_id: str | None = None,
+        grupo_id: int | None = None,
+        subgrupo_id: int | None = None,
     ) -> int:
         with system_conn() as conn:
             categoria_id, subcategoria_id = categorias.resolve(conn, categoria, subcategoria)
+            marca_id = marcas.resolver(conn, marca)
             cur = conn.execute(
                 "INSERT INTO produtos_cadastro"
-                " (familia_id, nome, marca, descricao, termos_busca, categoria_id, subcategoria_id, external_id)"
-                " VALUES (?,?,?,?,?,?,?,?)",
+                " (familia_id, nome, marca, marca_id, descricao, termos_busca, categoria_id, subcategoria_id, external_id, grupo_id, subgrupo_id)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     familia_id,
                     nome,
                     marca or "",
+                    marca_id,
                     descricao or "",
                     termos_busca or "",
                     categoria_id,
                     subcategoria_id,
                     str(external_id).strip() if external_id else None,
+                    grupo_id,
+                    subgrupo_id,
                 ),
             )
             produto_id = cur.lastrowid
@@ -344,22 +405,28 @@ class ProdutoRepository:
         subcategoria: str = "",
         termos_busca: str = "",
         external_id: str | None = None,
+        grupo_id: int | None = None,
+        subgrupo_id: int | None = None,
     ) -> tuple[bool, dict]:
         with system_conn() as conn:
             categoria_id, subcategoria_id = categorias.resolve(conn, categoria, subcategoria)
+            marca_id = marcas.resolver(conn, marca)
             cur = conn.execute(
-                "UPDATE produtos_cadastro SET familia_id=?, nome=?, marca=?, descricao=?,"
-                " termos_busca=?, categoria_id=?, subcategoria_id=?, external_id=?,"
+                "UPDATE produtos_cadastro SET familia_id=?, nome=?, marca=?, marca_id=?, descricao=?,"
+                " termos_busca=?, categoria_id=?, subcategoria_id=?, external_id=?, grupo_id=?, subgrupo_id=?,"
                 " atualizado_em=datetime('now') WHERE id=?",
                 (
                     familia_id,
                     nome,
                     marca or "",
+                    marca_id,
                     descricao or "",
                     termos_busca or "",
                     categoria_id,
                     subcategoria_id,
                     str(external_id).strip() if external_id else None,
+                    grupo_id,
+                    subgrupo_id,
                     produto_id,
                 ),
             )
@@ -414,7 +481,8 @@ class ProdutoRepository:
         Usado quando o pedido precisa de uma combinação de tamanho/cor que ainda
         não existe como SKU no catálogo: reusa a variante existente se houver uma
         com exatamente os mesmos atributos; caso contrário cria a variação, monta
-        os `variante_atributos` e reindexa o produto no FTS.
+        os `variante_atributos` + JSONB `atributos` e gera um SKU único via
+        `sku_service`.
         """
         norm = {int(k): str(v).strip() for k, v in (atributos or {}).items() if v not in (None, "")}
         if not norm:
@@ -433,14 +501,33 @@ class ProdutoRepository:
                 if existing == norm:
                     return r["id"]
             prod = conn.execute(
-                "SELECT marca FROM produtos_cadastro WHERE id=?", (produto_id,)
+                "SELECT marca, nome FROM produtos_cadastro WHERE id=?", (produto_id,)
             ).fetchone()
             prod_marca = (prod["marca"] or "") if prod else ""
+            prod_nome = (prod["nome"] or "") if prod else ""
+            familia_id = conn.execute(
+                "SELECT familia_id FROM produtos_cadastro WHERE id=?", (produto_id,)
+            ).fetchone()["familia_id"]
+            id_por_nome = {}
+            if familia_id:
+                id_por_nome = {
+                    r["id"]: r["nome"]
+                    for r in conn.execute(
+                        "SELECT id, nome FROM familia_atributos WHERE familia_id=?", (familia_id,)
+                    ).fetchall()
+                }
+            attrs_json = {id_por_nome.get(aid, str(aid)): valor for aid, valor in norm.items()}
             cur = conn.execute(
-                "INSERT INTO variantes (produto_id, preco, marca, ativo) VALUES (?,0,?,1)",
-                (produto_id, marca or prod_marca),
+                "INSERT INTO variantes (produto_id, preco, marca, ativo, atributos)"
+                " VALUES (?,0,?,1,?)",
+                (produto_id, marca or prod_marca, json.dumps(attrs_json, ensure_ascii=False)),
             )
             vid = cur.lastrowid
+            sku, _aviso = reservar_sku(
+                "", produto_id, vid, base=prod_nome, conn=conn,
+            )
+            if sku:
+                conn.execute("UPDATE variantes SET sku=? WHERE id=?", (sku, vid))
             for aid, valor in norm.items():
                 conn.execute(
                     "INSERT INTO variante_atributos (variante_id, atributo_id, valor) VALUES (?,?,?)",
@@ -487,14 +574,35 @@ class ProdutoRepository:
         return "excluidas"
 
     def _replace_variantes(self, conn, produto_id: int, variantes: list[dict]) -> dict:
-        resultado = {"excluidas": 0, "desativadas": 0}
+        resultado = {"excluidas": 0, "desativadas": 0, "bloqueadas": 0, "criadas": 0, "atributos_faltantes": 0}
         row = conn.execute(
-            "SELECT f.ncm_padrao, f.unidade_padrao FROM produtos_cadastro p"
+            "SELECT p.nome AS produto_nome, f.ncm_padrao, f.unidade_padrao, p.familia_id"
+            " FROM produtos_cadastro p"
             " LEFT JOIN familias f ON f.id=p.familia_id WHERE p.id=?",
             (produto_id,),
         ).fetchone()
         ncm_padrao = (row["ncm_padrao"] or "").strip() if row else ""
         unidade_padrao = (row["unidade_padrao"] or "UN").strip() if row else "UN"
+        produto_nome = (row["produto_nome"] or "") if row else ""
+        familia_id = row["familia_id"] if row else None
+        # id -> nome dos atributos da família (para montar o JSONB `atributos`)
+        id_por_nome: dict[int, str] = {}
+        # ids dos atributos obrigatórios da família (regra de negócio por variante)
+        obrigatorios: set[int] = set()
+        if familia_id:
+            id_por_nome = {
+                r["id"]: r["nome"]
+                for r in conn.execute(
+                    "SELECT id, nome FROM familia_atributos WHERE familia_id=?", (familia_id,)
+                ).fetchall()
+            }
+            obrigatorios = {
+                r["id"]
+                for r in conn.execute(
+                    "SELECT id FROM familia_atributos WHERE familia_id=? AND obrigatorio=1",
+                    (familia_id,),
+                ).fetchall()
+            }
         existing = {
             r["id"]
             for r in conn.execute(
@@ -506,19 +614,55 @@ class ProdutoRepository:
             preco = _to_float(v.get("preco"))
             prom = _to_float(v.get("preco_promocional"))
             attrs = v.get("atributos") or {}
+            vid = v.get("id")
+            # Regra de negócio: toda variante precisa de valor nos atributos
+            # obrigatórios da família (quando a família define atributos).
+            if obrigatorios:
+                valores_attrs = {int(k): str(val) for k, val in attrs.items() if val not in (None, "")}
+                faltando = [aid for aid in obrigatorios if not valores_attrs.get(aid, "").strip()]
+                if faltando:
+                    resultado["atributos_faltantes"] += 1
+                    # Preserva a variante existente (não a altera nem a remove).
+                    if vid in existing:
+                        submitted.add(vid)
+                    continue
             ncm = (v.get("ncm") or "").strip()
             unidade_tributavel = (v.get("unidade_tributavel") or "").strip()
             unidade_venda = (v.get("unidade_venda") or unidade_padrao or "UN").strip()
-            vid = v.get("id")
+
+            # Atributos em JSONB (por nome) — fonte canônica do modelo novo,
+            # espelhado no EAV (`variante_atributos`) mantido em paralelo.
+            attrs_json = {
+                id_por_nome.get(int(aid), str(aid)): str(valor)
+                for aid, valor in attrs.items()
+                if valor not in (None, "")
+            }
+
             if vid in existing:
                 submitted.add(vid)
+                novo_sku = v.get("sku") or ""
+                # Imutabilidade: SKU já emitido em operação comercial não é
+                # alterado automaticamente — mantém o valor atual no banco.
+                if novo_sku:
+                    atual = conn.execute(
+                        "SELECT sku FROM variantes WHERE id=?", (vid,)
+                    ).fetchone()
+                    sku_atual = atual["sku"] if atual else ""
+                    if sku_atual and sku_emitido_variante(conn, vid) and \
+                            normalizar_sku(novo_sku) != normalizar_sku(sku_atual):
+                        novo_sku = sku_atual
+                sku, _aviso = reservar_sku(
+                    novo_sku, produto_id, vid,
+                    base=produto_nome, ignorar_id=vid, conn=conn,
+                )
                 conn.execute(
                     "UPDATE variantes SET sku=?, ean=?, preco=?, preco_promocional=?,"
                     " observacao=?, peso=?, dimensoes=?, unidade_venda=?, embalagem=?,"
                     " fator_conversao=?, localizacao=?, unidade_tributavel=?,"
+                    " atributos=?,"
                     " ncm=COALESCE(NULLIF(?, ''), ncm) WHERE id=? AND produto_id=?",
                     (
-                        v.get("sku") or "",
+                        sku,
                         v.get("ean") or "",
                         preco or 0,
                         prom,
@@ -530,6 +674,7 @@ class ProdutoRepository:
                         _to_float(v.get("fator_conversao")) or 1,
                         v.get("localizacao") or "",
                         unidade_tributavel,
+                        json.dumps(attrs_json, ensure_ascii=False),
                         ncm,
                         vid,
                         produto_id,
@@ -539,11 +684,11 @@ class ProdutoRepository:
                 cur = conn.execute(
                     "INSERT INTO variantes (produto_id, sku, ean, preco, preco_promocional, observacao,"
                     " peso, dimensoes, unidade_venda, embalagem, fator_conversao, localizacao,"
-                    " unidade_tributavel, ncm)"
-                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    " unidade_tributavel, ncm, atributos)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         produto_id,
-                        v.get("sku") or "",
+                        "",
                         v.get("ean") or "",
                         preco or 0,
                         prom,
@@ -556,10 +701,17 @@ class ProdutoRepository:
                         v.get("localizacao") or "",
                         unidade_tributavel,
                         ncm or ncm_padrao,
+                        json.dumps(attrs_json, ensure_ascii=False),
                     ),
                 )
                 vid = cur.lastrowid
                 submitted.add(vid)
+                sku, _aviso = reservar_sku(
+                    v.get("sku") or "", produto_id, vid,
+                    base=produto_nome, ignorar_id=vid, conn=conn,
+                )
+                if sku:
+                    conn.execute("UPDATE variantes SET sku=? WHERE id=?", (sku, vid))
             self._sync_ncm(conn, vid, ncm or ncm_padrao)
             conn.execute("DELETE FROM variante_atributos WHERE variante_id=?", (vid,))
             for aid, valor in attrs.items():
@@ -570,8 +722,49 @@ class ProdutoRepository:
                     (vid, int(aid), str(valor)),
                 )
         for vid in existing - submitted:
+            # Regra de negócio: nunca remover/desativar a ÚNICA variante ativa.
+            if not self._tem_outra_variante_ativa(conn, produto_id, vid):
+                resultado["bloqueadas"] += 1
+                continue
             resultado[self._regra_remover_variante(conn, vid)] += 1
+        # Regra de negócio: todo produto base precisa de ao menos 1 variante.
+        ativas = conn.execute(
+            "SELECT COUNT(*) AS n FROM variantes WHERE produto_id=? AND ativo=1",
+            (produto_id,),
+        ).fetchone()["n"]
+        if not ativas:
+            self._criar_variante_padrao(conn, produto_id, produto_nome, ncm_padrao, unidade_padrao)
+            resultado["criadas"] += 1
         return resultado
+
+    @staticmethod
+    def _tem_outra_variante_ativa(conn, produto_id: int, variante_id: int) -> bool:
+        """Verdadeiro se o produto possui outra variante ativa além de `variante_id`."""
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM variantes WHERE produto_id=? AND ativo=1 AND id<>?",
+            (produto_id, variante_id),
+        ).fetchone()
+        return (row["n"] or 0) > 0
+
+    @staticmethod
+    def _criar_variante_padrao(conn, produto_id: int, produto_nome: str, ncm_padrao: str, unidade_padrao: str) -> int:
+        """Cria a variante padrão (preço 0, sem atributos) do produto pai."""
+        marca = conn.execute(
+            "SELECT COALESCE(marca,'') AS marca FROM produtos_cadastro WHERE id=?",
+            (produto_id,),
+        ).fetchone()["marca"]
+        cur = conn.execute(
+            "INSERT INTO variantes (produto_id, sku, ean, preco, preco_promocional, marca, observacao, ativo,"
+            " unidade_venda, embalagem, fator_conversao, unidade_tributavel, ncm, localizacao, atributos)"
+            " VALUES (?, '', '', 0, NULL, ?, '', 1, ?, 1, 1, '', ?, '', '{}')",
+            (produto_id, marca, unidade_padrao or "UN", ncm_padrao or ""),
+        )
+        vid = cur.lastrowid
+        sku, _aviso = reservar_sku("", produto_id, vid, base=produto_nome, conn=conn)
+        if sku:
+            conn.execute("UPDATE variantes SET sku=? WHERE id=?", (sku, vid))
+        fts.sync_product(conn, produto_id)
+        return vid
 
     @staticmethod
     def _sync_ncm(conn, variante_id: int, ncm: str) -> None:

@@ -1,13 +1,9 @@
-"""Runner de migrações versionadas para o PostgreSQL.
-
-Espelho do runner SQLite (`catalog_server.migrations.runner`), mas aplicado ao
-banco do catálogo/cotações quando `DATABASE_URL` está configurada.
+"""Runner de migrações versionadas para o PostgreSQL (banco único do ERP).
 
 Estratégia de versões:
-- A migração `0052_baseline_postgres` (versão 52, alinhada às 52 migrações
-  SQLite) aplica `scripts/postgres_schema.sql` — o schema atual do sistema.
-  Se o banco já possui o schema (ex.: banco migrado por `migrar_postgres.py`),
-  o `guard` reconhece e apenas registra a versão (idempotente).
+- A migração `0052_baseline_postgres` (versão 52) aplica
+  `scripts/postgres_schema.sql` — o schema atual do sistema. Se o banco já
+  possui o schema, o `guard` reconhece e apenas registra a versão (idempotente).
 - Mudanças futuras entram como `NNNN_nome.sql|py` em `versions/` (numeração
   0053+), aplicadas incrementalmente sobre o baseline.
 - Cada versão aplicada fica registrada na tabela `schema_migrations`.
@@ -38,8 +34,7 @@ PROJECT = Path(__file__).resolve().parent.parent.parent
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "versions"
 
-# Arquivo SQL do baseline (schema completo do sistema). Pode ser sobrescrito
-# por scripts que querem usar um schema customizado (ex.: migrar_postgres.py).
+# Arquivo SQL do baseline (schema completo do sistema).
 SCHEMA_FILE = PROJECT / "scripts" / "postgres_schema.sql"
 
 

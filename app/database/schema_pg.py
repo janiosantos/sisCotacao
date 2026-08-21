@@ -5,10 +5,8 @@ As tabelas (`categories`, `products`, `images`, `crawler_state` e
 sem prefixo, pois não colidem com as tabelas do sistema (`categorias`,
 `produtos_cadastro`, `variantes`, `imagens_produto`, ...).
 
-O DDL é idempotente (`CREATE TABLE IF NOT EXISTS`) e é aplicado:
-- pelo scraper (`app.database.sqlite.Database.create_tables`) ao abrir o banco;
-- pelo `catalog_server.sync_crawler`/`enrich` antes de ler/escrever;
-- pelo `scripts/migrar_postgres.py` ao importar o crawler.db.
+O DDL é idempotente (`CREATE TABLE IF NOT EXISTS`) e é aplicado pela migração
+baseline `0052_baseline_postgres` ao criar o schema do banco.
 """
 from __future__ import annotations
 

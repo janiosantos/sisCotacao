@@ -394,6 +394,12 @@ export default function PreVenda() {
       toast("Adicione ao menos um item", "error");
       return;
     }
+    // Autorização por senha exigida apenas ao salvar/finalizar, se o desconto
+    // estiver acima da alçada do vendedor e ainda não tiver sido autorizado.
+    if (c.descontoTotal > 0.01 && c.pct > limiteAlcadaPct + 1e-6 && !descontoAutorizado) {
+      setModalAutorizar({ id: null, descontoPct: c.pct, limitePct: limiteAlcadaPct, modo: "autorizar" });
+      return;
+    }
     setSalvando(true);
     try {
       const res = await persistir();
@@ -544,16 +550,8 @@ export default function PreVenda() {
     }
     setDescModo(modo);
     setDesconto(v);
-    // Avisa na hora quando o desconto geral ultrapassa a alçada do vendedor
-    // (modal dispensável), em vez de só na finalização.
-    if (limiteAlcadaPct != null) {
-      const novo = calculosPdv(linhas, modo, v);
-      if (novo.descontoTotal > 0.01 && novo.pct > limiteAlcadaPct + 1e-6) {
-        setModalAutorizar((prev) => prev ?? { id: editandoId, descontoPct: novo.pct, limitePct: limiteAlcadaPct, modo: "autorizar" });
-      } else {
-        setModalAutorizar((prev) => (prev?.modo === "autorizar" ? null : prev));
-      }
-    }
+    // A autorização por senha NÃO é solicitada durante a digitação: ela é
+    // pedida apenas ao Salvar ou Finalizar (ver salvar/finalizarOrcamento).
   };
 
   const carregarParaEdicao = async (id: number) => {

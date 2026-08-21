@@ -578,6 +578,7 @@ function ModalPedidoCaixa({ d, onSair }: { d: OrcamentoDetalhe; onSair: () => vo
   const codigoRef = useRef<HTMLInputElement>(null);
   const imprimirRef = useRef<HTMLButtonElement>(null);
   const retryRef = useRef<HTMLButtonElement>(null);
+  const confirmarRef = useRef<HTMLButtonElement>(null);
 
   const valorNum = parseNum(valor);
   const troco = forma === "dinheiro" ? Math.max(0, valorNum - total) : 0;
@@ -735,7 +736,7 @@ function ModalPedidoCaixa({ d, onSair }: { d: OrcamentoDetalhe; onSair: () => vo
             <Button variant="ghost" onClick={onSair}>
               ← Voltar para o Caixa <kbd className="ml-1 rounded bg-white px-1 text-[10px] shadow-sm">ESC</kbd>
             </Button>
-            <Button variant="primary" onClick={() => void confirmar()} disabled={enviando}>
+            <Button ref={confirmarRef} variant="primary" onClick={() => void confirmar()} disabled={enviando}>
               {enviando ? "Registrando…" : "Confirmar recebimento"}
               <kbd className="ml-2 rounded bg-white/20 px-1 text-[10px]">Ctrl+Enter</kbd>
             </Button>
@@ -772,8 +773,13 @@ function ModalPedidoCaixa({ d, onSair }: { d: OrcamentoDetalhe; onSair: () => vo
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    if (ehCartao) bandeiraRef.current?.focus();
-                    else void confirmar();
+                    if (ehCartao) {
+                      bandeiraRef.current?.focus();
+                    } else {
+                      // Dinheiro: não finaliza ainda — mostra o troco e move o
+                      // foco para "Confirmar recebimento"; um 2º ENTER finaliza.
+                      confirmarRef.current?.focus();
+                    }
                   }
                 }}
               />
