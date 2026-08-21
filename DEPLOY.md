@@ -131,6 +131,18 @@ na tabela `sistema_atualizacoes` (ver migração `0061`), alimentando o históri
 do painel. Portal do fornecedor (`/api/fornecedor/...`) e demais rotas continuam
 fora desse fluxo.
 
+**Quem aplica migrações (e onde):**
+
+- **Produção**: somente o passo explícito do pipeline. O container roda com
+  `AUTO_MIGRATE=0` — o processo web nunca executa DDL, então uma migração
+  problemática falha no deploy (visível no log do Actions) em vez de derrubar
+  o app em crash-loop.
+- **Dev/local**: o auto-apply no primeiro acesso ao banco permanece ligado
+  (default `AUTO_MIGRATE=1`) por conveniência.
+- O runner usa um **advisory lock** do Postgres (`pg_advisory_lock`), então
+  execuções concorrentes (deploy + painel, ou dois processos subindo juntos)
+  são serializadas com segurança.
+
 O frontend (menu **Admin → Atualizações**) também permite aplicar migrações
 pendentes **sob demanda** (útil para hotfix sem redeploy completo), via
 `POST /api/sistema/updates/apply`:

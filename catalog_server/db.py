@@ -11,6 +11,7 @@ o ERP importa esse JSON e não lê o `crawler.db` diretamente.
 """
 from __future__ import annotations
 
+import os
 import threading
 from contextlib import contextmanager
 from pathlib import Path
@@ -36,11 +37,20 @@ def _require_url() -> str:
 
 
 def _ensure_migrations() -> None:
-    """Aplica migrações PG pendentes uma única vez por processo/URL."""
+    """Aplica migrações PG pendentes uma única vez por processo/URL.
+
+    Controlado por `AUTO_MIGRATE` (default "1"). Em produção o container roda
+    com `AUTO_MIGRATE=0`: as migrações são aplicadas em passo explícito do
+    pipeline (deploy.yml), fora do processo web — falha de migração não derruba
+    o app em crash-loop.
+    """
     url = _require_url()
     with _MIGRATED_LOCK:
         key = f"pg:{url}"
         if key in _MIGRATED:
+            return
+        if os.getenv("AUTO_MIGRATE", "1") != "1":
+            _MIGRATED.add(key)
             return
         from scripts.pg_migrations.runner import apply as pg_apply
 

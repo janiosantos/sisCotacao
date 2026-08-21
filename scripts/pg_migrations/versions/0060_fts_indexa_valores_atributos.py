@@ -60,6 +60,17 @@ LEFT JOIN familias f ON f.id = p.familia_id
 """
 
 
+# A coluna gerada usa `f_unaccent` (wrapper IMMUTABLE do unaccent). Em banco
+# fresco a função só seria criada depois, pelo fts.ensure_fts() — garantimos
+# aqui para a cadeia de migrações ser autocontida (idempotente).
+_FTS_FN_DDL = """
+CREATE EXTENSION IF NOT EXISTS unaccent;
+CREATE OR REPLACE FUNCTION f_unaccent(text) RETURNS text AS $$
+    SELECT public.unaccent('public.unaccent', $1)
+$$ LANGUAGE sql IMMUTABLE;
+"""
+
+
 def guard(conn) -> bool:
     row = conn.execute(
         "SELECT 1 FROM information_schema.columns"
@@ -72,6 +83,9 @@ def forward(conn) -> None:
     autocommit = conn.autocommit
     conn.autocommit = True
     try:
+        for stmt in _FTS_FN_DDL.split(";"):
+            if stmt.strip():
+                conn.execute(stmt)
         conn.execute("DROP TABLE IF EXISTS produtos_fts")
         conn.execute(_FTS_DDL)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_produtos_fts_fts ON produtos_fts USING gin (fts)")

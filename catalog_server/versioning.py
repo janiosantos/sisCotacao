@@ -208,6 +208,7 @@ _RISCO_CLI = {
 
 def _main() -> int:
     p = argparse.ArgumentParser(description="Aplica migrações e registra o log.")
+    p.add_argument("command", nargs="?", choices=["apply"], default="apply")
     p.add_argument("--origem", default="deploy")
     p.add_argument(
         "--risco", default="todos", choices=["critica", "rotina", "melhoria", "todos"]

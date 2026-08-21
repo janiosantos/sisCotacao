@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from catalog_server import auth_token
 from catalog_server.repositories import usuario_repo
 
 api_usuarios_bp = Blueprint("api_usuarios", __name__)
+
+# Mantido: outros blueprints (orcamentos, fiscal, loja, precos) usam a sessão
+# para atribuir o usuário logado às operações.
+SESSION_KEY = "usuario_id"
 
 
 @api_usuarios_bp.get("/api/usuarios")
@@ -99,6 +103,7 @@ def login():
     user = usuario_repo.get_by_login(login_str)
     if not user or not check_password_hash(user["senha_hash"], senha) or not user.get("ativo"):
         return jsonify({"error": "Usuário ou senha inválidos"}), 401
+    session[SESSION_KEY] = user["id"]
     token = auth_token.criar_token(user)
     return jsonify(
         {

@@ -31,6 +31,9 @@ services:
       - IMAGES_DIR=/app/images
       - CATALOG_HOST=0.0.0.0
       - APP_VERSION=${APP_VERSION:-dev}
+      # Migrações são aplicadas em passo explícito do pipeline (deploy.yml),
+      # fora do processo web — evita crash-loop se uma migração falhar.
+      - AUTO_MIGRATE=0
       - DATABASE_URL=postgresql+psycopg://catalog:catalog@db:5432/catalog
     depends_on:
       db:

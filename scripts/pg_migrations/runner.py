@@ -35,6 +35,9 @@ PROJECT = Path(__file__).resolve().parent.parent.parent
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "versions"
 
+# Chave fixa do advisory lock que serializa o `apply` entre processos.
+ADVISORY_LOCK_KEY = 723901140
+
 # Arquivo SQL do baseline (schema completo do sistema).
 SCHEMA_FILE = PROJECT / "scripts" / "postgres_schema.sql"
 
@@ -194,6 +197,11 @@ def apply(
     """
     conn = _connect(url)
     try:
+        # Lock de sessão do Postgres: serializa execuções concorrentes (dois
+        # processos/containers subindo juntos não aplicam a mesma migração
+        # duas vezes). Liberado no finally / ao fechar a conexão.
+        conn.execute("SELECT pg_advisory_lock(%s)", (ADVISORY_LOCK_KEY,))
+        conn.commit()
         done = applied_versions(conn)
         applied_here: list[int] = []
         for mig in load_migrations():
@@ -224,6 +232,11 @@ def apply(
             applied_here.append(mig.version)
         return applied_here
     finally:
+        try:
+            conn.execute("SELECT pg_advisory_unlock(%s)", (ADVISORY_LOCK_KEY,))
+            conn.commit()
+        except Exception:
+            pass
         conn.close()
 
 
