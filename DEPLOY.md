@@ -286,6 +286,24 @@ chamadas. Em `401` o frontend limpa o token e volta ao login.
 > Portal do Fornecedor ficam protegidos pelo token; o proxy deve continuar
 > restrito por rede conforme necessário.
 
+## Ambiente local (espelha a produção)
+
+O `docker-compose.yml` local tem a MESMA topologia do `docker-compose.prod.yml`:
+
+```
+navegador → nginx (:8080) ─┬─ /api,/images,/compras/pedidos,/orcamentos,/fornecedor → backend:8000
+                           └─ / (SPA em dev) → vite:5173 (HMR atrás do proxy)
+backend → apenas rede interna · APP_VERSION=dev · AUTO_MIGRATE=0
+db      → postgres (dados no volume postgres-data)
+```
+
+- As rotas de backend vivem em **um único arquivo** (`frontend/nginx.backend-routes.conf`)
+  incluído pelo nginx de dev (`nginx.dev.conf`) e pelo de produção (`nginx.conf`) —
+  rota nova do Flask entra lá e vale nos dois ambientes.
+- Migrações NÃO aplicam sozinhas no local (paridade com produção). Após criar/
+  alterar migração: `docker compose exec -T backend python -m catalog_server.versioning apply --origem local`
+- Subir: `docker compose up -d` → sistema em `http://localhost:8080`.
+
 ## Rollback
 - Deploy falhou no health gate: o pipeline não sobe a nova versão; para reverter
   manualmente ao estado anterior:

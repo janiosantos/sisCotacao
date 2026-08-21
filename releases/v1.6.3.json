@@ -1,0 +1,12 @@
+{
+  "versao": "v1.6.3",
+  "componentes": ["frontend"],
+  "correcoes": [
+    "Impressão de orçamentos/compras e portal do fornecedor não funcionavam em produção (rotas do Flask caíam no fallback da SPA e mostravam o login) — nginx agora roteia ao backend como o Vite já fazia em dev"
+  ],
+  "melhorias": [
+    "Rotas de backend centralizadas num único arquivo de nginx compartilhado entre dev e prod (impossível divergir)",
+    "Ambiente local espelha a topologia de produção: nginx como única porta de entrada, backend isolado na rede, migrações por comando explícito"
+  ],
+  "recursos": []
+}
