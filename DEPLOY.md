@@ -302,6 +302,9 @@ db      → postgres (dados no volume postgres-data)
   rota nova do Flask entra lá e vale nos dois ambientes.
 - Migrações NÃO aplicam sozinhas no local (paridade com produção). Após criar/
   alterar migração: `docker compose exec -T backend python -m catalog_server.versioning apply --origem local`
+- O serviço `vite` roda com `CHOKIDAR_USEPOLLING=true`: eventos de alteração de
+  arquivo não cruzam o bind mount Windows→Docker, e sem polling o Vite serve a
+  versão em cache (HMR/F5 não refletem edições).
 - Subir: `docker compose up -d` → sistema em `http://localhost:8080`.
 
 ## Rollback

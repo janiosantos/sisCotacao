@@ -69,6 +69,10 @@ services:
     environment:
       - BACKEND_HOST=backend
       - BACKEND_PORT=8000
+      # Windows + Docker Desktop: eventos de arquivo não cruzam o bind mount,
+      # então o watcher usa polling (senão HMR/F5 servem cache antigo do Vite).
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
     depends_on:
       backend:
         condition: service_healthy
