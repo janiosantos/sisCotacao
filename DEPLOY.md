@@ -91,6 +91,33 @@ Tarefas disponíveis (`python -m catalog_server.maintenance <task>`):
 Para adicionar uma tarefa: crie a função em `catalog_server/maintenance.py`,
 registre em `TASKS` e adicione a opção no input `task` de `maintenance.yml`.
 
+## Versionamento do sistema (app ↔ schema)
+
+O backend expõe `GET /api/sistema/status` com a visão unificada de versão:
+
+- `app_version` — vem de `APP_VERSION` (injeto no build a partir do `git tag`;
+  `dev` em ambiente local).
+- `schema_version` / `schema_max` — versão aplicada e máxima das migrações.
+- `pending` / `pending_por_risco` — migrações pendentes agrupadas por
+  `RISCO` (`critica` / `melhoria` / `rotina` / `n/c`).
+
+A resposta é **somente-leitura** (consulta `schema_migrations`; não aplica
+migrações). O deploy define `APP_VERSION` automaticamente via `git describe`
+(`deploy.yml` → step "Resolve versão da imagem").
+
+Exemplo:
+```json
+{
+  "app_version": "v1.2.0",
+  "schema_version": 60,
+  "schema_max": 60,
+  "applied": 9,
+  "pending": [],
+  "pending_por_risco": {"critica": 0, "melhoria": 0, "rotina": 0, "n/c": 0},
+  "atualizado": true
+}
+```
+
 ## Rollback
 - Deploy falhou no health gate: o pipeline não sobe a nova versão; para reverter
   manualmente ao estado anterior:

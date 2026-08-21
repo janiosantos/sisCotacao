@@ -12,9 +12,14 @@ jobs:
     runs-on: [self-hosted, siscom-prod]
     env:
       COMPOSE_PROJECT_NAME: siscom   # mantém o volume siscom_postgres-data (dados intactos)
+      APP_VERSION: ${{ steps.version.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve versão da imagem
+        id: version
+        run: echo "tag=$(git describe --tags --always 2>/dev/null || echo dev)" >> "$GITHUB_OUTPUT"
 
       - name: Backup de segurança (somente se houver migration pendente)
         run: |

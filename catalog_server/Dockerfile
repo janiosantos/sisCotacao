@@ -1,4 +1,6 @@
 FROM python:3.14-slim
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
 WORKDIR /app
 COPY catalog_server/ catalog_server/
 COPY app/ app/

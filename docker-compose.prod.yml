@@ -28,6 +28,7 @@ services:
     environment:
       - IMAGES_DIR=/app/images
       - CATALOG_HOST=0.0.0.0
+      - APP_VERSION=${APP_VERSION:-dev}
       - DATABASE_URL=postgresql+psycopg://catalog:catalog@db:5432/catalog
     depends_on:
       db:
