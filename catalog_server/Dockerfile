@@ -5,6 +5,8 @@ WORKDIR /app
 COPY catalog_server/ catalog_server/
 COPY app/ app/
 COPY scripts/ scripts/
+# Manifestos de release (lidos pelo versioning ao publicar)
+COPY releases/ releases/
 RUN pip install --no-cache-dir flask python-dotenv requests beautifulsoup4 lxml colorlog fake-useragent sqlalchemy "psycopg[binary]"
 EXPOSE 8000
 CMD ["python", "-m", "catalog_server.run_server", "--port", "8000", "--host", "0.0.0.0"]

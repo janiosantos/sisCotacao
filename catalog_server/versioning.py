@@ -5,8 +5,9 @@ Leitura **sob demanda e somente-leitura**: não aplica migrações nem cria/alte
 tabelas — apenas consulta ``schema_migrations`` e os arquivos de migração.
 
 ``apply_updates`` aplica migrações pendentes (filtradas por `riscos`) e registra
-o evento na tabela ``sistema_atualizacoes`` (ver migração 0061), alimentando o
-histórico exibido no Painel de Atualizações.
+o evento na tabela ``sistema_atualizacoes`` (ver migrações 0061/0062), incluindo
+as notas de cada manifesto de release (``releases/vX.Y.Z.json``): correções,
+melhorias e recursos — alimentando o Histórico do Painel de Atualizações.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 import psycopg
 from psycopg.types.json import Json
@@ -45,6 +47,53 @@ def _applied_versions() -> set[int]:
 def _schema_version() -> int:
     applied = _applied_versions()
     return max(applied) if applied else 0
+
+
+# ---------------------------------------------------------------------------
+# Manifestos de release (releases/vX.Y.Z.json)
+# ---------------------------------------------------------------------------
+
+def _releases_dir() -> Path:
+    return Path(__file__).resolve().parent.parent / "releases"
+
+
+def _versao_key(versao: str) -> tuple[int, ...]:
+    partes = [p for p in versao.lstrip("v").split(".") if p.isdigit()]
+    return tuple(int(p) for p in partes) or (0,)
+
+
+def _publicadas() -> set[str]:
+    """Versões de release já registradas no log (tolera tabela ausente)."""
+    try:
+        with psycopg.connect(_dsn()) as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT versao_release FROM sistema_atualizacoes"
+                " WHERE versao_release IS NOT NULL"
+            ).fetchall()
+        return {r[0] for r in rows}
+    except Exception:
+        return set()
+
+
+def listar_manifestos_pendentes() -> list[dict]:
+    """Manifestos em `releases/` ainda não publicados (ordenados por versão)."""
+    publicadas = _publicadas()
+    out: list[dict] = []
+    d = _releases_dir()
+    if not d.is_dir():
+        return out
+    for f in sorted(d.glob("*.json")):
+        try:
+            m = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(m, dict) or not m.get("versao"):
+            continue
+        if m["versao"] in publicadas:
+            continue
+        out.append(m)
+    out.sort(key=lambda m: _versao_key(str(m.get("versao"))))
+    return out
 
 
 def system_status() -> dict:
@@ -94,6 +143,11 @@ def _registrar_log(
     usuario: str | None,
     detalhes: dict | None = None,
     erro: str | None = None,
+    versao_release: str | None = None,
+    componentes: list | None = None,
+    correcoes: list | None = None,
+    melhorias: list | None = None,
+    recursos: list | None = None,
 ) -> None:
     """Grava o evento de atualização. Falhas de log são ignoradas."""
     try:
@@ -102,8 +156,9 @@ def _registrar_log(
                 """
                 INSERT INTO sistema_atualizacoes
                     (nivel, versao_app, schema_antes, schema_depois,
-                     total_aplicadas, detalhes, origem, usuario, erro)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     total_aplicadas, detalhes, origem, usuario, erro,
+                     versao_release, componentes, correcoes, melhorias, recursos)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     nivel,
@@ -115,6 +170,11 @@ def _registrar_log(
                     origem,
                     usuario,
                     erro,
+                    versao_release,
+                    Json(componentes) if componentes is not None else None,
+                    Json(correcoes) if correcoes is not None else None,
+                    Json(melhorias) if melhorias is not None else None,
+                    Json(recursos) if recursos is not None else None,
                 ),
             )
             conn.commit()
@@ -146,6 +206,25 @@ def apply_updates(
             usuario=usuario,
             detalhes={"aplicadas": applied},
         )
+        # Publicação via deploy: registra um evento por manifesto pendente,
+        # na sequência das versões — o Histórico mostra O QUE foi lançado.
+        if origem == "deploy":
+            for m in listar_manifestos_pendentes():
+                _registrar_log(
+                    nivel="release",
+                    versao_app=st["app_version"],
+                    schema_antes=antes,
+                    schema_depois=st["schema_version"],
+                    total_aplicadas=0,
+                    origem="release",
+                    usuario=usuario,
+                    detalhes={"manifesto": m.get("versao")},
+                    versao_release=m.get("versao"),
+                    componentes=m.get("componentes"),
+                    correcoes=m.get("correcoes"),
+                    melhorias=m.get("melhorias"),
+                    recursos=m.get("recursos"),
+                )
         return st
     except Exception as e:
         erro = str(e)
@@ -174,7 +253,8 @@ def listar_log(limite: int = 50) -> list[dict]:
             rows = conn.execute(
                 """
                 SELECT id, executado_em, nivel, versao_app, schema_antes,
-                       schema_depois, total_aplicadas, origem, usuario, erro
+                       schema_depois, total_aplicadas, origem, usuario, erro,
+                       versao_release, componentes, correcoes, melhorias, recursos
                 FROM sistema_atualizacoes
                 ORDER BY executado_em DESC, id DESC
                 LIMIT %s
@@ -192,6 +272,11 @@ def listar_log(limite: int = 50) -> list[dict]:
             "origem",
             "usuario",
             "erro",
+            "versao_release",
+            "componentes",
+            "correcoes",
+            "melhorias",
+            "recursos",
         ]
         return [dict(zip(cols, r)) for r in rows]
     except Exception:

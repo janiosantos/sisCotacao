@@ -1375,6 +1375,7 @@ export const api = {
   aplicarAtualizacoes: (risco: NivelRisco) =>
     request<SistemaStatus & { ok: boolean; nivel: string; error?: string }>("POST", "/api/sistema/updates/apply", { risco }),
   sistemaUpdatesLog: () => request<{ log: AtualizacaoLog[] }>("GET", "/api/sistema/updates/log"),
+  releasesPendentes: () => request<{ pendentes: ReleaseManifesto[] }>("GET", "/api/sistema/releases/pendentes"),
 };
 
 export type NivelRisco = "critica" | "rotina" | "melhoria" | "todos";
@@ -1407,6 +1408,19 @@ export interface AtualizacaoLog {
   origem: string;
   usuario: string | null;
   erro: string | null;
+  versao_release?: string | null;
+  componentes?: string[] | null;
+  correcoes?: string[] | null;
+  melhorias?: string[] | null;
+  recursos?: string[] | null;
+}
+
+export interface ReleaseManifesto {
+  versao: string;
+  componentes: string[];
+  correcoes?: string[];
+  melhorias?: string[];
+  recursos?: string[];
 }
 
 export interface CategoriaTree {

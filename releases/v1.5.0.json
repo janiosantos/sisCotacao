@@ -1,0 +1,15 @@
+{
+  "versao": "v1.5.0",
+  "componentes": ["backend", "frontend", "schema"],
+  "correcoes": [],
+  "melhorias": [
+    "Migrações fora do processo web em produção (AUTO_MIGRATE=0) e advisory lock contra execuções concorrentes",
+    "Cadeia de migrações funciona em banco fresco (0060 garante f_unaccent antes do índice FTS)"
+  ],
+  "recursos": [
+    "Controle de publicação por autorização: workflow com versão e seleção de componentes (backend/frontend/schema)",
+    "Deploy seletivo por componente — correção de backend ou migração não derruba o frontend, e vice-versa",
+    "Histórico de atualizações com notas de release: correções, melhorias e recursos por versão",
+    "Seção 'Rascunhos pendentes' no Painel de Atualizações mostrando o que está acumulado em dev antes de publicar"
+  ]
+}

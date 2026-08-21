@@ -166,22 +166,63 @@ usuário e erro).
 
 ### Processo de publicação e versionamento
 
-Versionamento semântico `MAJOR.MINOR.PATCH` derivado de **git tag**; `APP_VERSION`
-é resolvido por `git describe` no deploy.
+Versionamento semântico `MAJOR.MINOR.PATCH`:
 
 - **PATCH** (`vX.Y.Z+1`) → correção (bugfix).
 - **MINOR** (`vX.Y+1.0`) → melhoria / novo recurso (não-breaking).
 - **MAJOR** (`vX+1.0.0`) → mudança breaking (contrato/schema incompatível).
 
-Fluxo de uma correção:
-1. Faça a mudança de código **e** a migration `00XX_*.py` com `RISCO` adequado.
-2. Commit.
-3. `git tag vX.Y.Z` e `git push origin main --tags` → o pipeline builda, sobe e
-   aplica as migrações (registradas no log).
-4. No painel **Admin → Atualizações**, confira versão/`Atualizado` e o Histórico.
+#### Manifesto de release (`releases/vX.Y.Z.json`)
 
-Dev (sem tag) roda com `APP_VERSION=dev` (mostrado no painel). A migration
-sempre acompanha o código que a exige e recebe classificação `RISCO`.
+Cada conjunto de mudanças vem com um manifesto commitado junto ao código:
+
+```json
+{
+  "versao": "v1.5.0",
+  "componentes": ["backend", "frontend", "schema"],
+  "correcoes": ["O que foi corrigido"],
+  "melhorias": ["O que foi melhorado"],
+  "recursos": ["O que foi adicionado"]
+}
+```
+
+Ele alimenta o **Histórico** do painel (o que mudou, por release) e a seção
+**"Rascunhos pendentes"** — releases implementadas em dev que ainda não foram
+publicadas (`GET /api/sistema/releases/pendentes`). Um manifesto só é marcado
+como publicado quando o deploy o registra no log.
+
+#### Publicar (autorização explícita)
+
+A publicação **nunca é automática**: acontece em
+GitHub → Actions → **"Deploy produção (siscom)"** → **Run workflow**, com:
+
+- `versao` — ex.: `v1.5.1` (vira o `APP_VERSION`);
+- `componentes` — `todos`, `backend`, `frontend` ou `schema`.
+
+Mapeamento dos componentes (seguro por construção):
+
+| Componente | Build backend | Build frontend | Migrações |
+|---|---|---|---|
+| `todos` | ✅ | ✅ | ✅ |
+| `backend` | ✅ | — | ✅ |
+| `schema` | ✅ (as migrações vivem na imagem) | — | ✅ |
+| `frontend` | — | ✅ | — |
+
+Ou seja: correção interna de backend ou migração **não derruba o frontend**;
+recurso visual novo publica **só o frontend**. Regra de ouro: se a mudança
+altera **assinatura de API**, o manifesto deve listar `backend + frontend`
+(publicar juntos).
+
+Fluxo completo:
+1. Implemente em dev; commit com código, migration `00XX_*.py` (com `RISCO`)
+   **e** o manifesto `releases/vX.Y.Z.json`.
+2. Quando quiser lançar, autorize o workflow com a versão e os componentes.
+3. O pipeline aplica as migrações pendentes e registra **um evento por
+   manifesto publicado, na sequência** — visível no Histórico.
+4. Confira no painel **Admin → Atualizações**: versão, estado e notas.
+
+> Nota: o gatilho por tag `v*` foi mantido apenas durante a transição e será
+> removido logo após a v1.5.0 — a partir daí, só `workflow_dispatch`.
 
 ### Autenticação por token (API)
 

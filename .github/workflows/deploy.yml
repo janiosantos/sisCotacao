@@ -5,6 +5,21 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      versao:
+        description: 'Versão da release (ex.: v1.5.1)'
+        required: true
+        type: string
+      componentes:
+        description: 'O que publicar'
+        required: true
+        default: 'todos'
+        type: choice
+        options:
+          - todos
+          - backend
+          - frontend
+          - schema
 
 jobs:
   deploy:
@@ -16,11 +31,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Define componentes do deploy
+        id: comp
+        run: |
+          C="${{ inputs.componentes }}"
+          if [ -z "$C" ]; then C="todos"; fi   # push de tag publica tudo
+          echo "componentes=$C" >> "$GITHUB_OUTPUT"
+          # schema implica rebuild do backend: as migrações vivem na imagem.
+          case "$C" in
+            todos)    B=true;  F=true;  M=true  ;;
+            backend)  B=true;  F=false; M=true  ;;
+            schema)   B=true;  F=false; M=true  ;;
+            frontend) B=false; F=true;  M=false ;;
+            *) echo "componentes inválidos: $C"; exit 1 ;;
+          esac
+          echo "backend=$B"  >> "$GITHUB_OUTPUT"
+          echo "frontend=$F" >> "$GITHUB_OUTPUT"
+          echo "migracoes=$M" >> "$GITHUB_OUTPUT"
+
       - name: Resolve versão da imagem
         id: version
-        run: echo "tag=$(git describe --tags --always 2>/dev/null || echo dev)" >> "$GITHUB_OUTPUT"
+        run: |
+          V="${{ inputs.versao }}"
+          if [ -z "$V" ]; then V="$(git describe --tags --always 2>/dev/null || echo dev)"; fi
+          echo "tag=$V" >> "$GITHUB_OUTPUT"
 
       - name: Backup de segurança (somente se houver migration pendente)
+        if: steps.comp.outputs.migracoes == 'true'
         run: |
           mkdir -p /home/jpsantos/siscom/backups
           PENDING=$(docker compose -f docker-compose.prod.yml exec -T backend \
@@ -36,19 +73,26 @@ jobs:
           fi
 
       - name: Salva imagem atual (para rollback)
+        if: steps.comp.outputs.backend == 'true'
         run: docker tag siscom-backend:latest siscom-backend:prev || true
 
-      - name: Build das imagens (no servidor, incremental via cache de layers)
+      - name: Build imagem do backend
+        if: steps.comp.outputs.backend == 'true'
         env:
           APP_VERSION: ${{ steps.version.outputs.tag }}
-        run: docker compose -f docker-compose.prod.yml build
+        run: docker compose -f docker-compose.prod.yml build backend
 
-      - name: Deploy (sobe containers; backend aplica migrações online no start)
+      - name: Build imagem do frontend
+        if: steps.comp.outputs.frontend == 'true'
+        run: docker compose -f docker-compose.prod.yml build frontend
+
+      - name: Deploy (sobe containers)
         env:
           APP_VERSION: ${{ steps.version.outputs.tag }}
         run: docker compose -f docker-compose.prod.yml up -d
 
       - name: Aplica migrações pendentes (com log de atualização)
+        if: steps.comp.outputs.migracoes == 'true'
         run: |
           docker compose -f docker-compose.prod.yml exec -T backend \
             python -m catalog_server.versioning apply --origem deploy

@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from catalog_server.versioning import apply_updates, listar_log, system_status
+from catalog_server.versioning import (
+    apply_updates,
+    listar_log,
+    listar_manifestos_pendentes,
+    system_status,
+)
 
 api_sistema_bp = Blueprint("api_sistema", __name__)
 
@@ -51,5 +56,14 @@ def updates_log():
     """Histórico de atualizações aplicadas (deploy ou painel)."""
     try:
         return jsonify({"log": listar_log(limite=50)}), 200
+    except Exception as exc:  # noqa: BLE001 - expõe erro de infra ao operador
+        return jsonify({"error": str(exc)}), 500
+
+
+@api_sistema_bp.get("/api/sistema/releases/pendentes")
+def releases_pendentes():
+    """Manifestos de release ainda não publicados (rascunhos acumulados em dev)."""
+    try:
+        return jsonify({"pendentes": listar_manifestos_pendentes()}), 200
     except Exception as exc:  # noqa: BLE001 - expõe erro de infra ao operador
         return jsonify({"error": str(exc)}), 500
