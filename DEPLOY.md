@@ -63,6 +63,28 @@ docker compose -f docker-compose.prod.yml exec backend \
   python -m scripts.pg_migrations check     # conexão + pendentes
 ```
 
+## Manutenção automatizada (tarefas de dados)
+
+Operações em produção **sem `scp` manual**: o runner `siscom-prod` executa o
+módulo `catalog_server.maintenance` dentro do container `backend` via
+`.github/workflows/maintenance.yml` (disparado por `workflow_dispatch`).
+
+Como usar:
+1. GitHub → Actions → **Manutenção produção (siscom)** → Run workflow.
+2. Escolha a `task` no menu e confirme.
+3. O log do job traz a saída da tarefa rodando no servidor.
+
+Tarefas disponíveis (`python -m catalog_server.maintenance <task>`):
+- `health` — resumo do estado do catálogo (contagens de produtos/variantes/FTS).
+- `diagnose_search` — valida que produtos **com atributos** retornam na busca FTS
+  (amostra 15 produtos; reporta falhas). Somente-leitura.
+- `fts_rebuild` — reconstrói `produtos_fts` a partir das tabelas base (índice
+  derivado/regenerável; **não** altera dados de origem). Use após a normalização
+  / re-importação do catálogo.
+
+Para adicionar uma tarefa: crie a função em `catalog_server/maintenance.py`,
+registre em `TASKS` e adicione a opção no input `task` de `maintenance.yml`.
+
 ## Rollback
 - Deploy falhou no health gate: o pipeline não sobe a nova versão; para reverter
   manualmente ao estado anterior:

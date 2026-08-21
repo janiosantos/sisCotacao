@@ -1,0 +1,34 @@
+name: Manutenção produção (siscom)
+
+# Tarefas de manutenção/dados executadas no próprio servidor de produção, via
+# self-hosted runner. Elimina a necessidade de scp manual de scripts.
+#
+# Como usar: GitHub → Actions → "Manutenção produção (siscom)" → Run workflow
+# → escolha a tarefa em "task".
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Tarefa de manutenção a executar no container backend"
+        required: true
+        default: "health"
+        type: choice
+        options:
+          - health
+          - diagnose_search
+          - fts_rebuild
+
+jobs:
+  maintenance:
+    runs-on: [self-hosted, siscom-prod]
+    env:
+      COMPOSE_PROJECT_NAME: siscom   # mantém o volume siscom_postgres-data (dados intactos)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Executa tarefa de manutenção no container backend
+        run: |
+          docker compose -f docker-compose.prod.yml exec -T backend \
+            python -m catalog_server.maintenance ${{ github.event.inputs.task }}
