@@ -1,9 +1,8 @@
 name: Deploy produção (siscom)
 
+# Publicação SOMENTE mediante autorização explícita (Run workflow),
+# escolhendo versão e componentes. Não há mais gatilho automático por tag.
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       versao:

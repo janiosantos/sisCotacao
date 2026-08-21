@@ -221,8 +221,8 @@ Fluxo completo:
    manifesto publicado, na sequência** — visível no Histórico.
 4. Confira no painel **Admin → Atualizações**: versão, estado e notas.
 
-> Nota: o gatilho por tag `v*` foi mantido apenas durante a transição e será
-> removido logo após a v1.5.0 — a partir daí, só `workflow_dispatch`.
+> O gatilho por tag `v*` foi **removido** após a v1.5.0. Publicar é sempre via
+> **Run workflow** — tags passam a ser apenas registro documental, se você quiser.
 
 ### Autenticação por token (API)
 
