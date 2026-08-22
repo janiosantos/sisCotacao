@@ -21,7 +21,7 @@ import psycopg
 from psycopg.types.json import Json
 
 from catalog_server import config
-from scripts.pg_migrations.runner import apply, load_migrations
+from migrations.runner import apply, load_migrations
 
 # Ordem canônica de classificação de risco (para o resumo do endpoint).
 RISCOS = ("critica", "melhoria", "rotina", "n/c")
@@ -54,7 +54,12 @@ def _schema_version() -> int:
 # ---------------------------------------------------------------------------
 
 def _releases_dir() -> Path:
-    return Path(__file__).resolve().parent.parent / "releases"
+    # Container: /app/catalog_server/.. = /app/releases (montagem do compose).
+    # Repo local: backend/catalog_server/../.. = raiz/releases.
+    aqui = Path(__file__).resolve().parent.parent / "releases"
+    if aqui.is_dir():
+        return aqui
+    return Path(__file__).resolve().parent.parent.parent / "releases"
 
 
 def _versao_key(versao: str) -> tuple[int, ...]:

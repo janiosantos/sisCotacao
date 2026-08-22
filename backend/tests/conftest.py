@@ -8,6 +8,15 @@ aplicado uma vez por sessão e cada teste recebe um banco zerado via
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
+
+# Pacotes vivem em backend/ (catalog_server, migrations) e na raiz (app/scrapper).
+_BACKEND = Path(__file__).resolve().parent.parent
+_RAIZ = _BACKEND.parent
+for _p in (str(_BACKEND), str(_RAIZ)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 import pytest
 
@@ -39,7 +48,7 @@ def pg_schema():
         conn.commit()
     engine.dispose()
 
-    from scripts.pg_migrations.runner import apply as pg_apply
+    from migrations.runner import apply as pg_apply
 
     applied = pg_apply(TEST_PG_URL)
     assert applied, "nenhuma migração aplicada no banco de teste PG"

@@ -752,19 +752,19 @@ sqlite3 usado nos repositórios), traduzindo o SQL na hora da execução
 NOTHING`, `LIKE ... COLLATE NOCASE`→`ILIKE`, `GROUP_CONCAT`→`string_agg`, etc.).
 
 O schema do Postgres evolui por **migrações versionadas** próprias
-(`scripts/pg_migrations/`): a versão `0052_baseline_postgres` aplica o
+(`backend/migrations/`): a versão `0052_baseline_postgres` aplica o
 `scripts/postgres_schema.sql` (schema completo do sistema) + o schema do scraper;
 mudanças futuras entram como arquivos `0053+` em
-`scripts/pg_migrations/versions/`, aplicados incrementalmente e registrados na
+`backend/migrations/versions/`, aplicados incrementalmente e registrados na
 tabela `schema_migrations`. O `init_db` (startup do servidor) aplica as
 pendentes automaticamente.
 
 ```bash
 # CLI do runner PG:
 $env:DATABASE_URL = "postgresql+psycopg://catalog:catalog@localhost:5432/catalog"
-.venv\Scripts\python.exe -m scripts.pg_migrations status
-.venv\Scripts\python.exe -m scripts.pg_migrations check
-.venv\Scripts\python.exe -m scripts.pg_migrations apply
+.venv\Scripts\python.exe -m migrations status
+.venv\Scripts\python.exe -m migrations check
+.venv\Scripts\python.exe -m migrations apply
 ```
 
 ```bash

@@ -19,8 +19,8 @@ services:
   backend:
     image: siscom-backend:latest
     build:
-      context: .
-      dockerfile: catalog_server/Dockerfile
+      context: ../..
+      dockerfile: backend/Dockerfile
     # Apenas na rede Docker: o frontend (nginx) alcança backend:8000.
     # Não expõe a porta no host — o acesso externo entra via proxy (:80/:6173).
     expose:
@@ -29,7 +29,7 @@ services:
       - /home/jpsantos/siscom/img:/app/images
       # Manifestos de release direto do checkout do runner — publicações
       # frontend/schema-only registram no Histórico sem rebuild do backend.
-      - ./releases:/app/releases:ro
+      - ../../releases:/app/releases:ro
     environment:
       - IMAGES_DIR=/app/images
       - CATALOG_HOST=0.0.0.0
@@ -52,7 +52,7 @@ services:
   frontend:
     image: siscom-frontend:latest
     build:
-      context: frontend
+      context: ../../frontend
       dockerfile: Dockerfile.prod
     ports:
       - "80:80"

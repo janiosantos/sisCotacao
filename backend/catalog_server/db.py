@@ -2,7 +2,7 @@
 
 O ERP (catálogo, fornecedores, cotações, preços, histórico, estoque, fiscal)
 vive em um único banco PostgreSQL, apontado por `DATABASE_URL` (obrigatória).
-O schema é evoluído por migrações versionadas em `scripts/pg_migrations/`
+O schema é evoluído por migrações versionadas em `backend/migrations/`
 (contrato do `runner.py`): o `init_db` aplica as versões pendentes uma única
 vez por processo e garante o índice de busca (tsvector).
 
@@ -52,7 +52,7 @@ def _ensure_migrations() -> None:
         if os.getenv("AUTO_MIGRATE", "1") != "1":
             _MIGRATED.add(key)
             return
-        from scripts.pg_migrations.runner import apply as pg_apply
+        from migrations.runner import apply as pg_apply
 
         pg_apply(url)
         _MIGRATED.add(key)

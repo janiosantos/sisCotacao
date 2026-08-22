@@ -1,0 +1,73 @@
+# STAGING ad-hoc — valida a branch em paralelo à produção, sem tocá-la:
+#   - projeto próprio (siscom-staging): containers/rede/volume de banco exclusivos
+#   - banco NASCE VAZIO e é migrado pelo pipeline (teste real da cadeia fresca)
+#   - imagens com sufixo -staging (não sobrescrevem as tags usadas pela produção)
+#   - frontend publicado em :8081 (produção segue em :80)
+# Uso: workflow "Deploy Staging" ou manual:
+#   COMPOSE_PROJECT_NAME=siscom-staging docker compose -f deployment/compose/docker-compose.staging.yml up -d --build
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=catalog
+      - POSTGRES_PASSWORD=catalog
+      - POSTGRES_DB=catalog
+    # Sem porta publicada: o banco de staging fica só na rede interna dele.
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catalog -d catalog"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    image: siscom-backend-staging:latest
+    build:
+      # Paths em um compose são relativos AO PRÓPRIO ARQUIVO — daqui,
+      # a raiz do repositório fica em ../..
+      context: ../..
+      dockerfile: backend/Dockerfile
+    expose:
+      - "8000"
+    volumes:
+      - /home/jpsantos/siscom/img-staging:/app/images
+      - ../../releases:/app/releases:ro
+    environment:
+      - IMAGES_DIR=/app/images
+      - CATALOG_HOST=0.0.0.0
+      - APP_VERSION=${APP_VERSION:-rc}
+      - AUTO_MIGRATE=0
+      - DATABASE_URL=postgresql+psycopg://catalog:catalog@db:5432/catalog
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; req=urllib.request.urlopen('http://localhost:8000/api/health'); sys.exit(0 if req.status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  frontend:
+    image: siscom-frontend-staging:latest
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile.prod
+    ports:
+      - "8081:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
