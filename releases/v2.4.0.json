@@ -1,0 +1,6 @@
+{
+  "versao": "v2.4.0",
+  "componentes": ["backend"],
+  "recursos": ["P1: JSONB canônico de atributos — backfill EAV→JSONB idempotente + índice GIN (ADR 0004); EAV congelado"],
+  "imagens": { "backend": "siscom-backend:v2.4.0" }
+}
