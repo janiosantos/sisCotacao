@@ -1,7 +1,9 @@
 """Endpoints de status/versionamento do sistema (controle de atualização)."""
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from pathlib import Path
+
+from flask import Blueprint, jsonify, request, send_file
 
 from catalog_server import flags
 from catalog_server.versioning import (
@@ -12,6 +14,19 @@ from catalog_server.versioning import (
 )
 
 api_sistema_bp = Blueprint("api_sistema", __name__)
+
+
+@api_sistema_bp.get("/api/openapi.json")
+def openapi_spec():
+    """Contrato da API (fase 1) — fonte única em backend/openapi.json."""
+    aqui = Path(__file__).resolve()
+    for cand in (
+        aqui.parent.parent.parent / "openapi.json",  # container: /app/openapi.json
+        aqui.parent.parent / "openapi.json",         # repo local: backend/openapi.json
+    ):
+        if cand.is_file():
+            return send_file(cand, mimetype="application/json")
+    return jsonify({"error": "openapi.json não encontrado"}), 500
 
 
 @api_sistema_bp.get("/api/sistema/status")

@@ -122,6 +122,7 @@ def create_app() -> Flask:
     _WHITELIST = {
         "/api/health": {"GET"},
         "/api/pronto": {"GET"},
+        "/api/openapi.json": {"GET"},
         "/api/login": {"POST"},
         "/api/logout": {"POST"},
         "/api/primeiro-usuario": {"GET"},
