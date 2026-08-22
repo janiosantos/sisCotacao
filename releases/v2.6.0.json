@@ -1,0 +1,8 @@
+{
+  "versao": "v2.6.0",
+  "componentes": ["backend"],
+  "recursos": [
+    "P3: estoque por fatos auditáveis — idempotency_key UNIQUE, origem rastreável, NUMERIC(14,3) e função reconciliar_estoque() (ADR 0003)"
+  ],
+  "imagens": { "backend": "siscom-backend:v2.6.0" }
+}
