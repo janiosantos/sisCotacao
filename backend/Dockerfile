@@ -5,6 +5,8 @@ WORKDIR /app
 # Contexto de build = raiz do repositório (ver docker-compose*.yml)
 COPY backend/catalog_server/ catalog_server/
 COPY backend/migrations/ migrations/
+# Suíte de testes (CI roda pytest dentro de container efêmero da imagem)
+COPY backend/tests/ tests/
 # Scraper legado (importado por classification/parse_url; execução futura via task)
 COPY app/ app/
 # Manifestos de release (lidos pelo versioning ao publicar)

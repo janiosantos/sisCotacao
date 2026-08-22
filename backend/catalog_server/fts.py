@@ -90,10 +90,12 @@ _QUERY_TOKENS = re.compile(r"[0-9A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF]+
 
 
 def ensure_fts(conn) -> None:
-    """Garante que o índice FTS exista no Postgres (idempotente)."""
-    row = conn.execute("SELECT to_regclass('public.produtos_fts') AS t").fetchone()
-    if row is not None and row[0] is not None:
-        return
+    """Garante extensões, funções, tabela e índice do FTS (idempotente).
+
+    Executa SEMPRE os statements: desde que a migração 0060 passou a criar a
+    própria tabela, sair cedo quando produtos_fts já existe pulava as FUNÇÕES
+    (f_unaccent/fts5_to_tsquery) e quebrava a busca em bancos novos.
+    """
     for stmt in _PG_CREATE:
         conn.execute(stmt)
 

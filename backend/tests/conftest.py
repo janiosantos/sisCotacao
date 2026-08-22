@@ -48,10 +48,11 @@ def pg_schema():
         conn.commit()
     engine.dispose()
 
-    from migrations.runner import apply as pg_apply
+    # Mesmo caminho do startup de produção: migrações + índice FTS
+    # (ensure_fts cria, entre outros, fts5_to_tsquery usada pela busca).
+    from catalog_server.db import init_db
 
-    applied = pg_apply(TEST_PG_URL)
-    assert applied, "nenhuma migração aplicada no banco de teste PG"
+    init_db()
 
     engine = sqlalchemy.create_engine(TEST_PG_URL)
     with engine.connect() as conn:

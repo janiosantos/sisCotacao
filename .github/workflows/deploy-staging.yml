@@ -29,6 +29,16 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
 
+      # GATE de CI: a branch não builda nem sobe se os testes falharem.
+      - name: Testes (CI) - migrações
+        run: bash deployment/scripts/test-migrations.sh
+
+      - name: Testes (CI) - backend
+        run: bash deployment/scripts/test-backend.sh
+
+      - name: Testes (CI) - frontend
+        run: bash deployment/scripts/test-frontend.sh
+
       - name: Build das imagens de staging
         env:
           APP_VERSION: ${{ inputs.app_version }}
