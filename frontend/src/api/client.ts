@@ -1444,6 +1444,9 @@ export const api = {
     request<SistemaStatus & { ok: boolean; nivel: string; error?: string }>("POST", "/api/sistema/updates/apply", { risco }),
   sistemaUpdatesLog: () => request<{ log: AtualizacaoLog[] }>("GET", "/api/sistema/updates/log"),
   releasesPendentes: () => request<{ pendentes: ReleaseManifesto[] }>("GET", "/api/sistema/releases/pendentes"),
+  listarFlags: () => request<{ flags: FeatureFlag[] }>("GET", "/api/flags"),
+  definirFlag: (nome: string, ativo: boolean) =>
+    request<{ ok: boolean; nome: string; ativo: boolean }>("PUT", `/api/flags/${nome}`, { ativo }),
 };
 
 export type NivelRisco = "critica" | "rotina" | "melhoria" | "todos";
@@ -1505,6 +1508,12 @@ export interface ReleaseManifesto {
   correcoes?: string[];
   melhorias?: string[];
   recursos?: string[];
+}
+
+export interface FeatureFlag {
+  nome: string;
+  descricao: string;
+  ativo: boolean;
 }
 
 export interface CategoriaTree {

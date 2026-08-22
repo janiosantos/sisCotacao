@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
+from catalog_server import flags
 from catalog_server.versioning import (
     apply_updates,
     listar_log,
@@ -67,3 +68,22 @@ def releases_pendentes():
         return jsonify({"pendentes": listar_manifestos_pendentes()}), 200
     except Exception as exc:  # noqa: BLE001 - expõe erro de infra ao operador
         return jsonify({"error": str(exc)}), 500
+
+
+@api_sistema_bp.get("/api/flags")
+def listar_flags():
+    """Feature flags registradas com estado atual."""
+    return jsonify({"flags": flags.listar()}), 200
+
+
+@api_sistema_bp.put("/api/flags/<nome>")
+def definir_flag(nome: str):
+    """Liga/desliga uma feature flag registrada (rollback comportamental)."""
+    body = request.get_json(silent=True) or {}
+    try:
+        flags.definir(nome, bool(body.get("ativo")))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except Exception as exc:  # noqa: BLE001 - expõe erro de infra ao operador
+        return jsonify({"error": str(exc)}), 500
+    return jsonify({"ok": True, "nome": nome, "ativo": bool(body.get("ativo"))}), 200
