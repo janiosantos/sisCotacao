@@ -22,6 +22,10 @@ from catalog_server.db import system_conn
 # Flags conhecidas pelo sistema. Adicione aqui ao introduzir uma nova.
 REGISTRADAS: dict[str, str] = {
     # "NOVO_FLUXO_X": "Explica quando usar o caminho novo",
+    "FISCAL_ENGINE_V2": (
+        "Usa o motor fiscal versionado v2 (regras PUBLISHED por vigência) "
+        "para resolver CFOP/CST quando houver regra aplicável"
+    ),
 }
 
 _TTL = 30.0  # segundos

@@ -1,0 +1,15 @@
+{
+  "versao": "v2.0.0",
+  "componentes": ["backend"],
+  "correcoes": [],
+  "melhorias": [
+    "Motor fiscal v1 versionado: fiscal_engine_rule/_version/_condition/_result com estados DRAFT→VALIDATED→PUBLISHED→SUPERSEDED→REVOKED e alíquotas em NUMERIC(9,4)",
+    "Backfill idempotente espelhando o legado fiscal_regra como PUBLISHED v1 (critérios viram condições; rates DOUBLE→NUMERIC)"
+  ],
+  "recursos": [
+    "Resolvedor v2: seleção pela DATA DA OPERAÇÃO, prioridade determinística, detecção de FISCAL_RULE_CONFLICT entre regras de mesma prioridade, condições 'igual' e 'prefixo' (NCM)",
+    "Feature flag FISCAL_ENGINE_V2 (painel Configurações): quando ligada, regras publicadas prevalecem sobre o legado no calculate() — falha qualquer cai no caminho antigo",
+    "MAJOR v2.0.0: fundação Decimal + motor versionado (contrato externo da API inalterado)"
+  ],
+  "imagens": { "backend": "siscom-backend:v2.0.0" }
+}

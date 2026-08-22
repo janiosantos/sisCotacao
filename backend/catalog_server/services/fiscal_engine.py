@@ -247,6 +247,39 @@ def calculate(
     # CFOP contextual: a matriz de regras decide quando há contexto
     # (tipo_cliente/contribuinte informados); senão, usa a config do produto.
     resultado["cfop_origem"] = "config"
+
+    # Motor v2 (atrás de feature flag): se houver regra PUBLISHED aplicável,
+    # prevalece sobre o legado. Falha qualquer = legado segue intacto.
+    try:
+        from catalog_server import flags as app_flags
+        from catalog_server.fiscal.resolvedor import resolver_v2
+
+        if app_flags.ativa("FISCAL_ENGINE_V2"):
+            rv = resolver_v2({
+                "regime": regime,
+                "uf_origin": uf_origem,
+                "uf_destination": uf_dest,
+                "customer_type": tipo_cliente,
+                "customer_taxpayer_status": contribuinte,
+                "operation_type": operacao,
+                "ncm": ncm,
+                "cest": (cfg.get("cest") or "").strip(),
+                "merchandise_origin": str(cfg.get("origem") or ""),
+            })
+            resultado["motor_v2"] = rv.para_dict()
+            if rv.status.value == "CALCULATED" and rv.cfop:
+                resultado["cfop"] = rv.cfop
+                if rv.cst:
+                    resultado["cst_icms"] = rv.cst
+                if rv.csosn:
+                    resultado["csosn"] = rv.csosn
+                resultado["cfop_origem"] = "regra_v2"
+                return resultado
+            if rv.bloqueia_emissao():
+                resultado["cfop_bloqueado_v2"] = rv.errors
+    except Exception:  # noqa: BLE001 — flag nunca derruba a precificação
+        pass
+
     if tipo_cliente or contribuinte:
         regra = fiscal_regras.buscar_regra({
             "regime": regime,
