@@ -1,0 +1,13 @@
+{
+  "versao": "v1.6.5",
+  "componentes": ["backend", "frontend"],
+  "correcoes": [],
+  "melhorias": [
+    "Reestruturação da árvore do projeto: backend/{catalog_server,migrations,scrapper,tests}, deployment/{compose,scripts} e docs/ organizados (sem mudança de contrato API/schema)",
+    "Compose de produção movido para deployment/compose/ com paths relativos corrigidos",
+    "Rotas de migração atualizadas para o pacote migrations (python -m migrations)"
+  ],
+  "recursos": [
+    "Workflow 'Deploy Staging': valida qualquer branch em ambiente paralelo no servidor (projeto siscom-staging, banco vazio migrado no pipeline, :8081) antes de autorizar produção"
+  ]
+}
