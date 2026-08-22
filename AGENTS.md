@@ -145,3 +145,22 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 6. ~~Infraestrutura de feature flags~~ ✅ **quitada na v1.9.0** (sistema_flags + painel)
 
 > Até as dívidas restantes fecharem, substituto mínimo aceitável: E2E local com Postgres descartável + validação live pós-deploy dos endpoints afetados (prática das releases v1.6.x). Para mudanças relevantes, o padrão atual é: validar a branch via **Deploy Staging** antes de autorizar produção.
+
+## 9. Regras de domínio — onde consultar
+
+### 9.1 Módulo Tributário / Fiscal
+
+**Obrigatório consultar antes e durante qualquer trabalho no domínio fiscal.**
+
+| Consultar | Onde |
+|---|---|
+| Diretrizes gerais do ERP + 10 regras permanentes | `MODULO_TRIBUTARIO.md` |
+| Manifesto do kit | `INSTRUCOES_MODULO_TRIBUTARIO.md` |
+| Regras por domínio (fiscal · banco · api · arquitetura · segurança) | `.agents/rules/<domínio>.md` |
+| Skills profundas (**fiscal-mg** · fiscal-engine · database · api-backend · frontend · testing · deployment) | `.agents/skills/<domínio>/SKILL.md` |
+| Workflows (nova feature · **regra fiscal** · migration · release) | `.agents/workflows/<fluxo>.md` |
+| Documentação fiscal (ADRs · matriz de cenários baseline · fontes oficiais · modelo de dados) | `docs/fiscal/` |
+
+**Princípio central do domínio:** `NCM → imposto` é proibido. Resultado = Produto + Contexto + Legislação vigente → **Motor Fiscal** → resultado versionado, explicável e auditável. Em dúvida: `FISCAL_REVIEW_REQUIRED`.
+
+> 🔜 Estrutura equivalente para os módulos **Produtos** e **Estoque** entra nesta seção quando recebida (9.2).
