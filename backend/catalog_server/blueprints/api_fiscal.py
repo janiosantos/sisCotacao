@@ -186,3 +186,27 @@ def explicar_tributacao(tipo: str, documento_id: int):
     from catalog_server.fiscal.snapshot import explicar
 
     return jsonify({"snapshots": explicar(tipo, documento_id)})
+
+
+@api_fiscal_bp.get("/api/fiscal/perfil-produto/<int:produto_id>")
+def obter_perfil_produto(produto_id: int):
+    return jsonify(fiscal_perfil.obter_produto(produto_id)
+                   or {"produto_id": produto_id, "ncm": "", "cest": "", "origem": 0})
+
+
+@api_fiscal_bp.put("/api/fiscal/perfil-produto/<int:produto_id>")
+def salvar_perfil_produto(produto_id: int):
+    return jsonify(fiscal_perfil.salvar_produto(produto_id, request.get_json(silent=True) or {}))
+
+
+@api_fiscal_bp.put("/api/fiscal/perfil-variante/<int:variante_id>")
+def salvar_perfil_variante(variante_id: int):
+    from catalog_server.repositories.produtos import ProdutoRepository
+
+    dados = request.get_json(silent=True) or {}
+    prod = ProdutoRepository()
+    variante = prod.obter_variante(variante_id) if hasattr(prod, "obter_variante") else None
+    produto_id = (variante or {}).get("produto_id")
+    return jsonify(fiscal_perfil.salvar_override_variante(
+        variante_id, dados, fiscal_perfil.obter_produto(produto_id) if produto_id else None
+    ))

@@ -1,0 +1,9 @@
+{
+  "versao": "v2.5.0",
+  "componentes": ["backend"],
+  "recursos": [
+    "P2: perfil fiscal hierárquico — produto_fiscal_profile como default por PRODUTO e override por VARIÁÇÃO com justificativa_override obrigatória quando divergente (AGENT-produtos #4)",
+    "API: GET/PUT /api/fiscal/perfil-produto/<id> e PUT /api/fiscal/perfil-variante/<id>"
+  ],
+  "imagens": { "backend": "siscom-backend:v2.5.0" }
+}
