@@ -1,0 +1,13 @@
+{
+  "versao": "v1.11.0",
+  "componentes": ["backend"],
+  "correcoes": [],
+  "melhorias": [],
+  "recursos": [
+    "Fundação do Módulo Fiscal (Fase 0): pacote catalog_server/fiscal com FiscalContext, FiscalResult e os 8 estados explícitos do spec (CALCULATED..CALCULATION_ERROR)",
+    "Política de precisão Decimal: dinheiro 2 casas / alíquota 4 casas, ROUND_HALF_UP — sem float em cálculo fiscal novo",
+    "Estados bloqueadores de emissão (RULE_NOT_FOUND, FISCAL_REVIEW_REQUIRED, RULE_CONFLICT...) formalizados",
+    "ADRs 0001 (motor versionado) e 0002 (validação normativa) promovidos a Aceito"
+  ],
+  "imagens": { "backend": "siscom-backend:v1.11.0" }
+}

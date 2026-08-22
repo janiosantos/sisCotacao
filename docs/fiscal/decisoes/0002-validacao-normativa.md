@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposto
+Aceito (v1.11.0 — fundação do módulo fiscal)
 
 ## Decisão
 
