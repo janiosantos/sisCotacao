@@ -31,13 +31,13 @@ Depois de aplicar um patch:
 | 03 | Todo container → versão/tag (`backend:vX.Y.Z`, não só `latest`) | ⚠️ a implementar |
 | 04 | Todo endpoint importante → contrato documentado (hoje: interfaces TS do `client.ts`; meta: OpenAPI) | ⚠️ parcial |
 | 05 | Mudança incompatível → Expand/Contract (ciclo A–F) | ✅ regra vigente |
-| 06 | Migration → testada automaticamente (banco vazio→head e N→head; hoje: E2E manual com Postgres descartável) | ⚠️ parcial |
+| 06 | Migration → testada automaticamente (banco vazio→head no gate de staging/CI) | ✅ |
 | 07 | Produção → nunca alteração manual de schema | ✅ (`AUTO_MIGRATE=0` + advisory lock) |
 | 08 | Frontend → nunca acesso direto ao PostgreSQL | ✅ |
 | 09 | Migration destrutiva → somente após período de compatibilidade | ✅ (etapa F) |
 | 10 | Toda release → plano de rollback nas duas dimensões (app × banco) | ✅ |
 | 11 | Produção → backup antes de migration relevante | ✅ (pipeline) |
-| 12 | Deploy → health check + smoke test | ⚠️ health ✅ / smoke ❌ |
+| 12 | Deploy → health check + smoke test | ✅ |
 
 ## 2. Visão obrigatória: 4 componentes + contratos
 
@@ -138,8 +138,8 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 ## 8. Dívidas técnicas declaradas (ordem sugerida)
 
 1. Tag de imagem por release (pequeno — workflow)
-2. Smoke tests no pipeline
-3. CI com testes automatizados (inclui testes de migration automáticos)
+2. ~~Smoke tests no pipeline~~ ✅ **quitada na v1.7.0**
+3. ~~CI com testes automatizados~~ ✅ **quitada na v1.8.0** (gate no staging + workflow manual)
 4. ~~STAGING~~ ✅ **quitada na v1.6.5** (projeto `siscom-staging` + workflow *Deploy Staging*)
 5. OpenAPI (contrato formal da API)
 6. Infraestrutura de feature flags
