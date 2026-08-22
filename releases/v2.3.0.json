@@ -1,0 +1,12 @@
+{
+  "versao": "v2.3.0",
+  "componentes": [
+    "backend"
+  ],
+  "recursos": [
+    "P0 fundação produtos/estoque: ADRs 0003/0004, contrato MovimentoEstoque com idempotência, inventário fiscal CONFIRMADO/INFERIDO/A CONFIRMAR"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.3.0"
+  }
+}
