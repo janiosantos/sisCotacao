@@ -25,7 +25,7 @@ jobs:
       COMPOSE_FILE: deployment/compose/docker-compose.staging.yml
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ inputs.branch }}
 
@@ -53,6 +53,13 @@ jobs:
             sleep 3
           done
           echo "staging não subiu"; docker compose logs backend; exit 1
+
+      # Mesma régua de smoke da produção, contra o ambiente de staging.
+      - name: Smoke tests
+        env:
+          SMOKE_USER: ${{ secrets.SMOKE_USER }}
+          SMOKE_PASS: ${{ secrets.SMOKE_PASS }}
+        run: bash deployment/scripts/smoke.sh http://localhost:8081
 
       - name: Limpa imagens órfãs
         if: always()

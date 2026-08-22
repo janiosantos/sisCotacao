@@ -1,0 +1,16 @@
+{
+  "versao": "v1.7.0",
+  "componentes": ["backend", "frontend"],
+  "correcoes": [],
+  "melhorias": [
+    "Smoke tests pós-deploy nos pipelines de produção e staging: health, pronto (banco), login autenticado, status sem migrações pendentes e frontend servindo — falha derruba o deploy",
+    "Upgrade actions/checkout para @v5 (remove aviso de deprecação do Node 20)"
+  ],
+  "recursos": [
+    "Tags de imagem por versão da release (siscom-backend:vX.Y.Z / siscom-frontend:vX.Y.Z além do latest) — rollback pontual para qualquer versão"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v1.7.0",
+    "frontend": "siscom-frontend:v1.7.0"
+  }
+}
