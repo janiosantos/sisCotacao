@@ -28,8 +28,8 @@ Depois de aplicar um patch:
 |---|---|---|
 | 01 | Todo schema change → migração versionada (`backend/migrations/versions/`, com `RISCO` + `MUDANCA`) | ✅ vigente |
 | 02 | Todo código → Git | ✅ |
-| 03 | Todo container → versão/tag (`backend:vX.Y.Z`, não só `latest`) | ⚠️ a implementar |
-| 04 | Todo endpoint importante → contrato documentado (hoje: interfaces TS do `client.ts`; meta: OpenAPI) | ⚠️ parcial |
+| 03 | Todo container → versão/tag (`backend:vX.Y.Z`, não só `latest`) | ✅ |
+| 04 | Todo endpoint importante → contrato documentado (OpenAPI fase 1 em `/api/openapi.json`; cresce por blueprint tocado) | 🟡 fase 1 ✅ |
 | 05 | Mudança incompatível → Expand/Contract (ciclo A–F) | ✅ regra vigente |
 | 06 | Migration → testada automaticamente (banco vazio→head no gate de staging/CI) | ✅ |
 | 07 | Produção → nunca alteração manual de schema | ✅ (`AUTO_MIGRATE=0` + advisory lock) |
