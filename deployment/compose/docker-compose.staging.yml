@@ -26,13 +26,15 @@ services:
   backend:
     image: siscom-backend-staging:latest
     build:
-      context: .
+      # Paths em um compose são relativos AO PRÓPRIO ARQUIVO — daqui,
+      # a raiz do repositório fica em ../..
+      context: ../..
       dockerfile: backend/Dockerfile
     expose:
       - "8000"
     volumes:
       - /home/jpsantos/siscom/img-staging:/app/images
-      - ./releases:/app/releases:ro
+      - ../../releases:/app/releases:ro
     environment:
       - IMAGES_DIR=/app/images
       - CATALOG_HOST=0.0.0.0
@@ -53,7 +55,7 @@ services:
   frontend:
     image: siscom-frontend-staging:latest
     build:
-      context: frontend
+      context: ../../frontend
       dockerfile: Dockerfile.prod
     ports:
       - "8081:80"
