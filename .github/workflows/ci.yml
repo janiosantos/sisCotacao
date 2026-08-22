@@ -1,0 +1,30 @@
+name: CI (siscom)
+
+# Feedback rápido de testes em qualquer branch — sob demanda (dispatch manual).
+# O Deploy Staging também roda os mesmos scripts como GATE antes do build.
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch a testar'
+        required: true
+        default: 'main'
+        type: string
+
+jobs:
+  ci:
+    runs-on: [self-hosted, siscom-prod]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Testes - migrações (vazio -> head + app de pé)
+        run: bash deployment/scripts/test-migrations.sh
+
+      - name: Testes - backend (pytest)
+        run: bash deployment/scripts/test-backend.sh
+
+      - name: Testes - frontend (typecheck + build)
+        run: bash deployment/scripts/test-frontend.sh
