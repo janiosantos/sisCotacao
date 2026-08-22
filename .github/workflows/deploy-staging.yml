@@ -1,0 +1,59 @@
+name: Deploy Staging (siscom)
+
+# Valida uma branch em ambiente paralelo à produção, no próprio servidor:
+# projeto Docker separado (siscom-staging), banco vazio que nasce e é
+# migrado pelo pipeline, frontend em :8081. Nada da produção é tocado.
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch a validar'
+        required: true
+        default: 'reestruturacao-casa-lm'
+        type: string
+      app_version:
+        description: 'APP_VERSION exibido no painel'
+        required: true
+        default: 'v1.6.5-rc'
+        type: string
+
+jobs:
+  staging:
+    runs-on: [self-hosted, siscom-prod]
+    env:
+      COMPOSE_PROJECT_NAME: siscom-staging
+      COMPOSE_FILE: deployment/compose/docker-compose.staging.yml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Build das imagens de staging
+        env:
+          APP_VERSION: ${{ inputs.app_version }}
+        run: docker compose build
+
+      - name: Sobe o stack de staging
+        env:
+          APP_VERSION: ${{ inputs.app_version }}
+        run: docker compose up -d
+
+      - name: Migrações no banco vazio de staging (teste real da cadeia)
+        run: |
+          docker compose exec -T backend \
+            python -m catalog_server.versioning apply --origem staging
+
+      - name: Health gate - staging
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8081/api/pronto >/dev/null 2>&1; then
+              echo "staging OK"; exit 0
+            fi
+            sleep 3
+          done
+          echo "staging não subiu"; docker compose logs backend; exit 1
+
+      - name: Limpa imagens órfãs
+        if: always()
+        run: docker image prune -f
