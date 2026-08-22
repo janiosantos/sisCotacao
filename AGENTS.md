@@ -141,7 +141,7 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 2. ~~Smoke tests no pipeline~~ ✅ **quitada na v1.7.0**
 3. ~~CI com testes automatizados~~ ✅ **quitada na v1.8.0** (gate no staging + workflow manual)
 4. ~~STAGING~~ ✅ **quitada na v1.6.5** (projeto `siscom-staging` + workflow *Deploy Staging*)
-5. OpenAPI (contrato formal da API)
-6. Infraestrutura de feature flags
+5. ~~OpenAPI~~ 🟡 **fase 1 entregue na v1.10.0** (fase 2: cobertura por blueprint tocado)
+6. ~~Infraestrutura de feature flags~~ ✅ **quitada na v1.9.0** (sistema_flags + painel)
 
 > Até as dívidas restantes fecharem, substituto mínimo aceitável: E2E local com Postgres descartável + validação live pós-deploy dos endpoints afetados (prática das releases v1.6.x). Para mudanças relevantes, o padrão atual é: validar a branch via **Deploy Staging** antes de autorizar produção.
