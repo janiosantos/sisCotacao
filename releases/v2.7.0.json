@@ -1,0 +1,13 @@
+{
+  "versao": "v2.7.0",
+  "componentes": ["backend"],
+  "correcoes": [],
+  "melhorias": [
+    "Lifecycle completo do documento fiscal (rascunho/validando/autorizado/rejeitado/cancelado/inutilizado/contingencia) em documentos_fiscais"
+  ],
+  "recursos": [
+    "P4: pré-lançamentos contábeis espelho por evento com idempotência (débito/crédito contra plano_de_contas)",
+    "fiscal_document_xml: retenção do XML/protocolo autorizado sem alterar documentos emitidos"
+  ],
+  "imagens": { "backend": "siscom-backend:v2.7.0" }
+}
