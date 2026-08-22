@@ -18,7 +18,7 @@ MUDANCA = {
 
 
 def _schema_statements():
-    from scripts.pg_migrations.runner import SCHEMA_FILE
+    from migrations.runner import SCHEMA_FILE
 
     return SCHEMA_FILE.read_text(encoding="utf-8")
 

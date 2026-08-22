@@ -5,9 +5,9 @@ O schema atual (`scripts/postgres_schema.sql`) vira a migração `baseline`
 aplicados incrementalmente e registrados em `schema_migrations`.
 
 Uso:
-    python -m scripts.pg_migrations status [--url URL]
-    python -m scripts.pg_migrations apply [--url URL] [--up-to N]
-    python -m scripts.pg_migrations check [--url URL]
+    python -m migrations status [--url URL]
+    python -m migrations apply [--url URL] [--up-to N]
+    python -m migrations check [--url URL]
 """
 from __future__ import annotations
 

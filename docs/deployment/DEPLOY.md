@@ -29,7 +29,7 @@ bash scripts/ci/setup-runner.sh <runner_registration_token>
 (O token de registro expira em ~1h; se expirar, gere um novo.)
 
 ## Fazer um deploy
-1. **Mudança de estrutura** = nova migration em `scripts/pg_migrations/versions/0061_*.py`
+1. **Mudança de estrutura** = nova migration em `backend/migrations/versions/0061_*.py`
    (nunca editar 0052–0060). Ver abaixo o padrão.
 2. Commitar e subir para `main`/branch.
 3. Taggear e empurrar:
@@ -62,11 +62,11 @@ bash scripts/ci/setup-runner.sh <runner_registration_token>
 ```bash
 # dentro do container backend em produção:
 docker compose -f docker-compose.prod.yml exec backend \
-  python -m scripts.pg_migrations status    # versões aplicadas/pendentes + checksum
+  python -m migrations status    # versões aplicadas/pendentes + checksum
 docker compose -f docker-compose.prod.yml exec backend \
-  python -m scripts.pg_migrations plan      # pendentes que serão aplicadas
+  python -m migrations plan      # pendentes que serão aplicadas
 docker compose -f docker-compose.prod.yml exec backend \
-  python -m scripts.pg_migrations check     # conexão + pendentes
+  python -m migrations check     # conexão + pendentes
 ```
 
 ## Manutenção automatizada (tarefas de dados)

@@ -20,7 +20,7 @@ services:
     image: siscom-backend:latest
     build:
       context: .
-      dockerfile: catalog_server/Dockerfile
+      dockerfile: backend/Dockerfile
     # Apenas na rede Docker: o frontend (nginx) alcança backend:8000.
     # Não expõe a porta no host — o acesso externo entra via proxy (:80/:6173).
     expose:

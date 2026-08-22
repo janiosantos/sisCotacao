@@ -26,7 +26,7 @@ Depois de aplicar um patch:
 
 | # | Regra | Status |
 |---|---|---|
-| 01 | Todo schema change → migração versionada (`scripts/pg_migrations/versions/`, com `RISCO` + `MUDANCA`) | ✅ vigente |
+| 01 | Todo schema change → migração versionada (`backend/migrations/versions/`, com `RISCO` + `MUDANCA`) | ✅ vigente |
 | 02 | Todo código → Git | ✅ |
 | 03 | Todo container → versão/tag (`backend:vX.Y.Z`, não só `latest`) | ⚠️ a implementar |
 | 04 | Todo endpoint importante → contrato documentado (hoje: interfaces TS do `client.ts`; meta: OpenAPI) | ⚠️ parcial |

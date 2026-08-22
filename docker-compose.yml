@@ -28,13 +28,13 @@ services:
   backend:
     build:
       context: .
-      dockerfile: catalog_server/Dockerfile
+      dockerfile: backend/Dockerfile
     # Apenas na rede Docker, como na produção — o acesso externo entra pelo nginx.
     expose:
       - "8000"
     volumes:
       - ./images:/app/images
-      - ./catalog_server:/app/catalog_server
+      - ./backend/catalog_server:/app/catalog_server
       - ./releases:/app/releases:ro
     environment:
       - FLASK_ENV=development

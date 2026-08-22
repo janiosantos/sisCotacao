@@ -59,12 +59,12 @@ jobs:
         if: steps.comp.outputs.migracoes == 'true'
         run: |
           mkdir -p /home/jpsantos/siscom/backups
-          PENDING=$(docker compose -f docker-compose.prod.yml exec -T backend \
-                      python -m scripts.pg_migrations check 2>/dev/null \
+          PENDING=$(docker compose -f deployment/compose/docker-compose.prod.yml exec -T backend \
+                      python -m migrations check 2>/dev/null \
                       | sed -n 's/.*pendentes: \([0-9]*\).*/\1/p')
           echo "migrações pendentes: ${PENDING:-0}"
           if [ "${PENDING:-0}" != "0" ]; then
-            docker compose -f docker-compose.prod.yml exec -T db pg_dump -U catalog -d catalog -Fc \
+            docker compose -f deployment/compose/docker-compose.prod.yml exec -T db pg_dump -U catalog -d catalog -Fc \
               > "/home/jpsantos/siscom/backups/prod-pre-$(date +%Y%m%d-%H%M%S).dump"
             echo "backup de segurança criado em /home/jpsantos/siscom/backups/"
           else
@@ -79,33 +79,33 @@ jobs:
         if: steps.comp.outputs.backend == 'true'
         env:
           APP_VERSION: ${{ steps.version.outputs.tag }}
-        run: docker compose -f docker-compose.prod.yml build backend
+        run: docker compose -f deployment/compose/docker-compose.prod.yml build backend
 
       - name: Build imagem do frontend
         if: steps.comp.outputs.frontend == 'true'
-        run: docker compose -f docker-compose.prod.yml build frontend
+        run: docker compose -f deployment/compose/docker-compose.prod.yml build frontend
 
       - name: Para o backend (janela de manutenção — DDL sem tráfego)
         if: steps.comp.outputs.migracoes == 'true'
-        run: docker compose -f docker-compose.prod.yml stop backend
+        run: docker compose -f deployment/compose/docker-compose.prod.yml stop backend
 
       - name: Aplica migrações pendentes (container one-off com a imagem nova)
         if: steps.comp.outputs.migracoes == 'true'
         env:
           APP_VERSION: ${{ steps.version.outputs.tag }}
         run: |
-          docker compose -f docker-compose.prod.yml run --rm backend \
+          docker compose -f deployment/compose/docker-compose.prod.yml run --rm backend \
             python -m catalog_server.versioning apply --origem deploy
 
       - name: Deploy (sobe containers)
         env:
           APP_VERSION: ${{ steps.version.outputs.tag }}
-        run: docker compose -f docker-compose.prod.yml up -d
+        run: docker compose -f deployment/compose/docker-compose.prod.yml up -d
 
       - name: Health gate - migrações + backend
         run: |
-          docker compose -f docker-compose.prod.yml exec -T backend \
-            python -m scripts.pg_migrations status
+          docker compose -f deployment/compose/docker-compose.prod.yml exec -T backend \
+            python -m migrations status
           for i in $(seq 1 30); do
             if curl -fsS http://localhost/api/health >/dev/null 2>&1; then
               echo "backend OK"; exit 0
@@ -113,13 +113,13 @@ jobs:
             sleep 3
           done
           echo "backend não subiu após deploy"; \
-            docker compose -f docker-compose.prod.yml logs backend; exit 1
+            docker compose -f deployment/compose/docker-compose.prod.yml logs backend; exit 1
 
       # Toda publicação gera registro no Histórico — independe do componente.
       # Manifestos cujos componentes estão contidos no escopo publicado fecham.
       - name: Registra releases publicadas (histórico)
         run: |
-          docker compose -f docker-compose.prod.yml exec -T backend \
+          docker compose -f deployment/compose/docker-compose.prod.yml exec -T backend \
             python -m catalog_server.versioning publicar \
             --componentes "${{ steps.comp.outputs.componentes }}"
 

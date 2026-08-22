@@ -2,9 +2,11 @@ FROM python:3.14-slim
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
 WORKDIR /app
-COPY catalog_server/ catalog_server/
+# Contexto de build = raiz do repositório (ver docker-compose*.yml)
+COPY backend/catalog_server/ catalog_server/
+COPY backend/migrations/ migrations/
+# Scraper legado (importado por classification/parse_url; execução futura via task)
 COPY app/ app/
-COPY scripts/ scripts/
 # Manifestos de release (lidos pelo versioning ao publicar)
 COPY releases/ releases/
 RUN pip install --no-cache-dir flask python-dotenv requests beautifulsoup4 lxml colorlog fake-useragent sqlalchemy "psycopg[binary]"

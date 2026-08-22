@@ -9,9 +9,9 @@ Estratégia de versões:
 - Cada versão aplicada fica registrada na tabela `schema_migrations`.
 
 CLI:
-    python -m scripts.pg_migrations status [--url URL]
-    python -m scripts.pg_migrations apply [--url URL] [--up-to N]
-    python -m scripts.pg_migrations check [--url URL]
+    python -m migrations status [--url URL]
+    python -m migrations apply [--url URL] [--up-to N]
+    python -m migrations check [--url URL]
 
 Formato `.sql` : script SQL idempotente (CREATE TABLE/INDEX IF NOT EXISTS).
 Formato `.py`  : módulo com o contrato:
@@ -38,8 +38,8 @@ MIGRATIONS_DIR = Path(__file__).resolve().parent / "versions"
 # Chave fixa do advisory lock que serializa o `apply` entre processos.
 ADVISORY_LOCK_KEY = 723901140
 
-# Arquivo SQL do baseline (schema completo do sistema).
-SCHEMA_FILE = PROJECT / "scripts" / "postgres_schema.sql"
+# Arquivo SQL do baseline (schema completo do sistema) — relativo ao módulo.
+SCHEMA_FILE = Path(__file__).resolve().parent / "sql" / "postgres_schema.sql"
 
 
 class MigrationError(Exception):
@@ -155,7 +155,7 @@ def load_migrations() -> list[Migration]:
     migs = [Migration(p) for p in files]
     versions = [m.version for m in migs]
     if len(versions) != len(set(versions)):
-        raise MigrationError("versões duplicadas em scripts/pg_migrations/versions/")
+        raise MigrationError("versões duplicadas em migrations/versions/")
     return migs
 
 
@@ -354,7 +354,7 @@ def status(url: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m scripts.pg_migrations")
+    ap = argparse.ArgumentParser(prog="python -m migrations")
     ap.add_argument("--url", default=os.getenv("DATABASE_URL", ""), help="URL do Postgres")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
