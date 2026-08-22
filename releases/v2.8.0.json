@@ -1,0 +1,13 @@
+{
+  "versao": "v2.8.0",
+  "componentes": ["backend"],
+  "correcoes": [],
+  "melhorias": [
+    "Golden test do dossiê normativo: revenda interna MG de cabo 8544 pelo substituído já retido resolve CFOP 5405/CSOSN 500; NCM fora das regras bloqueia com RULE_NOT_FOUND"
+  ],
+  "recursos": [
+    "Validação normativa inicial (dossiê docs/fiscal/legislacao/validacoes/2026-08-cabos-eletricos.md): Consulta SEF/MG 105/2021 + Protocolo ICMS 8/10",
+    "Migração 0071: seeds PUBLISHED para NCM 8544 MG-Simples (substituído já retido 5405/500 e exceção uso automotivo 5102/102) + ncm_version 8544.20/.30/.49 com fontes"
+  ],
+  "imagens": { "backend": "siscom-backend:v2.8.0" }
+}
