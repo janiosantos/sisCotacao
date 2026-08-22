@@ -1,0 +1,13 @@
+{
+  "versao": "v1.10.0",
+  "componentes": ["backend"],
+  "correcoes": [],
+  "melhorias": [],
+  "recursos": [
+    "Contrato OpenAPI 3.0 fase 1: GET /api/openapi.json (rota aberta) documentando login, health/pronto, sistema (status/updates/log/releases), flags e parse-url",
+    "Regra do checklist: blueprint tocado documenta seu trecho no spec — cobertura cresce organicamente"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v1.10.0"
+  }
+}
