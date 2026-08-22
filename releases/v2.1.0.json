@@ -1,0 +1,11 @@
+{
+  "versao": "v2.1.0",
+  "componentes": ["backend"],
+  "correcoes": [],
+  "melhorias": [],
+  "recursos": [
+    "Engines fiscais separadas por tributo (skill fiscal-engine): icms_proprio com redução, icms_st com métodos mva_original/mva_ajustada/preco_fixado e componentes legais, difal_entrada com cálculo POR DENTRO explícito, difal_saida com FCP segregado",
+    "Golden tests estruturais da matriz Simples Nacional (§23): números de engenharia como inputs — nenhuma alíquota legal hardcoded"
+  ],
+  "imagens": { "backend": "siscom-backend:v2.1.0" }
+}
