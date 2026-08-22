@@ -1,0 +1,16 @@
+{
+  "versao": "v1.9.0",
+  "componentes": ["backend", "frontend"],
+  "correcoes": [],
+  "melhorias": [],
+  "recursos": [
+    "Infraestrutura de feature flags: flags.ativa() com leitura em runtime (cache 30s, banco fora não derruba o app)",
+    "API protegida GET /api/flags e PUT /api/flags/<nome>",
+    "Painel Configurações: seção 'Feature flags' com toggles",
+    "Migração 0063_sistema_flags (RISCO rotina) — rollback comportamental independente do estrutural"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v1.9.0",
+    "frontend": "siscom-frontend:v1.9.0"
+  }
+}
