@@ -8,6 +8,28 @@ from catalog_server.repositories.fiscal_documentos import (
     tecnospeed_config_repo,
 )
 from catalog_server.services import tecnospeed
+from catalog_server.fiscal.snapshot import (
+    montar_contextos_orcamento,
+    persistir as persistir_snapshot,
+)
+
+
+def _capturar_snapshot(orcamento_id: int, tipo_doc: str) -> None:
+    """Best-effort: registra o snapshot fiscal do orçamento emitido.
+    Falha de snapshot NUNCA impede a emissão."""
+    try:
+        for ctx_dados, result in montar_contextos_orcamento(orcamento_id):
+            vid = ctx_dados.get('product_id') if isinstance(ctx_dados, dict) else getattr(ctx_dados, 'product_id', None)
+            data_op = ctx_dados.get('operation_date', '') if isinstance(ctx_dados, dict) else getattr(ctx_dados, 'operation_date', '')
+            persistir_snapshot(
+                documento_tipo=tipo_doc,
+                documento_id=orcamento_id,
+                variante_id=vid,
+                operation_date=data_op or None,
+                result=result,
+            )
+    except Exception:
+        pass
 
 api_fiscal_docs_bp = Blueprint("api_fiscal_docs", __name__)
 
@@ -18,6 +40,7 @@ def emitir_nfce(orcamento_id: int):
         doc = tecnospeed.emitir_nfce(orcamento_id)
     except tecnospeed.TecnospeedError as e:
         return jsonify({"error": str(e)}), 400
+    _capturar_snapshot(orcamento_id, "65")
     return jsonify(doc), 201
 
 
@@ -43,6 +66,7 @@ def emitir_nfe(orcamento_id: int):
         doc = tecnospeed.emitir_nfe(orcamento_id)
     except tecnospeed.TecnospeedError as e:
         return jsonify({"error": str(e)}), 400
+    _capturar_snapshot(orcamento_id, "55")
     return jsonify(doc), 201
 
 

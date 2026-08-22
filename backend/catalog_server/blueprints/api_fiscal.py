@@ -177,3 +177,12 @@ def registrar_ncm():
         return jsonify({"id": fiscal_perfil.registrar_ncm(dados)}), 201
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+
+
+# ─── Auditoria: por que esta tributação? ───────────────────
+
+@api_fiscal_bp.get("/api/fiscal/explicar/<tipo>/<int:documento_id>")
+def explicar_tributacao(tipo: str, documento_id: int):
+    from catalog_server.fiscal.snapshot import explicar
+
+    return jsonify({"snapshots": explicar(tipo, documento_id)})

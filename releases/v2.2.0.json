@@ -1,0 +1,14 @@
+{
+  "versao": "v2.2.0",
+  "componentes": ["backend"],
+  "correcoes": [],
+  "melhorias": [
+    "Auditoria fiscal: GET /api/fiscal/explicar/<tipo>/<documento_id> responde 'por que esta operação recebeu esta tributação?' com regra, versão, fundamento e fonte"
+  ],
+  "recursos": [
+    "Snapshot fiscal pós-autorização (skill fiscal-mg §14/17): persistido por item na emissão NFC-e/NF-e — histórico não depende da regra vigente",
+    "Hook best-effort na emissão: falha de snapshot nunca impede a emissão",
+    "montar_contextos_orcamento: sem Motor v2 ou sem validação normativa, itens entram como FISCAL_REVIEW_REQUIRED — nada é inventado (§26)"
+  ],
+  "imagens": { "backend": "siscom-backend:v2.2.0" }
+}
