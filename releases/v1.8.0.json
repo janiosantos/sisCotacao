@@ -1,0 +1,18 @@
+{
+  "versao": "v1.8.0",
+  "componentes": ["backend", "frontend"],
+  "correcoes": [
+    "Busca quebrada em bancos novos: fts5_to_tsquery não era criada desde a migração 0060 — ensure_fts agora sempre executa o DDL idempotente (bug encontrado pelos testes novos do CI)"
+  ],
+  "melhorias": [
+    "Testes automatizados de migrações/backend/frontend rodando como GATE antes do build no Deploy Staging",
+    "Suíte pytest (backend/tests) executada contra PostgreSQL descartável no pipeline"
+  ],
+  "recursos": [
+    "Workflow 'CI (siscom)': dispatch manual por branch para feedback rápido durante o desenvolvimento"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v1.8.0",
+    "frontend": "siscom-frontend:v1.8.0"
+  }
+}
