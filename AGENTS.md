@@ -71,7 +71,7 @@ Consumidores a mapear antes de qualquer DROP/RENAME/troca de tipo: blueprints, r
 
 ## 5. Ambientes
 
-DEV (diário) → **STAGING** (cópia estrutural de produção; testa Migration+Backend+Frontend juntos, com dados representativos) → PRODUÇÃO (só recebe release aprovada).
+DEV (diário) → **STAGING** (✅ existe: projeto `siscom-staging` no servidor, frontend `:8081`, banco próprio que nasce vazio e é migrado pelo workflow **Deploy Staging**; valida qualquer branch antes da produção) → PRODUÇÃO (só recebe release aprovada).
 
 ## 6. Pipeline, Release Manifest e fluxo completo
 
@@ -140,8 +140,8 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 1. Tag de imagem por release (pequeno — workflow)
 2. Smoke tests no pipeline
 3. CI com testes automatizados (inclui testes de migration automáticos)
-4. STAGING
+4. ~~STAGING~~ ✅ **quitada na v1.6.5** (projeto `siscom-staging` + workflow *Deploy Staging*)
 5. OpenAPI (contrato formal da API)
 6. Infraestrutura de feature flags
 
-> Até as dívidas fecharem, substituto mínimo aceitável: E2E local com Postgres descartável + validação live pós-deploy dos endpoints afetados (prática das releases v1.6.x).
+> Até as dívidas restantes fecharem, substituto mínimo aceitável: E2E local com Postgres descartável + validação live pós-deploy dos endpoints afetados (prática das releases v1.6.x). Para mudanças relevantes, o padrão atual é: validar a branch via **Deploy Staging** antes de autorizar produção.
