@@ -1,0 +1,17 @@
+{
+  "versao": "v1.12.0",
+  "componentes": ["backend", "frontend"],
+  "correcoes": [],
+  "melhorias": [
+    "Busca de NCM versionado por código/descrição com fonte oficial e vigência"
+  ],
+  "recursos": [
+    "Classificação fiscal separada do cadastro comercial (skill fiscal-mg §4): ncm_version, cest_version e product_fiscal_profile por variante",
+    "Aba 'Perfil Fiscal' no editor de produto: NCM/CEST/origem/enquadramento ST por variação, com busca de NCM versionado",
+    "API protegida: GET/PUT /api/fiscal/perfil/<variante_id>, GET/POST /api/fiscal/ncm"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v1.12.0",
+    "frontend": "siscom-frontend:v1.12.0"
+  }
+}

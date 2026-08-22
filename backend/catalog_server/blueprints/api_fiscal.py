@@ -11,6 +11,7 @@ from catalog_server.repositories import (
     cst_repo,
     fiscal_config_repo,
 )
+from catalog_server.repositories import fiscal_perfil
 from catalog_server.services.fiscal_engine import calculate as fiscal_calcular
 from catalog_server.services import fiscal_motor
 
@@ -145,3 +146,34 @@ def simular_operacao():
         "status_validacao": resultado["status_validacao"],
         "problemas": resultado["problemas"],
     })
+
+
+# ─── Perfil fiscal do produto (classificação) ──────────────
+
+@api_fiscal_bp.get("/api/fiscal/perfil/<int:variante_id>")
+def obter_perfil_fiscal(variante_id: int):
+    perfil = fiscal_perfil.obter(variante_id)
+    return jsonify(perfil or {"variante_id": variante_id, "ncm": "", "cest": "", "origem": 0, "regime_st": "", "fonte_url": None})
+
+
+@api_fiscal_bp.put("/api/fiscal/perfil/<int:variante_id>")
+def salvar_perfil_fiscal(variante_id: int):
+    dados = request.get_json(silent=True) or {}
+    try:
+        return jsonify(fiscal_perfil.salvar(variante_id, dados)), 200
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@api_fiscal_bp.get("/api/fiscal/ncm")
+def buscar_ncm():
+    return jsonify(fiscal_perfil.buscar_ncm(request.args.get("q", ""), int(request.args.get("limite", 20))))
+
+
+@api_fiscal_bp.post("/api/fiscal/ncm")
+def registrar_ncm():
+    dados = request.get_json(silent=True) or {}
+    try:
+        return jsonify({"id": fiscal_perfil.registrar_ncm(dados)}), 201
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400

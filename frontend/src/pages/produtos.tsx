@@ -16,6 +16,7 @@ import {
   type ProdutoCadastroPayload,
   type ProdutoPreview,
   type UnidadeCompra,
+  type PerfilFiscal,
 } from "../api/client";
 import { fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
@@ -929,7 +930,7 @@ export function ProdutoEditor() {
   const [form, setForm] = useState({ familia_id: "", marca: "", marca_id: "", external_id: "", nome: "", categoria: "", subcategoria: "", grupo_id: "", subgrupo_id: "", descricao: "", termos_busca: "" });
   const [atributos, setAtributos] = useState<FamiliaAtributo[]>([]);
   const [variantes, setVariantes] = useState<VarianteLocal[]>([]);
-  const [tab, setTab] = useState<"gerais" | "atributos" | "variacoes" | "imagens">("gerais");
+  const [tab, setTab] = useState<"gerais" | "atributos" | "variacoes" | "imagens" | "fiscal">("gerais");
   const [carregando, setCarregando] = useState(true);
 
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
@@ -1328,6 +1329,7 @@ export function ProdutoEditor() {
     { key: "atributos", label: "Atributos da Família" },
     { key: "variacoes", label: "Matriz de Variações" },
     { key: "imagens", label: "Mídia e Anexos" },
+    ...(id ? [{ key: "fiscal" as const, label: "Perfil Fiscal" }] : []),
   ];
 
   return (
@@ -1648,6 +1650,12 @@ export function ProdutoEditor() {
         </div>
       )}
 
+      {tab === "fiscal" && (
+        <div>
+          {id ? <PerfilFiscalPanel variantes={variantes} /> : null}
+        </div>
+      )}
+
       <div className="mt-6 flex justify-end gap-2">
         <Button onClick={() => (location.hash = "#/produtos")}>Cancelar</Button>
         <Button variant="primary" onClick={() => void salvar()}>
@@ -1958,4 +1966,133 @@ function seedFornecedorRows(produto: ProdutoCadastro, variantes: VarianteLocal[]
     rows.push({ uid: "fvr" + ++seq.current, variante_idx: 0, fornecedor_id: "", codigo: "", unidade: "", fator: "" });
   }
   return rows;
+}
+
+// ─── Perfil fiscal (classificação por variante) ─────────────────────────
+
+function PerfilFiscalPanel({ variantes }: { variantes: VarianteLocal[] }) {
+  const comId = variantes.filter((v) => v.id != null);
+  const [varianteSel, setVarianteSel] = useState<number | null>(comId[0]?.id ?? null);
+  const [perfil, setPerfil] = useState<PerfilFiscal | null>(null);
+  const [ncmBusca, setNcmBusca] = useState("");
+  const [ncmResultados, setNcmResultados] = useState<{ codigo: string; descricao: string }[]>([]);
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    if (varianteSel == null) return;
+    api.perfilFiscalObter(varianteSel).then(setPerfil).catch(() => toast("Erro ao ler perfil fiscal", "error"));
+  }, [varianteSel]);
+
+  const buscarNcm = async () => {
+    if (!ncmBusca.trim()) return;
+    try {
+      setNcmResultados(await api.buscarNcm(ncmBusca.trim()));
+    } catch (e) {
+      toast("Erro na busca de NCM: " + (e as Error).message, "error");
+    }
+  };
+
+  const salvar = async () => {
+    if (varianteSel == null || !perfil) return;
+    setSalvando(true);
+    try {
+      const salvo = await api.perfilFiscalSalvar(varianteSel, perfil);
+      setPerfil(salvo);
+      toast("Perfil fiscal salvo", "success");
+    } catch (e) {
+      toast("Erro: " + (e as Error).message, "error");
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  if (comId.length === 0) {
+    return <p className="py-8 text-center text-sm text-gray-400">Salve o produto e crie variações para classificar o perfil fiscal.</p>;
+  }
+
+  const campo = "w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm";
+
+  return (
+    <div className="max-w-xl space-y-4">
+      <div>
+        <label className="text-xs uppercase text-gray-400">Variação</label>
+        <select className={campo} value={varianteSel ?? ""} onChange={(e) => setVarianteSel(Number(e.target.value))}>
+          {comId.map((v) => (
+            <option key={v.id} value={v.id!}>
+              {v.sku || `(sem SKU)`} {v.ean ? `· ${v.ean}` : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {!perfil ? (
+        <p className="py-4 text-center text-sm text-gray-400">Carregando…</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs uppercase text-gray-400">NCM</label>
+              <input className={campo} value={perfil.ncm} onChange={(e) => setPerfil({ ...perfil, ncm: e.target.value })} placeholder="ex.: 8544.42.00" />
+            </div>
+            <div>
+              <label className="text-xs uppercase text-gray-400">CEST</label>
+              <input className={campo} value={perfil.cest} onChange={(e) => setPerfil({ ...perfil, cest: e.target.value })} placeholder="opcional" />
+            </div>
+            <div>
+              <label className="text-xs uppercase text-gray-400">Origem da mercadoria</label>
+              <select className={campo} value={perfil.origem} onChange={(e) => setPerfil({ ...perfil, origem: Number(e.target.value) })}>
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((o) => (
+                  <option key={o} value={o}>Origem {o}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs uppercase text-gray-400">Enquadramento ST (regime_st)</label>
+              <input className={campo} value={perfil.regime_st} onChange={(e) => setPerfil({ ...perfil, regime_st: e.target.value })} placeholder="opcional" />
+            </div>
+          </div>
+
+          <div className="rounded-md border border-gray-200 p-3">
+            <p className="mb-2 text-xs uppercase text-gray-400">Buscar NCM versionado (fonte oficial)</p>
+            <div className="flex gap-2">
+              <input
+                className={campo}
+                value={ncmBusca}
+                onChange={(e) => setNcmBusca(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void buscarNcm()}
+                placeholder="código ou termo da descrição"
+              />
+              <Button onClick={() => void buscarNcm()}>Buscar</Button>
+            </div>
+            {ncmResultados.length > 0 && (
+              <ul className="mt-2 max-h-40 space-y-1 overflow-auto text-sm">
+                {ncmResultados.map((n) => (
+                  <li key={n.codigo}>
+                    <button
+                      type="button"
+                      className="text-left hover:underline"
+                      onClick={() =>
+                        setPerfil((prev: PerfilFiscal | null) =>
+                          prev ? { ...prev, ncm: n.codigo } : prev,
+                        )
+                      }
+                    >
+                      <span className="font-mono">{n.codigo}</span> — {n.descricao}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-[11px] text-gray-400">NCM não encontrado? Registre com fonte oficial via POST /api/fiscal/ncm — nunca inventar código.</p>
+          </div>
+
+          <div className="flex justify-end">
+            <Button variant="primary" disabled={salvando} onClick={() => void salvar()}>
+              {salvando ? "Salvando…" : "Salvar perfil fiscal"}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }

@@ -1447,6 +1447,13 @@ export const api = {
   listarFlags: () => request<{ flags: FeatureFlag[] }>("GET", "/api/flags"),
   definirFlag: (nome: string, ativo: boolean) =>
     request<{ ok: boolean; nome: string; ativo: boolean }>("PUT", `/api/flags/${nome}`, { ativo }),
+  perfilFiscalObter: (varianteId: number) =>
+    request<PerfilFiscal>("GET", `/api/fiscal/perfil/${varianteId}`),
+  perfilFiscalSalvar: (varianteId: number, dados: Partial<PerfilFiscal>) =>
+    request<PerfilFiscal>("PUT", `/api/fiscal/perfil/${varianteId}`, dados),
+  buscarNcm: (q: string) => request<{ codigo: string; descricao: string }[]>("GET", "/api/fiscal/ncm" + qs({ q })),
+  registrarNcm: (dados: { codigo: string; descricao: string; fonte_url?: string; vigencia_inicio?: string; vigencia_fim?: string }) =>
+    request<{ id: number }>("POST", "/api/fiscal/ncm", dados),
 };
 
 export type NivelRisco = "critica" | "rotina" | "melhoria" | "todos";
@@ -1514,6 +1521,16 @@ export interface FeatureFlag {
   nome: string;
   descricao: string;
   ativo: boolean;
+}
+
+export interface PerfilFiscal {
+  variante_id?: number;
+  ncm: string;
+  cest: string;
+  origem: number;
+  regime_st: string;
+  fonte_url?: string | null;
+  atualizado_em?: string;
 }
 
 export interface CategoriaTree {
