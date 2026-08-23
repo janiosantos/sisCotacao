@@ -1,0 +1,12 @@
+{
+  "versao": "v2.13.0",
+  "componentes": [
+    "backend"
+  ],
+  "recursos": [
+    "Inventário-fato (lancar_inventario idempotente, leva saldo à contagem com justificativa), reconciliação automática com gate no staging (divergências falham o deploy) e API /estoque/inventarios + /estoque/reconciliacao/tudo"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.13.0"
+  }
+}

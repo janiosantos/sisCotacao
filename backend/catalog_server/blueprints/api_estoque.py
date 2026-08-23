@@ -285,3 +285,24 @@ def reconciliar_estoque_api():
     if not deposito_id or not variante_id:
         return jsonify({'error': 'informe deposito_id e variante_id'}), 400
     return jsonify(estoque_repo.reconciliar(deposito_id, variante_id))
+
+
+@api_estoque_bp.get('/api/estoque/reconciliacao/tudo')
+def reconciliar_tudo_api():
+    dep = request.args.get('deposito_id', type=int)
+    return jsonify({'divergencias': estoque_repo.reconciliar_tudo(dep)})
+
+
+@api_estoque_bp.post('/api/estoque/inventarios')
+def lancar_inventario_api():
+    dados = request.get_json(silent=True) or {}
+    try:
+        r = estoque_repo.lancar_inventario(
+            int(dados['deposito_id']), int(dados['variante_id']),
+            float(dados.get('quantidade_contada') or 0),
+            justificativa=dados.get('justificativa', ''),
+            idempotency_key=dados.get('idempotency_key'),
+        )
+    except (KeyError, ValueError, TypeError) as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify(r), 200 if r.get('duplicado') else 201

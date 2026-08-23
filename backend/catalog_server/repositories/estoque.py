@@ -253,6 +253,76 @@ class EstoqueRepository:
             ).fetchone()
             return dict(row) if row else {}
 
+    def reconciliar_tudo(self, deposito_id: int | None = None) -> list[dict]:
+        """Lista saldos com divergência entre o materializado e o derivado
+        (chamado pelo gate de CI/staging para alertar desalinhamentos)."""
+        sql = (
+            "SELECT s.deposito_id, s.variante_id, s.quantidade AS materializado,"
+            " COALESCE(d.derivado, 0) AS derivado"
+            " FROM estoque_saldo s"
+            " LEFT JOIN LATERAL ("
+            "   SELECT COALESCE(SUM(CASE WHEN m.tipo IN"
+            "     ('entrada','transferencia','inventario') THEN m.quantidade"
+            "     ELSE -m.quantidade END),0) AS derivado"
+            "   FROM estoque_movimento m WHERE m.deposito_id=s.deposito_id"
+            "     AND m.variante_id=s.variante_id"
+            " ) d ON TRUE"
+        )
+        where: list[str] = []
+        args: list = []
+        if deposito_id is not None:
+            where.append("s.deposito_id = ?")
+            args.append(deposito_id)
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " AND COALESCE(d.derivado,0) <> s.quantidade"
+        with system_conn() as conn:
+            return [dict(r) for r in conn.execute(sql, args).fetchall()]
+
+    def lancar_inventario(
+        self,
+        deposito_id: int,
+        variante_id: int,
+        quantidade_contada: float,
+        *,
+        justificativa: str,
+        idempotency_key: str | None = None,
+        usuario_id: int | None = None,
+    ) -> dict:
+        """Ajuste por inventário: cria um FATO tipo 'inventario' que leva o
+        saldo à quantidade contada (motivo registrado)."""
+        with system_conn() as conn:
+            atual = conn.execute(
+                "SELECT quantidade FROM estoque_saldo"
+                " WHERE deposito_id=? AND variante_id=?",
+                (deposito_id, variante_id),
+            ).fetchone()
+            saldo_atual = float(atual["quantidade"] or 0) if atual else 0.0
+            diff = float(quantidade_contada) - saldo_atual
+            if diff == 0:
+                return {
+                    "movimento_id": None,
+                    "duplicado": True,
+                    "motivo": "inventário já conferido (sem divergência)",
+                }
+            if not idempotency_key:
+                import uuid
+
+                idempotency_key = f"inv-{uuid.uuid4().hex}"
+        # 'inventario' soma a diferença para atingir a contagem
+        return self.movimentar_fato(
+            deposito_id,
+            variante_id,
+            "inventario",
+            diff,
+            idempotency_key=idempotency_key,
+            origem_tipo="inventario",
+            origem_id=None,
+            documento="inventário",
+            observacao=justificativa[:500],
+            usuario_id=usuario_id,
+        )
+
     def movimentos(
         self,
         deposito_id: int | None = None,

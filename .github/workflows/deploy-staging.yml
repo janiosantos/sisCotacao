@@ -71,6 +71,10 @@ jobs:
           SMOKE_PASS: ${{ secrets.SMOKE_PASS }}
         run: bash deployment/scripts/smoke.sh http://localhost:8081
 
+      # Gate de reconciliação: saldos divergentes dos movimentos falham o staging.
+      - name: Gate - reconciliação de estoque
+        run: bash deployment/scripts/check-reconciliacao.sh
+
       - name: Limpa imagens órfãs
         if: always()
         run: docker image prune -f
