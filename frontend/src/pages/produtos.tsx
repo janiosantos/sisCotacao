@@ -2037,18 +2037,25 @@ function PerfilFiscalPanel({ variantes }: { variantes: VarianteLocal[] }) {
             <div>
               <label className="text-xs uppercase text-gray-400">CEST</label>
               <input className={campo} value={perfil.cest} onChange={(e) => setPerfil({ ...perfil, cest: e.target.value })} placeholder="opcional" />
+              <p className="mt-1 text-[11px] text-gray-400">Fios/cabos uso construção (8544): <b>12.007.00</b> — Anexo VII Cap.12 item 7.0 (Conf. Consulta SEF/MG 105/2021).</p>
             </div>
             <div>
               <label className="text-xs uppercase text-gray-400">Origem da mercadoria</label>
               <select className={campo} value={perfil.origem} onChange={(e) => setPerfil({ ...perfil, origem: Number(e.target.value) })}>
-                {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((o) => (
-                  <option key={o} value={o}>Origem {o}</option>
-                ))}
+                <option value={0}>0 — Nacional (exceto 3, 4, 5 e 8)</option>
+                <option value={1}>1 — Estrangeira — importação direta</option>
+                <option value={2}>2 — Estrangeira — adquirida no mercado interno</option>
+                <option value={3}>3 — Nacional, conteúdo importação &gt; 40%</option>
+                <option value={4}>4 — Nacional, processos produtivos básicos</option>
+                <option value={5}>5 — Nacional, processo produtivo básico</option>
+                <option value={8}>8 — Nacional, conteúdo importação ≤ 40%</option>
               </select>
+              <p className="mt-1 text-[11px] text-gray-400">Vem das NFs de entrada dos fornecedores (não é consulta legal).</p>
             </div>
             <div>
               <label className="text-xs uppercase text-gray-400">Enquadramento ST (regime_st)</label>
               <input className={campo} value={perfil.regime_st} onChange={(e) => setPerfil({ ...perfil, regime_st: e.target.value })} placeholder="opcional" />
+              <p className="mt-1 text-[11px] text-gray-400">Ex.: <code>substituido_ja_retido</code> quando a entrada reteve ICMS-MG.</p>
             </div>
           </div>
 
