@@ -942,6 +942,19 @@ export function ProdutoEditor() {
 
   useEffect(() => {
     void (async () => {
+      // Restaura rascunho duplicado (novo produto)
+      if (!id) {
+        try {
+          const rascunho = sessionStorage.getItem("dup_produto");
+          if (rascunho) {
+            const copia = JSON.parse(rascunho);
+            setForm((f) => ({ ...f, ...copia }));
+            sessionStorage.removeItem("dup_produto");
+          }
+        } catch {
+          /* rascunho inválido — ignora */
+        }
+      }
       let fs: Familia[] = [];
       try {
         fs = await api.listarFamilias();
@@ -1318,6 +1331,13 @@ export function ProdutoEditor() {
   };
 
   const subcategorias = categoriasTree[form.categoria] || [];
+  const duplicar = () => {
+    // Copia o cadastro como novo rascunho (mantém atributos/variantes p/ edição)
+    const copia = { ...form, id: undefined };
+    sessionStorage.setItem("dup_produto", JSON.stringify(copia));
+    location.hash = "#/produtos/novo";
+    toast("Copiado como rascunho — revise antes de salvar", "success");
+  };
   const padraoText = normalize(form.categoria).includes("epi")
     ? "Padrão EPI: Item + Material/Tamanho + Nº CA + Marca."
     : normalize(form.categoria).includes("cabo") || normalize(form.categoria).includes("fio")
@@ -1338,9 +1358,14 @@ export function ProdutoEditor() {
         title={produto ? "Editar produto" : "Novo produto"}
         subtitle="Cadastre o produto uma vez; as variações são geradas pelas combinações dos atributos."
         actions={
-          <Button variant="ghost" onClick={() => (location.hash = "#/produtos")}>
-            ← Voltar
-          </Button>
+          <div className="flex gap-2">
+            {produto && (
+              <Button variant="ghost" onClick={duplicar}>⧉ Duplicar</Button>
+            )}
+            <Button variant="ghost" onClick={() => (location.hash = "#/produtos")}>
+              ← Voltar
+            </Button>
+          </div>
         }
       />
 
