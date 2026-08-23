@@ -177,3 +177,23 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 | Modelo de dados/schema de negócio, regras ACID faturamento, NFC-e offline, Focus NFe | \docs/erp/\ |
 
 **Princípios centrais:** estoque movimentado por fatos auditáveis com saldo derivado/reconciliável; atributos flexíveis em JSONB sem substituir colunas estruturais; CST/CFOP/CSOSN são SAÍDA de regra contextual, nunca verdades fixas da variação; convenção de incerteza CONFIRMADO/INFERIDO/A CONFIRMAR/BLOQUEADO.
+
+## 10. Compromissos pendentes (próximas sessões)
+
+### Cadastro de Produtos — melhorias de COMPLETUDE dentro das abas (estilo atual: abas, não página única)
+1. **Indicador de completude** em Dados Gerais (obrigatórios preenchidos × pendentes).
+2. **Estoque por depósito + situação** (ok/ruptura/excesso) na tabela da aba Variações.
+3. **Perfil Fiscal**: mostrar herdado do produto vs override por variação (hierarquia v2.5.0) + validação inline (marca, formato NCM, preço>0).
+
+### Estoque / Contábil
+4. **v2.15.0**: gatilhos contábeis configuráveis por evento (venda autorizada/compra/ajuste → `contabil.lancar()`) — `lancar()` já existe, falta conectar aos eventos.
+5. Homologação Focus NFe com credenciais reais (NF-e/NFC-e) — adapter + endpoints prontos em staging.
+
+### Fiscal / Publicação (aguardam decisão do usuário)
+6. Ligar `FISCAL_ENGINE_V2` em PRODUÇÃO (após deploy autorizado das releases v1.11→v2.14).
+7. Contract futuro: DROP físico do EAV (`variante_atributos`) e `fiscal_config` após período de coexistência.
+8. Renomear pasta raiz para `casa-lm` (manual: fechar editores, renomear, reabrir — ambas máquinas).
+
+### Ambiente / infra
+9. `frontend/tests/` ainda sem suíte (vitest) — criar esqueleto quando priorizado.
+10. OpenAPI fase 2: cresce por blueprint tocado (regra vigente).
