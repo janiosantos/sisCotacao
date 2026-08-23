@@ -1027,6 +1027,18 @@ export function ProdutoEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Atalho Ctrl+S — ANTES do early return de carregando (regra dos hooks).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void salvar();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   if (carregando) return <Loading />;
 
   const trocarFamilia = (familiaId: number | null) => {
@@ -1330,17 +1342,6 @@ export function ProdutoEditor() {
     sessionStorage.setItem("dup_produto", JSON.stringify(copia));
     toast("Copiado como rascunho — revise antes de salvar", "success");
   };
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        void salvar();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   return (
     <div>
