@@ -111,3 +111,29 @@ def webhook_tecnospeed():
     payload = request.get_json(silent=True) or {}
     tecnospeed.processar_webhook(payload)
     return jsonify({"ok": True})
+
+
+# ─── Provedor alternativo: Focus NFe ───────────────────────
+
+@api_fiscal_docs_bp.post("/api/orcamentos/<int:orcamento_id>/focus/<modelo>")
+def emitir_focus(orcamento_id: int, modelo: str):
+    """Emite NFC-e/NF-e via Focus NFe (provedor alternativo ao TecnoSpeed)."""
+    from catalog_server.services import focus_emissao
+
+    if modelo not in ("55", "65"):
+        return jsonify({"error": "modelo inválido (55 ou 65)"}), 400
+    try:
+        doc = focus_emissao.emitir(orcamento_id, modelo)
+    except focus_emissao.FocusEmissaoError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(doc), 201
+
+
+@api_fiscal_docs_bp.get("/api/orcamentos/<int:orcamento_id>/focus/<modelo>")
+def consultar_focus(orcamento_id: int, modelo: str):
+    from catalog_server.services import focus_emissao
+
+    try:
+        return jsonify(focus_emissao.consultar(orcamento_id, modelo))
+    except focus_emissao.FocusEmissaoError as e:
+        return jsonify({"error": str(e)}), 400

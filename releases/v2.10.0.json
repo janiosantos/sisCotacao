@@ -1,0 +1,13 @@
+{
+  "versao": "v2.10.0",
+  "componentes": ["backend"],
+  "correcoes": [],
+  "melhorias": [
+    "Testes dedicados do snapshot fiscal: roundtrip persistir→explicar com bases/rates JSONB e tolerância a falha de banco"
+  ],
+  "recursos": [
+    "Provedor alternativo de emissão via Focus NFe: endpoints POST/GET /api/orcamentos/<id>/focus/<modelo> com payload por orçamento, consulta e retenção de resposta bruta",
+    "Serviço focus_emissao integra adapter + perfil fiscal + motor v2 (CFOP/CSOSN por item)"
+  ],
+  "imagens": { "backend": "siscom-backend:v2.10.0" }
+}
