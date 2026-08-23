@@ -930,7 +930,6 @@ export function ProdutoEditor() {
   const [form, setForm] = useState({ familia_id: "", marca: "", marca_id: "", external_id: "", nome: "", categoria: "", subcategoria: "", grupo_id: "", subgrupo_id: "", descricao: "", termos_busca: "" });
   const [atributos, setAtributos] = useState<FamiliaAtributo[]>([]);
   const [variantes, setVariantes] = useState<VarianteLocal[]>([]);
-  const [tab, setTab] = useState<"gerais" | "atributos" | "variacoes" | "imagens" | "fiscal">("gerais");
   const [carregando, setCarregando] = useState(true);
 
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
@@ -1182,7 +1181,7 @@ export function ProdutoEditor() {
     }
     if (!variantes.length) {
       toast("Adicione ao menos uma variação", "error");
-      setTab("variacoes");
+      
       return;
     }
     // Validação por variante: atributos obrigatórios devem estar preenchidos
@@ -1193,7 +1192,7 @@ export function ProdutoEditor() {
         const faltando = obr.filter((a) => !(variantes[i].valores[String(a.id)] || "").trim());
         if (faltando.length) {
           toast(`Variação ${i + 1}: preencha os atributos obrigatórios: ${faltando.map((a) => a.nome).join(", ")}`, "error");
-          setTab("variacoes");
+          
           return;
         }
       }
@@ -1205,7 +1204,7 @@ export function ProdutoEditor() {
           const v = variantes[i].valores[String(a.id)];
           if (v && !/^[\d.\s]+$/.test(String(v).trim())) {
             toast(`Variação ${i + 1}: o atributo "${a.nome}" deve ser um número de CA válido (ex.: 12345 ou 12.345).`, "error");
-            setTab("variacoes");
+            
             return;
           }
         }
@@ -1260,7 +1259,7 @@ export function ProdutoEditor() {
       }
       if (atributosFaltantes) {
         toast(`Não foi possível salvar: ${atributosFaltantes} variação(ões) sem os atributos obrigatórios da família.`, "error");
-        setTab("variacoes");
+        
         return;
       }
       const avisos: string[] = [];
@@ -1324,13 +1323,24 @@ export function ProdutoEditor() {
       ? "Padrão de cabos: Item + Bitola (mm²) + Tensão + Norma/Marca."
       : "Padrão: Item + Características (bitola, tensão, CA) + Marca.";
 
-  const TABS: { key: typeof tab; label: string }[] = [
-    { key: "gerais", label: "Dados Gerais" },
-    { key: "atributos", label: "Atributos da Família" },
-    { key: "variacoes", label: "Matriz de Variações" },
-    { key: "imagens", label: "Mídia e Anexos" },
-    ...(id ? [{ key: "fiscal" as const, label: "Perfil Fiscal" }] : []),
-  ];
+  const duplicar = () => {
+    // Copia o cadastro como novo rascunho (mantém atributos/variantes p/ edição)
+    location.hash = "#/produtos/novo";
+    const copia = { ...form, id: undefined };
+    sessionStorage.setItem("dup_produto", JSON.stringify(copia));
+    toast("Copiado como rascunho — revise antes de salvar", "success");
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void salvar();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div>
@@ -1344,21 +1354,10 @@ export function ProdutoEditor() {
         }
       />
 
-      <div className="mb-4 flex flex-wrap gap-2 border-b border-gray-200">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
-              tab === t.key ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "gerais" && (
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="flex-1 space-y-6">
+      <Secao n="1" titulo="Identificação">
+      {true && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-4 lg:col-span-2">
             <Field label="Família (opcional)">
@@ -1461,8 +1460,10 @@ export function ProdutoEditor() {
           </aside>
         </div>
       )}
+      </Secao>
 
-      {tab === "atributos" && (
+      <Secao n="2" titulo="Atributos da Família">
+      {true && (
         <div>
           <p className="mb-3 text-sm text-gray-500">Atributos definidos pela família selecionada (referência). Os valores de cada atributo são informados em cada variação, na aba Variações.</p>
           {!form.familia_id ? (
@@ -1485,8 +1486,10 @@ export function ProdutoEditor() {
           )}
         </div>
       )}
+      </Secao>
 
-      {tab === "variacoes" && (
+      <Secao n="3" titulo="Variações & Preços">
+      {true && (
         <div>
           <div className="mb-3 flex flex-wrap items-center gap-3">
             <Button variant="primary" onClick={adicionarVariante}>
@@ -1643,21 +1646,31 @@ export function ProdutoEditor() {
           )}
         </div>
       )}
+      </Secao>
 
-      {tab === "imagens" && (
+      <Secao n="4" titulo="Mídia e Anexos">
+      {true && (
         <div>
           {produto ? <Imagens produto={produto} setProduto={setProduto} /> : <p className="py-8 text-center text-sm text-gray-400">Salve o produto para poder adicionar imagens.</p>}
         </div>
       )}
+      </Secao>
 
-      {tab === "fiscal" && (
+      <Secao n="5" titulo="Perfil Fiscal">
+      {true && (
         <div>
           {id ? <PerfilFiscalPanel variantes={variantes} /> : null}
         </div>
       )}
 
+      </Secao>
+        </div>
+        <ResumoLateral produto={produto} variantes={variantes} onSalvar={() => void salvar()} onDuplicar={duplicar} />
+      </div>
+
       <div className="mt-6 flex justify-end gap-2">
         <Button onClick={() => (location.hash = "#/produtos")}>Cancelar</Button>
+        <Button variant="ghost" onClick={duplicar}>⧉ Duplicar</Button>
         <Button variant="primary" onClick={() => void salvar()}>
           Salvar produto
         </Button>
@@ -2101,5 +2114,90 @@ function PerfilFiscalPanel({ variantes }: { variantes: VarianteLocal[] }) {
         </>
       )}
     </div>
+  );
+}
+
+// ─── Secao: acordeão numerado com indicador e salvar por sessão ────────
+
+function Secao({ n, titulo, children }: { n: string; titulo: string; children: React.ReactNode }) {
+  const [aberto, setAberto] = useState(true);
+  return (
+    <section className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setAberto(!aberto)}
+        className="flex w-full items-center justify-between bg-gray-50 px-4 py-3 text-left"
+      >
+        <span className="text-sm font-semibold text-gray-800">
+          <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">{n}</span>
+          {titulo}
+        </span>
+        <span className="text-gray-400">{aberto ? "▾" : "▸"}</span>
+      </button>
+      {aberto && <div className="p-4">{children}</div>}
+    </section>
+  );
+}
+
+// ─── ResumoLateral: painel fixo com foto, badges, estoque por depósito ──
+
+function ResumoLateral({ produto, variantes, onSalvar, onDuplicar }: {
+  produto: ProdutoCadastro | null;
+  variantes: VarianteLocal[];
+  onSalvar: () => void;
+  onDuplicar: () => void;
+}) {
+  const [estoque, setEstoque] = useState<{ deposito_nome: string; quantidade: number }[]>([]);
+  const [perfil, setPerfil] = useState<PerfilFiscal | null>(null);
+
+  useEffect(() => {
+    if (!produto) return;
+    api.perfilFiscalProdutoObter(produto.id).then(setPerfil).catch(() => {});
+    api.saldoEstoque().then((rows: any[]) => setEstoque(rows || [])).catch(() => {});
+  }, [produto]);
+
+  const total = estoque.reduce((a, r) => a + Number(r.quantidade || 0), 0);
+  const ncm = perfil?.ncm || "";
+  const cest = perfil?.cest || "";
+  const precoBase = variantes[0]?.preco;
+
+  return (
+    <aside className="w-full shrink-0 space-y-4 lg:w-72">
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <p className="text-xs uppercase text-gray-400">{produto ? "Produto" : "Novo produto"}</p>
+        <p className="mt-1 font-semibold text-gray-800">{produto?.nome || "—"}</p>
+        <div className="mt-3 flex flex-wrap gap-1">
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">{variantes.length} variações</span>
+          {precoBase ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">{fmtMoney(Number(precoBase))}</span> : null}
+          {ncm ? <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-mono text-xs text-indigo-700">NCM {ncm}</span> : null}
+          {cest ? <span className="rounded-full bg-teal-100 px-2 py-0.5 font-mono text-xs text-teal-700">CEST {cest}</span> : null}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <p className="mb-2 text-xs uppercase text-gray-400">Estoque por depósito</p>
+        {estoque.length === 0 ? (
+          <p className="text-xs text-gray-400">Sem saldo registrado.</p>
+        ) : (
+          <ul className="space-y-1 text-sm">
+            {estoque.slice(0, 6).map((r, i) => (
+              <li key={i} className="flex justify-between">
+                <span className="truncate text-gray-600">{r.deposito_nome || "—"}</span>
+                <span className="font-mono">{Number(r.quantidade || 0)}</span>
+              </li>
+            ))}
+            <li className="flex justify-between border-t border-gray-100 pt-1 font-semibold">
+              <span>Total</span>
+              <span className="font-mono">{total}</span>
+            </li>
+          </ul>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Button variant="primary" className="w-full" onClick={onSalvar}>💾 Salvar produto</Button>
+        <Button variant="ghost" className="w-full" onClick={onDuplicar}>⧉ Duplicar</Button>
+      </div>
+    </aside>
   );
 }

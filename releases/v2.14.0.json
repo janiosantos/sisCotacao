@@ -1,0 +1,12 @@
+{
+  "versao": "v2.14.0",
+  "componentes": [
+    "frontend"
+  ],
+  "recursos": [
+    "Cadastro de produtos em página única com resumo lateral (estoque por depósito, badges NCM/CEST, salvar/duplicar fixos), seções colapsáveis, duplicar produto, atalho Ctrl+S e perfil fiscal integrado na sessão 5"
+  ],
+  "imagens": {
+    "frontend": "siscom-frontend:v2.14.0"
+  }
+}

@@ -1447,6 +1447,8 @@ export const api = {
   listarFlags: () => request<{ flags: FeatureFlag[] }>("GET", "/api/flags"),
   definirFlag: (nome: string, ativo: boolean) =>
     request<{ ok: boolean; nome: string; ativo: boolean }>("PUT", `/api/flags/${nome}`, { ativo }),
+  perfilFiscalProdutoObter: (produtoId: number) =>
+    request<PerfilFiscal>("GET", `/api/fiscal/perfil-produto/${produtoId}`),
   perfilFiscalObter: (varianteId: number) =>
     request<PerfilFiscal>("GET", `/api/fiscal/perfil/${varianteId}`),
   perfilFiscalSalvar: (varianteId: number, dados: Partial<PerfilFiscal>) =>
