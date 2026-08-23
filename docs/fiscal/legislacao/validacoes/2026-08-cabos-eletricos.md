@@ -44,3 +44,8 @@ Anexo VII voltou ao ar; Cap.12 item 7.0 confirma **MVA 40%** p/ NCM 8544 (uso co
 
 1. `MG interno · 8544 · revenda · substituído já retido` → **CFOP 5405 · CSOSN 500** · sem novo ICMS próprio
 2. `MG interno · 8544 · uso automotivo (exceção)` → **CFOP 5102 · CSOSN 102** · sem ST (tributação no DAS)
+
+
+## Ativação
+
+23/08/2026: flag **FISCAL_ENGINE_V2 ligada no STAGING** — motor v2 resolvente ativo para as famílias 8544/8536/8516 (revenda retida MG-Simples). Produção liga após deploy autorizado.
