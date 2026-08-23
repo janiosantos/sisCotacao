@@ -164,3 +164,16 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 **Princípio central do domínio:** `NCM → imposto` é proibido. Resultado = Produto + Contexto + Legislação vigente → **Motor Fiscal** → resultado versionado, explicável e auditável. Em dúvida: `FISCAL_REVIEW_REQUIRED`.
 
 > 🔜 Estrutura equivalente para os módulos **Produtos** e **Estoque** entra nesta seção quando recebida (9.2).
+
+
+### 9.2 Módulo Produtos e Estoque
+
+| Consultar | Onde |
+|---|---|
+| Diretrizes do agente fiscal-comercial (missão, princípios #1-7, modelo mental Produto→Variação→TaxRule→InvoiceItem) | \AGENT-produtos.md\ |
+| Regras por domínio (products · inventory · kardex · accounting · fiscal · api · security · EAN/GTIN) | \.agents/rules/*-produtos.md\ |
+| Skills profundas (product-catalog · inventory · kardex · accounting · fiscal-engine/matrix/emission · fastapi-integration · testing) | \.agents/skills/<domínio>/SKILL-produtos.md\ |
+| Workflows (product-lifecycle · stock-movement · order-to-cash · fiscal-document/rule · nfce-contingency · accounting-posting · migration · release) | \.agents/workflows/*-produtos.md\ |
+| Modelo de dados/schema de negócio, regras ACID faturamento, NFC-e offline, Focus NFe | \docs/erp/\ |
+
+**Princípios centrais:** estoque movimentado por fatos auditáveis com saldo derivado/reconciliável; atributos flexíveis em JSONB sem substituir colunas estruturais; CST/CFOP/CSOSN são SAÍDA de regra contextual, nunca verdades fixas da variação; convenção de incerteza CONFIRMADO/INFERIDO/A CONFIRMAR/BLOQUEADO.
