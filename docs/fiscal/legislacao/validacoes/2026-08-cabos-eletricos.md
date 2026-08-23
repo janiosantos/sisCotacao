@@ -33,8 +33,12 @@
 | CEST 12.007.00 | ✅ CONFIRMADO (fonte 1) |
 | CFOP 5405 / CSOSN 500 p/ substituído já retido | ✅ CONFIRMADO (fonte 1, §3) |
 | Exceção automotivo (não-ST) | ✅ CONFIRMADO (fonte 1, art. 58-A) |
-| MVA 36% original | 🟡 INFERIDO de Prot. 8/10 — **confirmar contra Anexo VII vigente do Decreto 48.589/2023** (SEF em manutenção) |
+| **MVA 40% vigente (item 7.0 Cap.12)** | ✅ CONFIRMADO — Anexo VII Parte 2, acesso 23/08/2026: https://www.fazenda.mg.gov.br/empresas/legislacao_tributaria/ricms_2023_seco/anexovii2023_5.html |
 | Alíquota interna MG aplicável ao substituído | 🟡 A CONFIRMAR (depende da mercadoria/operação) |
+
+## Revisão 23/08/2026
+
+Anexo VII voltou ao ar; Cap.12 item 7.0 confirma **MVA 40%** p/ NCM 8544 (uso construção). A diferença vs Prot. ICMS 8/10 (36%) é porque lá consta a MVA ORIGINAL; MG aplica 40% conforme item 7.0. Também confirmados no mesmo capítulo: 8536 → 40% (item 4.0) e 8516 → 45% (item 2.0).
 
 ## Regras derivadas (semeadas na migração 0071, estado PUBLISHED)
 

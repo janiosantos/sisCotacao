@@ -1,0 +1,12 @@
+{
+  "versao": "v2.11.0",
+  "componentes": ["backend"],
+  "correcoes": [],
+  "melhorias": [
+    "Validação normativa concluída (Anexo VII Parte 2 Cap.12, acesso 23/08/2026): MVA vigente 40% p/ NCM 8544 registrada na regra; dossiê atualizado para CONFIRMADO"
+  ],
+  "recursos": [
+    "Novas regras PUBLISHED MG-Simples revenda substituído retido: NCM 8536 tomadas/interruptores (MVA 40%) e NCM 8516 chuveiros/resistências (MVA 45%)"
+  ],
+  "imagens": { "backend": "siscom-backend:v2.11.0" }
+}
