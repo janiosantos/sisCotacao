@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -108,7 +109,7 @@ def test_golden_substituido_ja_retido(seeds):
         "uf_origin": "MG",
         "uf_destination": "MG",
         "operation_type": "venda",
-        "operation_date": "2026-08-22",
+        "operation_date": date.today().isoformat(),
         "ncm": "8544.49.00",
     })
     assert r.status.value == "CALCULATED"
