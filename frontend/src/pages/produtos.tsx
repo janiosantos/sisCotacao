@@ -1456,7 +1456,7 @@ export function ProdutoEditor() {
           </div>
           <aside className="rounded-lg border border-gray-200 bg-white p-4">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Curva ABC · Gestão de Linha</div>
-            {produto ? <AbcRecap p={produto} /> : <p className="text-sm text-gray-400">Salve o produto para ver os indicadores de gestão.</p>}
+            {true && <AbcRecap p={produto} />}
           </aside>
         </div>
       )}
@@ -1620,7 +1620,7 @@ export function ProdutoEditor() {
             </div>
           )}
 
-          {produto ? (
+          {true && (
             <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
               <h4 className="mb-2 text-sm font-semibold text-gray-900">Códigos por fornecedor</h4>
               <p className="mb-3 text-xs text-gray-400">
@@ -1641,8 +1641,6 @@ export function ProdutoEditor() {
                 </Button>
               </div>
             </div>
-          ) : (
-            <p className="mt-4 text-sm text-gray-400">Salve o produto para cadastrar os códigos dos fornecedores por variação.</p>
           )}
         </div>
       )}
@@ -1651,7 +1649,7 @@ export function ProdutoEditor() {
       <Secao n="4" titulo="Mídia e Anexos">
       {true && (
         <div>
-          {produto ? <Imagens produto={produto} setProduto={setProduto} /> : <p className="py-8 text-center text-sm text-gray-400">Salve o produto para poder adicionar imagens.</p>}
+          {true && <Imagens produto={produto} setProduto={setProduto} />}
         </div>
       )}
       </Secao>
@@ -1659,7 +1657,7 @@ export function ProdutoEditor() {
       <Secao n="5" titulo="Perfil Fiscal">
       {true && (
         <div>
-          {id ? <PerfilFiscalPanel variantes={variantes} /> : null}
+          {true && <PerfilFiscalPanel variantes={variantes} />}
         </div>
       )}
 
@@ -1705,7 +1703,8 @@ function CellInput({ value, onChange, placeholder, type, error, title }: { value
   );
 }
 
-function AbcRecap({ p }: { p: ProdutoCadastro }) {
+function AbcRecap({ p }: { p: ProdutoCadastro | null }) {
+  if (!p) return <p className="text-sm text-gray-400">Salve o produto para ver os indicadores de gestão.</p>;
   const classe = p.classe_abc || "—";
   return (
     <div className="flex flex-wrap gap-2">
@@ -1816,10 +1815,11 @@ function FornecedorGrid({
   );
 }
 
-function Imagens({ produto, setProduto }: { produto: ProdutoCadastro; setProduto: (p: ProdutoCadastro) => void }) {
+function Imagens({ produto, setProduto }: { produto: ProdutoCadastro | null; setProduto: (p: ProdutoCadastro) => void }) {
   const [url, setUrl] = useState("");
   const [baixando, setBaixando] = useState(false);
   const uploadRef = useRef<HTMLInputElement>(null);
+  if (!produto) return <p className="py-8 text-center text-sm text-gray-400">Salve o produto para poder adicionar imagens.</p>;
 
   const refresh = async () => {
     try {
