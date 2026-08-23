@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import uuid
+
 from catalog_server.db import system_conn
+from catalog_server.estoque.movimento import MovimentoEstoque
 
 
 class EstoqueRepository:
@@ -126,6 +129,129 @@ class EstoqueRepository:
         finally:
             if ctx:
                 ctx.__exit__(None, None, None)
+
+    def movimentar_fato(
+        self,
+        deposito_id: int,
+        variante_id: int,
+        tipo: str,
+        quantidade: float,
+        *,
+        idempotency_key: str | None = None,
+        origem_tipo: str = "",
+        origem_id: int | None = None,
+        documento: str | None = None,
+        observacao: str | None = None,
+        lote_id: int | None = None,
+        usuario_id: int | None = None,
+    ) -> dict:
+        """Fato de estoque idempotente (ADR 0003): retrida com a mesma
+        `idempotency_key` devolve o movimento original sem reprocessar.
+        Tipos reserva/liberacao movem a coluna RESERVA, não o saldo."""
+        if not idempotency_key:
+            idempotency_key = f"auto-{uuid.uuid4().hex}"
+
+        ctx = system_conn()
+        conn = ctx.__enter__()
+        try:
+            existente = conn.execute(
+                "SELECT id, quantidade, saldo_anterior, saldo_posterior"
+                " FROM estoque_movimento WHERE idempotency_key=?",
+                (idempotency_key,),
+            ).fetchone()
+            if existente:
+                return {
+                    "movimento_id": existente["id"],
+                    "duplicado": True,
+                    "saldo_anterior": float(existente["saldo_anterior"] or 0),
+                    "saldo_posterior": float(existente["saldo_posterior"] or 0),
+                }
+
+            row = conn.execute(
+                "SELECT id, quantidade, reserva FROM estoque_saldo"
+                " WHERE deposito_id=? AND variante_id=?",
+                (deposito_id, variante_id),
+            ).fetchone()
+            if row:
+                saldo_atual = float(row["quantidade"] or 0)
+                reserva_atual = float(row["reserva"] or 0)
+                saldo_id = row["id"]
+            else:
+                conn.execute(
+                    "INSERT INTO estoque_saldo (deposito_id, variante_id, quantidade, reserva)"
+                    " VALUES (?,?,0,0)",
+                    (deposito_id, variante_id),
+                )
+                saldo_atual, reserva_atual = 0.0, 0.0
+                saldo_id = conn.execute(
+                    "SELECT id FROM estoque_saldo WHERE deposito_id=? AND variante_id=?",
+                    (deposito_id, variante_id),
+                ).fetchone()["id"]
+
+            q = float(quantidade)
+
+            if tipo == "reserva":
+                novo_reserva = min(reserva_atual + q, saldo_atual)
+                conn.execute(
+                    "UPDATE estoque_saldo SET reserva=? WHERE id=?",
+                    (novo_reserva, saldo_id),
+                )
+                novo_saldo = saldo_atual
+            elif tipo == "liberacao":
+                novo_reserva = max(0, reserva_atual - q)
+                conn.execute(
+                    "UPDATE estoque_saldo SET reserva=? WHERE id=?",
+                    (novo_reserva, saldo_id),
+                )
+                novo_saldo = saldo_atual
+            else:
+                if tipo in ("entrada", "inventario"):
+                    novo_saldo = saldo_atual + q
+                elif tipo == "saida":
+                    novo_saldo = max(0, saldo_atual - q)
+                elif tipo == "ajuste":
+                    novo_saldo = max(0, q)
+                elif tipo == "transferencia":
+                    novo_saldo = max(0, saldo_atual - q)
+                else:
+                    raise ValueError(f"tipo desconhecido: {tipo}")
+                conn.execute(
+                    "UPDATE estoque_saldo SET quantidade=?, atualizado_em=datetime('now')"
+                    " WHERE id=?",
+                    (novo_saldo, saldo_id),
+                )
+
+            cur = conn.execute(
+                "INSERT INTO estoque_movimento (deposito_id, variante_id, tipo,"
+                " quantidade, saldo_anterior, saldo_posterior, documento,"
+                " observacao, lote_id, usuario_id, idempotency_key,"
+                " origem_tipo, origem_id)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    deposito_id, variante_id, tipo, quantidade,
+                    saldo_atual, novo_saldo, documento, observacao,
+                    lote_id, usuario_id, idempotency_key,
+                    origem_tipo, origem_id,
+                ),
+            )
+            conn.commit()
+            return {
+                "movimento_id": cur.lastrowid,
+                "duplicado": False,
+                "saldo_anterior": saldo_atual,
+                "saldo_posterior": novo_saldo,
+                "tipo": tipo,
+            }
+        finally:
+            ctx.__exit__(None, None, None)
+
+    def reconciliar(self, deposito_id: int, variante_id: int) -> dict:
+        with system_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM reconciliar_estoque(?, ?)",
+                (deposito_id, variante_id),
+            ).fetchone()
+            return dict(row) if row else {}
 
     def movimentos(
         self,

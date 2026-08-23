@@ -223,3 +223,65 @@ def atualizar_status_expedicao(exp_id: int):
     if not expedicao_repo.update_status(exp_id, data.get("status", "")):
         return jsonify({"error": "Expedição não encontrada"}), 404
     return jsonify({"ok": True})
+
+
+# ─── Fatos auditáveis (ADR 0003) ───────────────────────────
+
+@api_estoque_bp.post('/api/estoque/movimentos')
+def criar_movimento_fato():
+    dados = request.get_json(silent=True) or {}
+    try:
+        r = estoque_repo.movimentar_fato(
+            int(dados['deposito_id']), int(dados['variante_id']),
+            dados.get('tipo', 'entrada'), float(dados.get('quantidade') or 0),
+            idempotency_key=dados.get('idempotency_key'),
+            origem_tipo=dados.get('origem_tipo', ''),
+            origem_id=dados.get('origem_id'),
+            documento=dados.get('documento'), observacao=dados.get('observacao'),
+        )
+    except (KeyError, ValueError, TypeError) as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify(r), 200 if r.get('duplicado') else 201
+
+
+@api_estoque_bp.post('/api/estoque/reservas')
+def reservar_estoque():
+    dados = request.get_json(silent=True) or {}
+    try:
+        r = estoque_repo.movimentar_fato(
+            int(dados['deposito_id']), int(dados['variante_id']),
+            'reserva', float(dados.get('quantidade') or 0),
+            idempotency_key=dados.get('idempotency_key'),
+            origem_tipo=dados.get('origem_tipo', 'orcamento'),
+            origem_id=dados.get('origem_id'),
+            observacao=dados.get('observacao'),
+        )
+    except (KeyError, ValueError, TypeError) as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify(r), 200 if r.get('duplicado') else 201
+
+
+@api_estoque_bp.post('/api/estoque/reservas/liberar')
+def liberar_reserva():
+    dados = request.get_json(silent=True) or {}
+    try:
+        r = estoque_repo.movimentar_fato(
+            int(dados['deposito_id']), int(dados['variante_id']),
+            'liberacao', float(dados.get('quantidade') or 0),
+            idempotency_key=dados.get('idempotency_key'),
+            origem_tipo=dados.get('origem_tipo', ''),
+            origem_id=dados.get('origem_id'),
+            observacao=dados.get('observacao'),
+        )
+    except (KeyError, ValueError, TypeError) as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify(r), 200
+
+
+@api_estoque_bp.get('/api/estoque/reconciliacao')
+def reconciliar_estoque_api():
+    deposito_id = int(request.args.get('deposito_id', 0))
+    variante_id = int(request.args.get('variante_id', 0))
+    if not deposito_id or not variante_id:
+        return jsonify({'error': 'informe deposito_id e variante_id'}), 400
+    return jsonify(estoque_repo.reconciliar(deposito_id, variante_id))

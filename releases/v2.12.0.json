@@ -1,0 +1,12 @@
+{
+  "versao": "v2.12.0",
+  "componentes": [
+    "backend"
+  ],
+  "recursos": [
+    "Estoque por fatos na prática: movimentar_fato idempotente com idempotency_key/origem, reservas e liberações como fatos próprios, reconciliação saldo×movimentos, API nova (/movimentos, /reservas, /reconciliacao) e migração 0073 (tipos reserva/liberacao)"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.12.0"
+  }
+}
