@@ -17,6 +17,7 @@ from catalog_server.blueprints import (
     api_compras_bp,
     api_contabil_bp,
     api_permissoes_bp,
+    api_payments_bp,
     api_estoque_bp,
     api_financeiro_bp,
     api_fiscal_avancado_bp,
@@ -108,6 +109,8 @@ _RECURSO_POR_PREFIXO: list[tuple[str, str]] = [
     ("/api/condicoes-pagamento", "financeiro"),
     ("/api/centros-custo", "financeiro"),
     ("/api/adiantamentos", "financeiro"),
+    ("/api/payment-providers", "financeiro"),
+    ("/api/webhooks/payments", "financeiro"),
     ("/api/caixa", "caixa"),
     ("/api/bancos", "bancos"),
     ("/api/plano-contas", "plano_contas"),
@@ -229,6 +232,7 @@ def create_app() -> Flask:
     app.register_blueprint(api_ia_bp)
     app.register_blueprint(api_contabil_bp)
     app.register_blueprint(api_permissoes_bp)
+    app.register_blueprint(api_payments_bp)
     app.register_blueprint(api_usuarios_bp)
     app.register_blueprint(api_vendedores_bp)
     app.register_blueprint(api_clientes_bp)
@@ -299,6 +303,7 @@ def create_app() -> Flask:
         "/api/primeiro-usuario": {"GET"},
         "/api/usuarios": {"POST"},  # criação do primeiro administrador
         "/api/webhooks/tecnospeed": {"POST"},  # callback público da SEFAZ/Tecnospeed
+        "/api/webhooks/payments": {"POST"},  # webhooks de pagamento (Asaas/Mercado Pago)
     }
 
     @app.before_request
@@ -310,6 +315,9 @@ def create_app() -> Flask:
             return
         metodos = _WHITELIST.get(request.path)
         if metodos and request.method in metodos:
+            return
+        # Webhooks de pagamento com provedor na URL: /api/webhooks/payments/<provider>
+        if request.path.startswith("/api/webhooks/payments/") and request.method == "POST":
             return
         # Perfil próprio: sempre acessível (dados de sessão, não gestão de usuários).
         if request.path == "/api/usuarios/atual":
