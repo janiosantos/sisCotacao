@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   api,
+  type CondicaoPagamento,
   type CotacaoComprasPayload,
   type CotacaoFornecedor,
   type CotacaoLista,
@@ -10,11 +11,12 @@ import {
   type Invite,
   type MatrizComparacao,
   type MatrizItem,
+  type ParcelaCalculada,
   type Pedido,
 } from "../api/client";
 import { fmtDate, fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
-import { Badge, Button, Cell, Input, Loading, Select, Table, TBody, THead } from "../ui/ui";
+import { Badge, Button, Cell, Field, Input, Loading, Modal, Select, Table, TBody, THead } from "../ui/ui";
 
 const KEY_DRAFT = "compras_draft";
 const KEY_COT = "compras_cotacao";
@@ -1272,6 +1274,10 @@ function ListaPedidosCompra() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [recebendo, setRecebendo] = useState<number | null>(null);
+  const [modalReceber, setModalReceber] = useState<Pedido | null>(null);
+  const [condId, setCondId] = useState("");
+  const [condicoesLista, setCondicoesLista] = useState<CondicaoPagamento[]>([]);
+  const [preview, setPreview] = useState<{ parcelas: ParcelaCalculada[]; total: number; n: number } | null>(null);
 
   const carregar = async () => {
     setCarregando(true);
@@ -1286,14 +1292,49 @@ function ListaPedidosCompra() {
 
   useEffect(() => {
     void carregar();
+    void api.listarCondicoes().then(setCondicoesLista).catch(() => {});
   }, []);
 
-  const receber = async (p: Pedido) => {
-    if (!window.confirm(`Confirmar recebimento do pedido ${p.numero} (${p.fornecedor})?`)) return;
-    setRecebendo(p.id);
+  const abrirReceber = (p: Pedido) => {
+    setModalReceber(p);
+    setCondId("");
+    setPreview(null);
+  };
+
+  const calcularPreview = async (condicaoId: string) => {
+    setCondId(condicaoId);
+    if (!condicaoId || !modalReceber) {
+      setPreview(null);
+      return;
+    }
     try {
-      await api.receberPedido(p.id, {});
-      toast("Pedido recebido — estoque e financeiro atualizados", "success");
+      const r = await api.previewLote({
+        modo: "condicao",
+        valor: modalReceber.total ?? 0,
+        data_base: new Date().toISOString().slice(0, 10),
+        condicao_pagamento_id: Number(condicaoId),
+      });
+      setPreview(r);
+    } catch (e) {
+      setPreview(null);
+      toast("Erro: " + (e as Error).message, "error");
+    }
+  };
+
+  const confirmarRecebimento = async () => {
+    if (!modalReceber) return;
+    setRecebendo(modalReceber.id);
+    try {
+      const r = await api.receberPedido(modalReceber.id, {
+        condicao_pagamento_id: condId ? Number(condId) : undefined,
+      });
+      toast(
+        r.parcelas && r.parcelas > 1
+          ? `Pedido recebido — ${r.parcelas} contas a pagar geradas (estoque atualizado)`
+          : "Pedido recebido — estoque e financeiro atualizados",
+        "success"
+      );
+      setModalReceber(null);
       await carregar();
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
@@ -1333,7 +1374,7 @@ function ListaPedidosCompra() {
                   PDF
                 </a>
                 {p.status !== "recebido" ? (
-                  <Button size="sm" variant="primary" onClick={() => void receber(p)} disabled={recebendo === p.id}>
+                  <Button size="sm" variant="primary" onClick={() => void abrirReceber(p)} disabled={recebendo === p.id}>
                     {recebendo === p.id ? "Recebendo…" : "Receber"}
                   </Button>
                 ) : null}
@@ -1342,6 +1383,54 @@ function ListaPedidosCompra() {
           ))}
         </div>
       )}
+
+      <Modal
+        open={modalReceber != null}
+        onClose={() => setModalReceber(null)}
+        title={modalReceber ? `Receber pedido ${modalReceber.numero}` : ""}
+        footer={
+          <>
+            <Button onClick={() => setModalReceber(null)}>Cancelar</Button>
+            <Button variant="primary" onClick={() => void confirmarRecebimento()} disabled={recebendo === modalReceber?.id}>
+              {recebendo === modalReceber?.id ? "Recebendo…" : "Confirmar recebimento"}
+            </Button>
+          </>
+        }
+      >
+        {modalReceber ? (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+              {modalReceber.fornecedor} · Total {fmtMoney(modalReceber.total ?? 0)}
+            </p>
+            <p className="text-sm text-gray-500">
+              Confirma a entrada de estoque e a geração das <b>contas a pagar</b>. Escolha a condição de pagamento:
+            </p>
+            <Field label="Condição de pagamento (opcional — vazio = 1 conta em 30 dias)">
+              <Select value={condId} onChange={(e) => void calcularPreview(e.target.value)}>
+                <option value="">À vista / 30 dias</option>
+                {condicoesLista.map((c) => (
+                  <option key={c.id} value={c.id}>{c.nome}</option>
+                ))}
+              </Select>
+            </Field>
+            {preview ? (
+              <div className="rounded-md bg-gray-50 p-3">
+                <div className="mb-2 text-xs font-semibold text-gray-500">
+                  {preview.n} parcela(s) · total {fmtMoney(preview.total)}
+                </div>
+                <div className="space-y-1">
+                  {preview.parcelas.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">{i + 1}ª · venc. {fmtDate(p.vencimento)}</span>
+                      <span className="font-medium">{fmtMoney(p.valor)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

@@ -1054,7 +1054,8 @@ export const api = {
   gerarPedidos: (id: number, logica: string) =>
     request<{ pedidos: Pedido[] }>("POST", `/api/compras/cotacoes/${id}/pedidos`, { logica }),
   listarPedidos: () => request<Pedido[]>("GET", "/api/compras/pedidos"),
-  receberPedido: (id: number, data: { deposito_id?: number }) => request<{ ok: boolean; total: number; itens: number }>("POST", `/api/compras/pedidos/${id}/receber`, data),
+  receberPedido: (id: number, data: { deposito_id?: number; condicao_pagamento_id?: number | null }) =>
+    request<{ ok: boolean; total: number; itens: number; parcelas?: number; grupo_id?: string }>("POST", `/api/compras/pedidos/${id}/receber`, data),
   detalharPedido: (id: number) => request<Pedido>("GET", `/api/compras/pedidos/${id}`),
 
   // histórico
@@ -1479,6 +1480,20 @@ export const api = {
   criarPagar: (data: ContaPayload) => request<{ id: number }>("POST", "/api/financeiro/pagar", data),
   pagarConta: (id: number, data: { valor: number; data_pagamento?: string }) =>
     request<{ saldo_anterior: number; saldo_posterior: number; status: string }>("POST", `/api/financeiro/pagar/${id}/pagar`, data),
+
+  // lançamentos parcelados / recorrentes (v2.25.0)
+  previewLote: (data: Record<string, unknown>) =>
+    request<{ parcelas: ParcelaCalculada[]; total: number; n: number }>("POST", "/api/financeiro/lote/preview", data),
+  criarPagarLote: (data: Record<string, unknown>) =>
+    request<LoteResultado>("POST", "/api/financeiro/pagar/lote", data),
+  criarReceberLote: (data: Record<string, unknown>) =>
+    request<LoteResultado>("POST", "/api/financeiro/receber/lote", data),
+  excluirLote: (tabela: "pagar" | "receber", grupoId: string) =>
+    request<{ ok: boolean; excluidas: number }>("DELETE", `/api/financeiro/lote/${tabela}/${grupoId}`),
+  anexarDocumento: (tabela: "pagar" | "receber", contaId: number, formData: FormData) =>
+    enviarArquivo<{ ok: boolean; filename: string }>(`/api/financeiro/anexo/${tabela}/${contaId}`, formData),
+  listarAnexos: (tabela: "pagar" | "receber", contaId: number) =>
+    request<ContaAnexo[]>("GET", `/api/financeiro/anexo/${tabela}/${contaId}`),
 
   // fiscal
   listarCfop: (tipo?: string) =>
@@ -2116,6 +2131,35 @@ export interface ContaReceber {
   qr_code_base64?: string;
   url_boleto?: string;
   nosso_numero?: string;
+  origem_tipo?: string;
+  origem_id?: number | null;
+  parcela?: number;
+  total_parcelas?: number;
+  grupo_id?: string;
+  recorrencia?: string;
+}
+
+export interface ParcelaCalculada {
+  valor: number;
+  vencimento: string;
+  dias: number;
+}
+
+export interface LoteResultado {
+  ok: boolean;
+  grupo_id: string;
+  ids: number[];
+  n_parcelas: number;
+}
+
+export interface ContaAnexo {
+  id: number;
+  tabela: string;
+  conta_id: number;
+  tipo: string;
+  filename: string;
+  descricao: string;
+  criado_em: string;
 }
 
 export interface PaymentProviderItem {
@@ -2173,6 +2217,12 @@ export interface ContaPagar {
   observacao: string | null;
   status: string;
   criado_em: string;
+  origem_tipo?: string;
+  origem_id?: number | null;
+  parcela?: number;
+  total_parcelas?: number;
+  grupo_id?: string;
+  recorrencia?: string;
 }
 
 export interface ContaPayload {
