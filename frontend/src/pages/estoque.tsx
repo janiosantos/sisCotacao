@@ -1,4 +1,4 @@
-// pages/estoque.tsx — estoque (React + Tailwind).
+﻿// pages/estoque.tsx — estoque (React + Tailwind).
 
 import { useEffect, useState } from "react";
 import { api, type Deposito, type Expedicao, type LoteItem, type LotePayload, type MovimentoItem, type MovimentoPayload, type SaldoItem } from "../api/client";
@@ -36,12 +36,12 @@ export default function Estoque() {
   return (
     <div>
       <PageHeader title="Estoque" subtitle="Saldo, depósitos, movimentos e lotes." />
-      <div className="mb-5 flex flex-wrap gap-2 border-b border-gray-200">
+      <div className="mb-5 flex gap-2 overflow-x-auto border-b border-gray-200">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setAba(t.key)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
               aba === t.key ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
@@ -504,7 +504,7 @@ function Lotes({ depositos }: { depositos: Deposito[] }) {
           <Field label="Quantidade">
             <Input type="number" min={0} step="any" value={form.quantidade} onChange={(e) => setForm({ ...form, quantidade: e.target.value })} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Fabricação">
               <Input type="date" value={form.fabricacao} onChange={(e) => setForm({ ...form, fabricacao: e.target.value })} />
             </Field>

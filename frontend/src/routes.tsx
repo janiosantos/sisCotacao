@@ -6,6 +6,7 @@ export interface RouteDef {
   pattern: RegExp;
   title: string;
   component?: LazyExoticComponent<ComponentType>;
+  recurso?: string;
 }
 
 const Dashboard = lazy(() => import("./pages/dashboard"));
@@ -36,51 +37,57 @@ const ProdutoEditor = lazy(() => import("./pages/produtos").then((m) => ({ defau
 const Pdv = lazy(() => import("./pages/pre-venda"));
 const Configuracoes = lazy(() => import("./pages/configuracoes"));
 const Atualizacoes = lazy(() => import("./pages/atualizacoes"));
+const Perfis = lazy(() => import("./pages/perfis"));
 
 export const ROUTES: RouteDef[] = [
-  { pattern: /^#\/dashboard$/, title: "Painel", component: Dashboard },
-  { pattern: /^#\/catalogo$/, title: "Catálogo", component: Catalogo },
-  { pattern: /^#\/compras$/, title: "Compras", component: Compras },
-  { pattern: /^#\/produtos$/, title: "Produtos", component: Produtos },
+  { pattern: /^#\/dashboard$/, title: "Painel", component: Dashboard, recurso: "dashboard" },
+  { pattern: /^#\/catalogo$/, title: "Catálogo", component: Catalogo, recurso: "catalogo" },
+  { pattern: /^#\/compras$/, title: "Compras", component: Compras, recurso: "compras" },
+  { pattern: /^#\/produtos$/, title: "Produtos", component: Produtos, recurso: "produtos" },
   {
     pattern: /^#\/produtos\/novo$/,
     title: "Novo produto",
     component: ProdutoEditor,
+    recurso: "produtos",
   },
   {
     pattern: /^#\/produtos\/(\d+)$/,
     title: "Produto",
     component: ProdutoEditor,
+    recurso: "produtos",
   },
-  { pattern: /^#\/cotacoes$/, title: "Cotações", component: Cotacoes },
+  { pattern: /^#\/cotacoes$/, title: "Cotações", component: Cotacoes, recurso: "cotacoes" },
   {
     pattern: /^#\/cotacoes\/(\d+)$/,
     title: "Cotação",
     component: CotacoesDetalhe,
+    recurso: "cotacoes",
   },
-  { pattern: /^#\/pre-venda$/, title: "Pré-venda", component: Pdv },
-  { pattern: /^#\/estoque$/, title: "Estoque", component: Estoque },
-  { pattern: /^#\/posvenda$/, title: "Pós-venda", component: PosVenda },
-  { pattern: /^#\/bancos$/, title: "Bancos", component: Bancos },
-  { pattern: /^#\/fiscal$/, title: "Fiscal", component: Fiscal },
-  { pattern: /^#\/financeiro$/, title: "Financeiro", component: Financeiro },
-  { pattern: /^#\/caixa$/, title: "Caixa", component: Caixa },
-  { pattern: /^#\/precos$/, title: "Preços", component: Precos },
-  { pattern: /^#\/orcamentos$/, title: "Orçamentos", component: Orcamentos },
-  { pattern: /^#\/solicitacoes$/, title: "Solicitações de Compra", component: Solicitacoes },
-  { pattern: /^#\/categorias$/, title: "Categorias", component: Categorias },
-  { pattern: /^#\/unidades$/, title: "Unidades", component: Unidades },
+  { pattern: /^#\/pre-venda$/, title: "Pré-venda", component: Pdv, recurso: "pre-venda" },
+  { pattern: /^#\/estoque$/, title: "Estoque", component: Estoque, recurso: "estoque" },
+  { pattern: /^#\/posvenda$/, title: "Pós-venda", component: PosVenda, recurso: "posvenda" },
+  { pattern: /^#\/bancos$/, title: "Bancos", component: Bancos, recurso: "bancos" },
+  { pattern: /^#\/fiscal$/, title: "Fiscal", component: Fiscal, recurso: "fiscal" },
+  { pattern: /^#\/financeiro$/, title: "Financeiro", component: Financeiro, recurso: "financeiro" },
+  { pattern: /^#\/caixa$/, title: "Caixa", component: Caixa, recurso: "caixa" },
+  { pattern: /^#\/precos$/, title: "Preços", component: Precos, recurso: "precos" },
+  { pattern: /^#\/orcamentos$/, title: "Orçamentos", component: Orcamentos, recurso: "orcamentos" },
+  { pattern: /^#\/solicitacoes$/, title: "Solicitações de Compra", component: Solicitacoes, recurso: "solicitacoes" },
+  { pattern: /^#\/categorias$/, title: "Categorias", component: Categorias, recurso: "categorias" },
+  { pattern: /^#\/unidades$/, title: "Unidades", component: Unidades, recurso: "unidades" },
   {
     pattern: /^#\/diagnostico-variacoes$/,
     title: "Qualidade do Catálogo",
     component: Diagnostico,
+    recurso: "qualidade",
   },
-  { pattern: /^#\/fornecedores$/, title: "Fornecedores", component: Fornecedores },
-  { pattern: /^#\/historico$/, title: "Histórico de Preços", component: Historico },
-  { pattern: /^#\/clientes$/, title: "Clientes", component: Clientes },
-  { pattern: /^#\/vendedores$/, title: "Vendedores", component: Vendedores },
-  { pattern: /^#\/usuarios$/, title: "Usuários", component: Usuarios },
-  { pattern: /^#\/plano-contas$/, title: "Plano de Contas", component: PlanoContas },
-  { pattern: /^#\/configuracoes$/, title: "Configurações", component: Configuracoes },
-  { pattern: /^#\/atualizacoes$/, title: "Atualizações", component: Atualizacoes },
+  { pattern: /^#\/fornecedores$/, title: "Fornecedores", component: Fornecedores, recurso: "fornecedores" },
+  { pattern: /^#\/historico$/, title: "Histórico de Preços", component: Historico, recurso: "historico" },
+  { pattern: /^#\/clientes$/, title: "Clientes", component: Clientes, recurso: "clientes" },
+  { pattern: /^#\/vendedores$/, title: "Vendedores", component: Vendedores, recurso: "vendedores" },
+  { pattern: /^#\/usuarios$/, title: "Usuários", component: Usuarios, recurso: "usuarios" },
+  { pattern: /^#\/perfis$/, title: "Perfis e permissões", component: Perfis, recurso: "perfis" },
+  { pattern: /^#\/plano-contas$/, title: "Plano de Contas", component: PlanoContas, recurso: "plano_contas" },
+  { pattern: /^#\/configuracoes$/, title: "Configurações", component: Configuracoes, recurso: "configuracoes" },
+  { pattern: /^#\/atualizacoes$/, title: "Atualizações", component: Atualizacoes, recurso: "atualizacoes" },
 ];

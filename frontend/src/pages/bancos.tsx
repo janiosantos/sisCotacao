@@ -1,4 +1,4 @@
-// pages/bancos.tsx — contas bancárias e extrato (React + Tailwind).
+﻿// pages/bancos.tsx — contas bancárias e extrato (React + Tailwind).
 
 import { useEffect, useState } from "react";
 import { api, type ContaBancaria, type ContaBancariaPayload, type MovimentoBancario, type MovimentoBancarioPayload } from "../api/client";
@@ -161,7 +161,7 @@ function Contas() {
           <Field label="Nome">
             <Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} autoFocus />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Banco (código)">
               <Input maxLength={3} value={form.banco} onChange={(e) => setForm({ ...form, banco: e.target.value })} />
             </Field>
@@ -319,7 +319,7 @@ function Extrato() {
               ))}
             </Select>
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Tipo">
               <Select value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
                 <option value="credito">Crédito</option>

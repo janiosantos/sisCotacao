@@ -1,4 +1,4 @@
-// pages/vendedores.tsx — cadastro de vendedores (React + Tailwind).
+﻿// pages/vendedores.tsx — cadastro de vendedores (React + Tailwind).
 
 import { useEffect, useState } from "react";
 import { api, type Vendedor, type VendedorPayload } from "../api/client";

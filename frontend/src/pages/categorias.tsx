@@ -1,4 +1,4 @@
-// pages/categorias.tsx — árvore de categorias/subcategorias + produtos (React + Tailwind).
+﻿// pages/categorias.tsx — árvore de categorias/subcategorias + produtos (React + Tailwind).
 
 import { useEffect, useState } from "react";
 import { api, type CategoriaTree, type ProdutoSubcategoria } from "../api/client";

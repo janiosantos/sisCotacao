@@ -1,4 +1,4 @@
-// pages/fiscal.tsx — fiscal (React + Tailwind).
+﻿// pages/fiscal.tsx — fiscal (React + Tailwind).
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -69,12 +69,12 @@ export default function Fiscal() {
   return (
     <div>
       <PageHeader title="Fiscal" subtitle="CFOP, CST e configuração tributária por produto." />
-      <div className="mb-5 flex flex-wrap gap-2 border-b border-gray-200">
+      <div className="mb-5 flex gap-2 overflow-x-auto border-b border-gray-200">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setAba(t.key)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
               aba === t.key ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
@@ -485,7 +485,7 @@ function ModalFiscal({
         </>
       }
     >
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
         <Field label="NCM">
           <Input maxLength={8} value={form.ncm || ""} onChange={(e) => set("ncm", e.target.value)} />
         </Field>
@@ -667,7 +667,7 @@ function EmitenteTab() {
       <Field label="Alíq. ICMS %">
         <Input type="number" step="0.01" value={form.aliquota_icms || ""} onChange={(e) => set("aliquota_icms", e.target.value)} />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Alíq. IBS % (transição — validar)">
           <Input type="number" step="0.01" value={form.aliquota_ibs || ""} onChange={(e) => set("aliquota_ibs", e.target.value)} />
         </Field>
@@ -675,7 +675,7 @@ function EmitenteTab() {
           <Input type="number" step="0.01" value={form.aliquota_cbs || ""} onChange={(e) => set("aliquota_cbs", e.target.value)} />
         </Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Vigência IBS início">
           <Input type="date" value={form.ibs_vigencia_inicio || ""} onChange={(e) => set("ibs_vigencia_inicio", e.target.value)} />
         </Field>
@@ -683,7 +683,7 @@ function EmitenteTab() {
           <Input type="date" value={form.ibs_vigencia_fim || ""} onChange={(e) => set("ibs_vigencia_fim", e.target.value)} />
         </Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Vigência CBS início">
           <Input type="date" value={form.cbs_vigencia_inicio || ""} onChange={(e) => set("cbs_vigencia_inicio", e.target.value)} />
         </Field>

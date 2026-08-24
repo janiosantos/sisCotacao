@@ -1,4 +1,4 @@
-// pages/precos.tsx — preços (React + Tailwind).
+﻿// pages/precos.tsx — preços (React + Tailwind).
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -56,12 +56,12 @@ export default function Precos() {
   return (
     <div>
       <PageHeader title="Preços" subtitle="Tabelas de preço e promoções." />
-      <div className="mb-5 flex flex-wrap gap-2 border-b border-gray-200">
+      <div className="mb-5 flex gap-2 overflow-x-auto border-b border-gray-200">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setAba(t.key)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
               aba === t.key ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
@@ -248,7 +248,7 @@ function ModalTabela({
             <option value="promocional">promocional</option>
           </Select>
         </Field>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Margem % (custo)">
             <Input type="number" step="0.1" value={margem} onChange={(e) => setMargem(e.target.value)} />
           </Field>
@@ -401,7 +401,7 @@ function ModalGerarPrecos({
           Calcula o preço sugerido pelo motor (custo líquido do Fiscal → margem/markup), mostra a prévia e, após
           confirmação, aplica e registra o histórico.
         </p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Margem % (preço = custo ÷ (1 − margem))">
             <Input type="number" step="0.1" value={margem} onChange={(e) => setMargem(e.target.value)} />
           </Field>
@@ -826,7 +826,7 @@ function ModalPromocao({
         <Field label="Nome">
           <Input value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
         </Field>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Tipo">
             <Select value={tipo} onChange={(e) => setTipo(e.target.value)}>
               <option value="percentual">Percentual (%)</option>
@@ -837,7 +837,7 @@ function ModalPromocao({
             <Input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} />
           </Field>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Início">
             <Input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} />
           </Field>

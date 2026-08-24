@@ -8,12 +8,17 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "e2e": "node e2e_runner.mjs"
+    "e2e": "node e2e_runner.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
+    "@vitest/ui": "^4.1.11",
+    "jsdom": "^30.0.1",
     "puppeteer-core": "^25.5.0",
     "typescript": "^7.0.2",
-    "vite": "^8.2.1"
+    "vite": "^8.2.1",
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

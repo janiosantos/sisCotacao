@@ -1,4 +1,4 @@
-// pages/financeiro.tsx — financeiro (React + Tailwind).
+﻿// pages/financeiro.tsx — financeiro (React + Tailwind).
 
 import { useEffect, useState } from "react";
 import { api, type CondicaoPagamento, type ContaPayload, type ContaPagar, type ContaReceber } from "../api/client";
@@ -23,12 +23,12 @@ export default function Financeiro() {
   return (
     <div>
       <PageHeader title="Financeiro" subtitle="Caixa, contas a receber e contas a pagar." />
-      <div className="mb-5 flex flex-wrap gap-2 border-b border-gray-200">
+      <div className="mb-5 flex gap-2 overflow-x-auto border-b border-gray-200">
         {ABAS.map((a) => (
           <button
             key={a.key}
             onClick={() => setAba(a.key)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
               aba === a.key ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
@@ -302,7 +302,7 @@ function Receber() {
           <Field label="Descrição">
             <Input value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Valor">
               <Input type="number" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} />
             </Field>
@@ -472,7 +472,7 @@ function Pagar() {
           <Field label="Descrição">
             <Input value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Valor">
               <Input type="number" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} />
             </Field>

@@ -1,4 +1,4 @@
-// pages/compras.tsx — fluxo de compra em tela única (React + Tailwind).
+﻿// pages/compras.tsx — fluxo de compra em tela única (React + Tailwind).
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -227,6 +227,7 @@ export default function Compras() {
 
       {invites !== null ? (
         <LinksPanel
+          cotacaoId={cotacaoId}
           invites={invites}
           onVoltar={() => {
             setInvites(null);
@@ -585,17 +586,41 @@ function EtapaCotando({
   );
 }
 
-function LinksPanel({ invites, onVoltar, onComparar }: { invites: Invite[]; onVoltar: () => void; onComparar: () => void }) {
+function LinksPanel({ cotacaoId, invites, onVoltar, onComparar }: { cotacaoId: number | null; invites: Invite[]; onVoltar: () => void; onComparar: () => void }) {
+  const [lembrando, setLembrando] = useState<number | null>(null);
+
+  const lembrar = async (inv: Invite) => {
+    if (!cotacaoId) return;
+    setLembrando(inv.fornecedor_id);
+    try {
+      const r = await api.lembrarFornecedor(cotacaoId, inv.fornecedor_id);
+      if (r.whatsapp_url) {
+        window.open(r.whatsapp_url, "_blank", "noopener,noreferrer");
+        toast("Lembrete aberto no WhatsApp");
+      } else if (r.mailto_url) {
+        window.location.href = r.mailto_url;
+        toast("Lembrete aberto no e-mail");
+      } else {
+        void navigator.clipboard.writeText(r.link).then(() => toast("Sem contato — link copiado!"));
+      }
+    } catch (e) {
+      toast("Erro: " + (e as Error).message, "error");
+    } finally {
+      setLembrando(null);
+    }
+  };
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
       <h3 className="text-sm font-semibold text-gray-900">Cotações disparadas! Envie para cada fornecedor</h3>
-      <p className="mb-3 text-sm text-gray-500">Toque no WhatsApp (verde) para abrir a conversa pronta, ou copie o link.</p>
+      <p className="mb-3 text-sm text-gray-500">Toque no WhatsApp (verde) para abrir a conversa pronta, ou copie o link. O botão "Lembrar" reenvia a mensagem para quem ainda não respondeu.</p>
       <div className="space-y-2">
         {invites.map((inv) => (
-          <div key={inv.fornecedor_id} className="flex items-center gap-3 rounded-md border border-gray-100 p-2">
+          <div key={inv.fornecedor_id} className="flex flex-wrap items-center gap-3 rounded-md border border-gray-100 p-2">
             <div className="flex-1">
               <b className="text-sm">{inv.nome}</b>
               <span className="ml-2 text-xs text-gray-400">{inv.status === "respondido" ? "✓ respondeu" : "pendente"}</span>
+              {inv.data_limite_retorno ? <span className="ml-2 text-xs text-gray-400">retorno até {inv.data_limite_retorno}</span> : null}
             </div>
             <div className="flex gap-2">
               {inv.whatsapp_url ? (
@@ -611,6 +636,11 @@ function LinksPanel({ invites, onVoltar, onComparar }: { invites: Invite[]; onVo
               <Button size="sm" onClick={() => void navigator.clipboard.writeText(inv.link).then(() => toast("Link copiado!"))}>
                 Copiar link
               </Button>
+              {inv.status !== "respondido" ? (
+                <Button size="sm" variant="secondary" onClick={() => void lembrar(inv)} disabled={lembrando === inv.fornecedor_id}>
+                  {lembrando === inv.fornecedor_id ? "…" : "🔔 Lembrar"}
+                </Button>
+              ) : null}
             </div>
           </div>
         ))}
@@ -792,13 +822,41 @@ function EtapaComparando({
                           : it.melhor_id === f.fornecedor_id;
                     const ehMelhorPreco = it.melhor_id === f.fornecedor_id;
                     const ehMenorPrazo = it.melhor_prazo_id === f.fornecedor_id && it.melhor_prazo_id !== it.melhor_id;
+                    const motivoLabel =
+                      pr.motivo_indisponibilidade === "em_falta_estoque"
+                        ? "Em falta de estoque"
+                        : pr.motivo_indisponibilidade === "nao_trabalha_linha"
+                          ? "Não trabalha com a linha"
+                          : pr.motivo_indisponibilidade === "descontinuado"
+                            ? "Descontinuado"
+                            : pr.motivo_indisponibilidade === "fora_regiao"
+                              ? "Fora da região"
+                              : pr.motivo_indisponibilidade === "outro"
+                                ? "Indisponível"
+                                : null;
+                    const fator = pr.fator_conversao && pr.fator_conversao > 1 ? pr.fator_conversao : 1;
                     return (
                       <td key={f.fornecedor_id} className={`px-4 py-2.5 ${ehVencedorPrincipal ? "bg-brand-50" : ""}`}>
-                        {!pr.disponivel ? <span className="text-xs text-red-500">s/ estoque</span> : null}
-                        <b> {fmtMoney(pr.preco_liquido)}</b>{" "}
-                        {logica === "recomendado" && ehVencedorPrincipal ? <span title="Recomendado">⭐</span> : null}
-                        {logica !== "centralizado" && ehMelhorPreco ? <span title="Melhor preço">💰</span> : null}
-                        {ehMenorPrazo ? <span title="Menor prazo de entrega">🚚</span> : null}
+                        {!pr.disponivel ? (
+                          <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                            {motivoLabel || "Indisponível"}
+                          </span>
+                        ) : (
+                          <>
+                            <b> {fmtMoney(pr.preco_liquido)}</b>
+                            {logica === "recomendado" && ehVencedorPrincipal ? <span title="Recomendado">⭐</span> : null}
+                            {logica !== "centralizado" && ehMelhorPreco ? <span title="Melhor preço">💰</span> : null}
+                            {ehMenorPrazo ? <span title="Menor prazo de entrega">🚚</span> : null}
+                          </>
+                        )}
+                        {pr.unidade_compra ? (
+                          <small className="block text-xs text-gray-400">
+                            {pr.unidade_compra}
+                            {fator > 1 ? ` · ${fator}/emb · ${pr.qtd_embalagens ?? 0} emb.` : ""}
+                            {pr.preco_embalagem != null && fator > 1 ? ` · ${fmtMoney(pr.preco_embalagem)}/emb` : ""}
+                          </small>
+                        ) : null}
+                        {pr.marca_ofertada ? <small className="block text-xs text-gray-500">marca: {pr.marca_ofertada}</small> : null}
                         <small className="block text-xs text-gray-400">
                           {pr.desconto ? "desconto " + pr.desconto + "%" : ""}
                           {pr.prazo ? " · " + pr.prazo + "d" : ""}
@@ -813,7 +871,7 @@ function EtapaComparando({
         </div>
 
         <p className="mt-2 text-xs text-gray-400">
-          💰 melhor preço · 🚚 menor prazo de entrega {logica === "recomendado" ? "· ⭐ recomendado (preço + prazo + pagamento)" : ""}
+          💰 melhor preço · 🚚 menor prazo de entrega {logica === "recomendado" ? "· ⭐ recomendado (preço + prazo + pagamento)" : ""} · unidade/embalagem e marca vêm da proposta do representante
         </p>
 
         <div className="mt-4 flex flex-wrap justify-between gap-2">
@@ -865,6 +923,22 @@ function EtapaPedidos({ cotacaoId }: { cotacaoId: number | null }) {
                 </div>
                 <div className="text-sm font-semibold">{fmtMoney(p.total ?? 0)}</div>
               </div>
+              {p.itens && p.itens.length > 0 ? (
+                <div className="mt-2 space-y-0.5">
+                  {p.itens.map((it) => (
+                    <div key={it.id} className="flex items-center justify-between text-xs text-gray-500">
+                      <span>
+                        {it.name || "Item"} {it.unidade_compra ? `(${it.unidade_compra}${it.fator_conversao && it.fator_conversao > 1 ? `·${it.fator_conversao}` : ""})` : ""}
+                      </span>
+                      <span>
+                        qtd {it.quantidade}
+                        {it.unidade_compra ? ` ${it.unidade_compra}` : ""}
+                        {it.fator_conversao && it.fator_conversao > 1 ? ` · ${Math.ceil(it.quantidade / it.fator_conversao)} emb.` : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <div className="mt-2 flex gap-2">
                 <a className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50" target="_blank" rel="noreferrer" href={`/compras/pedidos/${p.id}/imprimir`}>
                   PDF

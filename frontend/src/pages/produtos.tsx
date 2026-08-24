@@ -1,4 +1,4 @@
-// pages/produtos.tsx — cadastro de produtos (famílias + produto pai + variações + imagens).
+﻿// pages/produtos.tsx — cadastro de produtos (famílias + produto pai + variações + imagens).
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
@@ -16,11 +16,13 @@ import {
   type ProdutoCadastroPayload,
   type ProdutoPreview,
   type UnidadeCompra,
-  type PerfilFiscal,
+  type PerfilFiscalEfetivo,
+  type SaldoItem,
 } from "../api/client";
 import { fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
 import { Badge, Button, Field, Input, Loading, Modal, PageHeader, Select, Textarea } from "../ui/ui";
+import { temPermissao } from "../perm";
 
 const PAGE = 60;
 
@@ -48,6 +50,20 @@ interface FornecedorRow {
   unidade: string;
   fator: string | number;
   variante_idx: number;
+}
+
+interface ProdutoEditorForm {
+  familia_id: string;
+  marca: string;
+  marca_id: string;
+  external_id: string;
+  nome: string;
+  categoria: string;
+  subcategoria: string;
+  grupo_id: string;
+  subgrupo_id: string;
+  descricao: string;
+  termos_busca: string;
 }
 
 const CA_RE = /(^|[^a-z0-9])(n\s?[º°]?\s?ca|ca|certificado|aprovacao)([^a-z0-9]|$)/i;
@@ -239,9 +255,11 @@ export default function Produtos() {
         <Button variant="outline" onClick={() => setModalUrl(true)}>
           Novo via URL
         </Button>
-        <Button variant="primary" onClick={() => (location.hash = "#/produtos/novo")}>
-          Novo produto
-        </Button>
+        {temPermissao("produtos", "cadastrar") ? (
+          <Button variant="primary" onClick={() => (location.hash = "#/produtos/novo")}>
+            Novo produto
+          </Button>
+        ) : null}
         <span className="mb-2 text-sm text-gray-500">{total} produto(s)</span>
       </div>
 
@@ -284,9 +302,11 @@ export default function Produtos() {
                 <Button variant="primary" size="sm" className="flex-1" onClick={() => (location.hash = `#/produtos/${p.id}`)}>
                   Editar
                 </Button>
-                <Button variant="danger" size="sm" onClick={() => void excluir(p.id)}>
-                  Excluir
-                </Button>
+                {temPermissao("produtos", "excluir") ? (
+                  <Button variant="danger" size="sm" onClick={() => void excluir(p.id)}>
+                    Excluir
+                  </Button>
+                ) : null}
               </div>
             </article>
           ))}
@@ -501,7 +521,7 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
         <Field label="Descrição (opcional)">
           <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} />
         </Field>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="NCM padrão">
             <Input maxLength={8} placeholder="Ex.: 8536.69.90" value={ncm} onChange={(e) => setNcm(e.target.value)} />
           </Field>
@@ -914,6 +934,152 @@ function ModalQuickAdd({
         </Field>
       </div>
     </Modal>
+  );
+}
+
+// ===================================================================
+// INDICADOR DE COMPLETUDE (Dados Gerais)
+// ===================================================================
+
+function CompletudeDadosGerais({ form, variantes }: { form: ProdutoEditorForm; variantes: VarianteLocal[] }) {
+  const itens: { rotulo: string; preenchido: boolean; dica?: string }[] = [
+    { rotulo: "Nome base do produto", preenchido: !!form.nome.trim() },
+    { rotulo: "Marca", preenchido: !!form.marca.trim() },
+    { rotulo: "Categoria", preenchido: !!form.categoria.trim(), dica: "Ex.: Fios e Cabos" },
+    { rotulo: "Subcategoria", preenchido: !!form.subcategoria.trim(), dica: "Ex.: Cabo Flexível" },
+    { rotulo: "Grupo (SKU)", preenchido: !!form.grupo_id, dica: "1º segmento do SKU estruturado" },
+    { rotulo: "Subgrupo (SKU)", preenchido: !!form.subgrupo_id, dica: "2º segmento do SKU estruturado" },
+    { rotulo: "Código fabricante", preenchido: !!form.external_id.trim(), dica: "Referência do fornecedor" },
+    { rotulo: "Ao menos 1 variação com preço > 0", preenchido: variantes.some((v) => Number(v.preco) > 0) },
+  ];
+  const preenchidos = itens.filter((i) => i.preenchido).length;
+  const pct = Math.round((preenchidos / itens.length) * 100);
+  const pendentes = itens.filter((i) => !i.preenchido);
+  const concluido = preenchidos === itens.length;
+  return (
+    <div className={`rounded-lg border bg-white p-4 ${concluido ? "border-green-200" : "border-amber-200"}`}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Completude do cadastro</div>
+        <Badge tone={concluido ? "green" : "amber"}>
+          {preenchidos}/{itens.length}
+        </Badge>
+      </div>
+      <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+        <div className={`h-full rounded-full ${concluido ? "bg-green-500" : "bg-amber-500"}`} style={{ width: `${pct}%` }} />
+      </div>
+      {pendentes.length === 0 ? (
+        <p className="text-xs text-green-700">Cadastro completo — todos os dados gerais obrigatórios preenchidos.</p>
+      ) : (
+        <ul className="space-y-1">
+          {pendentes.map((p) => (
+            <li key={p.rotulo} className="flex items-start gap-1.5 text-xs text-gray-600">
+              <span className="mt-0.5 text-amber-500">●</span>
+              <span>
+                <strong>{p.rotulo}</strong>
+                {p.dica ? <span className="text-gray-400"> — {p.dica}</span> : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ===================================================================
+// ESTOQUE POR DEPÓSITO + SITUAÇÃO (aba Variações)
+// ===================================================================
+
+function EstoqueDeposito({ produtoId, variantes }: { produtoId: number; variantes: VarianteLocal[] }) {
+  const [saldos, setSaldos] = useState<SaldoItem[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    setCarregando(true);
+    setErro("");
+    api
+      .saldoEstoque({ produto_id: produtoId })
+      .then((rows) => {
+        if (alive) setSaldos(rows || []);
+      })
+      .catch((e) => {
+        if (alive) setErro((e as Error).message);
+      })
+      .finally(() => {
+        if (alive) setCarregando(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [produtoId]);
+
+  const porVariante = new Map<number, SaldoItem[]>();
+  for (const s of saldos) {
+    const arr = porVariante.get(s.variante_id) || [];
+    arr.push(s);
+    porVariante.set(s.variante_id, arr);
+  }
+
+  const badgeSituacao = (sit?: string) =>
+    sit === "ruptura" ? (
+      <Badge tone="red">Ruptura</Badge>
+    ) : sit === "excesso" ? (
+      <Badge tone="amber">Excesso</Badge>
+    ) : (
+      <Badge tone="green">OK</Badge>
+    );
+
+  if (carregando) return <p className="text-xs text-gray-400">Carregando estoque…</p>;
+  if (erro) return <p className="text-xs text-red-500">Erro ao carregar estoque: {erro}</p>;
+  if (saldos.length === 0)
+    return <p className="text-xs text-gray-400">Sem saldo registrado para as variações deste produto.</p>;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-200 text-sm">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Variação</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Depósito</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Saldo</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Situação</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {variantes.map((v, idx) => {
+            const linhas = (v.id != null ? porVariante.get(v.id) || [] : []).map((s) => ({ ...s }));
+            if (linhas.length === 0) {
+              return (
+                <tr key={idx} className="text-gray-500">
+                  <td className="px-3 py-1.5">{varianteLabel(v, [], idx)}</td>
+                  <td className="px-3 py-1.5 text-gray-400" colSpan={3}>
+                    sem saldo
+                  </td>
+                </tr>
+              );
+            }
+            return linhas.map((s, j) => (
+              <tr key={`${idx}-${j}`}>
+                {j === 0 && (
+                  <td className="px-3 py-1.5 font-medium" rowSpan={linhas.length}>
+                    {varianteLabel(v, [], idx)}
+                    {v.sku ? <span className="text-gray-400"> · {v.sku}</span> : null}
+                  </td>
+                )}
+                <td className="px-3 py-1.5">{s.deposito_nome}</td>
+                <td className="px-3 py-1.5">
+                  {s.quantidade}
+                  {s.reserva > 0 ? <span className="text-gray-400"> (reserva {s.reserva})</span> : null}
+                </td>
+                <td className="px-3 py-1.5">{badgeSituacao(s.situacao)}</td>
+              </tr>
+            ));
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -1369,12 +1535,12 @@ export function ProdutoEditor() {
         }
       />
 
-      <div className="mb-4 flex flex-wrap gap-2 border-b border-gray-200">
+      <div className="mb-4 flex gap-2 overflow-x-auto border-b border-gray-200">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
               tab === t.key ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
@@ -1398,7 +1564,7 @@ export function ProdutoEditor() {
                 </Select>
               </div>
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Marca">
                 <div className="flex gap-2">
                   <Input list="dlMarcas" placeholder="Ex.: Corfio" value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} className="flex-1" />
@@ -1422,7 +1588,7 @@ export function ProdutoEditor() {
                 {padraoText}
               </div>
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Categoria (opcional)">
                 <Input list="dlCategorias" placeholder="Fios e Cabos" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} />
                 <datalist id="dlCategorias">
@@ -1440,7 +1606,7 @@ export function ProdutoEditor() {
                 </datalist>
               </Field>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Grupo (SKU)" hint="1º segmento do SKU estruturado">
                 <div className="flex gap-2">
                   <Select value={form.grupo_id} onChange={(e) => trocarGrupo(e.target.value)} className="flex-1">
@@ -1480,9 +1646,12 @@ export function ProdutoEditor() {
               <p className="mt-1 text-xs text-gray-400">Palavras-chave e variações do nome usado pelo mercado, para facilitar a busca (ex.: "fio" além de "cabo").</p>
             </Field>
           </div>
-          <aside className="rounded-lg border border-gray-200 bg-white p-4">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Curva ABC · Gestão de Linha</div>
-            {produto ? <AbcRecap p={produto} /> : <p className="text-sm text-gray-400">Salve o produto para ver os indicadores de gestão.</p>}
+          <aside className="space-y-4">
+            <CompletudeDadosGerais form={form} variantes={variantes} />
+            <div className="rounded-lg border border-gray-200 bg-white p-4">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Curva ABC · Gestão de Linha</div>
+              {produto ? <AbcRecap p={produto} /> : <p className="text-sm text-gray-400">Salve o produto para ver os indicadores de gestão.</p>}
+            </div>
           </aside>
         </div>
       )}
@@ -1644,6 +1813,16 @@ export function ProdutoEditor() {
 
           {produto ? (
             <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+              <h4 className="mb-2 text-sm font-semibold text-gray-900">Estoque por depósito</h4>
+              <p className="mb-3 text-xs text-gray-400">
+                Saldo e situação por depósito (ok/ruptura/excesso) calculados a partir dos estoque mínimo e máximo.
+              </p>
+              <EstoqueDeposito produtoId={produto.id} variantes={variantes} />
+            </div>
+          ) : null}
+
+          {produto ? (
+            <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
               <h4 className="mb-2 text-sm font-semibold text-gray-900">Códigos por fornecedor</h4>
               <p className="mb-3 text-xs text-gray-400">
                 Informe para cada variação o fornecedor, o código usado por ele, a unidade de compra e o fator de conversão (ex.: embalagem com 10 unidades → fator 10).
@@ -1677,15 +1856,17 @@ export function ProdutoEditor() {
 
       {tab === "fiscal" && (
         <div>
-          {id ? <PerfilFiscalPanel variantes={variantes} /> : null}
+          {id ? <PerfilFiscalPanel variantes={variantes} produto={produto} /> : null}
         </div>
       )}
 
       <div className="mt-6 flex justify-end gap-2">
         <Button onClick={() => (location.hash = "#/produtos")}>Cancelar</Button>
-        <Button variant="primary" onClick={() => void salvar()}>
-          Salvar produto
-        </Button>
+        {temPermissao("produtos", "cadastrar") || temPermissao("produtos", "editar") ? (
+          <Button variant="primary" onClick={() => void salvar()}>
+            Salvar produto
+          </Button>
+        ) : null}
       </div>
 
       {quickAdd && (
@@ -1995,17 +2176,17 @@ function seedFornecedorRows(produto: ProdutoCadastro, variantes: VarianteLocal[]
 
 // ─── Perfil fiscal (classificação por variante) ─────────────────────────
 
-function PerfilFiscalPanel({ variantes }: { variantes: VarianteLocal[] }) {
+function PerfilFiscalPanel({ variantes, produto }: { variantes: VarianteLocal[]; produto: ProdutoCadastro | null }) {
   const comId = variantes.filter((v) => v.id != null);
   const [varianteSel, setVarianteSel] = useState<number | null>(comId[0]?.id ?? null);
-  const [perfil, setPerfil] = useState<PerfilFiscal | null>(null);
+  const [efetivo, setEfetivo] = useState<PerfilFiscalEfetivo | null>(null);
   const [ncmBusca, setNcmBusca] = useState("");
   const [ncmResultados, setNcmResultados] = useState<{ codigo: string; descricao: string }[]>([]);
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
     if (varianteSel == null) return;
-    api.perfilFiscalObter(varianteSel).then(setPerfil).catch(() => toast("Erro ao ler perfil fiscal", "error"));
+    api.perfilFiscalEfetivo(varianteSel).then(setEfetivo).catch(() => toast("Erro ao ler perfil fiscal", "error"));
   }, [varianteSel]);
 
   // Quando as variações carregarem (produto já salvo), seleciona a primeira
@@ -2026,11 +2207,11 @@ function PerfilFiscalPanel({ variantes }: { variantes: VarianteLocal[] }) {
   };
 
   const salvar = async () => {
-    if (varianteSel == null || !perfil) return;
+    if (varianteSel == null || !efetivo) return;
     setSalvando(true);
     try {
-      const salvo = await api.perfilFiscalSalvar(varianteSel, perfil);
-      setPerfil(salvo);
+      const salvo = await api.perfilFiscalSalvar(varianteSel, efetivo.efetivo);
+      setEfetivo({ ...efetivo, variante: salvo, efetivo: salvo });
       toast("Perfil fiscal salvo", "success");
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
@@ -2045,6 +2226,22 @@ function PerfilFiscalPanel({ variantes }: { variantes: VarianteLocal[] }) {
 
   const campo = "w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm";
 
+  const ncmRegex = /^\d{4}(\.\d{2})?(\.\d{2})?$/;
+  const varianteAtual = variantes.find((v) => v.id === varianteSel);
+  const precoOk = varianteAtual != null && Number(varianteAtual.preco) > 0;
+  const marcaOk = !!(produto?.marca || "").trim();
+  const ncmOk = !!efetivo && ncmRegex.test((efetivo.efetivo.ncm || "").trim());
+
+  const campoErro = "border-red-400 bg-red-50 focus:border-red-500";
+  const campoHerdado = (campoOverride: boolean) => (campoOverride ? "border-amber-400 bg-amber-50" : "border-gray-300");
+
+  const badgeHerdado = (override: boolean) =>
+    override ? (
+      <Badge tone="amber">Override da variação</Badge>
+    ) : (
+      <Badge tone="gray">Herdado do produto</Badge>
+    );
+
   return (
     <div className="max-w-xl space-y-4">
       <div>
@@ -2058,23 +2255,45 @@ function PerfilFiscalPanel({ variantes }: { variantes: VarianteLocal[] }) {
         </select>
       </div>
 
-      {!perfil ? (
+      {!efetivo ? (
         <p className="py-4 text-center text-sm text-gray-400">Carregando…</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3">
+          {/* Validações inline do cadastro (marca, NCM, preço) */}
+          <div className="rounded-md border border-gray-200 p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Validações do cadastro</p>
+            <ul className="space-y-1 text-xs">
+              <li className={marcaOk ? "text-green-700" : "text-red-600"}>
+                {marcaOk ? "✔" : "✘"} Marca do produto preenchida ({produto?.marca || "—"})
+              </li>
+              <li className={precoOk ? "text-green-700" : "text-red-600"}>
+                {precoOk ? "✔" : "✘"} Preço da variação &gt; 0 ({varianteAtual?.preco != null ? fmtMoney(Number(varianteAtual.preco)) : "—"})
+              </li>
+              <li className={ncmOk ? "text-green-700" : "text-red-600"}>
+                {ncmOk ? "✔" : "✘"} Formato NCM válido (ex.: 8544.42.00) — atual: {efetivo.efetivo.ncm || "vazio"}
+              </li>
+            </ul>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="text-xs uppercase text-gray-400">NCM</label>
-              <input className={campo} value={perfil.ncm} onChange={(e) => setPerfil({ ...perfil, ncm: e.target.value })} placeholder="ex.: 8544.42.00" />
+              <label className="text-xs uppercase text-gray-400">NCM {badgeHerdado(efetivo.override_campos.ncm)}</label>
+              <input
+                className={`${campo} ${ncmOk ? campoHerdado(efetivo.override_campos.ncm) : campoErro}`}
+                value={efetivo.efetivo.ncm}
+                onChange={(e) => setEfetivo({ ...efetivo, efetivo: { ...efetivo.efetivo, ncm: e.target.value } })}
+                placeholder="ex.: 8544.42.00"
+              />
+              {!ncmOk && <p className="mt-1 text-[11px] text-red-500">Formato inválido — use 4 ou 8 dígitos (ex.: 8544 ou 8544.42.00).</p>}
             </div>
             <div>
-              <label className="text-xs uppercase text-gray-400">CEST</label>
-              <input className={campo} value={perfil.cest} onChange={(e) => setPerfil({ ...perfil, cest: e.target.value })} placeholder="opcional" />
+              <label className="text-xs uppercase text-gray-400">CEST {badgeHerdado(efetivo.override_campos.cest)}</label>
+              <input className={`${campo} ${campoHerdado(efetivo.override_campos.cest)}`} value={efetivo.efetivo.cest} onChange={(e) => setEfetivo({ ...efetivo, efetivo: { ...efetivo.efetivo, cest: e.target.value } })} placeholder="opcional" />
               <p className="mt-1 text-[11px] text-gray-400">Fios/cabos uso construção (8544): <b>12.007.00</b> — Anexo VII Cap.12 item 7.0 (Conf. Consulta SEF/MG 105/2021).</p>
             </div>
             <div>
-              <label className="text-xs uppercase text-gray-400">Origem da mercadoria</label>
-              <select className={campo} value={perfil.origem} onChange={(e) => setPerfil({ ...perfil, origem: Number(e.target.value) })}>
+              <label className="text-xs uppercase text-gray-400">Origem da mercadoria {badgeHerdado(efetivo.override_campos.origem)}</label>
+              <select className={`${campo} ${campoHerdado(efetivo.override_campos.origem)}`} value={efetivo.efetivo.origem} onChange={(e) => setEfetivo({ ...efetivo, efetivo: { ...efetivo.efetivo, origem: Number(e.target.value) } })}>
                 <option value={0}>0 — Nacional (exceto 3, 4, 5 e 8)</option>
                 <option value={1}>1 — Estrangeira — importação direta</option>
                 <option value={2}>2 — Estrangeira — adquirida no mercado interno</option>
@@ -2086,11 +2305,23 @@ function PerfilFiscalPanel({ variantes }: { variantes: VarianteLocal[] }) {
               <p className="mt-1 text-[11px] text-gray-400">Vem das NFs de entrada dos fornecedores (não é consulta legal).</p>
             </div>
             <div>
-              <label className="text-xs uppercase text-gray-400">Enquadramento ST (regime_st)</label>
-              <input className={campo} value={perfil.regime_st} onChange={(e) => setPerfil({ ...perfil, regime_st: e.target.value })} placeholder="opcional" />
+              <label className="text-xs uppercase text-gray-400">Enquadramento ST (regime_st) {badgeHerdado(efetivo.override_campos.regime_st)}</label>
+              <input className={`${campo} ${campoHerdado(efetivo.override_campos.regime_st)}`} value={efetivo.efetivo.regime_st} onChange={(e) => setEfetivo({ ...efetivo, efetivo: { ...efetivo.efetivo, regime_st: e.target.value } })} placeholder="opcional" />
               <p className="mt-1 text-[11px] text-gray-400">Ex.: <code>substituido_ja_retido</code> quando a entrada reteve ICMS-MG.</p>
             </div>
           </div>
+
+          {efetivo.produto ? (
+            <p className="rounded-md bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
+              Perfil padrão do produto: NCM <b>{efetivo.produto.ncm || "—"}</b> · CEST{" "}
+              <b>{efetivo.produto.cest || "—"}</b> · Origem <b>{efetivo.produto.origem ?? 0}</b> · Regime ST{" "}
+              <b>{efetivo.produto.regime_st || "—"}</b>. Edite um campo para sobrescrever nesta variação (override).
+            </p>
+          ) : (
+            <p className="rounded-md bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
+              Sem perfil padrão no produto — os valores preenchidos aqui valem somente para esta variação.
+            </p>
+          )}
 
           <div className="rounded-md border border-gray-200 p-3">
             <p className="mb-2 text-xs uppercase text-gray-400">Buscar NCM versionado (fonte oficial)</p>
@@ -2112,8 +2343,8 @@ function PerfilFiscalPanel({ variantes }: { variantes: VarianteLocal[] }) {
                       type="button"
                       className="text-left hover:underline"
                       onClick={() =>
-                        setPerfil((prev: PerfilFiscal | null) =>
-                          prev ? { ...prev, ncm: n.codigo } : prev,
+                        setEfetivo((prev: PerfilFiscalEfetivo | null) =>
+                          prev ? { ...prev, efetivo: { ...prev.efetivo, ncm: n.codigo } } : prev,
                         )
                       }
                     >

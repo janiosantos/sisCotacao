@@ -238,12 +238,12 @@ export function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
       <div
-        className={`flex max-h-[90vh] w-full flex-col rounded-lg bg-white shadow-xl ${wide ? "max-w-3xl" : "max-w-lg"}`}
+        className={`flex max-h-[92vh] w-full flex-col rounded-lg bg-white shadow-xl ${wide ? "max-w-3xl" : "max-w-lg"}`}
       >
-        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
-          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 sm:px-5">
+          <h2 className="min-w-0 truncate text-base font-semibold text-gray-900">{title}</h2>
           <button
             onClick={onClose}
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
@@ -252,9 +252,9 @@ export function Modal({
             <X size={18} />
           </button>
         </div>
-        <div className="flex-1 overflow-auto px-5 py-4">{children}</div>
+        <div className="flex-1 overflow-auto px-4 py-4 sm:px-5">{children}</div>
         {footer ? (
-          <div className="flex justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-4 py-3 sm:px-5">
             {footer}
           </div>
         ) : null}

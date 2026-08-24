@@ -13,8 +13,51 @@
   --color-brand-900: #1e2f6a;
 }
 
+/* Garante que a sidebar desktop/tablet sempre apareça em telas >= 768px,
+   mesmo que CSS legado defina `.hidden` com !important. */
+@media (min-width: 768px) {
+  .md\:flex {
+    display: flex !important;
+  }
+  .md\:hidden {
+    display: none !important;
+  }
+}
+
 html,
 body,
 #root {
   height: 100%;
+}
+
+/* Altura dinâmica (barras mobile): fallback + dvh quando suportado. */
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100dvh;
+}
+
+/* Safe-area (notch/home indicator em celulares) — aplica às barras fixas. */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Evita seleção acidental de texto ao tocar em botões no mobile. */
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Inputs não zoomam no iOS ao focar (font-size >= 16px). */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+@media (min-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 14px;
+  }
 }

@@ -1,4 +1,4 @@
-// pages/posvenda.tsx — pós-venda (React + Tailwind).
+﻿// pages/posvenda.tsx — pós-venda (React + Tailwind).
 
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
@@ -155,7 +155,7 @@ function Acompanhamento() {
           <Field label="Descrição">
             <Textarea value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Próximo contato">
               <Input type="date" value={form.prox} onChange={(e) => setForm({ ...form, prox: e.target.value })} />
             </Field>
@@ -290,7 +290,7 @@ function Garantia() {
           <Field label="Produto">
             <Input value={form.produto} onChange={(e) => setForm({ ...form, produto: e.target.value })} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Data início">
               <Input type="date" value={form.inicio} onChange={(e) => setForm({ ...form, inicio: e.target.value })} />
             </Field>

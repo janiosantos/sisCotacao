@@ -1,4 +1,4 @@
-// pages/solicitacoes.tsx — solicitações de compra (React + Tailwind).
+﻿// pages/solicitacoes.tsx — solicitações de compra (React + Tailwind).
 
 import { useEffect, useState } from "react";
 import { api } from "../api/client";

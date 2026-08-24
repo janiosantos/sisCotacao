@@ -1,4 +1,4 @@
-// pages/cotacoes.tsx — lista de cotações e tela de comparação/fechamento.
+﻿// pages/cotacoes.tsx — lista de cotações e tela de comparação/fechamento.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {

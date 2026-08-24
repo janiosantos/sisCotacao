@@ -88,6 +88,17 @@ export interface Fornecedor {
   cnpj_cpf: string | null;
   representante: string | null;
   ativo: number | boolean;
+  telefone?: string | null;
+  endereco?: string | null;
+  numero?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  cep?: string | null;
+  categoria?: string | null;
+  condicao_pagamento_id?: number | null;
+  prazo_entrega_dias?: number;
+  nota?: number;
 }
 
 export interface FornecedorPayload {
@@ -95,6 +106,30 @@ export interface FornecedorPayload {
   whatsapp?: string | null;
   email?: string | null;
   observacoes?: string | null;
+  razao_social?: string | null;
+  cnpj_cpf?: string | null;
+  representante?: string | null;
+  telefone?: string | null;
+  endereco?: string | null;
+  numero?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  cep?: string | null;
+  categoria?: string | null;
+  condicao_pagamento_id?: number | null;
+  prazo_entrega_dias?: number;
+  nota?: number;
+}
+
+export interface FornecedorContato {
+  id: number;
+  fornecedor_id: number;
+  nome: string;
+  cargo: string;
+  telefone: string;
+  email: string;
+  criado_em: string;
 }
 
 // ------------------------------------------------------------------
@@ -132,6 +167,8 @@ export interface Cliente {
   ativo: number | boolean;
   contribuinte?: string;
   ie?: string;
+  segmento?: string;
+  categoria?: string;
 }
 
 export interface ClienteSituacao {
@@ -141,6 +178,8 @@ export interface ClienteSituacao {
   limite_disponivel: number;
   saldo_em_atraso: number;
   tem_atraso: boolean;
+  excede_limite?: boolean;
+  excede_por_atraso?: boolean;
 }
 
 export interface ClientePayload {
@@ -159,6 +198,8 @@ export interface ClientePayload {
   observacoes?: string | null;
   contribuinte?: string;
   ie?: string;
+  segmento?: string;
+  categoria?: string;
 }
 
 export interface ClienteEndereco {
@@ -194,37 +235,81 @@ export interface ClienteApoioComercial {
 
 export interface ClienteApoioFiscal {
   cfop_padrao: string;
+  cfop_entrada: string;
+  cfop_saida: string;
   cst_icms: string;
   cst_pis: string;
   cst_cofins: string;
+  cst_csosn: string;
+  cest: string;
   aliquota_icms: number;
+  aliquota_icms_st: number;
   aliquota_pis: number;
   aliquota_cofins: number;
+}
+
+export interface ContextoCliente {
+  vendedores: Vendedor[];
+  condicoes_pagamento: CondicaoPagamento[];
+  tabelas_preco: TabelaPreco[];
+  cfop: CfopCode[];
+  cst_icms: CstCode[];
+  cst_pis: CstCode[];
+  cst_cofins: CstCode[];
+  csosn: CstCode[];
+  cest: CstCode[];
+  segmentos: { valor: string; label: string }[];
+  categorias: { valor: string; label: string }[];
+}
+
+export interface ContextoFornecedor {
+  categorias: { valor: string; label: string }[];
+  condicoes_pagamento: CondicaoPagamento[];
 }
 
 export interface Usuario {
   id: number;
   nome: string;
   login: string;
-  perfil: string;
   ativo: number | boolean;
   desconto_limite_pct?: number;
   autoriza_desconto?: number | boolean;
   criado_em: string;
+  perfil_ids?: number[];
+  overrides?: Record<string, string[] | { conceder: string[]; negar: string[] }>;
+  permissoes?: string[];
 }
 
 export interface UsuarioPayload {
   nome: string;
   login: string;
   senha?: string;
-  perfil: string;
   desconto_limite_pct?: number;
   autoriza_desconto?: boolean;
+  perfil?: string;
+  perfil_ids?: number[];
+  conceder?: Record<string, string[]>;
+  negar?: Record<string, string[]>;
+  overrides?: Record<string, string[]>;
 }
 
 export interface UsuarioAtual extends Usuario {
   autenticado: boolean;
   token?: string;
+}
+
+export interface PerfilAcesso {
+  id: number;
+  nome: string;
+  descricao: string;
+  ativo: boolean;
+  permissoes: Record<string, string[]>;
+  superuser: boolean;
+}
+
+export interface CatalogoPermissoes {
+  recursos: { codigo: string; nome: string; grupo: string }[];
+  acoes: string[];
 }
 
 export interface ContaPlano {
@@ -334,6 +419,7 @@ export interface Invite {
   link: string;
   whatsapp_url: string;
   mailto_url: string;
+  data_limite_retorno?: string | null;
 }
 
 export interface Pedido {
@@ -367,6 +453,10 @@ export interface PedidoItem {
   sku?: string;
   brand?: string;
   imagem_url?: string | null;
+  unidade_compra?: string | null;
+  fator_conversao?: number | null;
+  marca_ofertada?: string | null;
+  motivo_indisponibilidade?: string | null;
 }
 
 // Matriz de comparação (fluxo de compra em tela única).
@@ -376,6 +466,12 @@ export interface MatrizPreco {
   prazo: number | null;
   preco_liquido: number;
   disponivel: boolean;
+  unidade_compra?: string;
+  fator_conversao?: number;
+  marca_ofertada?: string;
+  motivo_indisponibilidade?: string;
+  preco_embalagem?: number;
+  qtd_embalagens?: number;
 }
 
 export interface MatrizItem {
@@ -907,13 +1003,20 @@ export const api = {
   listarCategorias: () => request<CategoriaMap>("GET", "/api/categorias"),
 
   // fornecedores
-  listarFornecedores: (somenteAtivos = false) =>
-    request<Fornecedor[]>("GET", "/api/fornecedores" + qs({ somente_ativos: somenteAtivos })),
+  listarFornecedores: (somenteAtivos = false, params: Record<string, unknown> = {}) =>
+    request<Fornecedor[]>("GET", "/api/fornecedores" + qs({ somente_ativos: somenteAtivos, ...params })),
+  detalharFornecedor: (id: number) => request<Fornecedor>("GET", `/api/fornecedores/${id}`),
+  contextoFornecedor: () => request<ContextoFornecedor>("GET", "/api/fornecedores/contexto"),
   criarFornecedor: (data: FornecedorPayload) => request<{ id: number }>("POST", "/api/fornecedores", data),
   atualizarFornecedor: (id: number, data: FornecedorPayload) =>
     request<{ ok: boolean }>("PUT", `/api/fornecedores/${id}`, data),
   alternarAtivoFornecedor: (id: number, ativo: boolean) =>
     request<{ ok: boolean }>("PATCH", `/api/fornecedores/${id}/ativo` + qs({ ativo })),
+  listarContatosFornecedor: (id: number) => request<FornecedorContato[]>("GET", `/api/fornecedores/${id}/contatos`),
+  criarContatoFornecedor: (id: number, data: { nome: string; cargo?: string; telefone?: string; email?: string }) =>
+    request<{ id: number }>("POST", `/api/fornecedores/${id}/contatos`, data),
+  excluirContatoFornecedor: (contatoId: number) =>
+    request<{ ok: boolean }>("DELETE", `/api/fornecedores/contatos/${contatoId}`),
 
   // cotações
   listarCotacoes: (status: string) =>
@@ -944,6 +1047,8 @@ export const api = {
   criarCotacaoCompras: (data: CotacaoComprasPayload) =>
     request<{ id: number; numero: string; invites: Invite[] }>("POST", "/api/compras/cotacoes", data),
   convitesCotacao: (id: number) => request<Invite[]>("GET", `/api/compras/cotacoes/${id}/invites`),
+  lembrarFornecedor: (cotacaoId: number, fornecedorId: number) =>
+    request<Invite>("GET", `/api/compras/cotacoes/${cotacaoId}/lembrar/${fornecedorId}`),
   compararCotacao: (id: number) => request<MatrizComparacao>("GET", `/api/compras/cotacoes/${id}/comparar`),
   gerarPedidos: (id: number, logica: string) =>
     request<{ pedidos: Pedido[] }>("POST", `/api/compras/cotacoes/${id}/pedidos`, { logica }),
@@ -1098,13 +1203,14 @@ export const api = {
   buscarClientes: (q: string) =>
     request<Cliente[]>("GET", "/api/clientes/buscar" + qs({ q })),
   detalharCliente: (id: number) => request<Cliente>("GET", `/api/clientes/${id}`),
-  situacaoCliente: (id: number) => request<ClienteSituacao>("GET", `/api/clientes/${id}/situacao`),
+  situacaoCliente: (id: number, total?: number) =>
+    request<ClienteSituacao>("GET", `/api/clientes/${id}/situacao` + qs({ total })),
   criarCliente: (data: ClientePayload) => request<{ id: number }>("POST", "/api/clientes", data),
   atualizarCliente: (id: number, data: ClientePayload) =>
     request<{ ok: boolean }>("PUT", `/api/clientes/${id}`, data),
   alternarAtivoCliente: (id: number, ativo: boolean) =>
     request<{ ok: boolean }>("PATCH", `/api/clientes/${id}/ativo` + qs({ ativo })),
-  contextoCliente: () => request<{ vendedores: Vendedor[] }>("GET", "/api/clientes/contexto"),
+  contextoCliente: () => request<ContextoCliente>("GET", "/api/clientes/contexto"),
   listarEnderecosCliente: (id: number) => request<ClienteEndereco[]>("GET", `/api/clientes/${id}/enderecos`),
   criarEnderecoCliente: (id: number, data: { tipo: string; cep?: string; logradouro?: string; numero?: string; complemento?: string; bairro?: string; cidade?: string; uf?: string }) =>
     request<{ id: number }>("POST", `/api/clientes/${id}/enderecos`, data),
@@ -1119,6 +1225,12 @@ export const api = {
   getApoioFiscal: (id: number) => request<ClienteApoioFiscal>("GET", `/api/clientes/${id}/apoio-fiscal`),
   upsertApoioFiscal: (id: number, data: Record<string, unknown>) =>
     request<{ ok: boolean }>("PUT", `/api/clientes/${id}/apoio-fiscal`, data),
+  listarInteracoesCliente: (id: number) =>
+    request<ClienteInteracao[]>("GET", `/api/clientes/${id}/interacoes`),
+  criarInteracaoCliente: (
+    id: number,
+    data: { tipo: string; descricao?: string; data_contato: string; data_proximo_contato?: string | null }
+  ) => request<{ id: number }>("POST", `/api/clientes/${id}/interacoes`, data),
   listarVendedores: (somenteAtivos = false) =>
     request<Vendedor[]>("GET", "/api/vendedores" + qs({ somente_ativos: somenteAtivos })),
   detalharVendedor: (id: number) => request<Vendedor>("GET", `/api/vendedores/${id}`),
@@ -1139,6 +1251,24 @@ export const api = {
   login: (login: string, senha: string) =>
     request<UsuarioAtual>("POST", "/api/login", { login, senha }),
   logout: () => request<{ ok: boolean }>("POST", "/api/logout"),
+
+  // controle de acesso por perfil (RBAC)
+  listarPerfis: () => request<PerfilAcesso[]>("GET", "/api/perfis"),
+  criarPerfil: (data: { nome: string; descricao?: string; permissoes?: Record<string, string[]> }) =>
+    request<{ id: number }>("POST", "/api/perfis", data),
+  atualizarPerfil: (perfilId: number, data: { nome: string; descricao?: string }) =>
+    request<{ ok: boolean }>("PUT", `/api/perfis/${perfilId}`, data),
+  alternarAtivoPerfil: (perfilId: number, ativo: boolean) =>
+    request<{ ok: boolean }>("PATCH", `/api/perfis/${perfilId}/ativo` + qs({ ativo })),
+  excluirPerfil: (perfilId: number) =>
+    request<{ ok: boolean }>("DELETE", `/api/perfis/${perfilId}`),
+  gravarPermissoesPerfil: (perfilId: number, permissoes: Record<string, string[]>) =>
+    request<{ ok: boolean }>("PUT", `/api/perfis/${perfilId}/permissoes`, { permissoes }),
+  catalogoPermissoes: () => request<CatalogoPermissoes>("GET", "/api/permissoes/catalogo"),
+  definirPerfisUsuario: (usuarioId: number, perfilIds: number[]) =>
+    request<{ ok: boolean }>("PUT", `/api/usuarios/${usuarioId}/perfis`, { perfil_ids: perfilIds }),
+  definirOverridesUsuario: (usuarioId: number, conceder: Record<string, string[]>, negar: Record<string, string[]>) =>
+    request<{ ok: boolean }>("PUT", `/api/usuarios/${usuarioId}/overrides`, { conceder, negar }),
   listarPlanoContas: (tipo?: string, somenteAtivos = false) =>
     request<ContaPlano[]>("GET", "/api/plano-contas" + qs({ tipo, somente_ativos: somenteAtivos })),
   detalharContaPlano: (id: number) => request<ContaPlano>("GET", `/api/plano-contas/${id}`),
@@ -1178,6 +1308,14 @@ export const api = {
       `/api/orcamentos/${id}/autorizar-desconto`,
       creds
     ),
+  rejeitarDescontoOrcamento: (id: number, motivo: string) =>
+    request<{ ok: boolean }>("POST", `/api/orcamentos/${id}/rejeitar-desconto`, { motivo }),
+  pendentesAprovacao: () =>
+    request<(OrcamentoLista & { desconto_pct?: number; limite_aprovador?: number })[]>(
+      "GET",
+      "/api/orcamentos/pendentes-aprovacao"
+    ),
+  reabrirOrcamento: (id: number) => request<{ ok: boolean }>("POST", `/api/orcamentos/${id}/reabrir`),
   receberOrcamento: (id: number, data: { forma_pagamento?: string; valor_recebido?: number; bandeira?: string; codigo_autorizacao?: string; pagamentos?: { forma_pagamento: string; valor: number; bandeira?: string; codigo_autorizacao?: string }[] }) =>
     request<RecebimentoResultado>("POST", `/api/orcamentos/${id}/receber`, data),
   cancelarOrcamento: (id: number) => request<{ ok: boolean }>("POST", `/api/orcamentos/${id}/cancelar`),
@@ -1262,8 +1400,17 @@ export const api = {
     request<MargemVenda[]>("GET", "/api/relatorios/margem-vendas" + qs(params)),
   requestDashboard: () => request<DashboardData>("GET", "/api/dashboard"),
   // loja (PDV/estoque/compras/pós-venda)
-  lojaConfig: () => request<{ bloquear_venda_sem_estoque: boolean }>("GET", "/api/loja/config"),
-  setLojaConfig: (data: Record<string, unknown>) => request<{ bloquear_venda_sem_estoque: boolean }>("PUT", "/api/loja/config", data),
+  lojaConfig: () =>
+    request<{ bloquear_venda_sem_estoque: boolean; bloquear_venda_sem_credito: boolean; bloquear_venda_com_atraso: boolean }>(
+      "GET",
+      "/api/loja/config"
+    ),
+  setLojaConfig: (data: Record<string, unknown>) =>
+    request<{ bloquear_venda_sem_estoque: boolean; bloquear_venda_sem_credito: boolean; bloquear_venda_com_atraso: boolean }>(
+      "PUT",
+      "/api/loja/config",
+      data
+    ),
   lojaSaldo: (varianteId: number) => request<{ saldos: unknown[]; disponivel: number }>("GET", `/api/loja/saldo/${varianteId}`),
   listarInventarios: () => request<unknown[]>("GET", "/api/loja/inventarios"),
   criarInventario: (data: Record<string, unknown>) => request<{ id: number }>("POST", "/api/loja/inventarios", data),
@@ -1449,6 +1596,8 @@ export const api = {
     request<{ ok: boolean; nome: string; ativo: boolean }>("PUT", `/api/flags/${nome}`, { ativo }),
   perfilFiscalProdutoObter: (produtoId: number) =>
     request<PerfilFiscal>("GET", `/api/fiscal/perfil-produto/${produtoId}`),
+  perfilFiscalEfetivo: (varianteId: number) =>
+    request<PerfilFiscalEfetivo>("GET", `/api/fiscal/perfil-efetivo/${varianteId}`),
   perfilFiscalObter: (varianteId: number) =>
     request<PerfilFiscal>("GET", `/api/fiscal/perfil/${varianteId}`),
   perfilFiscalSalvar: (varianteId: number, dados: Partial<PerfilFiscal>) =>
@@ -1456,6 +1605,14 @@ export const api = {
   buscarNcm: (q: string) => request<{ codigo: string; descricao: string }[]>("GET", "/api/fiscal/ncm" + qs({ q })),
   registrarNcm: (dados: { codigo: string; descricao: string; fonte_url?: string; vigencia_inicio?: string; vigencia_fim?: string }) =>
     request<{ id: number }>("POST", "/api/fiscal/ncm", dados),
+
+  // contábil (gatilhos por evento, v2.15.0)
+  listarGatilhosContabil: () =>
+    request<{ gatilhos: ContabilGatilho[]; eventos: string[] }>("GET", "/api/contabil/gatilhos"),
+  configurarGatilhoContabil: (eventoTipo: string, dados: Partial<ContabilGatilho>) =>
+    request<ContabilGatilho>("PUT", `/api/contabil/gatilhos/${eventoTipo}`, dados),
+  listarLancamentosContabil: (limite = 100) =>
+    request<{ lancamentos: LancamentoContabil[] }>("GET", "/api/contabil/lancamentos" + qs({ limite })),
 };
 
 export type NivelRisco = "critica" | "rotina" | "melhoria" | "todos";
@@ -1535,6 +1692,47 @@ export interface PerfilFiscal {
   atualizado_em?: string;
 }
 
+export interface PerfilFiscalEfetivo {
+  variante_id: number;
+  produto_id: number | null;
+  produto: PerfilFiscal | null;
+  variante: PerfilFiscal | null;
+  efetivo: {
+    ncm: string;
+    cest: string;
+    origem: number;
+    regime_st: string;
+    fonte_url?: string | null;
+  };
+  override_campos: Record<"ncm" | "cest" | "origem" | "regime_st", boolean>;
+}
+
+export interface ContabilGatilho {
+  evento_tipo: string;
+  ativo: boolean | number;
+  debito_conta_id: number | null;
+  credito_conta_id: number | null;
+  descricao: string;
+  debito_codigo?: string;
+  debito_nome?: string;
+  credito_codigo?: string;
+  credito_nome?: string;
+}
+
+export interface LancamentoContabil {
+  id: number;
+  evento_tipo: string;
+  evento_id: number;
+  idempotency_key: string;
+  debito_conta_id: number | null;
+  credito_conta_id: number | null;
+  valor: string;
+  historico: string;
+  periodo_competencia: string;
+  origem_tipo: string;
+  criado_em: string;
+}
+
 export interface CategoriaTree {
   id: number;
   nome: string;
@@ -1553,7 +1751,11 @@ export interface UnidadeCompra {
 // Orçamentos de venda (PDV)
 // ------------------------------------------------------------------
 
-export type OrcamentoStatus = "rascunho" | "ativo" | "em_analise" | "liberado" | "faturado" | "recebido" | "cancelado";
+export type OrcamentoStatus =
+  | "rascunho" | "ativo" | "em_analise" | "liberado"
+  | "finalizado" | "recebido" | "cancelado" | "devolvido";
+
+export type DescontoStatus = "ok" | "pendente" | "aprovado" | "rejeitado";
 
 export interface OrcamentoItemPayload {
   produto_id?: number | null;
@@ -1586,6 +1788,11 @@ export interface OrcamentoLista {
   desconto_autorizado_por?: number | null;
   desconto_autorizado_em?: string | null;
   desconto_autorizado_nome?: string | null;
+  desconto_status?: DescontoStatus;
+  desconto_rejeitado_por?: number | null;
+  desconto_rejeitado_em?: string | null;
+  desconto_rejeitado_motivo?: string | null;
+  virou_pedido?: number | boolean;
   condicao_pagamento_id?: number | null;
   cliente_id?: number | null;
   cliente_doc?: string | null;

@@ -70,9 +70,9 @@ function DataBox({
   valueColor?: string;
 }) {
   return (
-    <div className="flex h-full flex-col justify-between rounded-xl bg-white p-3 shadow-md">
-      <span className="text-sm font-bold text-gray-800">{label}</span>
-      <div className={`mt-2 text-right font-bold ${largeValue ? "text-4xl" : "text-2xl"} ${valueColor}`}>{value ?? ""}</div>
+    <div className="flex h-full min-w-0 flex-col justify-between rounded-xl bg-white p-2 shadow-md sm:p-3">
+      <span className="truncate text-xs font-bold text-gray-800 sm:text-sm">{label}</span>
+      <div className={`mt-1 min-w-0 truncate text-right font-bold ${largeValue ? "text-2xl sm:text-4xl" : "text-lg sm:text-2xl"} ${valueColor}`}>{value ?? ""}</div>
     </div>
   );
 }
@@ -107,6 +107,8 @@ export default function PreVenda() {
   >(null);
   const [modalDadosCliente, setModalDadosCliente] = useState(false);
   const [modalLocalizar, setModalLocalizar] = useState(false);
+  // Aviso de crédito do cliente (trava de crédito da loja).
+  const [avisoCredito, setAvisoCredito] = useState<{ texto: string; severidade: "warn" | "error" } | null>(null);
   // Desconto acima da alçada já autorizado por um gerente (nesta composição).
   // Qualquer alteração de itens/desconto expira essa autorização.
   const [descontoAutorizado, setDescontoAutorizado] = useState(false);
@@ -128,6 +130,13 @@ export default function PreVenda() {
   }, []);
 
   const c = useMemo(() => calculosPdv(linhas, descModo, desconto), [linhas, descModo, desconto]);
+
+  // Reavalia o aviso de crédito quando o total da venda muda.
+  useEffect(() => {
+    if (clienteId == null || clienteId === CLIENTE_PADRAO.id) return;
+    const t = setTimeout(() => void carregarAvisoCredito(clienteId, cliente), 400);
+    return () => clearTimeout(t);
+  }, [c.total]);
 
   // Limite de alçada do vendedor atual (temporariamente se aplica a todos,
   // inclusive admin, até existirem grupos/permissões).
@@ -241,6 +250,32 @@ export default function PreVenda() {
     sessionStorage.setItem("pdv_cliente", cli.nome);
     sessionStorage.setItem("pdv_cliente_id", String(cli.id));
     buscaRef.current?.focus();
+    void carregarAvisoCredito(cli.id, cli.nome);
+  };
+
+  const carregarAvisoCredito = (id: number, nome: string) => {
+    if (id === CLIENTE_PADRAO.id) {
+      setAvisoCredito(null);
+      return;
+    }
+    void api
+      .situacaoCliente(id, c.total)
+      .then((s) => {
+        if (s.excede_limite) {
+          setAvisoCredito({
+            texto: `${nome}: venda de ${fmtMoney(c.total)} supera o limite disponível de ${fmtMoney(s.limite_disponivel)}.`,
+            severidade: "warn",
+          });
+        } else if (s.excede_por_atraso) {
+          setAvisoCredito({
+            texto: `${nome}: cliente possui conta em atraso de ${fmtMoney(s.saldo_em_atraso)}.`,
+            severidade: "error",
+          });
+        } else {
+          setAvisoCredito(null);
+        }
+      })
+      .catch(() => {});
   };
 
   const removerLinha = (i: number) => {
@@ -342,7 +377,7 @@ export default function PreVenda() {
       return false;
     }
     try {
-      await api.atualizarOrcamento(id, { status: "faturado" });
+      await api.atualizarOrcamento(id, { status: "finalizado" });
       return true;
     } catch (e) {
       const err = e as Error & { code?: string; details?: Record<string, unknown> };
@@ -595,37 +630,50 @@ export default function PreVenda() {
   const linhaAtual = linhaAtiva != null ? linhas[linhaAtiva] : undefined;
 
   return (
-    <div className="flex min-h-[560px] flex-col">
+    <div className="flex min-h-[100dvh] flex-col">
       {/* ── Cabeçalho do sistema ─────────────────────────── */}
-      <header className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-gray-300 bg-[#e4e4e4] px-4 py-1.5 text-sm text-gray-800">
+      <header className="flex flex-shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-gray-300 bg-[#e4e4e4] px-2 py-1.5 text-xs text-gray-800 sm:px-4 sm:text-sm">
         <div>
-          <strong>Operador:</strong> {usuarioCorrente()?.nome ?? "—"}
+          <strong>Operador:</strong> <span className="hidden sm:inline">{usuarioCorrente()?.nome ?? "—"}</span>
+          <span className="sm:hidden">{usuarioCorrente()?.nome?.split(" ")[0] ?? "—"}</span>
         </div>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
           <span>Cliente:</span>
           <button
             onClick={() => setModalBuscaCliente(true)}
-            className="max-w-md truncate rounded border border-gray-400 bg-white px-2 py-0.5 text-sm font-medium text-gray-800 hover:bg-gray-100"
+            className="max-w-[40vw] truncate rounded border border-gray-400 bg-white px-2 py-0.5 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:max-w-md"
             title="F6 — selecionar cliente"
           >
             {cliente}
           </button>
-          <span className="text-[10px] text-gray-500">F6</span>
           <button
             onClick={() => setModalDadosCliente(true)}
             disabled={clienteId == null || clienteId === CLIENTE_PADRAO.id}
             className="rounded border border-gray-400 bg-white px-2 py-0.5 text-xs text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
             title="F9 — dados do cliente"
           >
-            Dados do cliente <span className="text-[10px] text-gray-400">F9</span>
+            Dados
           </button>
         </div>
-        <div>Vendedor: {usuarioCorrente()?.nome ?? "—"}</div>
-        <div>Horário: {hora}</div>
+        <div className="hidden md:block">Vendedor: {usuarioCorrente()?.nome ?? "—"}</div>
+        <div className="hidden md:block">Horário: {hora}</div>
       </header>
 
+      {avisoCredito && (
+        <div
+          className={`flex flex-shrink-0 items-center justify-between gap-2 px-3 py-1.5 text-xs font-medium ${
+            avisoCredito.severidade === "error" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"
+          }`}
+        >
+          <span>{avisoCredito.texto}</span>
+          <button onClick={() => setAvisoCredito(null)} className="rounded px-1 hover:bg-black/10" aria-label="Fechar aviso">
+            ×
+          </button>
+        </div>
+      )}
+
       {/* ── Área principal ────────────────────────────────── */}
-      <main className="flex min-h-[480px] flex-1 flex-col gap-3 overflow-hidden bg-[#6a84a6] p-4">
+      <main className="flex min-h-[480px] flex-1 flex-col gap-2 overflow-hidden bg-[#6a84a6] p-2 sm:gap-3 sm:p-4">
         {/* Painel de produto + busca */}
         <div className="relative flex-shrink-0 rounded-xl bg-white p-3 shadow-md">
           <span className="absolute left-4 top-2 text-sm font-bold text-gray-800">Produto</span>
@@ -678,10 +726,10 @@ export default function PreVenda() {
           ) : null}
         </div>
 
-        {/* Três colunas */}
-        <div className="flex min-h-0 flex-1 gap-4">
-          {/* Imagem do produto */}
-          <div className="flex w-3/12 items-center justify-center overflow-hidden rounded-[2rem] bg-white p-4 shadow-md">
+        {/* Grid responsivo: mobile empilha, desktop mantém 3 colunas */}
+        <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 md:grid-cols-12 md:gap-4">
+          {/* Imagem do produto — oculta em telas pequenas */}
+          <div className="hidden items-center justify-center overflow-hidden rounded-[2rem] bg-white p-4 shadow-md md:flex md:col-span-2">
             {linhaAtual?.imagem_url ? (
               <img src={linhaAtual.imagem_url} alt="" className="max-h-full max-w-full object-contain" />
             ) : (
@@ -690,7 +738,7 @@ export default function PreVenda() {
           </div>
 
           {/* Formulário de lançamento */}
-          <div className="flex w-3/12 flex-col gap-3">
+          <div className="flex flex-col gap-2 md:col-span-3 md:gap-3">
             <DataBox label="Código" value={linhaAtual?.sku || "—"} />
             <div className="flex h-full flex-col justify-between rounded-xl bg-white p-3 shadow-md">
               <span className="text-sm font-bold text-gray-800">Quantidade</span>
@@ -717,9 +765,9 @@ export default function PreVenda() {
             <DataBox label="Valor Total" value={fmtMoney(linhaAtual?.subtotal ?? 0)} />
           </div>
 
-          {/* Cupom fiscal (somente leitura) */}
-          <div className="flex w-6/12 min-h-0 flex-col overflow-hidden rounded-[2.5rem] bg-white p-4 font-mono text-sm shadow-md">
-            <div className="grid grid-cols-[80px_1fr_60px_84px_84px_24px] gap-1 text-[11px] uppercase text-gray-500">
+          {/* Cupom fiscal (somente leitura) — ocupa o resto */}
+          <div className="col-span-2 flex min-h-0 flex-col overflow-hidden rounded-[2rem] bg-white p-2 font-mono text-sm shadow-md md:col-span-7 md:p-4">
+            <div className="grid grid-cols-[64px_1fr_52px_72px_76px_20px] gap-1 text-[10px] uppercase text-gray-500 sm:grid-cols-[80px_1fr_60px_84px_84px_24px] sm:text-[11px]">
               <span>Código</span>
               <span>Descrição</span>
               <span className="text-right">Qtde</span>
@@ -736,12 +784,12 @@ export default function PreVenda() {
                   <div
                     key={i}
                     onClick={() => setLinhaAtiva(i)}
-                    className={`grid cursor-pointer grid-cols-[80px_1fr_60px_84px_84px_24px] items-center gap-1 border-b border-gray-100 py-1.5 ${linhaAtiva === i ? "bg-orange-100" : ""}`}
+                    className={`grid cursor-pointer grid-cols-[64px_1fr_52px_72px_76px_20px] items-center gap-1 border-b border-gray-100 py-1.5 sm:grid-cols-[80px_1fr_60px_84px_84px_24px] ${linhaAtiva === i ? "bg-orange-100" : ""}`}
                   >
                     <span className="truncate text-xs">{l.sku || "#" + (i + 1)}</span>
                     <span className="truncate">{[l.nome, l.especificacao].filter(Boolean).join(" · ")}</span>
                     <span className="text-right text-xs">{l.quantidade}</span>
-                    <span className="text-right text-xs">{fmtMoney(l.preco_unitario)}</span>
+                    <span className="hidden text-right text-xs sm:block">{fmtMoney(l.preco_unitario)}</span>
                     <span className="text-right font-semibold">{fmtMoney(l.subtotal)}</span>
                     <button
                       className="text-gray-400 hover:text-red-600"
@@ -781,7 +829,7 @@ export default function PreVenda() {
                 condRef.current?.focus();
               }
             }}
-            className="w-24 rounded border border-gray-300 px-2 py-1 text-sm"
+            className="w-20 rounded border border-gray-300 px-2 py-1 text-sm sm:w-24"
           />
           <span className="font-semibold text-gray-600">Condição</span>
           <select
@@ -794,7 +842,7 @@ export default function PreVenda() {
                 obsRef.current?.focus();
               }
             }}
-            className="w-44 rounded border border-gray-300 px-2 py-1 text-sm"
+            className="w-40 rounded border border-gray-300 px-2 py-1 text-sm sm:w-44"
           >
             <option value="">Selecione</option>
             {condicoes.map((cd) => (
@@ -803,7 +851,7 @@ export default function PreVenda() {
               </option>
             ))}
           </select>
-          <span className="font-semibold text-gray-600">Obs</span>
+          <span className="hidden font-semibold text-gray-600 sm:inline">Obs</span>
           <input
             ref={obsRef}
             value={obs}
@@ -814,47 +862,47 @@ export default function PreVenda() {
                 salvarRef.current?.focus();
               }
             }}
-            className="min-w-40 flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+            className="hidden min-w-40 flex-1 rounded border border-gray-300 px-2 py-1 text-sm sm:block"
           />
         </div>
 
         {/* Totais */}
-        <div className="flex h-24 flex-shrink-0 gap-4">
-          <div className="flex w-4/12 items-center justify-center rounded-xl bg-white shadow-md">
-            <span className="text-5xl font-bold tracking-widest text-black">{editandoId ? "ALTERAÇÃO" : "VENDA"}</span>
+        <div className="grid flex-shrink-0 grid-cols-3 gap-2 sm:h-24 sm:gap-4">
+          <div className="flex items-center justify-center rounded-xl bg-white p-1 shadow-md sm:p-4">
+            <span className="truncate text-lg font-bold tracking-widest text-black sm:text-5xl">{editandoId ? "ALTERAÇÃO" : "VENDA"}</span>
           </div>
-          <div className="w-2/12">
+          <div>
             <DataBox label="Volumes" value={String(linhas.reduce((s, l) => s + l.quantidade, 0))} />
           </div>
-          <div className="w-6/12">
+          <div>
             <DataBox label="Total da Venda" value={fmtMoney(c.total)} largeValue valueColor="text-red-600" />
           </div>
         </div>
       </main>
 
       {/* ── Rodapé: atalhos + ações ───────────────────────── */}
-      <footer className="flex flex-shrink-0 flex-wrap items-center gap-2 border-t border-gray-400 bg-[#f0f0f0] px-4 py-2">
+      <footer className="safe-bottom flex flex-shrink-0 flex-wrap items-center gap-1.5 border-t border-gray-400 bg-[#f0f0f0] px-2 py-2 sm:gap-2 sm:px-4">
         <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(5)}>
-          Limpar (F5)
+          Limpar
         </Button>
         <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(6)}>
-          Cliente (F6)
+          Cliente
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(7)} disabled={!linhas.length}>
-          Enviar p/ Impressora Térmica (F7)
+        <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(7)} disabled={!linhas.length} className="hidden sm:inline-flex">
+          Impressora
         </Button>
         <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(8)}>
-          Localizar orçamento (F8)
+          Localizar
         </Button>
-        <div className="ml-auto flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(2)} disabled={!linhas.length}>
-            Visualizar (F2)
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(2)} disabled={!linhas.length} className="hidden sm:inline-flex">
+            Visualizar
           </Button>
           <Button size="sm" variant="outline" onClick={() => void acaoAtalho(3)} disabled={!linhas.length || salvando}>
-            Salvar (F3)
+            Salvar
           </Button>
           <Button ref={salvarRef} variant="primary" onClick={() => void acaoAtalho(1)} disabled={!linhas.length || salvando}>
-            Finalizar (F1)
+            Finalizar
           </Button>
         </div>
       </footer>
@@ -1138,7 +1186,7 @@ function ModalAutorizar({
       if (alvoId != null) {
         await api.autorizarDescontoOrcamento(alvoId, { login: login.trim(), senha });
         if (finalizar) {
-          await api.atualizarOrcamento(alvoId, { status: "faturado" });
+          await api.atualizarOrcamento(alvoId, { status: "finalizado" });
         }
       }
       toast(finalizar ? "Desconto autorizado e venda finalizada" : "Desconto autorizado", "success");

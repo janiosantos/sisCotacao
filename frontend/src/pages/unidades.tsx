@@ -1,4 +1,4 @@
-// pages/unidades.tsx — unidades de compra (React + Tailwind).
+﻿// pages/unidades.tsx — unidades de compra (React + Tailwind).
 
 import { useEffect, useState } from "react";
 import { api, type UnidadeCompra } from "../api/client";
