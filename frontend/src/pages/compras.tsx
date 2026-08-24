@@ -5,15 +5,16 @@ import {
   api,
   type CotacaoComprasPayload,
   type CotacaoFornecedor,
+  type CotacaoLista,
   type Fornecedor,
   type Invite,
   type MatrizComparacao,
   type MatrizItem,
   type Pedido,
 } from "../api/client";
-import { fmtMoney } from "../ui/format";
+import { fmtDate, fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
-import { Badge, Button, Input, Loading, Select } from "../ui/ui";
+import { Badge, Button, Cell, Input, Loading, Select, Table, TBody, THead } from "../ui/ui";
 
 const KEY_DRAFT = "compras_draft";
 const KEY_COT = "compras_cotacao";
@@ -140,6 +141,7 @@ const ETAPAS = [
 ];
 
 export default function Compras() {
+  const [aba, setAba] = useState<"nova" | "cotacoes" | "pedidos">("nova");
   const [etapa, setEtapa] = useState(1);
   const [cotacaoId, setCotacaoId] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft>(novoDraft);
@@ -195,71 +197,109 @@ export default function Compras() {
 
   if (!iniciado) return <Loading />;
 
+  const ABAS: { key: typeof aba; label: string }[] = [
+    { key: "nova", label: "Nova cotação" },
+    { key: "cotacoes", label: "Cotações" },
+    { key: "pedidos", label: "Pedidos de compra" },
+  ];
+
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Comprar</h1>
-          <p className="mt-1 text-sm text-gray-500">Monte a lista, cote com os fornecedores e gere o pedido em uma tela só.</p>
+          <h1 className="text-2xl font-semibold text-gray-900">Compras</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Solicite, cote com fornecedores e acompanhe os pedidos — o processo de compra em um só lugar.
+          </p>
         </div>
         <Button variant="ghost" onClick={novaCompra}>
           ＋ Nova compra
         </Button>
       </div>
 
-      <div className="mb-6 flex items-center">
-        {ETAPAS.map((e, i) => (
-          <div key={e.n} className="flex items-center">
-            {i > 0 && <div className={`h-0.5 w-10 ${e.n <= etapa ? "bg-brand-600" : "bg-gray-200"}`} />}
-            <div className="flex items-center gap-2">
-              <span
-                className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium ${
-                  e.n === etapa ? "bg-brand-600 text-white" : e.n < etapa ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-400"
-                }`}
-              >
-                {e.n}
-              </span>
-              <span className={`text-sm ${e.n === etapa ? "font-medium text-gray-900" : "text-gray-400"}`}>{e.nome}</span>
-            </div>
-          </div>
+      <div className="mb-4 flex gap-2 overflow-x-auto border-b border-gray-200 pb-2">
+        {ABAS.map((a) => (
+          <button
+            key={a.key}
+            onClick={() => setAba(a.key)}
+            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ${
+              aba === a.key ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            {a.label}
+          </button>
         ))}
       </div>
 
-      {invites !== null ? (
-        <LinksPanel
-          cotacaoId={cotacaoId}
-          invites={invites}
-          onVoltar={() => {
-            setInvites(null);
-            setEtapa(2);
-          }}
-          onComparar={() => {
-            setInvites(null);
+      {aba === "cotacoes" ? (
+        <ListaCotacoes
+          onNova={() => setAba("nova")}
+          onAbrirCompra={(id) => {
+            sessionStorage.setItem(KEY_COT, String(id));
+            setAba("nova");
+            setCotacaoId(id);
             setEtapa(3);
           }}
         />
-      ) : etapa === 1 ? (
-        <EtapaLista draft={draft} setDraft={setDraft} salvar={salvar} cotacaoId={cotacaoId} onProximo={() => setEtapa(2)} />
-      ) : etapa === 2 ? (
-        <EtapaCotando
-          draft={draft}
-          setDraft={setDraft}
-          salvar={salvar}
-          cotacaoId={cotacaoId}
-          onDisparado={(id, inv) => {
-            setCotacaoId(id);
-            setInvites(inv);
-          }}
-        />
-      ) : etapa === 3 ? (
-        <EtapaComparando
-          cotacaoId={cotacaoId}
-          logica={logica}
-          setLogica={setLogica}
-          onGerado={() => setEtapa(4)}
-        />
+      ) : aba === "pedidos" ? (
+        <ListaPedidosCompra />
       ) : (
-        <EtapaPedidos cotacaoId={cotacaoId} />
+        <>
+          <div className="mb-6 flex items-center">
+            {ETAPAS.map((e, i) => (
+              <div key={e.n} className="flex items-center">
+                {i > 0 && <div className={`h-0.5 w-10 ${e.n <= etapa ? "bg-brand-600" : "bg-gray-200"}`} />}
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium ${
+                      e.n === etapa ? "bg-brand-600 text-white" : e.n < etapa ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-400"
+                    }`}
+                  >
+                    {e.n}
+                  </span>
+                  <span className={`text-sm ${e.n === etapa ? "font-medium text-gray-900" : "text-gray-400"}`}>{e.nome}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {invites !== null ? (
+            <LinksPanel
+              cotacaoId={cotacaoId}
+              invites={invites}
+              onVoltar={() => {
+                setInvites(null);
+                setEtapa(2);
+              }}
+              onComparar={() => {
+                setInvites(null);
+                setEtapa(3);
+              }}
+            />
+          ) : etapa === 1 ? (
+            <EtapaLista draft={draft} setDraft={setDraft} salvar={salvar} cotacaoId={cotacaoId} onProximo={() => setEtapa(2)} />
+          ) : etapa === 2 ? (
+            <EtapaCotando
+              draft={draft}
+              setDraft={setDraft}
+              salvar={salvar}
+              cotacaoId={cotacaoId}
+              onDisparado={(id, inv) => {
+                setCotacaoId(id);
+                setInvites(inv);
+              }}
+            />
+          ) : etapa === 3 ? (
+            <EtapaComparando
+              cotacaoId={cotacaoId}
+              logica={logica}
+              setLogica={setLogica}
+              onGerado={() => setEtapa(4)}
+            />
+          ) : (
+            <EtapaPedidos cotacaoId={cotacaoId} />
+          )}
+        </>
       )}
     </div>
   );
@@ -954,6 +994,159 @@ function EtapaPedidos({ cotacaoId }: { cotacaoId: number | null }) {
                   >
                     WhatsApp
                   </a>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================ ABA COTAÇÕES
+
+const STATUS_COT_LABEL: Record<string, string> = {
+  aberta: "Pendente",
+  pendente: "Pendente",
+  analise: "Em análise",
+  fechada: "Finalizada",
+  finalizada: "Finalizada",
+  cancelada: "Cancelada",
+};
+
+function statusCotTone(s: string): "green" | "red" | "amber" | "gray" {
+  if (s === "finalizada" || s === "fechada") return "green";
+  if (s === "cancelada") return "red";
+  if (s === "analise") return "amber";
+  return "gray";
+}
+
+function ListaCotacoes({ onNova, onAbrirCompra }: { onNova: () => void; onAbrirCompra: (id: number) => void }) {
+  const [cotacoes, setCotacoes] = useState<CotacaoLista[]>([]);
+  const [carregando, setCarregando] = useState(true);
+
+  useEffect(() => {
+    void api
+      .listarCotacoes("")
+      .then(setCotacoes)
+      .catch(() => setCotacoes([]))
+      .finally(() => setCarregando(false));
+  }, []);
+
+  if (carregando) return <Loading />;
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-900">Cotações</h3>
+        <Button size="sm" variant="primary" onClick={onNova}>
+          + Nova cotação
+        </Button>
+      </div>
+      {cotacoes.length === 0 ? (
+        <p className="py-8 text-center text-sm text-gray-400">Nenhuma cotação ainda.</p>
+      ) : (
+        <Table>
+          <THead cols={["Nº", "Título", "Status", "Respostas", "Criada em", ""]} />
+          <TBody>
+            {cotacoes.map((c) => (
+              <tr key={c.id} className="hover:bg-gray-50">
+                <Cell className="font-mono">{c.numero}</Cell>
+                <Cell>{c.titulo || "—"}</Cell>
+                <Cell>
+                  <Badge tone={statusCotTone(c.status)}>{STATUS_COT_LABEL[c.status] || c.status}</Badge>
+                </Cell>
+                <Cell className="text-xs">
+                  {c.n_respostas} / {c.n_fornecedores}
+                </Cell>
+                <Cell className="text-xs text-gray-500">{fmtDate(c.criado_em)}</Cell>
+                <Cell>
+                  <div className="flex justify-end">
+                    <Button size="sm" onClick={() => onAbrirCompra(c.id)}>
+                      Abrir
+                    </Button>
+                  </div>
+                </Cell>
+              </tr>
+            ))}
+          </TBody>
+        </Table>
+      )}
+    </div>
+  );
+}
+
+// ============================================================ ABA PEDIDOS
+
+function ListaPedidosCompra() {
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [recebendo, setRecebendo] = useState<number | null>(null);
+
+  const carregar = async () => {
+    setCarregando(true);
+    try {
+      setPedidos(await api.listarPedidos());
+    } catch {
+      setPedidos([]);
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  useEffect(() => {
+    void carregar();
+  }, []);
+
+  const receber = async (p: Pedido) => {
+    if (!window.confirm(`Confirmar recebimento do pedido ${p.numero} (${p.fornecedor})?`)) return;
+    setRecebendo(p.id);
+    try {
+      await api.receberPedido(p.id, {});
+      toast("Pedido recebido — estoque e financeiro atualizados", "success");
+      await carregar();
+    } catch (e) {
+      toast("Erro: " + (e as Error).message, "error");
+    } finally {
+      setRecebendo(null);
+    }
+  };
+
+  if (carregando) return <Loading />;
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <h3 className="mb-3 text-sm font-semibold text-gray-900">Pedidos de compra</h3>
+      {pedidos.length === 0 ? (
+        <p className="py-8 text-center text-sm text-gray-400">Nenhum pedido de compra ainda.</p>
+      ) : (
+        <div className="space-y-2">
+          {pedidos.map((p) => (
+            <div key={p.id} className="rounded-md border border-gray-100 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <b className="text-sm">Pedido {p.numero}</b>
+                  <span className="ml-2 text-xs text-gray-400">{p.fornecedor}</span>
+                  <Badge tone={p.status === "recebido" ? "green" : "amber"}>
+                    {p.status === "recebido" ? "Recebido" : "Enviado"}
+                  </Badge>
+                </div>
+                <div className="text-sm font-semibold">{fmtMoney(p.total ?? 0)}</div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <a
+                  className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  target="_blank"
+                  rel="noreferrer"
+                  href={`/compras/pedidos/${p.id}/imprimir`}
+                >
+                  PDF
+                </a>
+                {p.status !== "recebido" ? (
+                  <Button size="sm" variant="primary" onClick={() => void receber(p)} disabled={recebendo === p.id}>
+                    {recebendo === p.id ? "Recebendo…" : "Receber"}
+                  </Button>
                 ) : null}
               </div>
             </div>

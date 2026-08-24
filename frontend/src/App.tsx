@@ -6,7 +6,6 @@ import {
   Package,
   ShoppingCart,
   FileText,
-  Gavel,
   ShoppingBag,
   Users,
   Truck,
@@ -24,7 +23,6 @@ import {
   Receipt,
   RotateCcw,
   RefreshCw,
-  ClipboardList,
   History,
   ShieldCheck,
   Settings,
@@ -60,7 +58,11 @@ const NAV: NavGroup[] = [
       { href: "#/catalogo", label: "Catálogo", icon: Package, recurso: "catalogo" },
       { href: "#/pre-venda", label: "Pré-venda", icon: ShoppingCart, recurso: "pre-venda" },
       { href: "#/orcamentos", label: "Orçamentos", icon: FileText, recurso: "orcamentos" },
-      { href: "#/cotacoes", label: "Cotações", icon: Gavel, recurso: "cotacoes" },
+    ],
+  },
+  {
+    label: "Compras",
+    items: [
       { href: "#/compras", label: "Compras", icon: ShoppingBag, recurso: "compras" },
     ],
   },
@@ -97,7 +99,6 @@ const NAV: NavGroup[] = [
     label: "Admin",
     items: [
       { href: "#/posvenda", label: "Pós-venda", icon: RotateCcw, recurso: "posvenda" },
-      { href: "#/solicitacoes", label: "Solic. Compra", icon: ClipboardList, recurso: "solicitacoes" },
       { href: "#/historico", label: "Hist. preços", icon: History, recurso: "historico" },
       { href: "#/usuarios", label: "Usuários", icon: ShieldCheck, recurso: "usuarios" },
       { href: "#/perfis", label: "Perfis e permissões", icon: ShieldCheck, recurso: "perfis" },

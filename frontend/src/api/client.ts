@@ -1536,6 +1536,8 @@ export const api = {
     request<{ id: number }>("POST", "/api/fornecedor-preco", data),
   listarSolicitacoesCompra: (status?: string) =>
     request<SolicitacaoCompra[]>("GET", "/api/solicitacoes-compra" + qs({ status: status || "" })),
+  detalharSolicitacaoCompra: (id: number) =>
+    request<SolicitacaoCompraDetalhe>("GET", `/api/solicitacoes-compra/${id}`),
   criarSolicitacaoCompra: (data: { codigo: string; descricao?: string; observacao?: string }) =>
     request<{ id: number }>("POST", "/api/solicitacoes-compra", data),
   addItemSolicitacao: (id: number, data: { variante_id: number; quantidade: number; justificativa?: string }) =>
@@ -2791,6 +2793,21 @@ export interface SolicitacaoCompra {
   usuario_nome: string | null;
   observacao: string;
   criado_em: string;
+}
+
+export interface SolicitacaoItem {
+  id: number;
+  solicitacao_id: number;
+  variante_id: number;
+  quantidade: number;
+  justificativa: string;
+  sku?: string;
+  unidade_venda?: string;
+  produto_nome?: string;
+}
+
+export interface SolicitacaoCompraDetalhe extends SolicitacaoCompra {
+  itens: SolicitacaoItem[];
 }
 
 export interface DescontoRegra {
