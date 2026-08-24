@@ -3,6 +3,7 @@ de WhatsApp/e-mail para o fornecedor convidado.
 """
 from __future__ import annotations
 
+import math
 import re
 from urllib.parse import quote
 
@@ -31,12 +32,23 @@ def montar_matriz(cotacao_id: int) -> dict | None:
             preco_liquido = float(pr["preco_unitario"]) * (1 - desc / 100.0)
             disponivel = bool(pr["disponibilidade_estoque"])
             prazo = pr["prazo_entrega_dias"]
+            fator = float(pr.get("fator_conversao") or 1)
+            fator = fator if fator and fator > 0 else 1
+            unidade = (pr.get("unidade_compra") or "").strip() or "UN"
+            motivo = (pr.get("motivo_indisponibilidade") or "").strip()
+            qtd = float(it["quantidade"] or 0)
             precos[str(pr["fornecedor_id"])] = {
                 "preco": float(pr["preco_unitario"]),
                 "desconto": desc,
                 "preco_liquido": preco_liquido,
                 "prazo": prazo,
                 "disponivel": disponivel,
+                "unidade_compra": unidade,
+                "fator_conversao": fator,
+                "marca_ofertada": (pr.get("marca_ofertada") or "").strip(),
+                "motivo_indisponibilidade": motivo,
+                "preco_embalagem": round(preco_liquido * fator, 4),
+                "qtd_embalagens": math.ceil(qtd / fator) if qtd > 0 else 0,
             }
             if disponivel and preco_liquido > 0 and (melhor_preco is None or preco_liquido < melhor_preco):
                 melhor_preco = preco_liquido

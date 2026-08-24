@@ -1,4 +1,4 @@
-"""FASE 10 — Suíte de regressão fiscal (FASE 3..9).
+﻿"""FASE 10 — Suíte de regressão fiscal (FASE 3..9).
 
 Roda todos os cenários-chave do motor fiscal e emite PASS/FAIL. Uso:
     python -m catalog_server.testar_fiscal  (na raiz do projeto)
@@ -87,11 +87,11 @@ def main() -> int:
     r = client.post("/api/orcamentos", json={"cliente": "Cli", "itens": [
         {"nome": "Ok", "produto_id": vid_st, "quantidade": 1, "preco_unitario": 100.0}]})
     oid_ok = r.get_json()["id"]
-    ok("finaliza com NCM", client.patch(f"/api/orcamentos/{oid_ok}", json={"status": "faturado"}).status_code == 200)
+    ok("finaliza com NCM", client.patch(f"/api/orcamentos/{oid_ok}", json={"status": "finalizado"}).status_code == 200)
     r = client.post("/api/orcamentos", json={"cliente": "Cli2", "itens": [
         {"nome": "Sem NCM", "produto_id": vid_sem, "quantidade": 1, "preco_unitario": 50.0}]})
     oid_sem = r.get_json()["id"]
-    r = client.patch(f"/api/orcamentos/{oid_sem}", json={"status": "faturado"})
+    r = client.patch(f"/api/orcamentos/{oid_sem}", json={"status": "finalizado"})
     ok("bloqueio sem NCM", r.status_code == 403 and r.get_json().get("code") == "fiscal_error")
 
     print("== FASE 9 — emissão NF-e ==")

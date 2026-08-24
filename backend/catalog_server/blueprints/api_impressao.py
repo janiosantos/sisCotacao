@@ -12,6 +12,7 @@ from flask import Blueprint, jsonify, request
 
 from catalog_server.repositories.orcamentos import orcamento_repo
 from catalog_server.services.impressao import impressao_service
+from catalog_server import permissao
 
 api_impressao_bp = Blueprint("api_impressao", __name__)
 
@@ -22,6 +23,7 @@ def get_config():
 
 
 @api_impressao_bp.put("/api/impressao/config")
+@permissao.exige_permissao("impressao", "configurar")
 def put_config():
     data = request.get_json(silent=True) or {}
     impressao_service.salvar_config(data)
@@ -29,6 +31,7 @@ def put_config():
 
 
 @api_impressao_bp.post("/api/impressao/orcamentos/<int:orcamento_id>")
+@permissao.exige_permissao("impressao", "imprimir")
 def imprimir_orcamento(orcamento_id: int):
     orc = orcamento_repo.buscar(orcamento_id)
     if orc is None:
@@ -38,6 +41,7 @@ def imprimir_orcamento(orcamento_id: int):
 
 
 @api_impressao_bp.post("/api/impressao/teste")
+@permissao.exige_permissao("impressao", "imprimir")
 def imprimir_teste():
     orc = {
         "numero": "TESTE",

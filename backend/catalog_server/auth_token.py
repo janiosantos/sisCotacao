@@ -1,8 +1,8 @@
 """Emissão e validação de token de API (HMAC, stateless, sem dependências).
 
 O token é `base64url(payload).hmac(secret)`. O `payload` traz `sub` (id do
-usuário), `login`, `perfil` e `exp` (expiração). A validação confere a
-assinatura e a expiração; falhas retornam `None`.
+usuário), `login` e `exp` (expiração). A validação confere a assinatura e a
+expiração; falhas retornam `None`.
 
 A chave é `config.SECRET_KEY` (env `CATALOG_SECRET`).
 """
@@ -29,7 +29,6 @@ def criar_token(usuario: dict, ttl: int = TTL_SECONDS) -> str:
     payload = {
         "sub": usuario.get("id"),
         "login": usuario.get("login"),
-        "perfil": usuario.get("perfil"),
         "exp": int(time.time()) + ttl,
     }
     data = (

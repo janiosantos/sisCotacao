@@ -1,4 +1,4 @@
-"""Operações da loja de material (balcão + depósito).
+﻿"""Operações da loja de material (balcão + depósito).
 
 Agrupa: config da loja, saldo/endereçamento, inventário, devolução/troca,
 reposição sugerida, comissão de vendedores e dados de etiqueta — evoluindo as
@@ -18,6 +18,8 @@ def get_config() -> dict:
         rows = dict(conn.execute("SELECT chave, valor FROM config_loja").fetchall())
     return {
         "bloquear_venda_sem_estoque": rows.get("bloquear_venda_sem_estoque") == "1",
+        "bloquear_venda_sem_credito": rows.get("bloquear_venda_sem_credito") == "1",
+        "bloquear_venda_com_atraso": rows.get("bloquear_venda_com_atraso") == "1",
     }
 
 
@@ -49,6 +51,26 @@ def bloquear_sem_fiscal() -> bool:
     with system_conn() as conn:
         row = conn.execute(
             "SELECT valor FROM config_loja WHERE chave='bloquear_venda_sem_fiscal'"
+        ).fetchone()
+    return row is not None and row["valor"] == "1"
+
+
+def bloquear_sem_credito() -> bool:
+    """Bloqueia a finalização quando o total da venda excede o limite de
+    crédito disponível do cliente (config `bloquear_venda_sem_credito=1`)."""
+    with system_conn() as conn:
+        row = conn.execute(
+            "SELECT valor FROM config_loja WHERE chave='bloquear_venda_sem_credito'"
+        ).fetchone()
+    return row is not None and row["valor"] == "1"
+
+
+def bloquear_com_atraso() -> bool:
+    """Bloqueia a finalização quando o cliente tem conta em atraso
+    (config `bloquear_venda_com_atraso=1`)."""
+    with system_conn() as conn:
+        row = conn.execute(
+            "SELECT valor FROM config_loja WHERE chave='bloquear_venda_com_atraso'"
         ).fetchone()
     return row is not None and row["valor"] == "1"
 
@@ -292,7 +314,7 @@ def comissoes(inicio: str | None = None, fim: str | None = None) -> list[dict]:
             " FROM orcamentos o"
             " JOIN clientes c ON c.id=o.cliente_id"
             " JOIN vendedores v ON v.id=c.vendedor_id"
-            " WHERE o.status IN ('faturado','recebido') AND date(o.criado_em) BETWEEN ? AND ?"
+            " WHERE o.status IN ('finalizado','recebido') AND date(o.criado_em) BETWEEN ? AND ?"
             " GROUP BY v.id ORDER BY comissao DESC",
             (inicio, fim),
         ).fetchall()]

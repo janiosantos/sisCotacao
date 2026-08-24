@@ -26,6 +26,11 @@ REGISTRADAS: dict[str, str] = {
         "Usa o motor fiscal versionado v2 (regras PUBLISHED por vigência) "
         "para resolver CFOP/CST quando houver regra aplicável"
     ),
+    "CONTROLE_ACESSO": (
+        "Aplica o controle de acesso por perfil (RBAC): gate central nas "
+        "rotas + permissões por recurso/ação. Desligar restaura o "
+        "comportamento anterior (tudo liberado para autenticados)"
+    ),
 }
 
 _TTL = 30.0  # segundos

@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request
 
 from catalog_server.repositories import compras_repo, quote_repo
 from catalog_server.services import compras as compras_service
+from catalog_server import contabil_gatilhos
 
 api_compras_bp = Blueprint("api_compras", __name__)
 
@@ -78,6 +79,43 @@ def convites(cotacao_id: int):
                                       cot.get("data_limite_retorno") or ""))
 
 
+@api_compras_bp.get("/api/compras/cotacoes/<int:cotacao_id>/lembrar/<int:fornecedor_id>")
+def lembrar(cotacao_id: int, fornecedor_id: int):
+    """Regenera o link/whatsapp/e-mail de um convite para reenviar.
+
+    Não envia nada automaticamente — devolve a URL pronta para o comprador
+    disparar o lembrete ao representante pendente.
+    """
+    inv = compras_repo.lembrar_invite(cotacao_id, fornecedor_id)
+    if inv is None:
+        return jsonify({"error": "Convite não encontrado"}), 404
+    dados = quote_repo.get(cotacao_id)
+    cot = dados["cotacao"] if dados else {}
+    comprador = cot.get("cliente") or ""
+    apelido = cot.get("titulo") or inv.get("apelido") or ""
+    data_limite = cot.get("data_limite_retorno") or inv.get("data_limite_retorno") or ""
+    link = compras_service.fornecedor_link(inv["token"])
+    out = {
+        "fornecedor_id": inv["fornecedor_id"],
+        "nome": inv["nome"],
+        "representante": inv["representante"],
+        "link": link,
+        "whatsapp_url": "",
+        "mailto_url": "",
+    }
+    if inv["whatsapp"]:
+        msg = compras_service.mensagem_whatsapp(
+            comprador, inv["representante"] or inv["nome"], link,
+            apelido, data_limite,
+        )
+        out["whatsapp_url"] = compras_service.whatsapp_url(inv["whatsapp"], msg)
+    if inv["email"]:
+        out["mailto_url"] = compras_service.mailto_url(
+            inv["email"], compras_service.email_assunto(apelido, None), link,
+        )
+    return jsonify(out)
+
+
 @api_compras_bp.get("/api/compras/cotacoes/<int:cotacao_id>/comparar")
 def comparar(cotacao_id: int):
     matriz = compras_service.montar_matriz(cotacao_id)
@@ -91,6 +129,24 @@ def gerar_pedidos(cotacao_id: int):
     data = request.get_json(silent=True) or {}
     logica = data.get("logica", "fracionado")
     pedidos = compras_repo.gerar_pedidos(cotacao_id, logica)
+    # Gatilho contábil (v2.15.0): compra → lançamento por pedido quando
+    # configurado (default inativo — não altera o comportamento atual).
+    try:
+        from datetime import datetime as _dt
+
+        for ped in pedidos or []:
+            total = float(ped.get("total") or 0)
+            if total > 0:
+                contabil_gatilhos.disparar(
+                    "compra",
+                    evento_id=int(ped["id"]),
+                    valor=total,
+                    historico=f"Pedido de compra {ped.get('numero', '')}",
+                    periodo_competencia=_dt.now().strftime("%Y-%m"),
+                    origem_tipo="compra",
+                )
+    except Exception:
+        pass
     return jsonify({"pedidos": pedidos})
 
 

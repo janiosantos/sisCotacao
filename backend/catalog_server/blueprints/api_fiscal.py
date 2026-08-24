@@ -14,6 +14,7 @@ from catalog_server.repositories import (
 from catalog_server.repositories import fiscal_perfil
 from catalog_server.services.fiscal_engine import calculate as fiscal_calcular
 from catalog_server.services import fiscal_motor
+from catalog_server import permissao
 
 api_fiscal_bp = Blueprint("api_fiscal", __name__)
 
@@ -72,6 +73,7 @@ def get_config(variante_id: int):
 
 
 @api_fiscal_bp.put("/api/fiscal/config/<int:variante_id>")
+@permissao.exige_permissao("fiscal", "configurar")
 def upsert_config(variante_id: int):
     data = request.get_json(silent=True) or {}
     num = lambda k: float(data[k]) if k in data and data[k] is not None else None
@@ -105,6 +107,7 @@ def upsert_config(variante_id: int):
 
 
 @api_fiscal_bp.post("/api/fiscal/config/gerar")
+@permissao.exige_permissao("fiscal", "configurar")
 def gerar_config():
     data = request.get_json(silent=True) or {}
     cfop = data.get("cfop", "5.102")
@@ -154,6 +157,12 @@ def simular_operacao():
 def obter_perfil_fiscal(variante_id: int):
     perfil = fiscal_perfil.obter(variante_id)
     return jsonify(perfil or {"variante_id": variante_id, "ncm": "", "cest": "", "origem": 0, "regime_st": "", "fonte_url": None})
+
+
+@api_fiscal_bp.get("/api/fiscal/perfil-efetivo/<int:variante_id>")
+def obter_perfil_fiscal_efetivo(variante_id: int):
+    """Perfil fiscal efetivo (hierarquia Produto→Variação) com marcação de override."""
+    return jsonify(fiscal_perfil.obter_efetivo(variante_id))
 
 
 @api_fiscal_bp.put("/api/fiscal/perfil/<int:variante_id>")

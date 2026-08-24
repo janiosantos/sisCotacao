@@ -14,6 +14,7 @@ class EstoqueRepository:
         variante_id: int | None = None,
         termo: str | None = None,
         familia_id: int | None = None,
+        produto_id: int | None = None,
     ) -> list[dict]:
         sql = (
             "SELECT s.id, s.deposito_id, s.variante_id, s.quantidade, s.reserva,"
@@ -43,6 +44,9 @@ class EstoqueRepository:
         if familia_id is not None:
             where.append("p.familia_id = ?")
             args.append(familia_id)
+        if produto_id is not None:
+            where.append("p.id = ?")
+            args.append(produto_id)
         if termo:
             where.append("(p.nome LIKE ? OR v.sku LIKE ? OR p.marca LIKE ?)")
             like = f"%{termo}%"

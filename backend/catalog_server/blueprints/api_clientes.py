@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from catalog_server.repositories import cliente_repo, vendedor_repo
+from catalog_server.repositories import (
+    cest_repo,
+    cfop_repo,
+    cliente_repo,
+    condicao_repo,
+    csosn_repo,
+    cst_repo,
+    interacao_repo,
+    tabela_preco_repo,
+    vendedor_repo,
+)
 
 api_clientes_bp = Blueprint("api_clientes", __name__)
 
@@ -32,7 +42,8 @@ def detalhar(cliente_id: int):
 
 @api_clientes_bp.get("/api/clientes/<int:cliente_id>/situacao")
 def situacao(cliente_id: int):
-    s = cliente_repo.situacao_credito(cliente_id)
+    total = request.args.get("total", type=float)
+    s = cliente_repo.situacao_credito(cliente_id, total=total)
     if s is None:
         return jsonify({"error": "Cliente não encontrado"}), 404
     return jsonify(s)
@@ -70,8 +81,41 @@ def alternar_ativo(cliente_id: int):
 
 @api_clientes_bp.get("/api/clientes/contexto")
 def contexto():
-    """Dados auxiliares para o formulário de cliente (ex.: lista de vendedores)."""
-    return jsonify({"vendedores": vendedor_repo.list(somente_ativos=True)})
+    """Dados auxiliares para o formulário de cliente.
+
+    Reúne vendedores, condições de pagamento, tabelas de preço, tabelas
+    fiscais (CFOP/CST/CSOSN/CEST) e listas de segmento/categoria para os
+    combos do cadastro — uma única chamada evita N requests no frontend.
+    """
+    return jsonify({
+        "vendedores": vendedor_repo.list(somente_ativos=True),
+        "condicoes_pagamento": condicao_repo.list(),
+        "tabelas_preco": tabela_preco_repo.list(somente_ativos=True),
+        "cfop": cfop_repo.list(),
+        "cst_icms": cst_repo.list("cst_icms"),
+        "cst_pis": cst_repo.list("cst_pis"),
+        "cst_cofins": cst_repo.list("cst_cofins"),
+        "csosn": csosn_repo.list(),
+        "cest": cest_repo.list(),
+        "segmentos": [
+            {"valor": "consumidor_final", "label": "Consumidor final"},
+            {"valor": "profissional", "label": "Profissional"},
+            {"valor": "construtora", "label": "Construtora / incorporadora"},
+            {"valor": "revenda", "label": "Revenda / lojista"},
+            {"valor": "varejo", "label": "Varejo"},
+        ],
+        "categorias": [
+            {"valor": "pedreiro", "label": "Pedreiro / mestre de obras"},
+            {"valor": "eletricista", "label": "Eletricista"},
+            {"valor": "encanador", "label": "Encanador / hidráulica"},
+            {"valor": "pintor", "label": "Pintor"},
+            {"valor": "marceneiro", "label": "Marceneiro"},
+            {"valor": "construtora", "label": "Construtora"},
+            {"valor": "lojista", "label": "Lojista / revenda"},
+            {"valor": "governo", "label": "Órgão público"},
+            {"valor": "outro", "label": "Outro"},
+        ],
+    })
 
 
 # ── Endereços ──────────────────────────────────────────────
@@ -148,3 +192,37 @@ def upsert_apoio_fiscal(cliente_id: int):
     data = request.get_json(silent=True) or {}
     cliente_repo.upsert_apoio_fiscal(cliente_id, data)
     return jsonify({"ok": True})
+
+
+# ── Interações ──────────────────────────────────────────────
+
+@api_clientes_bp.get("/api/clientes/<int:cliente_id>/interacoes")
+def listar_interacoes_cliente(cliente_id: int):
+    """Histórico de interações do cliente (ligação/visita/email/whatsapp/follow_up)."""
+    return jsonify(interacao_repo.list(cliente_id=cliente_id))
+
+
+@api_clientes_bp.post("/api/clientes/<int:cliente_id>/interacoes")
+def criar_interacao_cliente(cliente_id: int):
+    data = request.get_json(silent=True) or {}
+    cliente = cliente_repo.get(cliente_id)
+    if cliente is None:
+        return jsonify({"error": "Cliente não encontrado"}), 404
+    tipo = (data.get("tipo") or "").strip()
+    descricao = (data.get("descricao") or "").strip()
+    data_contato = data.get("data_contato")
+    if not tipo or not data_contato:
+        return jsonify({"error": "tipo e data_contato obrigatórios"}), 400
+    if tipo not in ("ligacao", "visita", "email", "whatsapp", "follow_up", "outro"):
+        return jsonify({"error": "tipo inválido"}), 400
+    interacao_id = interacao_repo.create(
+        cliente_id=cliente_id,
+        cliente_nome=cliente["nome"],
+        tipo=tipo,
+        descricao=descricao,
+        data_contato=data_contato,
+        data_proximo_contato=data.get("data_proximo_contato"),
+        orcamento_id=data.get("orcamento_id"),
+        usuario_id=data.get("usuario_id"),
+    )
+    return jsonify({"id": interacao_id}), 201

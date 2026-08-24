@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from catalog_server.db import system_conn
 from catalog_server.services import custo_engine
@@ -11,7 +11,7 @@ class RelatorioRepository:
             return [dict(r) for r in conn.execute(
                 "SELECT date(criado_em) AS dia, COUNT(*) AS n_pedidos,"
                 " COALESCE(SUM(total),0) AS total_vendas"
-                " FROM orcamentos WHERE status IN ('fechado','faturado','recebido')"
+                " FROM orcamentos WHERE status IN ('fechado','finalizado','recebido')"
                 " AND date(criado_em) BETWEEN ? AND ?"
                 " GROUP BY date(criado_em) ORDER BY dia",
                 (data_inicio, data_fim),
@@ -53,7 +53,7 @@ class RelatorioRepository:
         with system_conn() as conn:
             return [dict(r) for r in conn.execute("""
                 SELECT 'receitas' AS tipo, COALESCE(SUM(total),0) AS valor
-                FROM orcamentos WHERE status IN ('fechado','faturado','recebido')
+                FROM orcamentos WHERE status IN ('fechado','finalizado','recebido')
                 AND date(criado_em) BETWEEN ? AND ?
                 UNION ALL
                 SELECT 'despesas', COALESCE(SUM(valor),0)
@@ -72,7 +72,7 @@ class RelatorioRepository:
                        SUM(oi.preco_unitario * oi.quantidade) AS receita
                 FROM orcamento_itens oi
                 JOIN orcamentos o ON o.id = oi.orcamento_id
-                     AND o.status IN ('fechado','faturado','recebido')
+                     AND o.status IN ('fechado','finalizado','recebido')
                      AND date(o.criado_em) BETWEEN ? AND ?
                 JOIN variantes v ON v.id = oi.produto_id
                 JOIN produtos_cadastro p ON p.id = v.produto_id

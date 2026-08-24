@@ -24,6 +24,8 @@ from catalog_server.blueprints.api_fiscal import api_fiscal_bp
 from catalog_server.blueprints.api_fiscal_avancado import api_fiscal_avancado_bp
 from catalog_server.blueprints.api_fiscal_docs import api_fiscal_docs_bp
 from catalog_server.blueprints.api_fiscal_regras import api_fiscal_regras_bp
+from catalog_server.blueprints.api_contabil import api_contabil_bp
+from catalog_server.blueprints.api_permissoes import api_permissoes_bp
 from catalog_server.blueprints.api_precos import api_precos_bp
 from catalog_server.blueprints.pages import pages_bp
 from catalog_server.blueprints.portal import portal_bp

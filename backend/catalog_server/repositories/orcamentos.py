@@ -6,8 +6,11 @@ criação — o orçamento permanece estável mesmo se o catálogo mudar depois.
 from __future__ import annotations
 
 from catalog_server.db import system_conn
-
-STATUS_LIST = ("rascunho", "ativo", "em_analise", "liberado", "faturado", "recebido", "cancelado")
+from catalog_server.orcamento_status import (
+    STATUS_LIST,
+    aplicar_transicao,
+    pode_editar_conteudo,
+)
 
 
 def next_numero(conn) -> str:
@@ -230,31 +233,46 @@ class OrcamentoRepository:
         desconto: float | None = None,
         condicao_pagamento_id: int | None = None,
     ) -> bool:
-        fields, params = [], []
-        for key, val in (
-            ("cliente", cliente),
-            ("contato", contato),
-            ("validade_dias", validade_dias),
-            ("observacoes", observacoes),
-            ("status", status),
-            ("desconto", desconto),
-            ("condicao_pagamento_id", condicao_pagamento_id),
-        ):
-            if val is not None:
-                fields.append(f"{key}=?")
-                params.append(val)
-        if not fields:
-            return False
-        # O desconto mudou: uma autorização de alçada anterior valia para o
-        # percentual de ANTES da edição. Zera para forçar reavaliação — se o
-        # novo desconto já estiver dentro do limite do vendedor, a checagem
-        # de alçada simplesmente não vai exigir nada de novo.
-        if desconto is not None:
-            fields.append("desconto_autorizado=0")
-            fields.append("desconto_autorizado_por=NULL")
-            fields.append("desconto_autorizado_em=NULL")
-        params.append(orcamento_id)
         with system_conn() as conn:
+            row = conn.execute(
+                "SELECT status FROM orcamentos WHERE id=?", (orcamento_id,)
+            ).fetchone()
+            if row is None:
+                return False
+            status_atual = row["status"]
+
+            # Status (transição) é gerenciado pelo módulo de lifecycle.
+            if status is not None:
+                if status != status_atual:
+                    conn.commit()
+                    return aplicar_transicao(orcamento_id, status)
+                status = None
+
+            # Conteúdo: só editável até `liberado`.
+            conteudo_mudou = any(
+                val is not None
+                for val in (cliente, contato, validade_dias, observacoes, desconto, condicao_pagamento_id)
+            )
+            if conteudo_mudou and not pode_editar_conteudo(status_atual):
+                raise PermissionError(
+                    f"Orçamento {status_atual}: edição de conteúdo bloqueada (edite até liberado)"
+                )
+
+            fields, params = [], []
+            for key, val in (
+                ("cliente", cliente),
+                ("contato", contato),
+                ("validade_dias", validade_dias),
+                ("observacoes", observacoes),
+                ("desconto", desconto),
+                ("condicao_pagamento_id", condicao_pagamento_id),
+            ):
+                if val is not None:
+                    fields.append(f"{key}=?")
+                    params.append(val)
+            if not fields:
+                return False
+            params.append(orcamento_id)
             cur = conn.execute(
                 f"UPDATE orcamentos SET {', '.join(fields)} WHERE id=?",
                 params,
@@ -262,10 +280,16 @@ class OrcamentoRepository:
             if cur.rowcount == 0:
                 return False
             self._recalc_totals(conn, orcamento_id)
+            # Qualquer alteração de conteúdo invalida uma autorização de alçada
+            # anterior (o desconto efetivo pode ter mudado). Roda DEPOIS do
+            # UPDATE para recalcular com o novo desconto: dentro da alçada →
+            # `ok` (sem nova aprovação); acima → `pendente`.
+            self._revogar_aprovacao(conn, orcamento_id, "conteúdo editado")
             conn.execute(
                 "UPDATE orcamentos SET atualizado_em=datetime('now') WHERE id=?",
                 (orcamento_id,),
             )
+            conn.commit()
         return True
 
     # ------------------------------------------------------------------
@@ -280,10 +304,15 @@ class OrcamentoRepository:
         """
         with system_conn() as conn:
             cur = conn.execute(
-                "SELECT 1 FROM orcamentos WHERE id=?", (orcamento_id,)
+                "SELECT status FROM orcamentos WHERE id=?", (orcamento_id,)
             ).fetchone()
             if cur is None:
                 return False
+            status_atual = cur["status"]
+            if not pode_editar_conteudo(status_atual):
+                raise PermissionError(
+                    f"Orçamento {status_atual}: edição de conteúdo bloqueada (edite até liberado)"
+                )
             conn.execute("DELETE FROM orcamento_itens WHERE orcamento_id=?", (orcamento_id,))
             for it in itens:
                 conn.execute(
@@ -311,12 +340,12 @@ class OrcamentoRepository:
                     ),
                 )
             self._recalc_totals(conn, orcamento_id)
+            self._revogar_aprovacao(conn, orcamento_id, "itens alterados")
             conn.execute(
-                "UPDATE orcamentos SET atualizado_em=datetime('now'),"
-                " desconto_autorizado=0, desconto_autorizado_por=NULL,"
-                " desconto_autorizado_em=NULL WHERE id=?",
+                "UPDATE orcamentos SET atualizado_em=datetime('now') WHERE id=?",
                 (orcamento_id,),
             )
+            conn.commit()
         return True
 
     # ------------------------------------------------------------------
@@ -332,12 +361,118 @@ class OrcamentoRepository:
         """Registra a aprovação de desconto acima da alçada do vendedor."""
         with system_conn() as conn:
             cur = conn.execute(
-                "UPDATE orcamentos SET desconto_autorizado=1,"
+                "UPDATE orcamentos SET desconto_autorizado=1, desconto_status='aprovado',"
                 " desconto_autorizado_por=?, desconto_autorizado_em=datetime('now')"
                 " WHERE id=? AND desconto_autorizado=0",
                 (usuario_id, orcamento_id),
             )
             return cur.rowcount > 0
+
+    # ------------------------------------------------------------------
+
+    def rejeitar_desconto(self, orcamento_id: int, usuario_id: int, motivo: str) -> bool:
+        """Registra a rejeição de desconto (motivo obrigatório)."""
+        with system_conn() as conn:
+            cur = conn.execute(
+                "UPDATE orcamentos SET desconto_status='rejeitado',"
+                " desconto_rejeitado_por=?, desconto_rejeitado_em=now(),"
+                " desconto_rejeitado_motivo=?"
+                " WHERE id=?",
+                (usuario_id, motivo.strip(), orcamento_id),
+            )
+            return cur.rowcount > 0
+
+    # ------------------------------------------------------------------
+
+    def _revogar_aprovacao(self, conn, orcamento_id: int, motivo: str) -> None:
+        """Revoga a autorização de desconto após edição de conteúdo.
+
+        Zera os campos legados e recalcula `desconto_status`: se o novo desconto
+        efetivo estiver dentro da alçada do vendedor vira `ok` (sem nova
+        aprovação); se estiver acima, vira `pendente` (exige nova autorização).
+        Grava log de auditoria.
+        """
+        # Resumo do desconto a partir da própria conexão (evita abrir outra).
+        base = sum(
+            float(it.get("preco_unitario") or 0) * float(it.get("quantidade") or 0)
+            for it in (self._itens_do_conn(conn, orcamento_id) or [])
+        )
+        liquido = sum(
+            float(it.get("subtotal") or 0)
+            for it in (self._itens_do_conn(conn, orcamento_id) or [])
+        )
+        cab = conn.execute(
+            "SELECT desconto FROM orcamentos WHERE id=?", (orcamento_id,)
+        ).fetchone()
+        desconto = float(cab["desconto"] or 0) if cab else 0.0
+        desconto_total = max(0.0, base - liquido + desconto)
+        desconto_pct = (desconto_total / base * 100.0) if base > 0 else 0.0
+
+        usuario_id = conn.execute(
+            "SELECT usuario_id FROM orcamentos WHERE id=?", (orcamento_id,)
+        ).fetchone()
+        solicitante = usuario_id["usuario_id"] if usuario_id else None
+
+        if desconto_pct <= 0.01:
+            novo_status = "ok"
+        else:
+            from catalog_server.repositories.usuarios import usuario_repo
+
+            user = usuario_repo.get(solicitante) if solicitante else None
+            limite = float(user.get("desconto_limite_pct") or 0) if user else 0.0
+            novo_status = "ok" if desconto_pct <= limite + 1e-6 else "pendente"
+
+        conn.execute(
+            "UPDATE orcamentos SET desconto_status=?, desconto_autorizado=0,"
+            " desconto_autorizado_por=NULL, desconto_autorizado_em=NULL,"
+            " desconto_rejeitado_por=NULL, desconto_rejeitado_em=NULL,"
+            " desconto_rejeitado_motivo='' WHERE id=?",
+            (novo_status, orcamento_id),
+        )
+        conn.execute(
+            "INSERT INTO desconto_aprovacao_log"
+            " (orcamento_id, solicitante_id, desconto_pct, status, motivo)"
+            " VALUES (?,?,?,?,?)",
+            (orcamento_id, solicitante, round(desconto_pct, 2), "revogado", motivo),
+        )
+
+    @staticmethod
+    def _itens_do_conn(conn, orcamento_id: int) -> list[dict]:
+        rows = conn.execute(
+            "SELECT preco_unitario, quantidade, subtotal FROM orcamento_itens"
+            " WHERE orcamento_id=?",
+            (orcamento_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+
+    def pendentes_aprovacao(self, aprovador_id: int) -> list[dict]:
+        """Fila do aprovador: orçamentos/pedidos com desconto pendente (acima da
+        alçada do vendedor) e dentro da alçada do aprovador."""
+        from catalog_server.repositories.usuarios import usuario_repo
+
+        aprovador = usuario_repo.get(aprovador_id)
+        limite_aprovador = float(aprovador.get("desconto_limite_pct") or 0) if aprovador else 0.0
+        with system_conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT o.id, o.numero, o.cliente, o.total, o.desconto_status,
+                       o.usuario_id, o.desconto_autorizado_por, o.virou_pedido
+                FROM orcamentos o
+                WHERE o.desconto_status = 'pendente'
+                  AND (o.usuario_id IS NULL OR o.usuario_id <> ?)
+                ORDER BY o.id
+                """,
+                (aprovador_id,),
+            ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["desconto_pct"] = 0.0
+            d["limite_aprovador"] = limite_aprovador
+            out.append(d)
+        return out
 
     # ------------------------------------------------------------------
 

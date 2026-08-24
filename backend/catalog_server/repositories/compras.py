@@ -39,10 +39,15 @@ class ComprasRepository:
             )
             cotacao_id = cur.lastrowid
             for i in itens:
+                vid = int(i["produto_id"])
+                unidade = conn.execute(
+                    "SELECT unidade_venda FROM variantes WHERE id=?", (vid,)
+                ).fetchone()
                 conn.execute(
-                    "INSERT OR IGNORE INTO cotacao_itens (cotacao_id, produto_id, quantidade)"
-                    " VALUES (?,?,?)",
-                    (cotacao_id, int(i["produto_id"]), float(i.get("quantidade", 1) or 1)),
+                    "INSERT OR IGNORE INTO cotacao_itens (cotacao_id, produto_id, quantidade, unidade_solicitada)"
+                    " VALUES (?,?,?,?)",
+                    (cotacao_id, vid, float(i.get("quantidade", 1) or 1),
+                     (unidade["unidade_venda"] if unidade and unidade["unidade_venda"] else "") or ""),
                 )
             for f in fornecedores:
                 fid = f.get("fornecedor_id")
@@ -94,14 +99,36 @@ class ComprasRepository:
             rows = conn.execute(
                 """SELECT cf.id, cf.status, cf.token, cf.data_resposta,
                           f.id AS fornecedor_id, f.nome, f.whatsapp, f.email,
-                          f.representante
+                          f.representante, c.data_limite_retorno
                    FROM cotacao_fornecedores cf
                    JOIN fornecedores f ON f.id = cf.fornecedor_id
+                   JOIN cotacoes c ON c.id = cf.cotacao_id
                    WHERE cf.cotacao_id=?
                    ORDER BY f.nome""",
                 (cotacao_id,),
             ).fetchall()
             return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+
+    def lembrar_invite(self, cotacao_id: int, fornecedor_id: int) -> dict | None:
+        """Devolve o convite de um fornecedor (para o 'Lembrar' reenviar).
+
+        Não reenviou nada automaticamente — apenas expõe os dados de contato
+        e o link do token para o comprador disparar WhatsApp/e-mail de novo.
+        """
+        with system_conn() as conn:
+            row = conn.execute(
+                """SELECT cf.id, cf.status, cf.token, cf.data_resposta,
+                          f.id AS fornecedor_id, f.nome, f.whatsapp, f.email,
+                          f.representante, c.data_limite_retorno, c.titulo AS apelido
+                   FROM cotacao_fornecedores cf
+                   JOIN fornecedores f ON f.id = cf.fornecedor_id
+                   JOIN cotacoes c ON c.id = cf.cotacao_id
+                   WHERE cf.cotacao_id=? AND f.id=?""",
+                (cotacao_id, fornecedor_id),
+            ).fetchone()
+            return dict(row) if row else None
 
     # ------------------------------------------------------------------
     # Portal público do fornecedor (autosserviço)
@@ -127,14 +154,25 @@ class ComprasRepository:
     def portal_itens(self, token: str) -> list[dict]:
         with system_conn() as conn:
             rows = conn.execute(
-                """SELECT ci.id AS cotacao_item_id, ci.produto_id, ci.quantidade
+                """SELECT ci.id AS cotacao_item_id, ci.produto_id, ci.quantidade,
+                          ci.unidade_solicitada,
+                          v.unidade_venda, v.fator_conversao, v.embalagem, v.marca
                    FROM cotacao_fornecedores cf
                    JOIN cotacoes c ON c.id = cf.cotacao_id
                    JOIN cotacao_itens ci ON ci.cotacao_id = c.id
+                   LEFT JOIN variantes v ON v.id = ci.produto_id
                    WHERE cf.token=? ORDER BY ci.id""",
                 (token,),
             ).fetchall()
-            return [dict(r) for r in rows]
+            out = []
+            for r in rows:
+                d = dict(r)
+                unidade = d.get("unidade_solicitada") or d.get("unidade_venda") or "UN"
+                fator = float(d.get("fator_conversao") or 1) if d.get("fator_conversao") else 1.0
+                d["unidade_compra"] = unidade
+                d["fator_conversao"] = fator if fator and fator > 0 else 1
+                out.append(d)
+            return out
 
     # ------------------------------------------------------------------
 
@@ -149,6 +187,10 @@ class ComprasRepository:
 
         `condicao_pagamento` vale para a proposta inteira (não por item):
         é gravada em `cotacao_fornecedores`, junto do status/data_resposta.
+
+        Por item, além do preço, o representante pode informar:
+        `unidade_compra`, `fator_conversao`, `marca_ofertada`,
+        `motivo_indisponibilidade` e `observacao`.
         """
         with system_conn() as conn:
             row = conn.execute(
@@ -161,27 +203,48 @@ class ComprasRepository:
             if row is None:
                 return False
             for p in precos:
+                fator = p.get("fator_conversao")
+                try:
+                    fator = float(fator) if fator not in (None, "") else 1
+                except (TypeError, ValueError):
+                    fator = 1
+                fator = fator if fator and fator > 0 else 1
+                disp = p.get("disponibilidade_estoque")
+                disp = int(disp) if disp is not None else 1
+                motivo = (p.get("motivo_indisponibilidade") or "").strip()
+                if disp == 0 and not motivo:
+                    motivo = "em_falta_estoque"
                 conn.execute(
                     """INSERT INTO cotacao_precos
                          (cotacao_item_id, fornecedor_id, preco_unitario,
                           desconto, prazo_entrega_dias,
-                          disponibilidade_estoque, observacao, registrado_em)
-                       VALUES (?,?,?,?,?,?,?, datetime('now'))
+                          disponibilidade_estoque, observacao, registrado_em,
+                          unidade_compra, fator_conversao, marca_ofertada,
+                          motivo_indisponibilidade)
+                       VALUES (?,?,?,?,?,?,?, datetime('now'),?,?,?,?)
                        ON CONFLICT(cotacao_item_id, fornecedor_id) DO UPDATE SET
                          preco_unitario=excluded.preco_unitario,
                          desconto=excluded.desconto,
                          prazo_entrega_dias=excluded.prazo_entrega_dias,
                          disponibilidade_estoque=excluded.disponibilidade_estoque,
                          observacao=excluded.observacao,
-                         registrado_em=datetime('now')""",
+                         registrado_em=datetime('now'),
+                         unidade_compra=excluded.unidade_compra,
+                         fator_conversao=excluded.fator_conversao,
+                         marca_ofertada=excluded.marca_ofertada,
+                         motivo_indisponibilidade=excluded.motivo_indisponibilidade""",
                     (
                         int(p["cotacao_item_id"]),
                         row["fornecedor_id"],
                         float(p.get("preco_unitario") or 0),
                         float(p.get("desconto") if p.get("desconto") is not None else p.get("desconto_percentual") or 0),
                         int(p["prazo_entrega_dias"]) if p.get("prazo_entrega_dias") not in (None, "") else None,
-                        int(p.get("disponibilidade_estoque", 1) or 1),
+                        disp,
                         (p.get("observacao") or "").strip() or None,
+                        (p.get("unidade_compra") or "").strip(),
+                        fator,
+                        (p.get("marca_ofertada") or "").strip(),
+                        motivo,
                     ),
                 )
             conn.execute(
@@ -413,9 +476,14 @@ class ComprasRepository:
             if p is None:
                 return None
             itens = conn.execute(
-                """SELECT pi.*, ci.produto_id, ci.descricao
+                """SELECT pi.*, ci.produto_id, ci.descricao,
+                          cp.unidade_compra, cp.fator_conversao, cp.marca_ofertada,
+                          cp.motivo_indisponibilidade
                    FROM pedido_itens pi
                    JOIN cotacao_itens ci ON ci.id=pi.cotacao_item_id
+                   LEFT JOIN cotacao_precos cp
+                          ON cp.cotacao_item_id=pi.cotacao_item_id
+                         AND cp.fornecedor_id=pi.fornecedor_id
                    WHERE pi.pedido_id=? ORDER BY pi.id""",
                 (pedido_id,),
             ).fetchall()

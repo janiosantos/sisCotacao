@@ -292,8 +292,8 @@ def _emitir(orcamento_id: int, modelo: str) -> dict:
     orc = orcamento_repo.buscar(orcamento_id)
     if orc is None:
         raise TecnospeedError("Orçamento não encontrado")
-    if orc.get("status") not in ("faturado", "recebido"):
-        raise TecnospeedError(f"Só é possível emitir {'NFC-e' if modelo == '65' else 'NF-e'} para um orçamento faturado/recebido")
+    if orc.get("status") not in ("finalizado", "recebido"):
+        raise TecnospeedError(f"Só é possível emitir {'NFC-e' if modelo == '65' else 'NF-e'} para um pedido finalizado/recebido")
 
     existente = documento_fiscal_repo.get_by_orcamento(orcamento_id, modelo)
     if existente and existente["status"] in ("autorizado", "processando"):

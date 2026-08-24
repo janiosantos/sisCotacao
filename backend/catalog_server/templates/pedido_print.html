@@ -138,6 +138,7 @@
           <th style="width:28px">#</th>
           <th>Produto</th>
           <th class="num" style="width:60px">Qtd</th>
+          <th style="width:110px">Unidade</th>
           <th class="num" style="width:100px">Preço unit.</th>
           <th class="num" style="width:110px">Subtotal</th>
         </tr>
@@ -148,9 +149,17 @@
           <td>{{ loop.index }}</td>
           <td>
             <b>{{ it.name }}</b>
-            {% if it.sku or it.brand %}<div class="sku">{{ it.sku }}{% if it.brand %} · {{ it.brand }}{% endif %}</div>{% endif %}
+            {% if it.sku or it.brand %}<div class="sku">{{ it.sku }}{% if it.brand %} · {{ it.brand }}{% endif %}{% if it.marca_ofertada %} · oferta: {{ it.marca_ofertada }}{% endif %}</div>{% endif %}
           </td>
           <td class="num">{{ it.quantidade|qty }}</td>
+          <td>
+            {% if it.unidade_compra %}
+              {{ it.unidade_compra }}
+              {% if it.fator_conversao and it.fator_conversao > 1 %}
+                · {{ ((it.quantidade / it.fator_conversao)|round(0, 'ceil'))|int }} emb. de {{ it.fator_conversao }}
+              {% endif %}
+            {% else %}—{% endif %}
+          </td>
           <td class="num">{{ it.preco_unitario|brl }}</td>
           <td class="num">{{ (it.preco_unitario * it.quantidade)|brl }}</td>
         </tr>

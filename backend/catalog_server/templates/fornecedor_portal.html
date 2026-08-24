@@ -35,6 +35,13 @@
                font-weight:600;cursor:pointer;color:var(--texto)}
   .estq button.sim.seleto{background:var(--verde-claro);border-color:var(--verde);color:var(--verde-escuro)}
   .estq button.nao.seleto{background:#fdecec;border-color:#e05d5d;color:#c0392b}
+  .campo-sel{display:none}
+  .campo-sel.visivel{display:block}
+  .linha-unid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .obs-item{width:100%;padding:9px 10px;border:1px solid var(--borda);border-radius:8px;font-size:14px;font-family:inherit;resize:vertical}
+  .indisponivel{background:#fdf3f3;border:1px solid #f0d3d3;border-radius:8px;padding:10px;margin-top:8px}
+  .resumo-proposta{background:var(--cinza);border:1px solid var(--borda);border-radius:10px;padding:12px;margin-top:12px;font-size:13px}
+  .resumo-proposta b{color:var(--verde-escuro)}
   .rodape{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px}
   .rodape .meta{color:var(--texto2);font-size:12px}
   button.enviar{background:var(--verde-wa);color:#fff;border:none;padding:14px 22px;border-radius:10px;
@@ -131,38 +138,97 @@
       var card = document.createElement("div");
       card.className = "card";
       var img = it.imagem_url ? '<img src="'+it.imagem_url+'">' : '<img src="" style="visibility:hidden">';
+      var unid = it.unidade_compra || "UN";
+      var fator = it.fator_conversao && it.fator_conversao > 1 ? Number(it.fator_conversao) : 1;
+      var marca = it.brand || "";
       card.innerHTML =
         '<div class="item">' + img +
           '<div style="flex:1">' +
             '<div class="nome">'+it.name+'</div>' +
             '<div class="meta">SKU: '+(it.sku||"—")+(it.brand?' · '+it.brand:'')+'</div>' +
-            '<span class="qtd">Quantidade: '+it.quantidade+'</span>' +
+            '<span class="qtd">Quantidade: '+it.quantidade+' '+unid+'</span>' +
             '<div class="campos">' +
               '<div class="campo"><label>Preço unitário (R$)</label><input type="number" step="0.01" min="0" data-c="preco"></div>' +
               '<div class="campo"><label>Desconto (%)</label><input type="number" step="0.5" min="0" max="100" data-c="desconto"></div>' +
               '<div class="campo"><label>Prazo de entrega (dias)</label><input type="number" min="0" data-c="prazo"></div>' +
               '<div class="campo"><label>Estoque</label><div class="estq">' +
-                '<button type="button" data-s="1" class="sim seleto">Sim</button>' +
-                '<button type="button" data-s="0" class="nao">Não</button>' +
+                '<button type="button" data-s="1" class="sim seleto">Disponível</button>' +
+                '<button type="button" data-s="0" class="nao">Indisponível</button>' +
               '</div></div>' +
+            '</div>' +
+            '<div class="linha-unid" style="margin-top:10px">' +
+              '<div class="campo"><label>Unidade de venda</label><input type="text" data-c="unidade_compra" value="'+unid+'" placeholder="UN/CX/MT/KG…"></div>' +
+              '<div class="campo"><label>Qtd por embalagem</label><input type="number" step="1" min="1" data-c="fator_conversao" value="'+fator+'"></div>' +
+            '</div>' +
+            '<div class="campo" style="margin-top:10px"><label>Marca ofertada</label><input type="text" data-c="marca_ofertada" value="'+marca+'" placeholder="Marca que você está cotando"></div>' +
+            '<div class="indisponivel campo-sel" id="indis-'+it.cotacao_item_id+'">' +
+              '<div class="campo"><label>Motivo da indisponibilidade</label><select data-c="motivo_indisponibilidade">' +
+                '<option value="">Selecione…</option>' +
+                '<option value="em_falta_estoque">Em falta de estoque</option>' +
+                '<option value="nao_trabalha_linha">Não trabalha com a linha</option>' +
+                '<option value="descontinuado">Descontinuado pelo fabricante</option>' +
+                '<option value="fora_regiao">Fora da região de entrega</option>' +
+                '<option value="outro">Outro</option>' +
+              '</select></div>' +
+            '</div>' +
+            '<div class="campo" style="margin-top:10px"><label>Observação (opcional)</label><textarea class="obs-item" data-c="observacao" placeholder="Ex.: prazo sujeito a confirmação, lote mínimo…"></textarea></div>' +
+            '<div class="resumo-proposta" id="resumo-'+it.cotacao_item_id+'" style="display:none">' +
+              'Resumo: <b id="sum-'+it.cotacao_item_id+'"></b>' +
             '</div>' +
           '</div>' +
         '</div>';
-      card.querySelectorAll("input[data-c]").forEach(function(inp){
-        inp.addEventListener("input", function(){ guardar(it.cotacao_item_id, inp.dataset.c, inp.value); });
+      card.querySelectorAll("input[data-c], textarea[data-c], select[data-c]").forEach(function(inp){
+        inp.addEventListener("input", function(){ guardar(it.cotacao_item_id, inp.dataset.c, inp.value); atualizarResumo(it); });
+        inp.addEventListener("change", function(){ guardar(it.cotacao_item_id, inp.dataset.c, inp.value); atualizarResumo(it); });
       });
-      card.querySelector(".estq button").dataset.estq = "1";
       card.querySelectorAll(".estq button").forEach(function(b){
         b.addEventListener("click", function(){
           card.querySelectorAll(".estq button").forEach(function(x){ x.className=x.dataset.s==="1"?"sim":"nao"; });
           this.className = (this.dataset.s==="1"?"sim":"nao") + " seleto";
           guardar(it.cotacao_item_id, "estoque", Number(this.dataset.s));
+          var indis = document.getElementById("indis-"+it.cotacao_item_id);
+          if(indis) indis.className = "indisponivel campo-sel" + (Number(this.dataset.s)===0 ? " visivel" : "");
+          atualizarResumo(it);
         });
       });
       lista.appendChild(card);
     });
     document.getElementById("rodape").style.display="block";
     document.getElementById("preenchimento").style.width = "100%";
+  }
+
+  function fmtQtd(n){
+    if(!n || n <= 0) return "—";
+    return Number(n).toLocaleString("pt-BR", {maximumFractionDigits:3});
+  }
+
+  function atualizarResumo(it){
+    var r = respostas[it.cotacao_item_id] || {};
+    var sumEl = document.getElementById("sum-"+it.cotacao_item_id);
+    if(!sumEl) return;
+    var preco = Number(r.preco||0);
+    var desc = Number(r.desconto||0)||0;
+    var fator = Number(r.fator_conversao||0)||1;
+    var estoque = r.estoque === 0 ? 0 : 1;
+    if(estoque === 0){
+      sumEl.textContent = "Indisponível — informado ao comprador.";
+      document.getElementById("resumo-"+it.cotacao_item_id).style.display="block";
+      return;
+    }
+    if(preco <= 0){
+      document.getElementById("resumo-"+it.cotacao_item_id).style.display="none";
+      return;
+    }
+    var liq = preco * (1 - desc/100);
+    var qtd = Number(it.quantidade||0);
+    var emb = Math.ceil(qtd/fator);
+    var total = liq * qtd;
+    var linhas = [];
+    linhas.push(fmt(liq) + "/" + (r.unidade_compra || "un"));
+    if(fator > 1) linhas.push(emb + " emb. de " + fmtQtd(fator));
+    linhas.push("total " + fmt(total));
+    sumEl.textContent = linhas.join(" · ");
+    document.getElementById("resumo-"+it.cotacao_item_id).style.display="block";
   }
 
   function guardar(cotacao_item_id, campo, valor){
@@ -172,7 +238,19 @@
 
   function validar(){
     var faltando = 0;
-    itens.forEach(function(it){ if(!respostas[it.cotacao_item_id] || respostas[it.cotacao_item_id].preco<=0) faltando++; });
+    var semMotivo = 0;
+    itens.forEach(function(it){
+      var r = respostas[it.cotacao_item_id] || {};
+      var estq = r.estoque === 0 ? 0 : 1;
+      if(estq === 1 && Number(r.preco||0) <= 0) faltando++;
+      if(estq === 0 && !(r.motivo_indisponibilidade || "").trim()) semMotivo++;
+    });
+    if(semMotivo>0){
+      document.getElementById("aviso").className="aviso erro";
+      document.getElementById("aviso").style.display="block";
+      document.getElementById("aviso").textContent="Informe o motivo da indisponibilidade em " + semMotivo + " item(ns).";
+      return -1;
+    }
     return faltando;
   }
 
@@ -183,11 +261,12 @@
 
   document.getElementById("btnEnviar").addEventListener("click", function(){
     var faltando = validar();
-    if(faltando>0){
+    if(faltando > 0){
       var av=document.getElementById("aviso"); av.className="aviso erro"; av.style.display="block";
       av.textContent="Preencha o preço de " + faltando + " item(ns) antes de enviar.";
       return;
     }
+    if(faltando === -1) return; // motivo de indisponibilidade já exibido
     if(!validarPagamento()){
       var av2=document.getElementById("aviso"); av2.className="aviso erro"; av2.style.display="block";
       av2.textContent="Informe a condição de pagamento da proposta antes de enviar.";
@@ -197,12 +276,18 @@
     var cond = condicaoPagamentoAtual();
     var precos = itens.map(function(it){
       var r = respostas[it.cotacao_item_id] || {};
+      var estq = r.estoque === 0 ? 0 : 1;
       return {
         cotacao_item_id: it.cotacao_item_id,
         preco_unitario: Number(r.preco||0),
         desconto: Number(r.desconto||0)||0,
         prazo_entrega_dias: Number(r.prazo||0)||0,
-        disponibilidade_estoque: (r.estoque===0)?0:1
+        disponibilidade_estoque: estq,
+        unidade_compra: (r.unidade_compra || "").trim(),
+        fator_conversao: Number(r.fator_conversao||0)||1,
+        marca_ofertada: (r.marca_ofertada || "").trim(),
+        motivo_indisponibilidade: estq === 0 ? (r.motivo_indisponibilidade || "").trim() : "",
+        observacao: (r.observacao || "").trim()
       };
     });
     var btn=this; btn.disabled=true; btn.textContent="Enviando…";

@@ -16,6 +16,47 @@ def obter(variante_id: int) -> dict | None:
         return dict(row) if row else None
 
 
+def _produto_id_da_variante(variante_id: int) -> int | None:
+    """Resolve o produto de uma variante (para a hierarquia Produto→Variação)."""
+    with system_conn() as conn:
+        row = conn.execute(
+            "SELECT produto_id FROM variantes WHERE id=?", (variante_id,)
+        ).fetchone()
+        return int(row["produto_id"]) if row else None
+
+
+def obter_efetivo(variante_id: int) -> dict:
+    """Perfil fiscal EFETIVO da variante (hierarquia v2.5.0).
+
+    Retorna o perfil do produto como padrão herdado e o da variação como
+    override (quando existir), mais o perfil efetivo mesclado — para a UI
+    mostrar "herdado do produto" vs "override da variação".
+    """
+    variante = obter(variante_id)
+    produto_id = _produto_id_da_variante(variante_id)
+    produto = obter_produto(produto_id) if produto_id else None
+    padrao = produto or {}
+    efetivo = {
+        "ncm": (variante or {}).get("ncm") or padrao.get("ncm") or "",
+        "cest": (variante or {}).get("cest") or padrao.get("cest") or "",
+        "origem": (variante or {}).get("origem") if (variante or {}).get("origem") is not None else padrao.get("origem") or 0,
+        "regime_st": (variante or {}).get("regime_st") or padrao.get("regime_st") or "",
+        "fonte_url": (variante or {}).get("fonte_url") or padrao.get("fonte_url") or None,
+    }
+    override_campos = {
+        k: bool(variante and variante.get(k) not in (None, "") and str(variante.get(k)) != str(padrao.get(k, "")))
+        for k in ("ncm", "cest", "origem", "regime_st")
+    }
+    return {
+        "variante_id": variante_id,
+        "produto_id": produto_id,
+        "produto": produto,
+        "variante": variante,
+        "efetivo": efetivo,
+        "override_campos": override_campos,
+    }
+
+
 def salvar(variante_id: int, dados: dict) -> dict:
     """Cria/atualiza o perfil validando campos conhecidos."""
     limpo = {k: dados.get(k) for k in _CAMPOS if k in dados}

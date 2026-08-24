@@ -18,8 +18,9 @@ def get_config():
 def put_config():
     data = request.get_json(silent=True) or {}
     out = {}
-    if "bloquear_venda_sem_estoque" in data:
-        out["bloquear_venda_sem_estoque"] = bool(data["bloquear_venda_sem_estoque"])
+    for chave in ("bloquear_venda_sem_estoque", "bloquear_venda_sem_credito", "bloquear_venda_com_atraso"):
+        if chave in data:
+            out[chave] = bool(data[chave])
     return jsonify(loja.set_config(out))
 
 

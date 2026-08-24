@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request
 
 from catalog_server.db import system_conn
 from catalog_server.repositories import deposito_repo, estoque_repo, expedicao_repo, lote_repo
+from catalog_server import contabil_gatilhos
 
 api_estoque_bp = Blueprint("api_estoque", __name__)
 
@@ -60,10 +61,12 @@ def consultar_saldo():
     deposito_id = request.args.get("deposito_id", type=int)
     variante_id = request.args.get("variante_id", type=int)
     familia_id = request.args.get("familia_id", type=int)
+    produto_id = request.args.get("produto_id", type=int)
     q = request.args.get("q", "").strip()
     termo = q if q else None
     return jsonify(estoque_repo.saldo(
-        deposito_id=deposito_id, variante_id=variante_id, termo=termo, familia_id=familia_id
+        deposito_id=deposito_id, variante_id=variante_id, termo=termo,
+        familia_id=familia_id, produto_id=produto_id,
     ))
 
 
@@ -106,6 +109,19 @@ def registrar_movimento():
         lote_id=data.get("lote_id"),
         usuario_id=data.get("usuario_id"),
     )
+    # Gatilho contábil (v2.15.0): ajuste de estoque → lançamento quando
+    # configurado (default inativo — não altera o comportamento atual).
+    if tipo == "ajuste":
+        try:
+            contabil_gatilhos.disparar(
+                "ajuste",
+                evento_id=int(result.get("movimento_id") or variante_id),
+                valor=quantidade,
+                historico=f"Ajuste estoque var {variante_id}",
+                origem_tipo="estoque",
+            )
+        except Exception:
+            pass
     return jsonify(result), 201
 
 
@@ -241,6 +257,19 @@ def criar_movimento_fato():
         )
     except (KeyError, ValueError, TypeError) as exc:
         return jsonify({'error': str(exc)}), 400
+    # Gatilho contábil (v2.15.0): ajuste/inventário → lançamento quando
+    # configurado (default inativo — não altera o comportamento atual).
+    if not r.get('duplicado') and dados.get('tipo') in ('ajuste', 'inventario'):
+        try:
+            contabil_gatilhos.disparar(
+                'ajuste',
+                evento_id=int(r.get('movimento_id') or int(dados['variante_id'])),
+                valor=float(dados.get('quantidade') or 0),
+                historico=f"Ajuste estoque var {dados['variante_id']} ({dados.get('tipo')})",
+                origem_tipo=dados.get('origem_tipo', 'estoque'),
+            )
+        except Exception:
+            pass
     return jsonify(r), 200 if r.get('duplicado') else 201
 
 

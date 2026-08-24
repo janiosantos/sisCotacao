@@ -37,11 +37,13 @@ class ClienteRepository:
             "  c.nome LIKE ? COLLATE NOCASE OR c.doc LIKE ?"
             "  OR c.email LIKE ? OR c.telefone LIKE ? OR c.whatsapp LIKE ?"
             "  OR c.endereco LIKE ? OR c.cidade LIKE ? OR c.uf LIKE ?"
+            "  OR c.segmento LIKE ? OR c.categoria LIKE ?"
             " )"
             " ORDER BY c.nome LIMIT ?"
         )
+        args = (like, like, like, like, like, like, like, like, like, like, limite)
         with system_conn() as conn:
-            return [dict(r) for r in conn.execute(sql, (like, like, like, like, like, like, like, like, limite)).fetchall()]
+            return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
     # ------------------------------------------------------------------
 
@@ -54,12 +56,15 @@ class ClienteRepository:
 
     # ------------------------------------------------------------------
 
-    def situacao_credito(self, cliente_id: int) -> dict | None:
+    def situacao_credito(self, cliente_id: int, total: float | None = None) -> dict | None:
         """Situação de crédito do cliente para o balcão.
 
         Retorna o limite cadastrado, o quanto já está utilizado (contas a
         receber abertas/parciais), o limite disponível e o saldo em atraso
         (parcelas vencidas ainda não pagas).
+
+        Quando `total` é informado, também responde `excede_limite` e
+        `excede_por_atraso` para o gate de faturamento (trava de crédito).
         """
         with system_conn() as conn:
             cli = conn.execute(
@@ -81,13 +86,18 @@ class ClienteRepository:
         limite = max(0.0, float(cli["limite_credito"] or 0))
         utilizado_val = max(0.0, float(utilizado["s"] or 0))
         atraso_val = max(0.0, float(atraso["s"] or 0))
+        disponivel = max(0.0, limite - utilizado_val)
+        total_val = max(0.0, float(total or 0))
+        sem_limite = limite <= 0.005  # sem limite cadastrado = libera (regra de balcão)
         return {
             "nome": cli["nome"],
             "limite_credito": round(limite, 2),
             "limite_utilizado": round(utilizado_val, 2),
-            "limite_disponivel": round(max(0.0, limite - utilizado_val), 2),
+            "limite_disponivel": round(disponivel, 2),
             "saldo_em_atraso": round(atraso_val, 2),
             "tem_atraso": atraso_val > 0.005,
+            "excede_limite": (not sem_limite) and total_val > disponivel + 0.005,
+            "excede_por_atraso": atraso_val > 0.005 and total_val > 0.005,
         }
 
     # ------------------------------------------------------------------
@@ -118,7 +128,8 @@ class ClienteRepository:
             cur = conn.execute(
                 "INSERT INTO clientes (nome, tipo_pessoa, doc, email, telefone,"
                 " whatsapp, endereco, cidade, uf, cep, vendedor_id, limite_credito,"
-                " observacoes, contribuinte, ie, c_municipio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " observacoes, contribuinte, ie, c_municipio, segmento, categoria)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     dados["nome"],
                     dados.get("tipo_pessoa", "f"),
@@ -136,6 +147,8 @@ class ClienteRepository:
                     dados.get("contribuinte") or "",
                     dados.get("ie") or "",
                     dados.get("c_municipio") or "",
+                    dados.get("segmento") or "consumidor_final",
+                    dados.get("categoria") or "",
                 ),
             )
             return cur.lastrowid
@@ -148,7 +161,8 @@ class ClienteRepository:
                 "UPDATE clientes SET nome=?, tipo_pessoa=?, doc=?, email=?,"
                 " telefone=?, whatsapp=?, endereco=?, cidade=?, uf=?, cep=?,"
                 " vendedor_id=?, limite_credito=?, observacoes=?, contribuinte=?,"
-                " ie=?, c_municipio=?, atualizado_em=datetime('now') WHERE id=?",
+                " ie=?, c_municipio=?, segmento=?, categoria=?,"
+                " atualizado_em=datetime('now') WHERE id=?",
                 (
                     dados["nome"],
                     dados.get("tipo_pessoa", "f"),
@@ -166,6 +180,8 @@ class ClienteRepository:
                     dados.get("contribuinte") or "",
                     dados.get("ie") or "",
                     dados.get("c_municipio") or "",
+                    dados.get("segmento") or "consumidor_final",
+                    dados.get("categoria") or "",
                     cliente_id,
                 ),
             )
@@ -257,16 +273,22 @@ class ClienteRepository:
     def upsert_apoio_fiscal(self, cliente_id: int, dados: dict) -> int:
         with system_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO cliente_apoio_fiscal (cliente_id, cfop_padrao, cst_icms, cst_pis, cst_cofins, aliquota_icms, aliquota_pis, aliquota_cofins)"
-                " VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(cliente_id) DO UPDATE SET"
-                " cfop_padrao=excluded.cfop_padrao, cst_icms=excluded.cst_icms,"
+                "INSERT INTO cliente_apoio_fiscal (cliente_id, cfop_padrao, cfop_entrada, cfop_saida,"
+                " cst_icms, cst_pis, cst_cofins, cst_csosn, cest,"
+                " aliquota_icms, aliquota_icms_st, aliquota_pis, aliquota_cofins)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(cliente_id) DO UPDATE SET"
+                " cfop_padrao=excluded.cfop_padrao, cfop_entrada=excluded.cfop_entrada,"
+                " cfop_saida=excluded.cfop_saida, cst_icms=excluded.cst_icms,"
                 " cst_pis=excluded.cst_pis, cst_cofins=excluded.cst_cofins,"
-                " aliquota_icms=excluded.aliquota_icms, aliquota_pis=excluded.aliquota_pis,"
-                " aliquota_cofins=excluded.aliquota_cofins",
-                (cliente_id, dados.get("cfop_padrao", ""), dados.get("cst_icms", ""),
+                " cst_csosn=excluded.cst_csosn, cest=excluded.cest,"
+                " aliquota_icms=excluded.aliquota_icms, aliquota_icms_st=excluded.aliquota_icms_st,"
+                " aliquota_pis=excluded.aliquota_pis, aliquota_cofins=excluded.aliquota_cofins",
+                (cliente_id, dados.get("cfop_padrao", ""), dados.get("cfop_entrada", ""),
+                 dados.get("cfop_saida", ""), dados.get("cst_icms", ""),
                  dados.get("cst_pis", ""), dados.get("cst_cofins", ""),
-                 float(dados.get("aliquota_icms") or 0), float(dados.get("aliquota_pis") or 0),
-                 float(dados.get("aliquota_cofins") or 0)),
+                 dados.get("cst_csosn", ""), dados.get("cest", ""),
+                 float(dados.get("aliquota_icms") or 0), float(dados.get("aliquota_icms_st") or 0),
+                 float(dados.get("aliquota_pis") or 0), float(dados.get("aliquota_cofins") or 0)),
             )
             return cur.lastrowid
 
