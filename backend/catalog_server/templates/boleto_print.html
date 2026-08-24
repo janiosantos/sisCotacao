@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Boleto — {{ orc.numero }}</title>
+<style>
+  :root{
+    --verde:#2E7D46; --verde-escuro:#1F5C33; --tinta:#1f2430;
+    --tinta-suave:#5b655c; --linha:#d7dace; --fundo-suave:#f6f7f3;
+  }
+  @page{ margin:14mm 12mm; }
+  *{ box-sizing:border-box; }
+  body{ font-family:'Segoe UI',Arial,sans-serif; color:var(--tinta); font-size:12.5px; margin:0;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; background:#fff; }
+  .folha{ max-width:900px; margin:0 auto; padding:20px; }
+
+  .toolbar{ display:flex; justify-content:flex-end; gap:8px; margin-bottom:14px; }
+  .toolbar button{ padding:8px 16px; border-radius:6px; border:1px solid var(--linha); background:#fff; font-size:13px; cursor:pointer; }
+  .toolbar button.primary{ background:var(--verde); color:#fff; border-color:var(--verde); font-weight:600; }
+  @media print{ .toolbar{ display:none; } .folha{ padding:0; } }
+
+  .letterhead{ display:flex; justify-content:space-between; align-items:flex-start;
+    border-bottom:3px solid var(--verde); padding-bottom:14px; margin-bottom:18px; }
+  .empresa .nome{ font-size:17px; font-weight:800; color:var(--verde-escuro); }
+  .empresa .linha{ font-size:11px; color:var(--tinta-suave); margin-top:2px; }
+  .doc-info{ text-align:right; }
+  .doc-info .titulo{ font-size:20px; font-weight:800; letter-spacing:.03em; text-transform:uppercase; }
+  .doc-info .numero{ font-size:14px; font-weight:700; color:var(--verde); margin-top:2px; }
+
+  .boleto{ border:1px solid var(--linha); border-radius:8px; margin-bottom:20px; overflow:hidden; }
+  .boleto:last-child{ margin-bottom:0; }
+  .b-head{ background:var(--fundo-suave); border-bottom:1px solid var(--linha); padding:10px 14px;
+    font-weight:800; font-size:13px; color:var(--verde-escuro); text-transform:uppercase; letter-spacing:.04em; }
+  .b-body{ padding:14px; }
+  .b-grade{ display:flex; gap:16px; flex-wrap:wrap; }
+  .b-campo{ flex:1 1 200px; }
+  .b-campo .rot{ font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--tinta-suave); }
+  .b-campo .val{ font-size:14px; font-weight:700; margin-top:2px; font-variant-numeric:tabular-nums; }
+  .linha-digitavel{ margin-top:14px; padding:12px 14px; background:#fff; border:2px dashed var(--verde);
+    border-radius:6px; text-align:center; font-family:Consolas,monospace; font-size:18px; font-weight:800;
+    letter-spacing:.06em; color:var(--verde-escuro); }
+  .cod-barras{ margin-top:10px; text-align:center; font-family:Consolas,monospace; font-size:12px;
+    letter-spacing:.04em; color:var(--tinta-suave); }
+  .b-tot{ margin-top:12px; display:flex; justify-content:space-between; font-weight:800; font-size:15px; }
+
+  .assinaturas{ display:flex; gap:40px; margin-top:44px; }
+  .assinatura{ flex:1; text-align:center; }
+  .assinatura .linha-ass{ border-top:1px solid var(--tinta); margin-bottom:6px; padding-top:34px; }
+  .assinatura small{ color:var(--tinta-suave); }
+
+  .rodape{ margin-top:30px; padding-top:10px; border-top:1px solid var(--linha); font-size:10.5px;
+    color:var(--tinta-suave); display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+  <div class="folha">
+    <div class="toolbar">
+      <button onclick="window.close()">Fechar</button>
+      <button class="primary" onclick="window.print()">Imprimir / Salvar PDF</button>
+    </div>
+
+    <div class="letterhead">
+      <div class="empresa">
+        {% if emitente %}
+          <div class="nome">{{ emitente.nome_fantasia or emitente.razao_social }}</div>
+          {% if emitente.cnpj %}<div class="linha">CNPJ {{ emitente.cnpj }}</div>{% endif %}
+          {% if emitente.logradouro %}
+            <div class="linha">{{ emitente.logradouro }}{% if emitente.numero %}, {{ emitente.numero }}{% endif %}{% if emitente.bairro %} — {{ emitente.bairro }}{% endif %}</div>
+          {% endif %}
+          {% if emitente.municipio %}
+            <div class="linha">{{ emitente.municipio }}{% if emitente.uf %}/{{ emitente.uf }}{% endif %}{% if emitente.cep %} · CEP {{ emitente.cep }}{% endif %}</div>
+          {% endif %}
+        {% else %}
+          <div class="nome">Empresa</div>
+        {% endif %}
+      </div>
+      <div class="doc-info">
+        <div class="titulo">Boleto</div>
+        <div class="numero">Venda {{ orc.numero }}</div>
+      </div>
+    </div>
+
+    <div class="painel" style="margin-bottom:14px">
+      <b>Cliente:</b> {{ orc.cliente or "Consumidor final" }}
+      {% if condicao_pagamento %} · <b>Condição:</b> {{ condicao_pagamento }}{% endif %}
+    </div>
+
+    {% if parcelas %}
+      {% for p in parcelas %}
+      <div class="boleto">
+        <div class="b-head">Parcela {{ p.observacao if p.observacao else loop.index }} — {{ p.data_vencimento }}</div>
+        <div class="b-body">
+          <div class="b-grade">
+            <div class="b-campo"><div class="rot">Beneficiário</div><div class="val">{{ emitente.nome_fantasia if emitente and emitente.nome_fantasia else 'Empresa' }}</div></div>
+            <div class="b-campo"><div class="rot">Pagador</div><div class="val">{{ orc.cliente or '—' }}</div></div>
+            <div class="b-campo"><div class="rot">Nosso número</div><div class="val">{{ p.nosso_numero or '—' }}</div></div>
+            <div class="b-campo"><div class="rot">Vencimento</div><div class="val">{{ p.data_vencimento }}</div></div>
+          </div>
+          <div class="linha-digitavel">{{ p.linha_digitavel or '—' }}</div>
+          <div class="cod-barras">Código de barras: {{ p.codigo_barras or '—' }}</div>
+          <div class="b-tot">
+            <span>Valor do documento</span>
+            <span>R$ {{ "%.2f"|format(p.valor) }}</span>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="boleto"><div class="b-body" style="text-align:center; color:var(--tinta-suave)">
+        Venda sem parcelas (à vista) — nenhum boleto gerado.
+      </div></div>
+    {% endif %}
+
+    <div class="assinaturas">
+      <div class="assinatura"><div class="linha-ass"></div><small>Loja — data</small></div>
+      <div class="assinatura"><div class="linha-ass"></div><small>Cliente / autorizado — de acordo</small></div>
+    </div>
+
+    <div class="rodape">
+      <span>Boleto gerado automaticamente pelo sistema — pagamento conforme condição de venda.</span>
+      <span>{{ orc.numero }} · {{ parcelas|length }} parcela(s)</span>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function(){ setTimeout(function(){ window.print(); }, 200); };
+  </script>
+</body>
+</html>

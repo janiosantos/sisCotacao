@@ -167,10 +167,14 @@ class OrcamentoRepository:
             SELECT o.id, o.numero, o.cliente, o.contato, o.status, o.desconto,
                    o.subtotal, o.total, o.validade_dias, o.criado_em, o.observacoes,
                    o.usuario_id, o.desconto_autorizado, o.desconto_autorizado_por,
-                   o.desconto_autorizado_em,
+                   o.desconto_autorizado_em, o.cliente_id, o.condicao_pagamento_id,
+                   cp.nome AS condicao_nome,
                    (SELECT COUNT(*) FROM orcamento_itens oi WHERE oi.orcamento_id=o.id) AS n_itens,
-                   (SELECT u.nome FROM usuarios u WHERE u.id=o.usuario_id) AS usuario_nome
+                   (SELECT u.nome FROM usuarios u WHERE u.id=o.usuario_id) AS usuario_nome,
+                   (SELECT COUNT(*) FROM contas_receber cr
+                     WHERE cr.documento=o.numero AND cr.status IN ('aberto','parcial')) AS n_parcelas
             FROM orcamentos o
+            LEFT JOIN condicoes_pagamento cp ON cp.id=o.condicao_pagamento_id
         """
         params: list = []
         conds: list = []

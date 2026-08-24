@@ -226,23 +226,30 @@ def atualizar(orcamento_id: int):
         if not aplicar_transicao(orcamento_id, status):
             return jsonify({"error": "Não foi possível aplicar a transição"}), 400
 
-    # Gatilho: finalizar (conversão) → gerar conta a receber + baixar estoque
+    # Gatilho: finalizar (conversão) → gerar contas a receber + baixar estoque
     if status == "finalizado":
         from datetime import datetime, timedelta
         from catalog_server.db import system_conn as _sc
+        from catalog_server.services.parcelas_venda import gerar_contas_receber
+
         orc = orcamento_repo.buscar(orcamento_id)
         if orc:
-            venc = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-            try:
-                contas_repo.criar_receber(
-                    cliente=orc.get("cliente", "") or "",
-                    valor=float(orc.get("total") or 0),
-                    data_vencimento=venc,
-                    descricao=f"Venda {orc.get('numero', '')}",
-                    documento=orc.get("numero", ""),
-                )
-            except Exception:
-                pass
+            # Contas a receber: a prazo (cliente identificado + condição ativa)
+            # gera parcelas; à vista/balcão mantém a conta única de 0 dias.
+            parcelas = gerar_contas_receber(orc)
+            if not parcelas:
+                venc = (datetime.now() + timedelta(days=0)).strftime("%Y-%m-%d")
+                try:
+                    contas_repo.criar_receber(
+                        cliente=orc.get("cliente", "") or "",
+                        cliente_id=orc.get("cliente_id"),
+                        valor=float(orc.get("total") or 0),
+                        data_vencimento=venc,
+                        descricao=f"Venda {orc.get('numero', '')}",
+                        documento=orc.get("numero", ""),
+                    )
+                except Exception:
+                    pass
 
             for item in orc.get("itens", []):
                 qtd = float(item.get("quantidade") or 0)
@@ -294,7 +301,20 @@ def reabrir(orcamento_id: int):
     Volta para `liberado` (ou `em_analise` se ainda não estava liberado),
     desfaz a marcação de pedido e revoga a autorização de desconto — qualquer
     desconto acima da alçada volta a `pendente`, exigindo nova autorização.
+
+    Pedido finalizado com boleto emitido nunca pode ser alterado/reaberto.
     """
+    orc = orcamento_repo.buscar(orcamento_id)
+    if orc is None:
+        return jsonify({"error": "Orçamento não encontrado"}), 404
+    if orc.get("status") not in ("finalizado",):
+        return jsonify({"error": "Apenas pedidos finalizados podem ser reabertos"}), 400
+
+    from catalog_server.services.boletos import tem_boleto_emitido
+
+    if tem_boleto_emitido(orc.get("numero") or ""):
+        return jsonify({"error": "Pedido com boleto emitido não pode ser alterado/reaberto"}), 403
+
     from catalog_server import permissao
 
     payload = getattr(request, "usuario", None)
@@ -306,17 +326,14 @@ def reabrir(orcamento_id: int):
     if not aprova:
         return jsonify({"error": "Reabrir pedido exige permissão de aprovação"}), 403
 
-    orc = orcamento_repo.buscar(orcamento_id)
-    if orc is None:
-        return jsonify({"error": "Orçamento não encontrado"}), 404
-    if orc.get("status") not in ("finalizado",):
-        return jsonify({"error": "Apenas pedidos finalizados podem ser reabertos"}), 400
-
     if not aplicar_transicao(orcamento_id, "liberado"):
         return jsonify({"error": "Não foi possível reabrir o pedido"}), 400
     # Revoga a autorização de desconto (se houver) — correção exige reavaliação.
+    # Estorna as contas a receber geradas na finalização (serão regeneradas).
     from catalog_server.db import system_conn as _sc
+    from catalog_server.services.parcelas_venda import estornar_contas_receber
 
+    estornar_contas_receber(orc)
     with _sc() as conn:
         orcamento_repo._revogar_aprovacao(conn, orcamento_id, "pedido reaberto para correção")
         conn.commit()
@@ -461,6 +478,24 @@ def receber(orcamento_id: int):
         "troco": troco,
         "recebido": recebido,
     })
+
+
+# ─── Boleto de venda a prazo ───────────────────────────────
+
+@api_orcamentos_bp.post("/api/orcamentos/<int:orcamento_id>/boleto")
+def gerar_boleto(orcamento_id: int):
+    """Gera boletos das parcelas de uma venda a prazo (pedido finalizado)."""
+    from catalog_server.services.boletos import gerar_boletos_parcelas
+
+    orc = orcamento_repo.buscar(orcamento_id)
+    if orc is None:
+        return jsonify({"error": "Orçamento não encontrado"}), 404
+    if orc.get("status") not in ("finalizado", "recebido"):
+        return jsonify({"error": "Apenas pedidos finalizados/recebidos podem gerar boleto"}), 400
+    boletos = gerar_boletos_parcelas(orc.get("numero") or "")
+    if not boletos:
+        return jsonify({"error": "Venda sem parcelas (à vista) — nenhum boleto gerado"}), 400
+    return jsonify({"ok": True, "boletos": boletos})
 
 
 @api_orcamentos_bp.post("/api/orcamentos/<int:orcamento_id>/cancelar")

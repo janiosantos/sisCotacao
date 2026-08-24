@@ -17,6 +17,7 @@ from catalog_server.repositories.orcamentos import resumo_desconto
 from catalog_server.services import quote_service
 from catalog_server.blueprints.api_quotes import _enrich_itens
 from catalog_server.repositories import loja
+from catalog_server.services import boletos as boleto_service
 
 pages_bp = Blueprint("pages", __name__)
 
@@ -94,4 +95,25 @@ def orcamento_venda_print(orcamento_id: int):
         validade=validade,
         status_label=_ORC_STATUS_LABEL.get(orc.get("status"), orc.get("status") or ""),
         desc_resumo=resumo_desconto(orc),
+    )
+
+
+@pages_bp.get("/orcamentos/<int:orcamento_id>/boleto")
+def orcamento_boleto(orcamento_id: int):
+    """Impressão do(s) boleto(s) das parcelas de uma venda a prazo."""
+    orc = orcamento_repo.buscar(orcamento_id)
+    if orc is None:
+        abort(404)
+    emitente = emitente_repo.get()
+    parcelas = boleto_service.parcelas_com_boleto(orc.get("numero") or "")
+    cond_nome = None
+    if orc.get("condicao_pagamento_id"):
+        cond = condicao_repo.get(orc["condicao_pagamento_id"])
+        cond_nome = (cond or {}).get("nome")
+    return render_template(
+        "boleto_print.html",
+        orc=orc,
+        emitente=emitente,
+        parcelas=parcelas,
+        condicao_pagamento=cond_nome,
     )
