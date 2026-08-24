@@ -338,15 +338,17 @@ Cresceu de 43 → 45 paths (`receber` pedido, `solicitacoes-compra/<id>`).
 ### Testes
 `test_parcelas_boleto.py` (5): parcelas por condição, consumidor não gera, boleto marca parcelas, reabrir com boleto bloqueia, reabrir sem boleto estorna. Suíte backend total: **180 testes**.
 
-## 18. Integração de pagamentos nas contas a receber (v2.23.0)
+## 18. Integração de pagamentos nas contas a receber (v2.23.0 · v2.24.0)
 
-**Entregue (v2.23.0)** — migração `0083_payment_providers`. **Fase 1**: Asaas + Mercado Pago (sandbox). **Fase 2 (futura)**: EfiPay + Sicoob (certificado digital).
+**Entregue (v2.23.0)** — migração `0083_payment_providers`. **Fase 1**: Asaas + Mercado Pago (sandbox). **Fase 2 (v2.24.0)**: EfiPay + Sicoob.
 
 ### Conceito
 Boleto e PIX são emitidos **a partir da conta a receber** (Financeiro), via **provedor escolhido por prioridade de custo** configurável por operação (boleto/pix) e ambiente (sandbox/produção). Troca de provedor = reordenar prioridade, sem código.
 
 ### Backend (`catalog_server/payments/`)
-- `base.py` (interface), `registry.py` (seleção por prioridade), `repo.py` (config), `asaas.py` + `mercadopago.py` (fase 1), `efipay.py` + `sicoob.py` (stubs fase 2), `service.py` (emissão + baixa automática).
+- `base.py` (interface), `registry.py` (seleção por prioridade), `repo.py` (config), `asaas.py` + `mercadopago.py` (fase 1), `efipay.py` + `sicoob.py` (fase 2), `service.py` (emissão + baixa automática).
+- **EfiPay**: OAuth2 client credentials + certificado P12/PEM (mTLS) p/ PIX (`POST /v2/cob`) e boleto via API de cobranças (`POST /v1/charges`); webhook `pix.received`/`charge`.
+- **Sicoob**: sandbox com token Bearer de teste + header `client_id`; produção com OAuth2 + certificado ICP-Brasil; boleto Cobrança V3 (`/cobranca-bancaria/v3/boletos`) e PIX (`/pix/api/v2/cob`); webhook `pix`.
 - `POST /api/financeiro/receber/<id>/cobranca` (boleto/pix); `GET .../cobranca/status`; `POST .../comprovante` (upload depósito/TED).
 - `POST /api/webhooks/payments/<provider>` (whitelist pública) → valida evento → **baixa automática** idempotente (`webhook_id`).
 - `POST /api/financeiro/receber/<id>/receber` ampliado com `forma_pagamento` (dinheiro/pix/cheque/deposito_bancario/ted/transferencia/cartão), lança no caixa.
@@ -362,4 +364,4 @@ Boleto e PIX são emitidos **a partir da conta a receber** (Financeiro), via **p
 - **Financeiro → Contas a Receber**: coluna Cobrança (badge status), botões **Boleto / PIX** (mesma parcela), modal com QR code/copia-e-cola e boleto/URL; modal **Receber** com forma de pagamento + anexo de comprovante (depósito/TED obrigatório).
 
 ### Testes
-`test_payments.py` (5): configurar provedor, emitir boleto Asaas (mock), webhook baixa automática idempotente, receber manual com forma, comprovante. Suíte backend total: **185 testes**.
+`test_payments.py` (7): configurar provedor, emitir boleto Asaas (mock), webhook baixa automática idempotente, receber manual com forma, comprovante, emitir boleto EfiPay, emitir PIX Sicoob + webhook. Suíte backend total: **187 testes**.

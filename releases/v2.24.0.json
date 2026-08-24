@@ -1,0 +1,34 @@
+{
+  "versao": "v2.24.0",
+  "componentes": [
+    "backend"
+  ],
+  "correcoes": [],
+  "melhorias": [
+    "Fase 2 da integração de pagamentos: provedores EfiPay e Sicoob implementados (boleto e PIX)",
+    "EfiPay: OAuth2 client credentials + certificado P12/PEM (mTLS) para PIX; boleto via API de cobranças",
+    "Sicoob: sandbox com token Bearer de teste + client_id; produção com OAuth2 + certificado ICP-Brasil",
+    "Webhook de pagamento agora instancia o provedor pela operação da conta (boleto/pix), não fixo em pix"
+  ],
+  "recursos": [
+    "payments/efipay.py e payments/sicoob.py implementados (antes stubs)",
+    "Webhooks EfiPay (pix.received/charge) e Sicoob (pix) com baixa automática"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.24.0",
+    "frontend": "siscom-frontend:v2.24.0"
+  },
+  "database": {
+    "migration": 83
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "efipay_ativado": true,
+    "sicoob_ativado": true
+  }
+}
