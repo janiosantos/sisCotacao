@@ -6,7 +6,8 @@
     "frontend"
   ],
   "correcoes": [
-    "Corrigido bug: disponibilidade_estoque=0 era convertido em 1 (operador `or 1`) — indisponível nunca persistia como tal no portal do fornecedor"
+    "Corrigido bug: disponibilidade_estoque=0 era convertido em 1 (operador `or 1`) — indisponível nunca persistia como tal no portal do fornecedor",
+    "RBAC: concedida permissão atualizacoes.visualizar a Vendedor/Estoquista/Operador (migração 0081) — o smoke test pós-deploy (Regra 12) lê /api/sistema/status com perfil vendedor"
   ],
   "melhorias": [
     "Portal do fornecedor: representante responde por item com unidade de venda (UN/CX/MT/KG…), quantidade por embalagem (fator), marca ofertada e observação",
@@ -18,6 +19,7 @@
   ],
   "recursos": [
     "Migração 0080: cotacao_precos (+unidade_compra, fator_conversao, marca_ofertada, motivo_indisponibilidade) e cotacao_itens (+unidade_solicitada)",
+    "Migração 0081: atualizacoes.visualizar para Vendedor/Estoquista/Operador (smoke test pós-deploy)",
     "Endpoint GET /api/compras/cotacoes/<id>/lembrar/<fornecedor_id> para reenvio de convite",
     "Portal público /api/fornecedor/<token> e /proposta documentados no OpenAPI (PrecoProposta)"
   ],
@@ -26,7 +28,7 @@
     "frontend": "siscom-frontend:v2.20.0"
   },
   "database": {
-    "migration": 80
+    "migration": 81
   },
   "api": {
     "versao": "v1"

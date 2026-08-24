@@ -200,7 +200,7 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 
 ## 11. Controle de acesso por perfil (RBAC)
 
-**Entregue (v2.16.0)** — migração `0075_controle_acesso`. **Dívidas fechadas (v2.17.0)** — migrações `0076` (negação por usuário) e `0077` (Contract de `usuarios.perfil`).
+**Entregue (v2.16.0)** — migração `0075_controle_acesso`. **Dívidas fechadas (v2.17.0)** — migrações `0076` (negação por usuário) e `0077` (Contract de `usuarios.perfil`). **Correção v2.20.0** — migração `0081`: `atualizacoes.visualizar` concedida a Vendedor/Estoquista/Operador (smoke test pós-deploy lê `/api/sistema/status` com perfil vendedor).
 
 - **Modelo**: `perfis` (4 fixos: Administrador, Vendedor, Estoquista, Operador + perfis novos via CRUD), `recursos` (catálogo de módulos), `perfil_recurso` (matriz de ações), `usuario_perfis` (N:N) e `usuario_override` (`acoes_extra` concede e `acoes_negadas` nega — a efetiva é `(perfis ∪ conceder) − negar`; superuser ignora negações).
 - **Ações**: `visualizar, cadastrar, editar, excluir, imprimir, aprovar, configurar`.
@@ -258,7 +258,7 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 
 ## 14. Compras — portal do fornecedor rico (v2.20.0)
 
-**Entregue (v2.20.0)** — migração `0080_compras_portal`.
+**Entregue (v2.20.0)** — migração `0080_compras_portal` + `0081_rbac_atualizacoes_visualizar`.
 
 ### Portal do fornecedor (representante responde online)
 - **Por item**: unidade de venda (UN/CX/MT/KG…, editável), quantidade por embalagem (`fator_conversao`), marca ofertada e observação — além de preço, desconto %, prazo e condição de pagamento global (que já existiam).
