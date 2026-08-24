@@ -1972,6 +1972,188 @@
           }
         }
       }
+    },
+    "/api/financeiro/pagar/lote": {
+      "post": {
+        "tags": [
+          "financeiro"
+        ],
+        "summary": "Cria contas a pagar parceladas (condição/manual/datas) ou recorrentes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fornecedor": {
+                    "type": "string"
+                  },
+                  "descricao": {
+                    "type": "string"
+                  },
+                  "documento": {
+                    "type": "string"
+                  },
+                  "valor": {
+                    "type": "number"
+                  },
+                  "data_emissao": {
+                    "type": "string"
+                  },
+                  "modo": {
+                    "type": "string",
+                    "enum": [
+                      "condicao",
+                      "manual",
+                      "datas"
+                    ]
+                  },
+                  "condicao_pagamento_id": {
+                    "type": "integer"
+                  },
+                  "n_parcelas": {
+                    "type": "integer"
+                  },
+                  "intervalo_dias": {
+                    "type": "integer"
+                  },
+                  "recorrencia": {
+                    "type": "string"
+                  },
+                  "frequencia": {
+                    "type": "string",
+                    "enum": [
+                      "mensal",
+                      "semanal",
+                      "anual"
+                    ]
+                  },
+                  "n_ocorrencias": {
+                    "type": "integer"
+                  },
+                  "dia": {
+                    "type": "integer"
+                  },
+                  "origem_tipo": {
+                    "type": "string"
+                  },
+                  "origem_id": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Lote criado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoteResultado"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/financeiro/receber/lote": {
+      "post": {
+        "tags": [
+          "financeiro"
+        ],
+        "summary": "Cria contas a receber parceladas ou recorrentes",
+        "responses": {
+          "201": {
+            "description": "Lote criado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoteResultado"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/financeiro/lote/preview": {
+      "post": {
+        "tags": [
+          "financeiro"
+        ],
+        "summary": "Calcula as parcelas sem gravar (preview)",
+        "responses": {
+          "200": {
+            "description": "Parcelas calculadas"
+          }
+        }
+      }
+    },
+    "/api/financeiro/lote/{tabela}/{grupo_id}": {
+      "get": {
+        "tags": [
+          "financeiro"
+        ],
+        "summary": "Lista as parcelas do grupo",
+        "responses": {
+          "200": {
+            "description": "Parcelas do grupo"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "financeiro"
+        ],
+        "summary": "Exclui as parcelas EM ABERTO do grupo",
+        "responses": {
+          "200": {
+            "description": "Excluídas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "excluidas": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/financeiro/anexo/{tabela}/{conta_id}": {
+      "post": {
+        "tags": [
+          "financeiro"
+        ],
+        "summary": "Anexa documento/boleto/comprovante ao lançamento (multipart)",
+        "responses": {
+          "200": {
+            "description": "Anexo salvo"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "financeiro"
+        ],
+        "summary": "Lista anexos do lançamento",
+        "responses": {
+          "200": {
+            "description": "Lista de anexos"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3443,6 +3625,26 @@
           },
           "url_pix": {
             "type": "string"
+          }
+        }
+      },
+      "LoteResultado": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "grupo_id": {
+            "type": "string"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "n_parcelas": {
+            "type": "integer"
           }
         }
       }

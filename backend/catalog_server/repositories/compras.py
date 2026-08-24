@@ -492,7 +492,15 @@ class ComprasRepository:
             d["total"] = sum(r["preco_unitario"] * r["quantidade"] for r in itens)
             return d
 
-    def confirmar_recebimento(self, pedido_id: int, deposito_id: int = 1, usuario_id: int | None = None) -> dict:
+    def confirmar_recebimento(self, pedido_id: int, deposito_id: int = 1, usuario_id: int | None = None,
+                              condicao_pagamento_id: int | None = None) -> dict:
+        """Recebe o pedido: entrada de estoque + contas a pagar + status.
+
+        Quando `condicao_pagamento_id` é informado e possui parcelas, gera as
+        contas a pagar PARCELADAS (modelo TOTVS/desdobramento) vinculadas ao
+        pedido (`origem_tipo='pedido_compra'`) por `grupo_id`. Sem condição,
+        cria 1 conta com vencimento em 30 dias.
+        """
         with system_conn() as conn:
             pedido = conn.execute("SELECT * FROM pedidos_compra WHERE id=?", (pedido_id,)).fetchone()
             if not pedido:
@@ -518,9 +526,36 @@ class ComprasRepository:
             fornecedor = conn.execute("SELECT nome FROM fornecedores WHERE id=?", (pedido["fornecedor_id"],)).fetchone()
             fnome = fornecedor["nome"] if fornecedor else f"fornecedor #{pedido['fornecedor_id']}"
             from datetime import datetime, timedelta
-            venc = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-            contas_repo.criar_pagar(fornecedor=fnome, valor=round(total, 2), data_vencimento=venc,
-                                    descricao=f"Pedido {pedido['numero']}", documento=pedido["numero"],
-                                    _conn=conn)
+            from catalog_server.services import lancamentos_lote
+
+            grupo = lancamentos_lote.novo_grupo()
+            parcelas = []
+            if condicao_pagamento_id:
+                try:
+                    parcelas = lancamentos_lote.calcular_parcelas(
+                        "condicao", round(total, 2), datetime.now().strftime("%Y-%m-%d"),
+                        condicao_id=int(condicao_pagamento_id),
+                    )
+                except ValueError:
+                    parcelas = []
+            if not parcelas:
+                venc = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+                parcelas = [{"valor": round(total, 2), "vencimento": venc, "dias": 30}]
+            n = len(parcelas)
+            for i, p in enumerate(parcelas, start=1):
+                descricao = f"Pedido {pedido['numero']}"
+                if n > 1:
+                    descricao = f"{descricao} — parcela {i}/{n}"
+                conn.execute(
+                    """INSERT INTO contas_pagar
+                         (fornecedor, fornecedor_id, descricao, valor, saldo,
+                          data_vencimento, documento, origem_tipo, origem_id,
+                          parcela, total_parcelas, grupo_id)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (fnome, pedido["fornecedor_id"], descricao, float(p["valor"]),
+                     float(p["valor"]), p["vencimento"], pedido["numero"],
+                     "pedido_compra", pedido_id, i, n, grupo),
+                )
             conn.execute("UPDATE pedidos_compra SET status='recebido' WHERE id=?", (pedido_id,))
-            return {"ok": True, "total": round(total, 2), "itens": len(itens)}
+            return {"ok": True, "total": round(total, 2), "itens": len(itens),
+                    "parcelas": n, "grupo_id": grupo}

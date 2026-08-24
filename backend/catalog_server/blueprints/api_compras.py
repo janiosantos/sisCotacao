@@ -165,7 +165,11 @@ def detalhar_pedido(pedido_id: int):
 
 @api_compras_bp.post("/api/compras/pedidos/<int:pedido_id>/receber")
 def receber_pedido(pedido_id: int):
-    """Recebe o pedido: entrada de estoque + conta a pagar + status 'recebido'."""
+    """Recebe o pedido: entrada de estoque + contas a pagar + status 'recebido'.
+
+    Com `condicao_pagamento_id` (e parcelas cadastradas), gera as contas a
+    pagar PARCELADAS vinculadas ao pedido; sem condição, 1 conta em 30 dias.
+    """
     from flask import session as _session
     from catalog_server.blueprints.api_usuarios import SESSION_KEY
 
@@ -175,6 +179,7 @@ def receber_pedido(pedido_id: int):
             pedido_id,
             deposito_id=int(data.get("deposito_id") or 1),
             usuario_id=_session.get(SESSION_KEY),
+            condicao_pagamento_id=data.get("condicao_pagamento_id"),
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400

@@ -233,3 +233,149 @@ def baixar_adiantamento(aid: int):
         return jsonify(result)
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
+
+
+# ─── Lançamentos parcelados / recorrentes (v2.25.0) ────────
+
+@api_financeiro_bp.post("/api/financeiro/lote/preview")
+def preview_lote():
+    """Calcula as parcelas sem gravar (preview no frontend)."""
+    from catalog_server.services import lancamentos_lote
+
+    data = request.get_json(silent=True) or {}
+    try:
+        if data.get("recorrencia"):
+            parcelas = lancamentos_lote.calcular_recorrencia(
+                data.get("frequencia") or "mensal",
+                float(data.get("valor") or 0),
+                data.get("primeira") or "",
+                int(data.get("n_ocorrencias") or 1),
+                dia=data.get("dia"),
+            )
+        else:
+            parcelas = lancamentos_lote.calcular_parcelas(
+                data.get("modo") or "manual",
+                float(data.get("valor") or 0),
+                data.get("data_base") or "",
+                condicao_id=data.get("condicao_pagamento_id"),
+                n_parcelas=int(data.get("n_parcelas") or 1),
+                intervalo_dias=int(data.get("intervalo_dias") or 30),
+                datas=data.get("datas"),
+            )
+        return jsonify({
+            "parcelas": parcelas,
+            "total": round(sum(float(p["valor"]) for p in parcelas), 2),
+            "n": len(parcelas),
+        })
+    except (ValueError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+
+
+def _criar_lote(tabela: str):
+    from catalog_server.services import lancamentos_lote
+
+    data = request.get_json(silent=True) or {}
+    pessoa = "fornecedor" if tabela == "contas_pagar" else "cliente"
+    if not (data.get(pessoa) or "").strip():
+        return jsonify({"error": f"informe o {pessoa}"}), 400
+    valor = float(data.get("valor") or 0)
+    if valor <= 0:
+        return jsonify({"error": "valor obrigatório"}), 400
+    try:
+        if data.get("recorrencia"):
+            parcelas = lancamentos_lote.calcular_recorrencia(
+                data.get("frequencia") or "mensal",
+                valor,
+                data.get("primeira") or data.get("data_base") or data.get("data_emissao") or "",
+                int(data.get("n_ocorrencias") or 1),
+                dia=data.get("dia"),
+            )
+        else:
+            parcelas = lancamentos_lote.calcular_parcelas(
+                data.get("modo") or "manual",
+                valor,
+                data.get("data_base") or data.get("data_emissao") or "",
+                condicao_id=data.get("condicao_pagamento_id"),
+                n_parcelas=int(data.get("n_parcelas") or 1),
+                intervalo_dias=int(data.get("intervalo_dias") or 30),
+                datas=data.get("datas"),
+            )
+    except (ValueError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+    dados_lote = dict(data)
+    if data.get("recorrencia"):
+        dados_lote["recorrencia"] = data.get("frequencia") or "mensal"
+    ids, grupo = lancamentos_lote.criar_lote(tabela, dados_lote, parcelas)
+    return jsonify({"ok": True, "grupo_id": grupo, "ids": ids, "n_parcelas": len(ids)}), 201
+
+
+@api_financeiro_bp.post("/api/financeiro/pagar/lote")
+def pagar_lote():
+    return _criar_lote("contas_pagar")
+
+
+@api_financeiro_bp.post("/api/financeiro/receber/lote")
+def receber_lote():
+    return _criar_lote("contas_receber")
+
+
+@api_financeiro_bp.get("/api/financeiro/lote/<tabela>/<grupo_id>")
+def ver_lote(tabela: str, grupo_id: str):
+    from catalog_server.services import lancamentos_lote
+
+    if tabela not in ("pagar", "receber"):
+        return jsonify({"error": "tabela inválida"}), 400
+    return jsonify(lancamentos_lote.listar_lote(f"contas_{tabela}", grupo_id))
+
+
+@api_financeiro_bp.delete("/api/financeiro/lote/<tabela>/<grupo_id>")
+def excluir_lote(tabela: str, grupo_id: str):
+    from catalog_server.services import lancamentos_lote
+
+    if tabela not in ("pagar", "receber"):
+        return jsonify({"error": "tabela inválida"}), 400
+    excluidas = lancamentos_lote.excluir_lote(f"contas_{tabela}", grupo_id)
+    return jsonify({"ok": True, "excluidas": excluidas})
+
+
+# ─── Anexo no lançamento (nota/boleto/comprovante) ─────────
+
+@api_financeiro_bp.post("/api/financeiro/anexo/<tabela>/<int:conta_id>")
+def anexar_documento(tabela: str, conta_id: int):
+    from catalog_server.blueprints.api_usuarios import SESSION_KEY
+    from flask import session
+
+    if tabela not in ("pagar", "receber"):
+        return jsonify({"error": "tabela inválida"}), 400
+    tipo = (request.form.get("tipo") or "documento").strip()
+    descricao = (request.form.get("descricao") or "").strip()
+    arquivo = request.files.get("file")
+    if not arquivo or not arquivo.filename:
+        return jsonify({"error": "Informe o arquivo"}), 400
+    import os
+    import uuid as _uuid
+
+    ext = os.path.splitext(arquivo.filename)[1] or ".pdf"
+    filename = f"anexo_{tabela}_{conta_id}_{_uuid.uuid4().hex[:12]}{ext}"
+    base = os.environ.get("COMPROVANTES_DIR", "/app/images/comprovantes")
+    os.makedirs(base, exist_ok=True)
+    arquivo.save(os.path.join(base, filename))
+    with system_conn() as conn:
+        conn.execute(
+            "INSERT INTO conta_anexo (tabela, conta_id, tipo, filename, descricao, usuario_id)"
+            " VALUES (?,?,?,?,?,?)",
+            (tabela, conta_id, tipo, filename, descricao, session.get(SESSION_KEY)),
+        )
+        conn.commit()
+    return jsonify({"ok": True, "filename": filename})
+
+
+@api_financeiro_bp.get("/api/financeiro/anexo/<tabela>/<int:conta_id>")
+def listar_anexos(tabela: str, conta_id: int):
+    if tabela not in ("pagar", "receber"):
+        return jsonify({"error": "tabela inválida"}), 400
+    with system_conn() as conn:
+        return jsonify([dict(r) for r in conn.execute(
+            "SELECT * FROM conta_anexo WHERE tabela=? AND conta_id=? ORDER BY id",
+            (tabela, conta_id),
+        ).fetchall()])

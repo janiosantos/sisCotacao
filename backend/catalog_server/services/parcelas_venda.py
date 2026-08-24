@@ -62,6 +62,10 @@ def gerar_contas_receber(orcamento: dict) -> list[dict]:
     hoje = date.today()
     criadas: list[dict] = []
     soma_pct = 0.0
+    from catalog_server.services.lancamentos_lote import novo_grupo
+
+    grupo = novo_grupo()
+    n = len(parcelas)
 
     for i, p in enumerate(parcelas, start=1):
         pct = float(p.get("percentual") or 0)
@@ -76,14 +80,21 @@ def gerar_contas_receber(orcamento: dict) -> list[dict]:
             cliente_id=int(orcamento["cliente_id"]),
             valor=valor,
             data_vencimento=venc,
-            descricao=f"Venda {numero} — parcela {i}/{len(parcelas)}",
+            descricao=f"Venda {numero} — parcela {i}/{n}",
             documento=numero,
-            observacao=f"Parcela {i}/{len(parcelas)} · condição de pagamento",
+            observacao=f"Parcela {i}/{n} · condição de pagamento",
         )
+        with system_conn() as conn:
+            conn.execute(
+                "UPDATE contas_receber SET origem_tipo='venda', origem_id=?,"
+                " parcela=?, total_parcelas=?, grupo_id=? WHERE id=?",
+                (orcamento.get("id"), i, n, grupo, conta_id),
+            )
+            conn.commit()
         criadas.append({
             "conta_id": conta_id,
             "parcela": i,
-            "total_parcelas": len(parcelas),
+            "total_parcelas": n,
             "dias": dias,
             "vencimento": venc,
             "valor": valor,
