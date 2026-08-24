@@ -291,3 +291,24 @@ Cresceu de 40 → 43 paths com `PrecoProposta`, `Invite` e os endpoints do porta
 - **Topbar compacta**: botão Sair vira só ícone no mobile (`< sm`); título com `flex-1` e truncate.
 - **Grids `grid-cols-3` puros → responsivos**: configurações de impressora, cadastro rápido de cliente no PDV e recebimento do caixa.
 - **Testes**: `tests/table.test.tsx` (3) — data-label por coluna, preserva EmptyRow, classes card/coluna. Suíte frontend total: **13 testes**.
+
+## 16. Compras — pipeline único (modelo TOTVS) (v2.21.0)
+
+**Entregue (v2.21.0)** — remove a confusão conceitual Cotação × Compras.
+
+### Conceito (referência TOTVS Protheus SIGACOM)
+Cadeia linear de documentos: **Solicitação de Compra → Cotação (negociação/propostas) → Análise (vencedor) → Pedido de Compra → Recebimento**. Cotação **não é módulo separado** — é etapa do processo de compras; Pedido de Compra é o compromisso formal.
+
+### Mudanças
+- **Módulo Compras único** (`#/compras`): abas **Nova cotação / Cotações / Pedidos de compra**.
+- **Aba Cotações**: lista todas as cotações (status normalizado `aberta→Pendente`, `fechada→Finalizada`), botão Abrir para continuar no fluxo.
+- **Aba Pedidos de compra**: lista `pedidos_compra` com status (Enviado/Recebido), botão **Receber** (entrada de estoque + conta a pagar + status recebido) e PDF.
+- **Menu**: removidas as rotas avulsas `#/cotacoes` e `#/solicitacoes` do menu lateral — tudo passa por Compras. As telas legadas continuam acessíveis por URL (compat).
+- **Endpoint novo**: `POST /api/compras/pedidos/<id>/receber`; `GET /api/solicitacoes-compra/<id>` (detalhe com itens) para futura "cotar a partir da solicitação".
+- **Bug corrigido**: `confirmar_recebimento` usava `item.get()` sobre `PgRow` (PostgreSQL) — recebimento falhava.
+
+### Testes
+`test_pedidos_compras.py` (4): listar pedidos, receber atualiza status/estoque, receber duas vezes bloqueia (400), solicitação detalhe com itens. Suíte backend total: **174 testes**.
+
+### OpenAPI
+Cresceu de 43 → 45 paths (`receber` pedido, `solicitacoes-compra/<id>`).

@@ -1,0 +1,40 @@
+{
+  "versao": "v2.21.0",
+  "componentes": [
+    "backend",
+    "frontend"
+  ],
+  "correcoes": [
+    "confirmar_recebimento usava item.get() sobre linha PgRow (PostgreSQL) — receber pedido de compra falhava com AttributeError",
+    "Removida a confusão conceitual Cotação × Compras: as telas paralelas 'Cotações' e 'Solic. Compra' foram unificadas dentro do módulo Compras"
+  ],
+  "melhorias": [
+    "Módulo Compras único com abas: Nova cotação / Cotações / Pedidos de compra (modelo TOTVS em cadeia: Solicitação → Cotação → Análise → Pedido → Recebimento)",
+    "Nova aba 'Cotações' lista todas as cotações com status normalizado (aberta→Pendente, fechada→Finalizada) e botão Abrir para continuar no fluxo",
+    "Nova aba 'Pedidos de compra' lista pedidos gerados com status (Enviado/Recebido), botão Receber (entrada de estoque + conta a pagar) e PDF",
+    "Menu lateral: 'Cotações' e 'Solic. Compra' saem do menu — tudo passa por 'Compras'",
+    "Endpoint GET /api/solicitacoes-compra/<id> devolve a solicitação com seus itens (base para 'cotar a partir da solicitação')"
+  ],
+  "recursos": [
+    "POST /api/compras/pedidos/<id>/receber (recebimento de pedido com depósito)",
+    "GET /api/solicitacoes-compra/<id> (detalhe com itens)",
+    "Aba Pedidos de compra no frontend com recebimento"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.21.0",
+    "frontend": "siscom-frontend:v2.21.0"
+  },
+  "database": {
+    "migration": 81
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "compras_pipeline_unico": true,
+    "pedidos_compra_tela": true
+  }
+}
