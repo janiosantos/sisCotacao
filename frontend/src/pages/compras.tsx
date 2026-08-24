@@ -697,6 +697,156 @@ function LinksPanel({ cotacaoId, invites, onVoltar, onComparar }: { cotacaoId: n
 
 // ============================================================ ETAPA 3
 
+function AguardandoRespostas({
+  cotacaoId,
+  m,
+  onAtualizar,
+}: {
+  cotacaoId: number | null;
+  m: MatrizComparacao;
+  onAtualizar: () => void;
+}) {
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [quantidades, setQuantidades] = useState<Record<number, string>>(() => {
+    const init: Record<number, string> = {};
+    for (const it of m.itens) init[it.cotacao_item_id] = String(it.quantidade);
+    return init;
+  });
+  const [salvando, setSalvando] = useState<number | null>(null);
+  const [lembrando, setLembrando] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!cotacaoId) return;
+    void api
+      .convitesCotacao(cotacaoId)
+      .then(setInvites)
+      .catch(() => setInvites([]));
+  }, [cotacaoId]);
+
+  const salvarQtd = async (itemId: number) => {
+    if (!cotacaoId) return;
+    setSalvando(itemId);
+    try {
+      await api.atualizarItem(cotacaoId, itemId, { quantidade: Number(quantidades[itemId]) || 1 });
+      toast("Quantidade atualizada", "success");
+      onAtualizar();
+    } catch (e) {
+      toast("Erro: " + (e as Error).message, "error");
+    } finally {
+      setSalvando(null);
+    }
+  };
+
+  const lembrar = async (inv: Invite) => {
+    if (!cotacaoId) return;
+    setLembrando(inv.fornecedor_id);
+    try {
+      const r = await api.lembrarFornecedor(cotacaoId, inv.fornecedor_id);
+      if (r.whatsapp_url) {
+        window.open(r.whatsapp_url, "_blank", "noopener,noreferrer");
+        toast("Lembrete aberto no WhatsApp");
+      } else if (r.mailto_url) {
+        window.location.href = r.mailto_url;
+        toast("Lembrete aberto no e-mail");
+      } else {
+        void navigator.clipboard.writeText(r.link).then(() => toast("Sem contato — link copiado!"));
+      }
+    } catch (e) {
+      toast("Erro: " + (e as Error).message, "error");
+    } finally {
+      setLembrando(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Cotação {m.cotacao.numero} — aguardando respostas</h3>
+            <p className="text-sm text-gray-500">
+              {m.itens.length} item(ns) · {m.fornecedores.filter((f) => f.status === "respondido").length} de {m.fornecedores.length} fornecedor(es) responderam
+            </p>
+          </div>
+          <Button variant="primary" onClick={onAtualizar}>
+            ↻ Atualizar respostas
+          </Button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <tr>
+                <th className="px-3 py-2">Produto</th>
+                <th className="px-3 py-2">SKU</th>
+                <th className="px-3 py-2">Quantidade</th>
+                <th className="px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {m.itens.map((it) => (
+                <tr key={it.cotacao_item_id} className="hover:bg-gray-50">
+                  <td className="px-3 py-2 font-medium">{it.name}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-gray-400">{it.sku || "—"}</td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="number"
+                      min={1}
+                      value={quantidades[it.cotacao_item_id] ?? it.quantidade}
+                      onChange={(e) => setQuantidades({ ...quantidades, [it.cotacao_item_id]: e.target.value })}
+                      className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none"
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <Button size="sm" onClick={() => void salvarQtd(it.cotacao_item_id)} disabled={salvando === it.cotacao_item_id}>
+                      {salvando === it.cotacao_item_id ? "…" : "Salvar"}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <h4 className="mb-2 text-sm font-semibold text-gray-900">Enviar / reenviar convite</h4>
+        <p className="mb-3 text-sm text-gray-500">Os links continuam disponíveis para reenviar aos fornecedores pendentes.</p>
+        <div className="space-y-2">
+          {invites.length === 0 ? (
+            <p className="text-sm text-gray-400">Nenhum fornecedor convidado.</p>
+          ) : (
+            invites.map((inv) => (
+              <div key={inv.fornecedor_id} className="flex flex-wrap items-center gap-3 rounded-md border border-gray-100 p-2">
+                <div className="flex-1">
+                  <b className="text-sm">{inv.nome}</b>
+                  <span className="ml-2 text-xs text-gray-400">{inv.status === "respondido" ? "✓ respondeu" : "pendente"}</span>
+                  {inv.data_limite_retorno ? <span className="ml-2 text-xs text-gray-400">retorno até {inv.data_limite_retorno}</span> : null}
+                </div>
+                <div className="flex gap-2">
+                  {inv.whatsapp_url ? (
+                    <a className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-700" target="_blank" rel="noopener noreferrer" href={inv.whatsapp_url}>
+                      WhatsApp
+                    </a>
+                  ) : null}
+                  <Button size="sm" onClick={() => void navigator.clipboard.writeText(inv.link).then(() => toast("Link copiado!"))}>
+                    Copiar link
+                  </Button>
+                  {inv.status !== "respondido" ? (
+                    <Button size="sm" variant="secondary" onClick={() => void lembrar(inv)} disabled={lembrando === inv.fornecedor_id}>
+                      {lembrando === inv.fornecedor_id ? "…" : "🔔 Lembrar"}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EtapaComparando({
   cotacaoId,
   logica,
@@ -738,15 +888,7 @@ function EtapaComparando({
   if (m) {
     const status = m.cotacao.status;
     if (status !== "analise" && status !== "finalizada" && !m.fornecedores.some((f) => f.status === "respondido")) {
-      return (
-        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
-          <div className="mb-3 text-sm font-semibold text-gray-900">Cotação disparada — aguardando respostas</div>
-          <p className="mb-4 text-sm text-gray-500">Quando os fornecedores responderem (ou você apertar o botão), a matriz aparece aqui.</p>
-          <Button variant="primary" onClick={() => void carregar()}>
-            Atualizar respostas
-          </Button>
-        </div>
-      );
+      return <AguardandoRespostas cotacaoId={cotacaoId} m={m} onAtualizar={() => void carregar()} />;
     }
 
     const fornecedores = m.fornecedores;

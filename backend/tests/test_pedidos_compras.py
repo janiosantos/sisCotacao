@@ -158,3 +158,36 @@ def test_solicitacao_detalhe_com_itens(system_db):
     assert body["codigo"] == "SOL-001"
     assert len(body["itens"]) == 1
     assert body["itens"][0]["produto_nome"] == "Cimento"
+
+
+def test_editar_quantidade_item_cotacao_compras(system_db):
+    """Edição de quantidade de item numa cotação criada pelo fluxo Compras
+    (tela 'aguardando respostas') usa o PATCH de itens da cotação."""
+    c, h = _admin_client(system_db)
+    with system_conn() as conn:
+        conn.execute("INSERT INTO produtos_cadastro (nome, ativo) VALUES ('Cimento', 1)")
+        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
+        conn.execute(
+            "INSERT INTO variantes (produto_id, sku, ean, preco, unidade_venda, ativo)"
+            " VALUES (%s,'CIM-50','7891000000003',32,'SC',1)",
+            (pid,),
+        )
+        vid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
+        conn.commit()
+    from catalog_server.repositories import supplier_repo
+
+    fid = supplier_repo.create({"nome": "Cimento Norte"})
+    r = c.post("/api/compras/cotacoes", headers=h, json={
+        "apelido": "Cotação Cimento",
+        "comprador": "Loja",
+        "itens": [{"produto_id": vid, "quantidade": 10}],
+        "fornecedores": [{"fornecedor_id": fid}],
+    })
+    assert r.status_code == 200, r.get_json()
+    cid = r.get_json()["id"]
+
+    up = c.patch(f"/api/cotacoes/{cid}/itens/1", headers=h, json={"quantidade": 25})
+    assert up.status_code == 200, up.get_json()
+    with system_conn() as conn:
+        qtd = conn.execute("SELECT quantidade FROM cotacao_itens WHERE id=1").fetchone()["quantidade"]
+    assert float(qtd) == 25
