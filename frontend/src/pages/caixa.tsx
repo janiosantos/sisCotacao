@@ -756,7 +756,7 @@ function ModalPedidoCaixa({ d, onSair }: { d: OrcamentoDetalhe; onSair: () => vo
             {d.cliente || "Sem cliente"} · Vendedor: {d.usuario_nome || "—"} · {fmtDate(d.criado_em)}
           </p>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-xl bg-orange-50 p-4 text-center">
               <div className="text-xs font-medium uppercase text-orange-700">Valor a Receber</div>
               <div className="mt-1 text-3xl font-bold text-orange-600">{fmtMoney(total)}</div>

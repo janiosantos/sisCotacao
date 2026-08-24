@@ -61,3 +61,63 @@ textarea {
     font-size: 14px;
   }
 }
+
+/* ------------------------------------------------------------------
+   Tabelas do componente Table (classe mob-card) no mobile (< lg):
+   cada linha vira um card empilhado, com o rótulo do cabeçalho à
+   esquerda. Em lg+ volta o formato de colunas.
+   ------------------------------------------------------------------ */
+@media (max-width: 1023px) {
+  .mob-card tbody tr {
+    display: block;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    margin: 0 6px 10px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .mob-card tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 14px;
+  }
+  .mob-card tbody td > * {
+    min-width: 0;
+  }
+  .mob-card tbody td:last-child {
+    border-bottom: 0;
+  }
+  .mob-card tbody td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #9ca3af;
+    margin-right: auto;
+    min-width: 84px;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Célula de ação (última coluna, normalmente sem label) fica só com o conteúdo. */
+  .mob-card tbody td[data-label=""] {
+    justify-content: flex-end;
+    background: #f9fafb;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .mob-card tbody td[data-label=""]::before {
+    display: none;
+  }
+  .mob-card tbody td.text-right,
+  .mob-card tbody td.text-right::before {
+    text-align: right;
+  }
+}

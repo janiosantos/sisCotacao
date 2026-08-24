@@ -247,7 +247,7 @@ function Impressora() {
               <option value="arquivo">Arquivo (grava o cupom em binário, para teste)</option>
             </Select>
           </Field>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label="Host">
               <Input value={cfg.host} onChange={(e) => setCfg({ ...cfg, host: e.target.value })} disabled={(cfg.driver || "escpos_tcp") !== "escpos_tcp"} />
             </Field>

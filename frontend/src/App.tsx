@@ -342,8 +342,10 @@ export default function App() {
           >
             <Menu size={20} />
           </button>
-          <h1 className="min-w-0 truncate text-base font-semibold text-gray-900 sm:text-lg">{route?.def.title ?? "ERP"}</h1>
-          <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
+          <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-gray-900 sm:flex-none sm:text-lg">
+            {route?.def.title ?? "ERP"}
+          </h1>
+          <div className="ml-auto flex flex-none items-center gap-1.5 sm:gap-3">
             <button
               onClick={() => toggleCart()}
               className="relative rounded-md border border-gray-200 p-2 text-gray-600 hover:bg-gray-50"
@@ -365,10 +367,12 @@ export default function App() {
             <Button
               variant="ghost"
               size="sm"
+              className="!px-2 sm:!px-2.5"
               onClick={async () => {
                 await sair();
                 setAuthed(false);
               }}
+              title="Sair"
             >
               <LogOut size={16} /> <span className="hidden sm:inline">Sair</span>
             </Button>

@@ -312,12 +312,12 @@ export default function Fornecedores() {
           </>
         }
       >
-        <div className="mb-4 flex flex-wrap gap-2 border-b border-gray-200 pb-3">
+        <div className="mb-4 flex gap-2 overflow-x-auto border-b border-gray-200 pb-3">
           {TABS.map((t) => (
             <button
               key={t.key}
               onClick={() => setAba(t.key)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+              className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ${
                 aba === t.key ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-100"
               }`}
             >
