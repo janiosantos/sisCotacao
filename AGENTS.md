@@ -280,3 +280,14 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 
 ### OpenAPI
 Cresceu de 40 → 43 paths com `PrecoProposta`, `Invite` e os endpoints do portal (`/api/fornecedor/<token>` e `/proposta`) e o `lembrar`.
+
+## 15. Layout responsivo mobile/tablet (v2.20.1)
+
+**Entregue (v2.20.1)** — melhorias de layout em `frontend/src/ui/ui.tsx`, `index.css`, `App.tsx` e telas principais.
+
+- **Tabelas viram cards no mobile** (`< lg`): o componente `Table`/`TBody` injeta `data-label` (rótulo do cabeçalho) em cada célula; o CSS `mob-card` transforma cada `<tr>` num card empilhado com label à esquerda. Em `lg+` volta o formato de colunas. Cobre todas as listagens que usam o componente `Table` (clientes, fornecedores, financeiro, estoque, orçamentos, etc.).
+- **Modal vira bottom-sheet no mobile**: abre deslizando de baixo (full-width, `rounded-t-lg`), centralizado no desktop (`sm:items-center`).
+- **Abas roláveis**: `overflow-x-auto` + `whitespace-nowrap` em Clientes/Fornecedores (produtos já usava).
+- **Topbar compacta**: botão Sair vira só ícone no mobile (`< sm`); título com `flex-1` e truncate.
+- **Grids `grid-cols-3` puros → responsivos**: configurações de impressora, cadastro rápido de cliente no PDV e recebimento do caixa.
+- **Testes**: `tests/table.test.tsx` (3) — data-label por coluna, preserva EmptyRow, classes card/coluna. Suíte frontend total: **13 testes**.
