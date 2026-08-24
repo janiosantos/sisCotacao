@@ -1,0 +1,43 @@
+{
+  "versao": "v2.25.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [],
+  "melhorias": [
+    "Financeiro: 1 lançamento gera N parcelas (modelo TOTVS/desdobramento) — compra 30/60/90 em um único lançamento",
+    "Parcelamento por condição de pagamento, manual (nº parcelas + intervalo) ou datas explícitas, com preview antes de salvar",
+    "Recorrência (aluguel/mensalidade): frequência mensal/semanal/anual com todas as ocorrências geradas antecipadamente",
+    "Origem rastreável: contas a pagar vinculadas ao pedido de compra e contas a receber vinculadas à venda, com badge clicável",
+    "Exclusão de parcelas em aberto por grupo (pagas preservadas)",
+    "Recebimento do pedido de compra propõe parcelamento pela condição escolhida (com preview) — não mais silencioso",
+    "Anexo de nota/boleto/comprovante no lançamento"
+  ],
+  "recursos": [
+    "Migração 0084: origem_tipo, origem_id, parcela, total_parcelas, grupo_id, recorrencia em contas_pagar/receber + conta_anexo",
+    "POST /api/financeiro/{pagar|receber}/lote, POST /api/financeiro/lote/preview",
+    "GET/DELETE /api/financeiro/lote/{tabela}/{grupo_id}",
+    "POST/GET /api/financeiro/anexo/{tabela}/{conta_id}",
+    "POST /api/compras/pedidos/<id>/receber aceita condicao_pagamento_id (parcelamento com confirmação)"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.25.0",
+    "frontend": "siscom-frontend:v2.25.0"
+  },
+  "database": {
+    "migration": 84
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "lancamentos_parcelados": true,
+    "recorrencia_financeira": true,
+    "origem_lancamento": true
+  }
+}

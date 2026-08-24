@@ -365,3 +365,26 @@ Boleto e PIX são emitidos **a partir da conta a receber** (Financeiro), via **p
 
 ### Testes
 `test_payments.py` (7): configurar provedor, emitir boleto Asaas (mock), webhook baixa automática idempotente, receber manual com forma, comprovante, emitir boleto EfiPay, emitir PIX Sicoob + webhook. Suíte backend total: **187 testes**.
+
+## 19. Financeiro: parcelamento, recorrência e origem (v2.25.0)
+
+**Entregue (v2.25.0)** — migração `0084_lancamentos_lote`.
+
+### Conceito (TOTVS/desdobramento FINA050/FINA040)
+1 lançamento → N títulos com vencimentos diferenciados. Toda parcela de um lançamento compartilha `grupo_id` e carrega `parcela i/N` + `origem_tipo/origem_id`.
+
+### Backend
+- `services/lancamentos_lote.py`: `calcular_parcelas` (`condicao` usa `condicao_parcelas` dias/percentual; `manual` nº+intervalo; `datas` explícita), `calcular_recorrencia` (mensal/semanal/anual, **todas as ocorrências geradas antecipadamente**), `criar_lote`, `excluir_lote` (só abertas), `listar_lote`.
+- Endpoints: `POST /api/financeiro/{pagar|receber}/lote`, `POST /api/financeiro/lote/preview` (não grava), `GET/DELETE /api/financeiro/lote/{tabela}/{grupo_id}`, `POST/GET /api/financeiro/anexo/{tabela}/{conta_id}` (tabela `conta_anexo`).
+- **Compras → Financeiro**: `confirmar_recebimento` aceita `condicao_pagamento_id` — com parcelas, gera contas a pagar **parceladas** com `origem_tipo='pedido_compra'`, `origem_id`, `grupo_id`; sem, 1 conta em 30 dias (comportamento anterior + origem).
+- **Vendas a prazo (v2.22)**: parcelas ganham `origem_tipo='venda'`, `origem_id`, `grupo_id`, `parcela i/N`.
+
+### Frontend
+- **Financeiro (Pagar e Receber)**: modal `ModalLancamento` com seção Parcelamento — À vista | Por condição (select + **preview das parcelas**) | Parcelado (nº + intervalo) | Recorrente (frequência + ocorrências + dia). Grid com coluna **Parcela (1/3)**, badge de recorrência, **origem clicável** (Pedido → Compras) e 🗑 excluir parcelas em aberto do grupo. 📎 anexo de nota/boleto por lançamento.
+- **Compras → Receber pedido**: modal com select de condição + **preview das parcelas** antes de confirmar (não mais silencioso); resultado informa nº de contas geradas.
+
+### Testes
+`test_lancamentos_lote.py` (7): parcelamento por condição (30/60/90, ajuste de arredondamento na última), manual (n+intervalo), recorrência mensal antecipada, preview não grava, exclusão de grupo preserva pagas, pedido parcelado com origem, venda a prazo com grupo. Suíte backend total: **194 testes**.
+
+### OpenAPI
+Cresceu de 51 → 56 paths (lote pagar/receber, preview, ver/excluir grupo, anexo).
