@@ -197,7 +197,7 @@ def test_comprovante_deposito(system_db):
     data = {
         "file": (io.BytesIO(b"fakepdf"), "comprovante.pdf"),
         "tipo": "ted",
-        "descricao": "DepÃ³sito TED",
+"descricao": "Depósito TED",
     }
     r = c.post(f"/api/financeiro/receber/{conta_id}/comprovante", headers=h,
                data=data, content_type="multipart/form-data")
@@ -206,3 +206,82 @@ def test_comprovante_deposito(system_db):
         comp = conn.execute("SELECT * FROM conta_comprovante WHERE conta_id=%s", (conta_id,)).fetchone()
     assert comp is not None
     assert comp["tipo"] == "ted"
+
+
+def _config(system_db, codigo, operacao, **extra):
+    """Cria config de um provedor (fase 2) com credenciais."""
+    from catalog_server.payments.repo import payment_provider_repo
+
+    with system_conn() as conn:
+        conn.execute(
+            "INSERT INTO payment_provider (codigo, nome) VALUES (%s, %s) ON CONFLICT (codigo) DO NOTHING",
+            (codigo, codigo.capitalize()),
+        )
+        pid = int(conn.execute(
+            "SELECT id FROM payment_provider WHERE codigo=%s", (codigo,)
+        ).fetchone()["id"])
+        conn.commit()
+    dados = {"provider_id": pid, "operacao": operacao, "ambiente": "sandbox",
+             "prioridade": 1, "ativo": 1}
+    dados.update(extra)
+    payment_provider_repo.upsert_config(dados)
+
+
+def _mock_resp(payload):
+    return type("R", (), {"ok": True, "status_code": 200, "json": lambda *a: payload, "text": ""})
+
+
+def test_emitir_boleto_efipay(system_db):
+    """EfiPay (fase 2): OAuth2 + certificado; boleto via /v1/charges."""
+    c, h = _admin_client(system_db)
+    _config(system_db, "efipay", "boleto", client_id="efi_id", client_secret="efi_secret", certificado="/tmp/cert.pem")
+    conta_id = _conta(system_db)
+    charge_resp = {
+        "id": "ch_123",
+        "payment": {"banking_billet": {
+            "linha_digitavel": "00190.50095 40144.816906 80690.350314 3 73370000000100",
+            "barcode": "00190500954014481690680690350314337370000000100",
+            "nosso_numero": "00000001",
+            "link": "https://efipay.com.br/boleto/xxx",
+        }},
+    }
+    with patch("requests.post") as mpost:
+        mpost.side_effect = [
+            _mock_resp({"access_token": "tok_efi"}),
+            _mock_resp(charge_resp),
+        ]
+        r = c.post(f"/api/financeiro/receber/{conta_id}/cobranca", headers=h, json={"operacao": "boleto"})
+        assert r.status_code == 200, r.get_json()
+        body = r.get_json()
+        assert body["payment_id"] == "ch_123"
+        assert body["provider"] == "efipay"
+        assert body["linha_digitavel"]
+
+
+def test_emitir_pix_sicoob_webhook(system_db):
+    """Sicoob (fase 2): sandbox token direto; PIX cob + webhook baixa."""
+    c, h = _admin_client(system_db)
+    _config(system_db, "sicoob", "pix", client_id="sicoob_id", access_token="bearer_teste", chave_pix="chave@teste.com")
+    conta_id = _conta(system_db)
+    cob_resp = {
+        "txid": "tx123",
+        "pixCopiaECola": "00020126580014br.gov.bcb.pix0136...",
+        "loc": {"location": "https://sicoob/pix/tx123"},
+    }
+    with patch("requests.post") as mpost:
+        mpost.return_value = _mock_resp(cob_resp)
+        r = c.post(f"/api/financeiro/receber/{conta_id}/cobranca", headers=h, json={"operacao": "pix"})
+        assert r.status_code == 200, r.get_json()
+        body = r.get_json()
+        assert body["payment_id"] == "tx123"
+        assert body["provider"] == "sicoob"
+        assert body["payload_pix"]
+
+    # webhook Sicoob PIX baixa automaticamente
+    payload = {"pix": [{"txid": "tx123", "valor": "500.00", "status": "CONCLUIDA"}]}
+    rw = c.post("/api/webhooks/payments/sicoob", json=payload)
+    assert rw.status_code == 200
+    assert rw.get_json()["ok"] is True
+    with system_conn() as conn:
+        row = conn.execute("SELECT * FROM contas_receber WHERE id=%s", (conta_id,)).fetchone()
+    assert row["status"] == "pago"

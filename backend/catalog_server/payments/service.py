@@ -92,8 +92,28 @@ def consultar(conta_id: int) -> dict:
 
 
 def processar_webhook(provider_codigo: str, payload: dict, headers: dict) -> dict:
-    """Processa o webhook da plataforma e baixa a conta automaticamente."""
-    provider = registry.instanciar(provider_codigo, "pix", "sandbox")
+    """Processa o webhook da plataforma e baixa a conta automaticamente.
+
+    Instancia o provedor pela operação da conta (boleto/pix). O ambiente é
+    sandbox nesta fase; produção será resolvido pela config quando ativada.
+    """
+    # pré-localiza a conta pelo payment_id para saber a operação
+    pre_payment_id = None
+    try:
+        evento_tmp = registry.instanciar(provider_codigo, "pix", "sandbox").webhook(payload, headers)
+        if evento_tmp:
+            pre_payment_id = evento_tmp.get("payment_id")
+    except Exception:
+        evento_tmp = None
+
+    with system_conn() as conn:
+        conta = conn.execute(
+            "SELECT * FROM contas_receber WHERE payment_id=? LIMIT 1",
+            (pre_payment_id or "",),
+        ).fetchone()
+
+    operacao = (conta["tipo_cobranca"] or "pix") if conta else "pix"
+    provider = registry.instanciar(provider_codigo, operacao, "sandbox")
     evento = provider.webhook(payload, headers)
     if not evento:
         return {"ok": True, "ignorado": True}
