@@ -44,6 +44,28 @@ class SolicitacaoRepository:
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
+    def get(self, sc_id: int) -> dict | None:
+        """Solicitação com seus itens (variante + produto)."""
+        with system_conn() as conn:
+            row = conn.execute(
+                "SELECT s.*, u.nome AS usuario_nome FROM solicitacao_compra s"
+                " LEFT JOIN usuarios u ON u.id=s.usuario_id WHERE s.id=?",
+                (sc_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            itens = conn.execute(
+                """SELECT si.*, v.sku, v.unidade_venda, p.nome AS produto_nome
+                   FROM solicitacao_itens si
+                   JOIN variantes v ON v.id=si.variante_id
+                   JOIN produtos_cadastro p ON p.id=v.produto_id
+                   WHERE si.solicitacao_id=? ORDER BY si.id""",
+                (sc_id,),
+            ).fetchall()
+            d = dict(row)
+            d["itens"] = [dict(r) for r in itens]
+            return d
+
     def create(self, codigo: str, descricao: str = "", observacao: str = "", usuario_id: int | None = None) -> int:
         with system_conn() as conn:
             return conn.execute(

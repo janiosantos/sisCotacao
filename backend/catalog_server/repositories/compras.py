@@ -510,7 +510,7 @@ class ComprasRepository:
                 qtd = float(item["quantidade"] or 0)
                 preco = float(item["preco_unitario"] or 0)
                 total += preco * qtd
-                vid = item.get("produto_id")
+                vid = item["produto_id"]
                 if vid and qtd > 0:
                     from catalog_server.repositories.estoque import estoque_repo
                     estoque_repo.movimentar(deposito_id, vid, "entrada", qtd, str(pedido["numero"]), "Recebimento compra", usuario_id=usuario_id, _conn=conn)

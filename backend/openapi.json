@@ -1769,6 +1769,64 @@
           }
         }
       }
+    },
+    "/api/compras/pedidos/{pedido_id}/receber": {
+      "post": {
+        "tags": [
+          "compras"
+        ],
+        "summary": "Recebe pedido de compra: entrada de estoque + conta a pagar + status recebido",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "deposito_id": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pedido recebido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "total": {
+                      "type": "number"
+                    },
+                    "itens": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/solicitacoes-compra/{sc_id}": {
+      "get": {
+        "tags": [
+          "compras"
+        ],
+        "summary": "Solicitação de compra com itens (para integrar no pipeline)",
+        "responses": {
+          "200": {
+            "description": "Solicitação com itens"
+          }
+        }
+      }
     }
   },
   "components": {

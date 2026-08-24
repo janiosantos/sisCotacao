@@ -161,3 +161,21 @@ def detalhar_pedido(pedido_id: int):
     if pedido is None:
         return jsonify({"error": "Pedido não encontrado"}), 404
     return jsonify(pedido)
+
+
+@api_compras_bp.post("/api/compras/pedidos/<int:pedido_id>/receber")
+def receber_pedido(pedido_id: int):
+    """Recebe o pedido: entrada de estoque + conta a pagar + status 'recebido'."""
+    from flask import session as _session
+    from catalog_server.blueprints.api_usuarios import SESSION_KEY
+
+    data = request.get_json(silent=True) or {}
+    try:
+        result = compras_repo.confirmar_recebimento(
+            pedido_id,
+            deposito_id=int(data.get("deposito_id") or 1),
+            usuario_id=_session.get(SESSION_KEY),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(result)

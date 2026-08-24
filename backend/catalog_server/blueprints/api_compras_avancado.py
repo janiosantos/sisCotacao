@@ -42,6 +42,14 @@ def listar_solicitacoes():
     return jsonify(solicitacao_repo.list(status=request.args.get("status")))
 
 
+@api_compras_avancado_bp.get("/api/solicitacoes-compra/<int:sc_id>")
+def detalhar_solicitacao(sc_id: int):
+    sc = solicitacao_repo.get(sc_id)
+    if sc is None:
+        return jsonify({"error": "Solicitação não encontrada"}), 404
+    return jsonify(sc)
+
+
 @api_compras_avancado_bp.post("/api/solicitacoes-compra")
 def criar_solicitacao():
     data = request.get_json(silent=True) or {}
