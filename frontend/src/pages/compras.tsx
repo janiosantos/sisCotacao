@@ -737,11 +737,58 @@ function AguardandoRespostas({
     }
   };
 
-  const lembrar = async (inv: Invite) => {
-    if (!cotacaoId) return;
-    setLembrando(inv.fornecedor_id);
+  // Fonte primária: fornecedores da matriz (nunca vazio se convidados).
+  // Os invites (quando carregados) trazem os links prontos.
+  const fornecedores = m.fornecedores.map((f) => {
+    const inv = invites.find((i) => i.fornecedor_id === f.fornecedor_id);
+    return { ...f, link: inv?.link, whatsapp_url: inv?.whatsapp_url || "" };
+  });
+
+  const obterLink = async (fid: number): Promise<string | null> => {
+    if (!cotacaoId) return null;
+    const inv = invites.find((i) => i.fornecedor_id === fid);
+    if (inv?.link) return inv.link;
+    const r = await api.lembrarFornecedor(cotacaoId, fid);
+    setInvites((cur) => {
+      const idx = cur.findIndex((i) => i.fornecedor_id === fid);
+      if (idx >= 0) {
+        const next = [...cur];
+        next[idx] = r;
+        return next;
+      }
+      return [...cur, r];
+    });
+    return r.link;
+  };
+
+  const copiarLink = async (fid: number) => {
     try {
-      const r = await api.lembrarFornecedor(cotacaoId, inv.fornecedor_id);
+      const link = await obterLink(fid);
+      if (link) {
+        await navigator.clipboard.writeText(link);
+        toast("Link copiado!");
+      } else {
+        toast("Sem link disponível para este fornecedor.", "error");
+      }
+    } catch (e) {
+      toast("Erro: " + (e as Error).message, "error");
+    }
+  };
+
+  const lembrar = async (fid: number, nome: string) => {
+    if (!cotacaoId) return;
+    setLembrando(fid);
+    try {
+      const r = await api.lembrarFornecedor(cotacaoId, fid);
+      setInvites((cur) => {
+        const idx = cur.findIndex((i) => i.fornecedor_id === fid);
+        if (idx >= 0) {
+          const next = [...cur];
+          next[idx] = r;
+          return next;
+        }
+        return [...cur, r];
+      });
       if (r.whatsapp_url) {
         window.open(r.whatsapp_url, "_blank", "noopener,noreferrer");
         toast("Lembrete aberto no WhatsApp");
@@ -752,7 +799,7 @@ function AguardandoRespostas({
         void navigator.clipboard.writeText(r.link).then(() => toast("Sem contato — link copiado!"));
       }
     } catch (e) {
-      toast("Erro: " + (e as Error).message, "error");
+      toast(`Não foi possível gerar o convite de ${nome}: ` + (e as Error).message, "error");
     } finally {
       setLembrando(null);
     }
@@ -812,36 +859,36 @@ function AguardandoRespostas({
       <div className="rounded-lg border border-gray-200 bg-white p-4">
         <h4 className="mb-2 text-sm font-semibold text-gray-900">Enviar / reenviar convite</h4>
         <p className="mb-3 text-sm text-gray-500">Os links continuam disponíveis para reenviar aos fornecedores pendentes.</p>
-        <div className="space-y-2">
-          {invites.length === 0 ? (
-            <p className="text-sm text-gray-400">Nenhum fornecedor convidado.</p>
-          ) : (
-            invites.map((inv) => (
-              <div key={inv.fornecedor_id} className="flex flex-wrap items-center gap-3 rounded-md border border-gray-100 p-2">
+        {fornecedores.length === 0 ? (
+          <p className="text-sm text-gray-400">Nenhum fornecedor convidado nesta cotação.</p>
+        ) : (
+          <div className="space-y-2">
+            {fornecedores.map((f) => (
+              <div key={f.fornecedor_id} className="flex flex-wrap items-center gap-3 rounded-md border border-gray-100 p-2">
                 <div className="flex-1">
-                  <b className="text-sm">{inv.nome}</b>
-                  <span className="ml-2 text-xs text-gray-400">{inv.status === "respondido" ? "✓ respondeu" : "pendente"}</span>
-                  {inv.data_limite_retorno ? <span className="ml-2 text-xs text-gray-400">retorno até {inv.data_limite_retorno}</span> : null}
+                  <b className="text-sm">{f.nome}</b>
+                  <span className="ml-2 text-xs text-gray-400">{f.status === "respondido" ? "✓ respondeu" : "pendente"}</span>
+                  {f.data_limite_retorno ? <span className="ml-2 text-xs text-gray-400">retorno até {f.data_limite_retorno}</span> : null}
                 </div>
                 <div className="flex gap-2">
-                  {inv.whatsapp_url ? (
-                    <a className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-700" target="_blank" rel="noopener noreferrer" href={inv.whatsapp_url}>
+                  {f.whatsapp_url ? (
+                    <a className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-700" target="_blank" rel="noopener noreferrer" href={f.whatsapp_url}>
                       WhatsApp
                     </a>
                   ) : null}
-                  <Button size="sm" onClick={() => void navigator.clipboard.writeText(inv.link).then(() => toast("Link copiado!"))}>
+                  <Button size="sm" onClick={() => void copiarLink(f.fornecedor_id)}>
                     Copiar link
                   </Button>
-                  {inv.status !== "respondido" ? (
-                    <Button size="sm" variant="secondary" onClick={() => void lembrar(inv)} disabled={lembrando === inv.fornecedor_id}>
-                      {lembrando === inv.fornecedor_id ? "…" : "🔔 Lembrar"}
+                  {f.status !== "respondido" ? (
+                    <Button size="sm" variant="secondary" onClick={() => void lembrar(f.fornecedor_id, f.nome)} disabled={lembrando === f.fornecedor_id}>
+                      {lembrando === f.fornecedor_id ? "…" : "🔔 Lembrar"}
                     </Button>
                   ) : null}
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

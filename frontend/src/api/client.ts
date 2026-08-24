@@ -367,6 +367,7 @@ export interface CotacaoFornecedor {
   whatsapp: string | null;
   email: string | null;
   data_resposta?: string | null;
+  data_limite_retorno?: string | null;
   condicao_pagamento?: string | null;
   condicao_pagamento_dias?: number | null;
 }
