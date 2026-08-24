@@ -1,0 +1,42 @@
+{
+  "versao": "v2.22.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [
+    "Contas a receber ao finalizar: antes sempre 1 conta em +30 dias (ignorando condição). Agora gera parcelas conforme a condição de pagamento",
+    "Tela de Orçamentos mostrava 'Receber' (caixa) para vendas a prazo — agora só para à vista"
+  ],
+  "melhorias": [
+    "Vendas a prazo (cliente identificado + condição ativa) geram contas a receber por parcela, com vencimento por dias da condição",
+    "Cliente padrão (CONSUMIDOR/balcão) e condição à vista mantêm recebimento no caixa (1 conta)",
+    "Geração de boleto por parcela: linha digitável + código de barras + template imprimível com assinatura do cliente/autorizado",
+    "Pedido finalizado com boleto emitido não pode ser alterado/reaberto",
+    "Reabrir pedido sem boleto estorna as contas a receber (regeneradas na refinalização)",
+    "Impressão do pedido de venda com campo de assinatura do cliente ou autorizado"
+  ],
+  "recursos": [
+    "POST /api/orcamentos/<id>/boleto (gera boletos das parcelas)",
+    "GET /orcamentos/<id>/boleto (impressão/PDF do boleto)",
+    "Migração 0082: status_boleto, linha_digitavel, codigo_barras, nosso_numero, url_boleto em contas_receber"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.22.0",
+    "frontend": "siscom-frontend:v2.22.0"
+  },
+  "database": {
+    "migration": 82
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "parcelas_venda_a_prazo": true,
+    "boleto_imprimivel": true
+  }
+}

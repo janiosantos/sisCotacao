@@ -312,3 +312,28 @@ Cadeia linear de documentos: **Solicitação de Compra → Cotação (negociaç�
 
 ### OpenAPI
 Cresceu de 43 → 45 paths (`receber` pedido, `solicitacoes-compra/<id>`).
+
+## 17. Vendas a prazo — parcelas e boleto (v2.22.0)
+
+**Entregue (v2.22.0)** — migração `0082_boletos_receber`.
+
+### Contas a receber por parcela
+- Ao finalizar (`finalizado`), gera **contas a receber por parcela** conforme a condição de pagamento (`condicao_parcelas`: dias + percentual), **somente quando**: cliente **identificado** (não é o CONSUMIDOR id 1) **e** condição **ativa**.
+- Condição à vista / sem parcelas / cliente padrão → mantém **1 conta** e recebimento no **caixa** (balcão).
+- Ajuste da última parcela quando os percentuais não somam 100%.
+- **Reabrir** (sem boleto) **estorna** as contas a receber; **cancelar** já cancelava (via documento).
+- `orcamento_repo.listar` agora devolve `condicao_nome` e `n_parcelas` (contas abertas do documento).
+
+### Boleto
+- `POST /api/orcamentos/<id>/boleto` gera boletos das parcelas (linha digitável 48 + código de barras genérico, **sem integração bancária real nesta fase**).
+- `GET /orcamentos/<id>/boleto` imprime o template `boleto_print.html` (1 boleto por parcela) com **assinatura do cliente/autorizado**.
+- **Trava**: pedido `finalizado` com boleto emitido **não pode ser reaberto/alterado**.
+- Migração 0082: `contas_receber` + `status_boleto`, `linha_digitavel`, `codigo_barras`, `nosso_numero`, `url_boleto`.
+
+### Frontend (Orçamentos)
+- Lista: pedido `finalizado` **a prazo** (n_parcelas>1) mostra **Boleto** e **Contas** (link Financeiro), **sem** "Receber"; à vista mantém "Receber" (caixa).
+- Detalhe: mostra condição de pagamento e nº de parcelas; ações condicionadas ao tipo.
+- Impressão do pedido de venda (`orcamento_print.html`) com campo **"Cliente / autorizado — de acordo"**.
+
+### Testes
+`test_parcelas_boleto.py` (5): parcelas por condição, consumidor não gera, boleto marca parcelas, reabrir com boleto bloqueia, reabrir sem boleto estorna. Suíte backend total: **180 testes**.
