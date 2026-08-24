@@ -82,6 +82,18 @@ class ContasRepository:
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
+    def get_receber(self, conta_id: int) -> dict | None:
+        """Conta a receber enriquecida com dados do cliente (doc/email)."""
+        with system_conn() as conn:
+            row = conn.execute(
+                """SELECT cr.*, c.doc AS cliente_doc, c.email AS cliente_email, c.tipo_pessoa
+                   FROM contas_receber cr
+                   LEFT JOIN clientes c ON c.id=cr.cliente_id
+                   WHERE cr.id=?""",
+                (conta_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
     def criar_receber(
         self,
         cliente: str, valor: float, data_vencimento: str,

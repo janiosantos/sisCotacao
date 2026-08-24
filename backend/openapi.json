@@ -1827,6 +1827,151 @@
           }
         }
       }
+    },
+    "/api/financeiro/receber/{conta_id}/cobranca": {
+      "post": {
+        "tags": [
+          "financeiro"
+        ],
+        "summary": "Emite boleto ou PIX para a conta (provedor por prioridade)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operacao": {
+                    "type": "string",
+                    "enum": [
+                      "boleto",
+                      "pix"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cobrança emitida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CobrancaResultado"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/financeiro/receber/{conta_id}/cobranca/status": {
+      "get": {
+        "tags": [
+          "financeiro"
+        ],
+        "summary": "Consulta status da cobrança na plataforma",
+        "responses": {
+          "200": {
+            "description": "Status da cobrança",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status_cobranca": {
+                      "type": "string"
+                    },
+                    "status_plataforma": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/financeiro/receber/{conta_id}/comprovante": {
+      "post": {
+        "tags": [
+          "financeiro"
+        ],
+        "summary": "Anexa comprovante de depósito/TED (multipart)",
+        "responses": {
+          "200": {
+            "description": "Comprovante salvo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "filename": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/webhooks/payments/{provider}": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Webhook de pagamento (baixa automática, idempotente)",
+        "responses": {
+          "200": {
+            "description": "Processado"
+          }
+        }
+      }
+    },
+    "/api/payment-providers": {
+      "get": {
+        "tags": [
+          "financeiro"
+        ],
+        "summary": "Lista provedores e configurações",
+        "responses": {
+          "200": {
+            "description": "Provedores e configs"
+          }
+        }
+      }
+    },
+    "/api/payment-providers/config": {
+      "put": {
+        "tags": [
+          "financeiro"
+        ],
+        "summary": "Salva configuração de provedor (credenciais/prioridade)",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3257,6 +3402,47 @@
           "data_limite_retorno": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "CobrancaResultado": {
+        "type": "object",
+        "properties": {
+          "operacao": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "payment_id": {
+            "type": "string"
+          },
+          "status_cobranca": {
+            "type": "string"
+          },
+          "linha_digitavel": {
+            "type": "string"
+          },
+          "codigo_barras": {
+            "type": "string"
+          },
+          "nosso_numero": {
+            "type": "string"
+          },
+          "url_boleto": {
+            "type": "string"
+          },
+          "payload_pix": {
+            "type": "string"
+          },
+          "qr_code_base64": {
+            "type": "string"
+          },
+          "txid": {
+            "type": "string"
+          },
+          "url_pix": {
+            "type": "string"
           }
         }
       }

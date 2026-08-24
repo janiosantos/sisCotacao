@@ -77,9 +77,36 @@ def receber_conta(conta_id: int):
     valor = float(data.get("valor") or 0)
     if valor <= 0:
         return jsonify({"error": "valor obrigatório"}), 400
+    forma = (data.get("forma_pagamento") or "dinheiro").strip().lower()
     try:
+        conta = contas_repo.get_receber(conta_id)
+        if conta is None:
+            return jsonify({"error": "Conta não encontrada"}), 404
         result = contas_repo.receber(conta_id, valor, data.get("data_recebimento"))
-        return jsonify(result)
+        # lança no caixa (entrada) com a forma de pagamento
+        from catalog_server.repositories import caixa_repo
+
+        try:
+            caixa_repo.movimentar(
+                "entrada",
+                f"Recebimento {conta['documento'] or ''} — {conta['cliente'] or ''}",
+                valor,
+                forma_pagamento=forma,
+                documento=conta.get("documento") or "",
+            )
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        # baixa automática da cobrança (PIX/boleto) quando paga
+        if result.get("status") == "pago":
+            from catalog_server.db import system_conn as _sc
+
+            with _sc() as conn:
+                conn.execute(
+                    "UPDATE contas_receber SET status_cobranca='pago' WHERE id=?",
+                    (conta_id,),
+                )
+                conn.commit()
+        return jsonify({**result, "forma_pagamento": forma})
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
 
