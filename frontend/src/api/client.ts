@@ -1,7 +1,5 @@
 // client.ts — cliente HTTP tipado para a API do catalog_server.
 
-export type Metodo = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-
 // ------------------------------------------------------------------
 // Catálogo
 // ------------------------------------------------------------------
@@ -29,6 +27,8 @@ export interface Atributo {
   label: string;
   options?: string[];
 }
+
+export type Metodo = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export interface Variante {
   id: number;
@@ -1322,6 +1322,8 @@ export const api = {
   cancelarOrcamento: (id: number) => request<{ ok: boolean }>("POST", `/api/orcamentos/${id}/cancelar`),
   devolverOrcamento: (id: number) => request<{ ok: boolean; itens_devolvidos: number }>("POST", `/api/orcamentos/${id}/devolver`),
   formasPagamento: () => request<string[]>("GET", "/api/orcamentos/receber/formas"),
+  gerarBoleto: (id: number) =>
+    request<{ ok: boolean; boletos: BoletoParcela[] }>("POST", `/api/orcamentos/${id}/boleto`),
 
   // emissão fiscal (NFC-e/NF-e via Tecnospeed)
   emitirNfce: (orcamentoId: number) =>
@@ -1797,6 +1799,8 @@ export interface OrcamentoLista {
   desconto_rejeitado_motivo?: string | null;
   virou_pedido?: number | boolean;
   condicao_pagamento_id?: number | null;
+  condicao_nome?: string | null;
+  n_parcelas?: number;
   cliente_id?: number | null;
   cliente_doc?: string | null;
   uf_destino?: string | null;
@@ -1807,6 +1811,19 @@ export interface OrcamentoLista {
 
 export interface OrcamentoDetalhe extends OrcamentoLista {
   itens: OrcamentoItemPayload[];
+}
+
+export interface BoletoParcela {
+  id: number;
+  cliente: string;
+  documento: string;
+  valor: number;
+  data_vencimento: string;
+  status_boleto: string;
+  linha_digitavel: string;
+  codigo_barras: string;
+  nosso_numero: string;
+  observacao: string;
 }
 
 export interface RecebimentoResultado {

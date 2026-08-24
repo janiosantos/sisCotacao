@@ -175,17 +175,37 @@ export default function Orcamentos() {
                 <Cell className="text-xs">{fmtDate(o.criado_em)}</Cell>
                 <Cell>
                   <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                    {o.status === "finalizado" && (
-                      <Button size="sm" variant="primary" onClick={() => setReceberDe({ id: o.id, numero: o.numero, total: o.total })}>
-                        Receber
-                      </Button>
-                    )}
+                    {o.status === "finalizado" &&
+                      (o.n_parcelas && o.n_parcelas > 1 ? (
+                        <>
+                          <a
+                            className="rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700"
+                            target="_blank"
+                            rel="noreferrer"
+                            href={`/orcamentos/${o.id}/boleto`}
+                            title="Gerar / imprimir boleto das parcelas"
+                          >
+                            Boleto
+                          </a>
+                          <a
+                            className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                            href="#/financeiro"
+                            title="Ver contas a receber"
+                          >
+                            Contas
+                          </a>
+                        </>
+                      ) : (
+                        <Button size="sm" variant="primary" onClick={() => setReceberDe({ id: o.id, numero: o.numero, total: o.total })}>
+                          Receber
+                        </Button>
+                      ))}
                     <a
                       className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                       target="_blank"
                       rel="noreferrer"
                       href={`/orcamentos/venda/${o.id}/imprimir`}
-                      title="Imprimir / salvar PDF"
+                      title="Imprimir / salvar PDF (com campo de assinatura)"
                     >
                       PDF
                     </a>
@@ -320,11 +340,29 @@ function ModalDetalhe({
               Reabrir p/ correção
             </Button>
           )}
-          {d.status === "finalizado" && (
-            <Button variant="primary" onClick={onReceber}>
-              Receber
-            </Button>
-          )}
+          {d.status === "finalizado" &&
+            (d.n_parcelas && d.n_parcelas > 1 ? (
+              <>
+                <a
+                  className="inline-flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700"
+                  target="_blank"
+                  rel="noreferrer"
+                  href={`/orcamentos/${d.id}/boleto`}
+                >
+                  Boleto
+                </a>
+                <a
+                  className="inline-flex items-center justify-center gap-1.5 rounded-md border border-gray-300 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  href="#/financeiro"
+                >
+                  Contas a receber
+                </a>
+              </>
+            ) : (
+              <Button variant="primary" onClick={onReceber}>
+                Receber
+              </Button>
+            ))}
           {pendenteDesconto && (
             <>
               <Button variant="ghost" onClick={onRejeitar}>
@@ -345,6 +383,8 @@ function ModalDetalhe({
         {d.cliente || "Sem cliente"}
         {d.contato ? " · " + d.contato : ""} · criado em {fmtDate(d.criado_em)}
         {d.virou_pedido ? " · virou pedido" : ""}
+        {d.condicao_nome ? " · condição: " + d.condicao_nome : ""}
+        {d.n_parcelas && d.n_parcelas > 1 ? ` · ${d.n_parcelas} parcela(s) a receber` : ""}
       </p>
 
       {d.desconto_status ? (
