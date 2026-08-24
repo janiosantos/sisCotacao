@@ -1,0 +1,41 @@
+{
+  "versao": "v2.23.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [],
+  "melhorias": [
+    "Contas a receber: emitir boleto e PIX direto do Financeiro, via provedores Asaas e Mercado Pago (fase 1, sandbox)",
+    "Baixa automática de PIX/boleto via webhook (idempotente); dinheiro/cheque/depósito/TED com baixa manual",
+    "Depósito bancário e TED com anexo de comprovante no sistema",
+    "Troca de provedor por prioridade de custo configurável (boleto/PIX) sem código",
+    "Recebimento de conta a receber com forma de pagamento (dinheiro/pix/cheque/depósito/TED/transferência/cartão) lançando no caixa"
+  ],
+  "recursos": [
+    "Migração 0083: payment_provider (catálogo), payment_provider_config (credenciais+prioridade), contas_receber expandida (provider_id, payment_id, status_cobranca, payload_pix, qr_code_base64, txid, webhook_id) e conta_comprovante",
+    "POST /api/financeiro/receber/<id>/cobranca (boleto/PIX), GET .../cobranca/status",
+    "POST /api/financeiro/receber/<id>/comprovante (upload)",
+    "POST /api/webhooks/payments/<provider> (baixa automática idempotente)",
+    "GET/PUT /api/payment-providers(/config) — Integrações de pagamento em Configurações",
+    "Provedores previstos (fase 2): EfiPay e Sicoob (certificado digital)"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.23.0",
+    "frontend": "siscom-frontend:v2.23.0"
+  },
+  "database": {
+    "migration": 83
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "pagamentos_contas_receber": true,
+    "boleto_pix_multi_provedor": true
+  }
+}
