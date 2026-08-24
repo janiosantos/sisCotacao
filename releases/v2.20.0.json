@@ -1,0 +1,41 @@
+{
+  "versao": "v2.20.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [
+    "Corrigido bug: disponibilidade_estoque=0 era convertido em 1 (operador `or 1`) — indisponível nunca persistia como tal no portal do fornecedor"
+  ],
+  "melhorias": [
+    "Portal do fornecedor: representante responde por item com unidade de venda (UN/CX/MT/KG…), quantidade por embalagem (fator), marca ofertada e observação",
+    "Indisponibilidade com motivo: em falta de estoque, não trabalha com a linha, descontinuado, fora da região, outro (motivo obrigatório quando indisponível)",
+    "Unidade sugerida da variante (unidade_venda/fator_conversao) no momento da cotação (snapshot em cotacao_itens.unidade_solicitada)",
+    "Matriz de comparação mostra unidade, fator, nº de embalagens, preço por embalagem e marca da oferta",
+    "Botão 'Lembrar' por fornecedor pendente na tela de convites — reenvia WhatsApp/e-mail com o mesmo link",
+    "Pedido impresso exibe unidade e nº de embalagens (ceil da quantidade/fator)"
+  ],
+  "recursos": [
+    "Migração 0080: cotacao_precos (+unidade_compra, fator_conversao, marca_ofertada, motivo_indisponibilidade) e cotacao_itens (+unidade_solicitada)",
+    "Endpoint GET /api/compras/cotacoes/<id>/lembrar/<fornecedor_id> para reenvio de convite",
+    "Portal público /api/fornecedor/<token> e /proposta documentados no OpenAPI (PrecoProposta)"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.20.0",
+    "frontend": "siscom-frontend:v2.20.0"
+  },
+  "database": {
+    "migration": 80
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "compras_portal_rico": true,
+    "lembrete_fornecedor": true
+  }
+}

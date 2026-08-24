@@ -1,0 +1,34 @@
+{
+  "versao": "v2.15.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [],
+  "melhorias": [],
+  "recursos": [
+    "Indicador de completude no cadastro de produtos (Dados Gerais): card lateral com progresso e pendências obrigatórias",
+    "Estoque por depósito + situação (ok/ruptura/excesso) na aba Variações do cadastro de produto (filtro produto_id em /api/estoque/saldo)",
+    "Perfil Fiscal efetivo com hierarquia Produto→Variação: badge herdado vs override + validação inline (marca, formato NCM, preço>0) via GET /api/fiscal/perfil-efetivo/{variante_id}",
+    "Gatilhos contábeis configuráveis por evento (venda_autorizada/compra/ajuste → contabil.lancar(), idempotente) com painel em Configurações",
+    "Esqueleto da suíte de testes frontend (vitest + vitest.config.ts + tests/format.test.ts, script npm test)",
+    "OpenAPI fase 2 cresce nos blueprints tocados (estoque/saldo, perfil-efetivo, contabil/gatilhos e contabil/lancamentos)"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.15.0",
+    "frontend": "siscom-frontend:v2.15.0"
+  },
+  "database": {
+    "migration": 74
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "gatilhos_contabeis": true
+  }
+}

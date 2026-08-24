@@ -1,0 +1,35 @@
+{
+  "versao": "v2.16.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [],
+  "melhorias": [],
+  "recursos": [
+    "Controle de acesso por perfil (RBAC): perfis fixos (Administrador, Vendedor, Estoquista, Operador), catálogo de recursos e matriz de ações (visualizar/cadastrar/editar/excluir/imprimir/aprovar/configurar)",
+    "Usuário com múltiplos perfis (N:N) e acesso personalizado por tela via overrides (concede extra, nunca nega)",
+    "Gate central no backend: rota → recurso + ação por método HTTP, atrás da flag CONTROLE_ACESSO (rollback comportamental)",
+    "Decorators de permissão em endpoints críticos (aprovar desconto, config fiscal, impressão)",
+    "Tela Perfis e permissões (matriz recursos × ações por perfil) e cadastro de usuário com multi-perfil + overrides",
+    "Sidebar e rotas do frontend ocultam/bloqueiam módulos sem permissão de visualizar; botões críticos (produtos) seguem permissões",
+    "OpenAPI documenta os endpoints RBAC (/api/perfis, /api/permissoes/catalogo, perfis/overrides de usuário)"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.16.0",
+    "frontend": "siscom-frontend:v2.16.0"
+  },
+  "database": {
+    "migration": 75
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "controle_acesso": true
+  }
+}

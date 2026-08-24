@@ -1,0 +1,39 @@
+{
+  "versao": "v2.18.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [
+    "Login passou a devolver desconto_limite_pct e autoriza_desconto — corrige desconto dentro da alçada (ex.: 5% com limite 5%) pedindo autorização indevidamente no PDV",
+    "usuario_id de orçamentos/caixa agora prioriza o token Bearer (evita atribuição errada por cookie de sessão)"
+  ],
+  "melhorias": [],
+  "recursos": [
+    "Lifecycle orçamento→pedido: orçamento (rascunho/ativo/em_analise/liberado, editável) vs pedido (finalizado/recebido/cancelado/devolvido, congelado); virou_pedido marca a conversão; 'faturado' deixa de ser status (emissão fiscal via documentos_fiscais)",
+    "Transições de status controladas (sem select livre): liberado→finalizado é a conversão com gate de alçada+estoque+fiscal; finalizado→recebido é o caixa; ação 'reabrir' (com permissão de aprovação) volta para liberado para correção",
+    "Alçada de desconto TOTVS-like: desconto_status (ok/pendente/aprovado/rejeitado), segregação (aprovador ≠ vendedor), alçada do aprovador ≥ desconto (superuser aprova tudo), log de auditoria desconto_aprovacao_log",
+    "Revogação ao editar conteúdo: qualquer alteração (cliente/condição/obs/desconto/itens/reabrir) invalida a autorização — dentro da alçada volta a 'ok' (sem nova aprovação), acima volta a 'pendente'",
+    "Fila do aprovador (GET /api/orcamentos/pendentes-aprovacao) + rejeitar desconto com motivo (POST /api/orcamentos/<id>/rejeitar-desconto)",
+    "Frontend: badges de status/desconto, botões Autorizar/Rejeitar/Reabrir, fila de aprovação na tela Orçamentos; labels de alçada no cadastro de usuário"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.18.0",
+    "frontend": "siscom-frontend:v2.18.0"
+  },
+  "database": {
+    "migration": 78
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "controle_acesso": true,
+    "lifecycle_pedido": true,
+    "alcada_desconto": true
+  }
+}

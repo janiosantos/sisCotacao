@@ -181,12 +181,12 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 ## 10. Compromissos pendentes (próximas sessões)
 
 ### Cadastro de Produtos — melhorias de COMPLETUDE dentro das abas (estilo atual: abas, não página única)
-1. **Indicador de completude** em Dados Gerais (obrigatórios preenchidos × pendentes).
-2. **Estoque por depósito + situação** (ok/ruptura/excesso) na tabela da aba Variações.
-3. **Perfil Fiscal**: mostrar herdado do produto vs override por variação (hierarquia v2.5.0) + validação inline (marca, formato NCM, preço>0).
+1. **Indicador de completude** em Dados Gerais (obrigatórios preenchidos × pendentes). ✅ **entregue (v2.15.0)** — card lateral com progresso e pendências.
+2. **Estoque por depósito + situação** (ok/ruptura/excesso) na tabela da aba Variações. ✅ **entregue (v2.15.0)** — filtro `produto_id` em `/api/estoque/saldo` + tabela por depósito com badges na aba Variações.
+3. **Perfil Fiscal**: mostrar herdado do produto vs override por variação (hierarquia v2.5.0) + validação inline (marca, formato NCM, preço>0). ✅ **entregue (v2.15.0)** — `GET /api/fiscal/perfil-efetivo/{variante_id}` + painel com badges herdado/override e validações inline.
 
 ### Estoque / Contábil
-4. **v2.15.0**: gatilhos contábeis configuráveis por evento (venda autorizada/compra/ajuste → `contabil.lancar()`) — `lancar()` já existe, falta conectar aos eventos.
+4. **v2.15.0**: gatilhos contábeis configuráveis por evento (venda autorizada/compra/ajuste → `contabil.lancar()`). ✅ **entregue** — migração 0074 (`contabil_gatilho`), serviço `contabil_gatilhos.disparar()` conectado aos eventos (faturamento de orçamento, geração de pedidos de compra, ajuste/inventário de estoque) + painel em Configurações.
 5. Homologação Focus NFe com credenciais reais (NF-e/NFC-e) — adapter + endpoints prontos em staging.
 
 ### Fiscal / Publicação (aguardam decisão do usuário)
@@ -195,5 +195,88 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 8. Renomear pasta raiz para `casa-lm` (manual: fechar editores, renomear, reabrir — ambas máquinas).
 
 ### Ambiente / infra
-9. `frontend/tests/` ainda sem suíte (vitest) — criar esqueleto quando priorizado.
-10. OpenAPI fase 2: cresce por blueprint tocado (regra vigente).
+9. `frontend/tests/` — ✅ **esqueleto entregue (v2.15.0)**: vitest + `vitest.config.ts` + `tests/format.test.ts`; script `npm test`. Dívida residual: ampliar cobertura.
+10. OpenAPI fase 2: ✅ **cresceu nos blueprints tocados (v2.15.0)** — estoque (`/api/estoque/saldo`), fiscal (`perfil-efetivo`) e contábil (gatilhos/lançamentos) documentados em `backend/openapi.json`; segue regra de crescer por blueprint tocado.
+
+## 11. Controle de acesso por perfil (RBAC)
+
+**Entregue (v2.16.0)** — migração `0075_controle_acesso`. **Dívidas fechadas (v2.17.0)** — migrações `0076` (negação por usuário) e `0077` (Contract de `usuarios.perfil`).
+
+- **Modelo**: `perfis` (4 fixos: Administrador, Vendedor, Estoquista, Operador + perfis novos via CRUD), `recursos` (catálogo de módulos), `perfil_recurso` (matriz de ações), `usuario_perfis` (N:N) e `usuario_override` (`acoes_extra` concede e `acoes_negadas` nega — a efetiva é `(perfis ∪ conceder) − negar`; superuser ignora negações).
+- **Ações**: `visualizar, cadastrar, editar, excluir, imprimir, aprovar, configurar`.
+- **Serviço**: `catalog_server/permissao.py` — `tem_permissao()`, `exige_permissao()` (decorator), `usuario_tem_rbac()`, cache em processo TTL 30s, `definir_perfis/overrides`, `criar/atualizar/set_ativo/excluir_perfil`.
+- **Gate central**: `app_factory._autorizar_acesso()` mapeia rota→recurso e método→ação (+ `_ACAO_ESPECIFICA` para config/impressão); atrás da flag `CONTROLE_ACESSO`. **Mapeamento 100%** das rotas `/api` (teste `test_mapeamento_100pct_rotas_api` garante cobertura); **deny-by-default** para rota não mapeada. Exceções: whitelist de auth (inclui webhook público `/api/webhooks/tecnospeed`), portal do fornecedor e `/api/usuarios/atual`.
+- **APIs**: `api_permissoes.py` (`/api/perfis` GET/POST, `/api/perfis/<id>` PUT/DELETE, `/api/perfis/<id>/ativo` PATCH, `/api/perfis/<id>/permissoes`, `/api/permissoes/catalogo`, `/api/usuarios/<id>/perfis`, `/api/usuarios/<id>/overrides` com `conceder`/`negar`); `/api/usuarios/atual` e login devolvem `perfil_ids`, `overrides` e `permissoes`.
+- **Frontend**: `src/perm.ts` (`temPermissao`), sidebar e rotas filtradas por `visualizar`, tela `#/perfis` (CRUD + matriz), cadastro de usuário multi-perfil + conceder/negar por tela, botões críticos de produtos gated.
+- **Admin é superuser** (ignora checagens e negações). Presets dos demais perfis ajustáveis na tela Perfis.
+- **Contract concluído**: coluna `usuarios.perfil` removida (migração 0077); RBAC via `usuario_perfis` é a fonte única. Token não carrega mais `perfil`; superuser detectado pelo vínculo ao perfil Administrador. Bootstrap do admin inicial vincula o perfil no RBAC.
+- **Dívidas conhecidas (restantes)**: negação por usuário respeitada no gate (testada); CRUD de perfis pronto; permanece: token com `perfil=admin` legado ainda passa no gate (remover após período de validade dos tokens antigos).
+
+## 12. Lifecycle orçamento→pedido + alçada de desconto (v2.18.0)
+
+**Entregue (v2.18.0)** — migração `0078_lifecycle_pedido_alcada`.
+
+- **Conceito (TOTVS SIGAFAT)**: orçamento = proposta editável; pedido = compromisso congelado.
+- **Status**: orçamento `rascunho/ativo/em_analise/liberado` (editável até `liberado`) → pedido `finalizado/recebido/cancelado/devolvido` (congelado). `virou_pedido` marca a conversão; **`faturado` deixou de ser status** (emissão fiscal via `documentos_fiscais`).
+- **Transições controladas** (`catalog_server/orcamento_status.py`): sem select livre de status. `liberado→finalizado` é a conversão (gate de alçada+estoque+fiscal, cria conta a receber e baixa estoque); `finalizado→recebido` é o caixa; **`reabrir`** (`finalizado→liberado`, exige `orcamentos.aprovar`/`autoriza_desconto`) volta para correção.
+- **Editabilidade**: conteúdo (cliente/itens/desconto/condição) bloqueado após `liberado` (403). Caixa recebe apenas `finalizado`.
+- **Alçada de desconto (TOTVS-like)**:
+  - Desconto efetivo ≤ alçada do vendedor (`desconto_limite_pct`) → `ok`, nunca pede permissão nem expira (bug do login corrigido na v2.18.0).
+  - Acima → `pendente` + 403 na conversão; `desconto_status` (`ok/pendente/aprovado/rejeitado`).
+  - **Segregação**: aprovador ≠ vendedor; precisa de `autoriza_desconto` **ou** `orcamentos.aprovar`; alçada do aprovador ≥ desconto (superuser aprova tudo).
+  - **Revogação**: qualquer edição de conteúdo ou `reabrir` invalida a autorização (dentro da alçada → `ok`; acima → `pendente`) com log em `desconto_aprovacao_log`.
+  - **Fila do aprovador**: `GET /api/orcamentos/pendentes-aprovacao`; **rejeitar**: `POST /api/orcamentos/<id>/rejeitar-desconto` (motivo).
+- **APIs**: `POST /api/orcamentos/<id>/reabrir`, `GET /api/orcamentos/pendentes-aprovacao`, `POST /api/orcamentos/<id>/rejeitar-desconto`; `PATCH` com `status` usa transições do lifecycle.
+- **Frontend**: tela Orçamentos com badges de status/desconto, Autorizar/Rejeitar/Reabrir, fila de aprovação; PDV finaliza com `finalizado`; labels de alçada no cadastro de usuário.
+- **Testes**: `test_alcada.py` (11) + `test_status_fluxo.py` (8) — alçada dentro/fora, segregação, revogação por edição/reabrir, rejeição, fila, transições e editabilidade.
+
+## 13. Clientes e Fornecedores completos + trava de crédito (v2.19.0)
+
+**Entregue (v2.19.0)** — migração `0079_clientes_fornecedores`.
+
+### Clientes
+- **Apoio comercial com selects reais**: condição de pagamento e tabela de preço por nome (via `GET /api/clientes/contexto` ampliado: vendedores + condições + tabelas + CFOP/CST/CSOSN/CEST + segmentos + categorias em uma chamada). Acabaram os inputs de ID.
+- **Apoio fiscal com combos**: CFOP padrão/entrada/saída, CST ICMS/PIS/COFINS, CSOSN, CEST, alíquotas ICMS/ICMS-ST/PIS/COFINS (colunas novas: `cfop_entrada`, `cfop_saida`, `cst_csosn`, `cest`, `aliquota_icms_st`).
+- **Aba Interações**: expõe a tabela `cliente_interacao` (ligação/visita/email/whatsapp/follow_up) com data do próximo contato — endpoints `GET/POST /api/clientes/<id>/interacoes` (reuso do `interacao_repo` do pós-venda).
+- **Segmentação**: `segmento` (consumidor_final/profissional/construtora/revenda/varejo) + `categoria` de perfil; grid com cidade/UF, segmento e busca rápida.
+- **Máscaras/validação** (`ui/format.ts`): CPF/CNPJ com dígitos verificadores, telefone/whatsapp `(11) 98765-4321`, CEP, IE; validados no salvamento (`validarDoc`).
+
+### Fornecedores
+- **CRUD completo**: razão social, CNPJ/CPF (máscara), representante, telefone, whatsapp, e-mail, endereço completo (rua/nº/bairro/cidade/UF/CEP), categoria, condição de pagamento padrão, prazo médio de entrega e avaliação (nota 1–5).
+- **Aba Contatos**: tabela `fornecedor_contatos` + endpoints `GET/POST /api/fornecedores/<id>/contatos` e `DELETE /api/fornecedores/contatos/<id>`.
+- **Contexto**: `GET /api/fornecedores/contexto` (categorias fixas em `repositories/suppliers.py` + condições). Busca por termo (`q`) e filtro `categoria`.
+- Grid com CNPJ, cidade/UF, categoria, prazo, nota (estrelas) e busca.
+
+### Trava de crédito no faturamento (A4)
+- **Configurações > Loja**: checkboxes `bloquear_venda_sem_credito` e `bloquear_venda_com_atraso` (config_loja, mesmo padrão de `bloquear_sem_estoque`).
+- **Gate na conversão orçamento→pedido** (`api_orcamentos.py`, entre alçada e estoque): bloqueia `403 {code: sem_credito | cliente_atraso}` quando a venda excede o limite disponível ou o cliente tem conta em atraso. **Cliente padrão (CONSUMIDOR, id 1) nunca bloqueia** (regra de balcão).
+- `situacao_credito()` ganhou `excede_limite`/`excede_por_atraso` com `total` opcional; PDV exibe banner de aviso quando o total supera o limite.
+- **Testes**: `test_credito.py` (5) + `test_fornecedores.py` (4) — dentro/fora do limite, atraso, consumidor liberado, config desligada, CRUD completo, contatos, busca e contexto. Suíte backend total: **164 testes**.
+
+### OpenAPI
+`backend/openapi.json` cresceu de 27 → 40 paths com schemas de clientes (situação, apoio comercial/fiscal, endereços, contatos, interações, contexto) e fornecedores (CRUD completo, contatos, contexto).
+
+## 14. Compras — portal do fornecedor rico (v2.20.0)
+
+**Entregue (v2.20.0)** — migração `0080_compras_portal`.
+
+### Portal do fornecedor (representante responde online)
+- **Por item**: unidade de venda (UN/CX/MT/KG…, editável), quantidade por embalagem (`fator_conversao`), marca ofertada e observação — além de preço, desconto %, prazo e condição de pagamento global (que já existiam).
+- **Indisponibilidade com motivo**: `em_falta_estoque | nao_trabalha_linha | descontinuado | fora_regiao | outro` (obrigatório quando marcado indisponível; vazio = disponível). `disponibilidade_estoque` segue como compat.
+- **Pré-preenchimento**: a unidade/fator vêm da variante (`variantes.unidade_venda/fator_conversao`) capturados no snapshot `cotacao_itens.unidade_solicitada` no momento da cotação.
+- **Bug corrigido**: `disponibilidade_estoque=0` era convertido em 1 (`or 1`) — indisponível nunca persistia.
+
+### Comprador (Casa LM)
+- **Matriz de comparação** (`montar_matriz`): cada proposta mostra unidade, fator, `qtd_embalagens` (ceil), `preco_embalagem` (preço líquido × fator), marca e o motivo quando indisponível.
+- **Lembrete**: `GET /api/compras/cotacoes/<id>/lembrar/<fornecedor_id>` regenera link/whatsapp/e-mail; botão 🔔 Lembrar na tela de convites (só pendentes).
+- **Pedido impresso**: coluna Unidade + nº de embalagens (ceil da quantidade/fator); marca da oferta no rodapé do item.
+
+### Schema (migração 0080)
+- `cotacao_precos` + `unidade_compra`, `fator_conversao` (default 1), `marca_ofertada`, `motivo_indisponibilidade`.
+- `cotacao_itens` + `unidade_solicitada`.
+
+### Testes
+`test_compras_portal.py` (6): unidade sugerida da variante, submit com unidade/marca/motivo, motivo obrigatório p/ indisponível, matriz com preco_embalagem/qtd_embalagens, lembrete gera WhatsApp, lembrete inexistente 404. Suíte backend total: **170 testes**.
+
+### OpenAPI
+Cresceu de 40 → 43 paths com `PrecoProposta`, `Invite` e os endpoints do portal (`/api/fornecedor/<token>` e `/proposta`) e o `lembrar`.

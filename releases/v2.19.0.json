@@ -1,0 +1,45 @@
+{
+  "versao": "v2.19.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [],
+  "melhorias": [
+    "Cliente: apoio comercial com selects reais (condição de pagamento e tabela de preço por nome, não mais IDs crus)",
+    "Cliente: apoio fiscal com combos das tabelas (CFOP padrão/entrada/saída, CST ICMS/PIS/COFINS, CSOSN, CEST) + alíquota ICMS-ST",
+    "Cliente: aba Interações expondo a tabela cliente_interacao (ligação/visita/email/whatsapp/follow_up) com data do próximo contato",
+    "Cliente: máscaras e validação de CPF/CNPJ (dígitos verificadores), telefone/whatsapp, CEP, IE; grid com cidade/UF, segmento e busca rápida",
+    "Fornecedor: CRUD completo com razão social, CNPJ/CPF, representante, telefone, endereço, categoria, condição de pagamento, prazo de entrega e avaliação",
+    "Fornecedor: abas (Dados/Endereço/Contatos/Comercial), contatos de representantes e busca por termo/categoria",
+    "Trava de crédito no faturamento: bloqueia a conversão orçamento→pedido quando a venda excede o limite disponível ou o cliente tem conta em atraso (configurável)",
+    "Aviso de crédito no PDV: banner avisando quando o total da venda supera o limite disponível ou há atraso",
+    "Configurações: checkboxes de bloqueio de venda sem limite de crédito e com conta em atraso"
+  ],
+  "recursos": [
+    "Segmentação de clientes (segmento: consumidor_final/profissional/construtora/revenda/varejo + categoria de perfil)",
+    "Endpoint /api/clientes/contexto ampliado (vendedores, condições, tabelas, CFOP/CST/CSOSN/CEST, segmentos, categorias) em uma única chamada",
+    "Endpoints de interações por cliente (GET/POST /api/clientes/<id>/interacoes) e contexto de fornecedor (GET /api/fornecedores/contexto)",
+    "CRUD de contatos de fornecedor (GET/POST /api/fornecedores/<id>/contatos, DELETE /api/fornecedores/contatos/<id>)",
+    "Migração 0079: segmento/categoria em clientes, CSOSN/CEST/CFOP-entrada/saída/alíquota ST em cliente_apoio_fiscal, colunas de contato/endereço/comercial em fornecedores e tabela fornecedor_contatos"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.19.0",
+    "frontend": "siscom-frontend:v2.19.0"
+  },
+  "database": {
+    "migration": 79
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "cliente_segmentacao": true,
+    "fornecedor_completo": true,
+    "trava_credito": true
+  }
+}

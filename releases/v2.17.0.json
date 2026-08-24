@@ -1,0 +1,39 @@
+{
+  "versao": "v2.17.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [
+    "Webhook público /api/webhooks/tecnospeed passou a ser aceito sem token (antes exigia Bearer)"
+  ],
+  "melhorias": [],
+  "recursos": [
+    "Mapeamento 100% dos endpoints /api no gate RBAC (famílias antes sem mapeamento agora cobertas) com deny-by-default para rota desconhecida + teste guarda de cobertura",
+    "Ações específicas de config/impressão no gate central (configurar para loja/emitente/tecnospeed/fiscal-config; imprimir para fila de impressão)",
+    "CRUD de perfis novos (POST/PUT/PATCH/DELETE /api/perfis) com proteção do Administrador e bloqueio de exclusão de perfil em uso",
+    "Negação por usuário: overrides aceitam conceder/negar (efetiva = perfis+conceder−negar; superuser ignora negações)",
+    "Contract de usuarios.perfil: coluna legada removida (migração 0077), RBAC via usuario_perfis é a fonte única",
+    "Bootstrap do admin inicial passa a vincular o perfil Administrador no RBAC",
+    "Frontend: tela Perfis com criar/renomear/excluir/ativar; cadastro de usuário com conceder/negar por tela e sem perfil legado"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.17.0",
+    "frontend": "siscom-frontend:v2.17.0"
+  },
+  "database": {
+    "migration": 77
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "controle_acesso": true,
+    "rbac_negacao": true,
+    "rbac_perfis_crud": true
+  }
+}
