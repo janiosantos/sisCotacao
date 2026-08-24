@@ -140,8 +140,114 @@ def _seed_pg(url: str) -> None:
             "('CRED_PRES','Crédito presumido de ICMS','credito_presumido',0)"
             " ON CONFLICT (codigo) DO NOTHING"
         )
+        # Seeds de controle de acesso (migração 0075 — TRUNCATE por teste apaga).
+        _seed_rbac_pg(conn)
         conn.commit()
     engine.dispose()
+
+
+def _seed_rbac_pg(conn) -> None:
+    """Replica os seeds RBAC da migração 0075 (perfis/recursos/matriz)."""
+    import json as _json
+
+    perfis = [
+        ("Administrador", "Acesso total — ignora as checagens de permissão"),
+        ("Vendedor", "Vendas, pré-venda, orçamentos, clientes"),
+        ("Estoquista", "Estoque, fiscal e logística"),
+        ("Operador", "PDV, caixa e orçamentos"),
+    ]
+    for nome, desc in perfis:
+        conn.exec_driver_sql(
+            "INSERT INTO perfis (nome, descricao) VALUES (%s, %s) ON CONFLICT (nome) DO NOTHING",
+            (nome, desc),
+        )
+    recursos = [
+        ("dashboard", "Painel", "Vendas"),
+        ("catalogo", "Catálogo", "Vendas"),
+        ("pre-venda", "Pré-venda (PDV)", "Vendas"),
+        ("orcamentos", "Orçamentos", "Vendas"),
+        ("cotacoes", "Cotações", "Vendas"),
+        ("compras", "Compras", "Vendas"),
+        ("clientes", "Clientes", "Cadastros"),
+        ("fornecedores", "Fornecedores", "Cadastros"),
+        ("produtos", "Produtos", "Cadastros"),
+        ("vendedores", "Vendedores", "Cadastros"),
+        ("categorias", "Categorias", "Cadastros"),
+        ("unidades", "Unidades", "Cadastros"),
+        ("qualidade", "Qualidade do catálogo", "Cadastros"),
+        ("financeiro", "Financeiro", "Financeiro"),
+        ("caixa", "Caixa", "Financeiro"),
+        ("precos", "Preços", "Financeiro"),
+        ("bancos", "Bancos", "Financeiro"),
+        ("plano_contas", "Plano de contas", "Financeiro"),
+        ("estoque", "Estoque", "Logística"),
+        ("fiscal", "Fiscal", "Logística"),
+        ("posvenda", "Pós-venda", "Admin"),
+        ("solicitacoes", "Solicitações de compra", "Admin"),
+        ("historico", "Histórico de preços", "Admin"),
+        ("usuarios", "Usuários", "Admin"),
+        ("perfis", "Perfis e permissões", "Admin"),
+        ("configuracoes", "Configurações", "Admin"),
+        ("atualizacoes", "Atualizações", "Admin"),
+        ("contabil", "Contábil (gatilhos)", "Admin"),
+        ("impressao", "Impressão", "Admin"),
+    ]
+    for codigo, nome, grupo in recursos:
+        conn.exec_driver_sql(
+            "INSERT INTO recursos (codigo, nome, grupo) VALUES (%s, %s, %s)"
+            " ON CONFLICT (codigo) DO NOTHING",
+            (codigo, nome, grupo),
+        )
+    presets = {
+        "Vendedor": {
+            "dashboard": ["visualizar"],
+            "catalogo": ["visualizar"],
+            "pre-venda": ["visualizar", "cadastrar", "editar", "imprimir"],
+            "orcamentos": ["visualizar", "cadastrar", "editar", "imprimir"],
+            "cotacoes": ["visualizar"],
+            "clientes": ["visualizar", "cadastrar", "editar"],
+            "precos": ["visualizar"],
+            "impressao": ["imprimir"],
+        },
+        "Estoquista": {
+            "dashboard": ["visualizar"],
+            "produtos": ["visualizar"],
+            "estoque": ["visualizar", "cadastrar", "editar", "excluir", "imprimir"],
+            "fiscal": ["visualizar"],
+            "qualidade": ["visualizar"],
+            "solicitacoes": ["visualizar", "cadastrar"],
+            "compras": ["visualizar"],
+            "impressao": ["imprimir"],
+        },
+        "Operador": {
+            "dashboard": ["visualizar"],
+            "pre-venda": ["visualizar", "cadastrar", "editar", "imprimir"],
+            "orcamentos": ["visualizar", "cadastrar", "editar", "imprimir"],
+            "caixa": ["visualizar", "cadastrar"],
+            "clientes": ["visualizar"],
+            "produtos": ["visualizar"],
+            "estoque": ["visualizar"],
+            "impressao": ["imprimir"],
+        },
+    }
+    for nome_perfil, matriz in presets.items():
+        row = conn.exec_driver_sql(
+            "SELECT id FROM perfis WHERE nome=%s", (nome_perfil,)
+        ).fetchone()
+        if not row:
+            continue
+        pid = row[0]
+        for codigo, acoes in matriz.items():
+            rrow = conn.exec_driver_sql(
+                "SELECT id FROM recursos WHERE codigo=%s", (codigo,)
+            ).fetchone()
+            if not rrow:
+                continue
+            conn.exec_driver_sql(
+                "INSERT INTO perfil_recurso (perfil_id, recurso_id, acoes)"
+                " VALUES (%s, %s, %s::jsonb) ON CONFLICT DO NOTHING",
+                (pid, rrow[0], _json.dumps(acoes)),
+            )
 
 
 @pytest.fixture()
