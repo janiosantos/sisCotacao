@@ -1458,8 +1458,22 @@ export const api = {
   listarReceber: (params: Record<string, unknown> = {}) =>
     request<ContaReceber[]>("GET", "/api/financeiro/receber" + qs(params)),
   criarReceber: (data: ContaPayload) => request<{ id: number }>("POST", "/api/financeiro/receber", data),
-  receberConta: (id: number, data: { valor: number; data_recebimento?: string }) =>
-    request<{ saldo_anterior: number; saldo_posterior: number; status: string }>("POST", `/api/financeiro/receber/${id}/receber`, data),
+  receberConta: (id: number, data: { valor: number; data_recebimento?: string; forma_pagamento?: string }) =>
+    request<{ saldo_anterior: number; saldo_posterior: number; status: string; forma_pagamento?: string }>(
+      "POST",
+      `/api/financeiro/receber/${id}/receber`,
+      data
+    ),
+  emitirCobranca: (contaId: number, operacao: "boleto" | "pix") =>
+    request<CobrancaResultado>("POST", `/api/financeiro/receber/${contaId}/cobranca`, { operacao }),
+  statusCobranca: (contaId: number) =>
+    request<{ status_cobranca: string; status_plataforma?: string }>("GET", `/api/financeiro/receber/${contaId}/cobranca/status`),
+  anexarComprovante: (contaId: number, formData: FormData) =>
+    enviarArquivo<{ ok: boolean; filename: string }>(`/api/financeiro/receber/${contaId}/comprovante`, formData),
+  listarPaymentProviders: () =>
+    request<{ providers: PaymentProviderItem[]; configs: PaymentProviderConfig[] }>("GET", "/api/payment-providers"),
+  salvarPaymentProviderConfig: (data: Record<string, unknown>) =>
+    request<{ ok: boolean }>("PUT", "/api/payment-providers/config", data),
   listarPagar: (params: Record<string, unknown> = {}) =>
     request<ContaPagar[]>("GET", "/api/financeiro/pagar" + qs(params)),
   criarPagar: (data: ContaPayload) => request<{ id: number }>("POST", "/api/financeiro/pagar", data),
@@ -2093,6 +2107,55 @@ export interface ContaReceber {
   observacao: string | null;
   status: string;
   criado_em: string;
+  status_boleto?: string;
+  status_cobranca?: string;
+  tipo_cobranca?: string;
+  payment_id?: string;
+  provider_id?: number | null;
+  payload_pix?: string;
+  qr_code_base64?: string;
+  url_boleto?: string;
+  nosso_numero?: string;
+}
+
+export interface PaymentProviderItem {
+  id: number;
+  codigo: string;
+  nome: string;
+  ativo: number | boolean;
+}
+
+export interface PaymentProviderConfig {
+  id: number;
+  provider_id: number;
+  provider_codigo?: string;
+  provider_nome?: string;
+  operacao: string;
+  ambiente: string;
+  client_id: string;
+  client_secret: string;
+  access_token: string;
+  api_key: string;
+  certificado: string;
+  conta: string;
+  chave_pix: string;
+  prioridade: number;
+  ativo: number | boolean;
+}
+
+export interface CobrancaResultado {
+  operacao: string;
+  provider: string;
+  payment_id: string;
+  status_cobranca: string;
+  linha_digitavel?: string;
+  codigo_barras?: string;
+  nosso_numero?: string;
+  url_boleto?: string;
+  payload_pix?: string;
+  qr_code_base64?: string;
+  txid?: string;
+  url_pix?: string;
 }
 
 export interface ContaPagar {

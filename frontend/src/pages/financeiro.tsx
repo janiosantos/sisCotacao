@@ -1,7 +1,7 @@
 ﻿// pages/financeiro.tsx — financeiro (React + Tailwind).
 
 import { useEffect, useState } from "react";
-import { api, type CondicaoPagamento, type ContaPayload, type ContaPagar, type ContaReceber } from "../api/client";
+import { api, type CobrancaResultado, type CondicaoPagamento, type ContaPayload, type ContaPagar, type ContaReceber } from "../api/client";
 import { fmtDate, fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
 import { Badge, Button, Cell, EmptyRow, Field, Input, Loading, Modal, PageHeader, Select, Table, TBody, THead, Textarea } from "../ui/ui";
@@ -186,7 +186,11 @@ function Receber() {
   const [modalConta, setModalConta] = useState(false);
   const [modalReceber, setModalReceber] = useState<ContaReceber | null>(null);
   const [form, setForm] = useState({ cliente: "", desc: "", valor: "", venc: "", doc: "", obs: "" });
-  const [rec, setRec] = useState({ valor: "", data: "" });
+  const [rec, setRec] = useState({ valor: "", data: "", forma: "dinheiro" });
+  const [modalCobranca, setModalCobranca] = useState<ContaReceber | null>(null);
+  const [cobranca, setCobranca] = useState<CobrancaResultado | null>(null);
+  const [comprovante, setComprovante] = useState<File | null>(null);
+  const [emitindo, setEmitindo] = useState(false);
 
   const carregar = async () => {
     try {
@@ -225,6 +229,12 @@ function Receber() {
     }
   };
 
+  const abrirReceber = (c: ContaReceber) => {
+    setModalReceber(c);
+    setRec({ valor: String(c.saldo), data: "", forma: "dinheiro" });
+    setComprovante(null);
+  };
+
   const receber = async () => {
     if (!modalReceber) return;
     const valor = parseFloat(rec.valor.replace(",", "."));
@@ -232,11 +242,50 @@ function Receber() {
       toast("Valor inválido", "error");
       return;
     }
+    const precisaComprovante = rec.forma === "deposito_bancario" || rec.forma === "ted";
+    if (precisaComprovante && !comprovante) {
+      toast("Anexe o comprovante para depósito/TED", "error");
+      return;
+    }
     try {
-      await api.receberConta(modalReceber.id, { valor, data_recebimento: rec.data || undefined });
+      if (precisaComprovante && comprovante) {
+        const fd = new FormData();
+        fd.append("file", comprovante);
+        fd.append("tipo", rec.forma);
+        await api.anexarComprovante(modalReceber.id, fd);
+      }
+      await api.receberConta(modalReceber.id, {
+        valor,
+        data_recebimento: rec.data || undefined,
+        forma_pagamento: rec.forma,
+      });
       setModalReceber(null);
       toast("Recebimento registrado", "success");
       await carregar();
+    } catch (e) {
+      toast("Erro: " + (e as Error).message, "error");
+    }
+  };
+
+  const emitir = async (operacao: "boleto" | "pix") => {
+    if (!modalCobranca) return;
+    setEmitindo(true);
+    try {
+      const r = await api.emitirCobranca(modalCobranca.id, operacao);
+      setCobranca(r);
+      await carregar();
+    } catch (e) {
+      toast("Erro: " + (e as Error).message, "error");
+    } finally {
+      setEmitindo(false);
+    }
+  };
+
+  const atualizarStatus = async (c: ContaReceber) => {
+    try {
+      await api.statusCobranca(c.id);
+      await carregar();
+      toast("Status atualizado", "success");
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
     }
@@ -253,10 +302,10 @@ function Receber() {
         <Loading />
       ) : (
         <Table>
-          <THead cols={["Cliente", "Descrição", "Valor", "Saldo", "Vencimento", "Status", ""]} />
+          <THead cols={["Cliente", "Descrição", "Valor", "Saldo", "Vencimento", "Status", "Cobrança", ""]} />
           <TBody>
             {rows.length === 0 ? (
-              <EmptyRow colSpan={7} message="Nenhuma conta" />
+              <EmptyRow colSpan={8} message="Nenhuma conta" />
             ) : (
               rows.map((c) => (
                 <tr key={c.id} className="hover:bg-gray-50">
@@ -270,9 +319,30 @@ function Receber() {
                   </Cell>
                   <Cell>
                     {c.status !== "pago" ? (
-                      <Button size="sm" onClick={() => { setModalReceber(c); setRec({ valor: String(c.saldo), data: "" }); }}>
-                        Receber
-                      </Button>
+                      c.status_cobranca === "pago" ? (
+                        <Badge tone="green">Pago</Badge>
+                      ) : c.status_cobranca === "pendente" ? (
+                        <Badge tone="blue">Pendente</Badge>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )
+                    ) : (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
+                  </Cell>
+                  <Cell>
+                    {c.status !== "pago" ? (
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" onClick={() => { setModalCobranca(c); setCobranca(null); }}>
+                          Boleto / PIX
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => void atualizarStatus(c)} title="Consultar status">
+                          ↻
+                        </Button>
+                        <Button size="sm" variant="primary" onClick={() => abrirReceber(c)}>
+                          Receber
+                        </Button>
+                      </div>
                     ) : null}
                   </Cell>
                 </tr>
@@ -319,6 +389,76 @@ function Receber() {
         </div>
       </Modal>
 
+      {/* Modal de emissão de cobrança (boleto/PIX) */}
+      <Modal
+        open={modalCobranca != null}
+        onClose={() => setModalCobranca(null)}
+        title={modalCobranca ? `Cobrança — ${modalCobranca.cliente}` : ""}
+        wide
+        footer={
+          <>
+            <Button onClick={() => setModalCobranca(null)}>Fechar</Button>
+            {modalCobranca && modalCobranca.status !== "pago" && (
+              <>
+                <Button variant="secondary" onClick={() => void emitir("boleto")} disabled={emitindo}>
+                  {emitindo ? "…" : "Emitir boleto"}
+                </Button>
+                <Button variant="primary" onClick={() => void emitir("pix")} disabled={emitindo}>
+                  {emitindo ? "…" : "Emitir PIX"}
+                </Button>
+              </>
+            )}
+          </>
+        }
+      >
+        {modalCobranca ? (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+              {modalCobranca.cliente} · Saldo: {fmtMoney(modalCobranca.saldo)} · Vencimento {fmtDate(modalCobranca.data_vencimento)}
+            </p>
+            {cobranca ? (
+              <div className="rounded-md border border-gray-200 p-4">
+                {cobranca.operacao === "boleto" ? (
+                  <div className="space-y-2 text-sm">
+                    {cobranca.url_boleto ? (
+                      <a className="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-white hover:bg-brand-700" target="_blank" rel="noreferrer" href={cobranca.url_boleto}>
+                        Abrir boleto
+                      </a>
+                    ) : null}
+                    {cobranca.linha_digitavel ? (
+                      <div className="rounded bg-gray-50 p-2 font-mono text-xs">{cobranca.linha_digitavel}</div>
+                    ) : null}
+                    {cobranca.nosso_numero ? <div className="text-xs text-gray-500">Nosso número: {cobranca.nosso_numero}</div> : null}
+                    <div className="text-xs text-gray-400">Provider: {cobranca.provider}</div>
+                  </div>
+                ) : (
+                  <div className="space-y-3 text-sm">
+                    {cobranca.qr_code_base64 ? (
+                      <img src={`data:image/png;base64,${cobranca.qr_code_base64}`} alt="QR Code PIX" className="mx-auto h-40 w-40 object-contain" />
+                    ) : null}
+                    {cobranca.payload_pix ? (
+                      <div>
+                        <div className="mb-1 text-xs font-medium text-gray-500">PIX Copia e Cola</div>
+                        <div className="rounded bg-gray-50 p-2 font-mono text-xs break-all">{cobranca.payload_pix}</div>
+                        <Button size="sm" className="mt-2" onClick={() => void navigator.clipboard.writeText(cobranca.payload_pix || "").then(() => toast("Copia e cola copiado!"))}>
+                          Copiar
+                        </Button>
+                      </div>
+                    ) : null}
+                    <div className="text-xs text-gray-400">Provider: {cobranca.provider}</div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">
+                Escolha <b>Emitir boleto</b> ou <b>Emitir PIX</b> para gerar a cobrança na plataforma (Asaas / Mercado Pago).
+              </p>
+            )}
+          </div>
+        ) : null}
+      </Modal>
+
+      {/* Modal de recebimento com forma de pagamento */}
       <Modal
         open={modalReceber != null}
         onClose={() => setModalReceber(null)}
@@ -327,7 +467,7 @@ function Receber() {
           <>
             <Button onClick={() => setModalReceber(null)}>Cancelar</Button>
             <Button variant="primary" onClick={() => void receber()}>
-              Receber
+              Confirmar recebimento
             </Button>
           </>
         }
@@ -337,12 +477,42 @@ function Receber() {
             <p className="text-sm text-gray-500">
               Valor original: {fmtMoney(modalReceber.valor)} · Saldo: {fmtMoney(modalReceber.saldo)}
             </p>
-            <Field label="Valor a receber">
-              <Input type="number" step="0.01" value={rec.valor} onChange={(e) => setRec({ ...rec, valor: e.target.value })} />
+            <Field label="Forma de pagamento">
+              <Select value={rec.forma} onChange={(e) => setRec({ ...rec, forma: e.target.value })}>
+                <option value="dinheiro">Dinheiro</option>
+                <option value="pix">PIX</option>
+                <option value="cheque">Cheque</option>
+                <option value="deposito_bancario">Depósito bancário</option>
+                <option value="ted">TED / transferência</option>
+                <option value="transferencia">Transferência</option>
+                <option value="cartao_debito">Cartão débito</option>
+                <option value="cartao_credito">Cartão crédito</option>
+                <option value="boleto">Boleto</option>
+              </Select>
             </Field>
-            <Field label="Data do recebimento">
-              <Input type="date" value={rec.data} onChange={(e) => setRec({ ...rec, data: e.target.value })} />
-            </Field>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Valor a receber">
+                <Input type="number" step="0.01" value={rec.valor} onChange={(e) => setRec({ ...rec, valor: e.target.value })} />
+              </Field>
+              <Field label="Data do recebimento">
+                <Input type="date" value={rec.data} onChange={(e) => setRec({ ...rec, data: e.target.value })} />
+              </Field>
+            </div>
+            {(rec.forma === "deposito_bancario" || rec.forma === "ted") && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                <Field label="Comprovante (obrigatório)">
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => setComprovante(e.target.files?.[0] ?? null)}
+                    className="text-sm"
+                  />
+                </Field>
+                <p className="mt-1 text-xs text-amber-700">
+                  Anexe o comprovante para confirmar o depósito/TED. A baixa é manual.
+                </p>
+              </div>
+            )}
           </div>
         ) : null}
       </Modal>
