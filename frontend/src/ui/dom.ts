@@ -79,3 +79,34 @@ export function confirmDialog(message: string): Promise<boolean> {
     );
   });
 }
+
+/** Copia texto para a área de transferência.
+
+  `navigator.clipboard` só existe em contexto seguro (HTTPS/localhost); em
+  HTTP (ex.: acesso por IP na rede local) usamos o fallback com textarea +
+  `execCommand('copy')`.
+*/
+export async function copiarTexto(texto: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(texto);
+      return true;
+    }
+  } catch {
+    /* cai no fallback */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = texto;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}

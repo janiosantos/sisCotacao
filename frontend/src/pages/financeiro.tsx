@@ -11,7 +11,7 @@ import {
   type ParcelaCalculada,
 } from "../api/client";
 import { fmtDate, fmtMoney } from "../ui/format";
-import { toast } from "../ui/dom";
+import { copiarTexto, toast } from "../ui/dom";
 import { Badge, Button, Cell, EmptyRow, Field, Input, Loading, Modal, PageHeader, Select, Table, TBody, THead, Textarea } from "../ui/ui";
 
 type Aba = "caixa" | "receber" | "pagar" | "condicoes" | "centros" | "adiantamentos";
@@ -400,7 +400,7 @@ function Receber() {
                       <div>
                         <div className="mb-1 text-xs font-medium text-gray-500">PIX Copia e Cola</div>
                         <div className="rounded bg-gray-50 p-2 font-mono text-xs break-all">{cobranca.payload_pix}</div>
-                        <Button size="sm" className="mt-2" onClick={() => void navigator.clipboard.writeText(cobranca.payload_pix || "").then(() => toast("Copia e cola copiado!"))}>
+                        <Button size="sm" className="mt-2" onClick={() => void copiarTexto(cobranca.payload_pix || "").then((ok) => toast(ok ? "Copia e cola copiado!" : "Não foi possível copiar", ok ? "" : "error"))}>
                           Copiar
                         </Button>
                       </div>

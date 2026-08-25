@@ -15,7 +15,7 @@ import {
   type Pedido,
 } from "../api/client";
 import { fmtDate, fmtMoney } from "../ui/format";
-import { toast } from "../ui/dom";
+import { copiarTexto, toast } from "../ui/dom";
 import { Badge, Button, Cell, Field, Input, Loading, Modal, Select, Table, TBody, THead } from "../ui/ui";
 
 const KEY_DRAFT = "compras_draft";
@@ -643,7 +643,8 @@ function LinksPanel({ cotacaoId, invites, onVoltar, onComparar }: { cotacaoId: n
         window.location.href = r.mailto_url;
         toast("Lembrete aberto no e-mail");
       } else {
-        void navigator.clipboard.writeText(r.link).then(() => toast("Sem contato — link copiado!"));
+        const ok = await copiarTexto(r.link);
+        toast(ok ? "Sem contato — link copiado!" : "Não foi possível copiar", ok ? "" : "error");
       }
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
@@ -675,7 +676,7 @@ function LinksPanel({ cotacaoId, invites, onVoltar, onComparar }: { cotacaoId: n
                   E-mail
                 </a>
               ) : null}
-              <Button size="sm" onClick={() => void navigator.clipboard.writeText(inv.link).then(() => toast("Link copiado!"))}>
+              <Button size="sm" onClick={() => void copiarTexto(inv.link).then((ok) => toast(ok ? "Link copiado!" : "Não foi possível copiar", ok ? "" : "error"))}>
                 Copiar link
               </Button>
               {inv.status !== "respondido" ? (
@@ -767,8 +768,8 @@ function AguardandoRespostas({
     try {
       const link = await obterLink(fid);
       if (link) {
-        await navigator.clipboard.writeText(link);
-        toast("Link copiado!");
+        const ok = await copiarTexto(link);
+        toast(ok ? "Link copiado!" : "Não foi possível copiar", ok ? "" : "error");
       } else {
         toast("Sem link disponível para este fornecedor.", "error");
       }
@@ -798,7 +799,8 @@ function AguardandoRespostas({
         window.location.href = r.mailto_url;
         toast("Lembrete aberto no e-mail");
       } else {
-        void navigator.clipboard.writeText(r.link).then(() => toast("Sem contato — link copiado!"));
+        const ok = await copiarTexto(r.link);
+        toast(ok ? "Sem contato — link copiado!" : "Não foi possível copiar", ok ? "" : "error");
       }
     } catch (e) {
       toast(`Não foi possível gerar o convite de ${nome}: ` + (e as Error).message, "error");
