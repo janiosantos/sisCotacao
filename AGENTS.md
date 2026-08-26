@@ -73,6 +73,18 @@ Consumidores a mapear antes de qualquer DROP/RENAME/troca de tipo: blueprints, r
 
 DEV (diário) → **STAGING** (✅ existe: projeto `siscom-staging` no servidor, frontend `:8081`, banco próprio que nasce vazio e é migrado pelo workflow **Deploy Staging**; valida qualquer branch antes da produção) → PRODUÇÃO (só recebe release aprovada).
 
+### Ambientes DEV duais (v2.25.0)
+O ambiente de desenvolvimento roda **em dois hosts em paralelo** (o serviço não para ao alternar o notebook):
+- **Notebook (local)**: stack Docker no workspace, frontend `http://localhost:8080`.
+- **VM 10.189.14.9** (Ubuntu `dsktop`): stack Docker em `~/Projetos/ecommerce_scraper`, frontend `http://10.189.14.9:8080`. Acesso SSH: `jpsantos@10.189.14.9` (chave pública do notebook; sudo com senha `Mudar@123`).
+
+**Sincronização**: código via git (push/pull no GitHub — main commitada). Dados/banco e `images/` (uploads de produtos) migrados do notebook para a VM uma vez (v2.25.0). O `docker-compose.yml` monta `./images:/app/images`.
+
+**Acesso ao código na VM**: VS Code **Remote-SSH** → `jpsantos@10.189.14.9` → `~/Projetos/ecommerce_scraper` (HMR funciona).
+**Ferramentas na VM**: Docker 29 + Compose 2.40, Git 2.53, Python 3.14, **opencode** (v1.18.23 em `~/.opencode/bin`, PATH no `~/.bashrc`). Instalar extras: `ssh ... "echo 'Mudar@123' | sudo -S apt-get install -y <pkg>"`.
+
+> ⚠️ Ao alterar algo na VM, lembrar que o código é o mesmo do notebook via git — sempre `git pull` na VM antes de operar, e `git push` após alterações para manter os dois em sincronia. Migrações são idempotentes (rodam em ambos).
+
 ## 6. Pipeline, Release Manifest e fluxo completo
 
 Ordem de produção: **Backup → Migration Job (nunca dentro do `compose up`) → Health Check → Backend rollout → Frontend rollout → Smoke Tests**.
