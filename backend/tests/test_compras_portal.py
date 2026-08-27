@@ -231,3 +231,31 @@ def test_lembrar_link_respeita_public_base_url(system_db, monkeypatch):
     assert r.status_code == 200
     link = r.get_json()["link"]
     assert link.startswith("http://siscom.casalm.com.br:6173/fornecedor/")
+
+
+def test_lembrar_link_dinamico_usar_host_da_requisicao(system_db, monkeypatch):
+    """Sem PUBLIC_BASE_URL, o link reflete a URL externa acessada (Host header)
+    — detecção dinâmica da porta (CGNAT pode mudar a porta a qualquer momento)."""
+    monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
+    vid = _produto_com_unidade(system_db)
+    fid = _fornecedor("Distribuidora Z")
+    c, h = _cliente_comprador(system_db)
+    _criar_cotacao(c, h, vid, fid)
+    r = c.get(f"/api/compras/cotacoes/1/lembrar/{fid}", headers=h)
+    assert r.status_code == 200
+    assert r.get_json()["link"].startswith("http://localhost/fornecedor/")
+
+
+def test_lembrar_link_usa_x_forwarded_host(system_db, monkeypatch):
+    """Atrás de proxy reverso, X-Forwarded-Host/Proto revelam a URL externa real."""
+    monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
+    vid = _produto_com_unidade(system_db)
+    fid = _fornecedor("Distribuidora Z")
+    c, h = _cliente_comprador(system_db)
+    _criar_cotacao(c, h, vid, fid)
+    r = c.get(
+        f"/api/compras/cotacoes/1/lembrar/{fid}",
+        headers={**h, "X-Forwarded-Host": "siscom.casalm.com.br:8123", "X-Forwarded-Proto": "https"},
+    )
+    assert r.status_code == 200
+    assert r.get_json()["link"].startswith("https://siscom.casalm.com.br:8123/fornecedor/")

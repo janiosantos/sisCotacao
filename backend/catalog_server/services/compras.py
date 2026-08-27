@@ -101,17 +101,25 @@ def montar_matriz(cotacao_id: int) -> dict | None:
 
 
 def base_url_for() -> str:
-    """URL pública base usada nos links de convite ao fornecedor.
+    """URL base dos links de convite ao fornecedor — detecção DINÂMICA.
 
-    Prioriza `PUBLIC_BASE_URL` (variável de ambiente) — necessária quando o
-    acesso externo passa por redirecionamento de porta (ex.: CGNAT redireciona
-    `:6173` para a porta 80 do nginx), pois `request.host_url` reflete o Host
-    interno/LAN e geraria links sem a porta pública. Sem a variável, usa o Host
-    da requisição.
+    Padrão: reflete a URL externa que o cliente usou para acessar o sistema
+    (Host header em `request.host_url`), incluindo a porta — cobre acesso via
+    redirecionamento de porta/CGNAT cuja porta pode mudar a qualquer momento.
+    Se um proxy reverso estiver na frente e definir `X-Forwarded-Host/Proto`,
+    usa esses cabeçalhos (URL externa real mesmo atrás de proxy).
+
+    Override explícito: `PUBLIC_BASE_URL` (variável de ambiente) força uma URL
+    fixa quando a detecção dinâmica não é suficiente (ex.: o comprador acessa
+    pela LAN e os fornecedores pela porta pública).
     """
     public = os.getenv("PUBLIC_BASE_URL", "").strip()
     if public:
         return public.rstrip("/")
+    fwd_host = request.headers.get("X-Forwarded-Host", "").strip()
+    if fwd_host:
+        proto = request.headers.get("X-Forwarded-Proto", request.scheme)
+        return f"{proto}://{fwd_host}".rstrip("/")
     return request.host_url.rstrip("/")
 
 
