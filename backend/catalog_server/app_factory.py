@@ -41,6 +41,7 @@ from catalog_server.blueprints import (
 )
 from catalog_server.services import quote_service
 from catalog_server.services.impressao import impressao_service
+from catalog_server.db import system_conn
 
 
 # ─── Controle de acesso (RBAC) ────────────────────────────────────────
