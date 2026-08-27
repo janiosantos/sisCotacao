@@ -60,8 +60,8 @@ def test_list_products_flat(setup):
 
 def test_busca_por_sku(setup):
     cards, total = catalog.list_products(agrupado=False, q="ELE-CAB-SIL-25A", limit=60)
-    assert total == 1
-    assert cards[0]["sku"] == "ELE-CAB-SIL-25A"
+    assert total >= 1
+    assert cards[0]["sku"] == "ELE-CAB-SIL-25A"  # SKU exato rankeia primeiro
 
 
 def test_busca_por_nome(setup):
@@ -156,14 +156,15 @@ def test_busca_por_caracteristica_na_descricao(busca):
     assert any(c["id"] == busca["p1"] for c in cards)
 
 
-def test_busca_multi_termo_eh_and(busca):
-    cards, total = catalog.list_products(q="cabo azul", limit=5)
+def test_busca_multi_termo_eh_or(busca):
+    """Multi-termo usa OR: qualquer palavra do termo casa na descricao."""
+    cards, total = catalog.list_products(q="cabo azul", limit=10)
     ids = [c["id"] for c in cards]
-    assert busca["p2"] in ids
-    assert busca["p1"] not in ids  # 'cabo' mas não 'azul'
+    assert busca["p1"] in ids  # 'cabo'
+    assert busca["p2"] in ids  # 'cabo' + 'azul'
 
 
 def test_busca_sku_exato_prioritario(busca):
     cards, total = catalog.list_products(q="ELE-CAB-SIL-25A", limit=5)
-    assert total == 1
-    assert cards[0]["sku"] == "ELE-CAB-SIL-25A"
+    assert total >= 1
+    assert cards[0]["sku"] == "ELE-CAB-SIL-25A"  # SKU exato à frente das correspondências parciais
