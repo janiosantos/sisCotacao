@@ -50,7 +50,7 @@ def test_get_product_le_atributos_do_jsonb(system_db, familia, attr_ids):
         atributos={"Bitola": "2,5mm", "Cor": "Verde"},
     )
     prod = repo.get_product(pid)
-    assert prod["atributos"] == {"Bitola": "2,5mm", "Cor": "Verde"}
+    assert prod["atributos_valores"] == {"Bitola": "2,5mm", "Cor": "Verde"}
     # `atributos_nomes` espelha o mesmo conteúdo (chaves por nome).
     assert prod["atributos_nomes"] == {"Bitola": "2,5mm", "Cor": "Verde"}
 
@@ -58,7 +58,7 @@ def test_get_product_le_atributos_do_jsonb(system_db, familia, attr_ids):
 def test_get_product_atributos_vazios(system_db):
     pid = _criar(dados={"sku": "SKU-SEM", "preco": 10.0})
     prod = repo.get_product(pid)
-    assert prod["atributos"] == {}
+    assert prod["atributos_valores"] == {}
 
 
 # ---------------------------------------------------------------------------

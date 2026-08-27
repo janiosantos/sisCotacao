@@ -64,8 +64,9 @@ def test_criar_produto_unificado(system_db, familia, attr_ids):
     assert prod["ean"] == "7891"
     assert prod["preco"] == 10.0
     assert prod["ncm"] == "85444900"
-    assert prod["atributos"]["Bitola"] == "2,5mm"
+    assert prod["atributos_valores"]["Bitola"] == "2,5mm"
     assert prod["atributos_nomes"]["Bitola"] == "2,5mm"
+    assert prod["atributos"]  # definições da família (lista) presentes
 
 
 def test_update_preserva_sku(system_db, familia, attr_ids):
