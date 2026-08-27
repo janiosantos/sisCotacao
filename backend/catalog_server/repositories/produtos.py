@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import json
 
-from catalog_server import fts
 from catalog_server import categorias
 from catalog_server.db import system_conn
 from catalog_server.repositories import marcas
+from catalog_server.repositories.busca import montar_busca
 from catalog_server.services.sku_service import (
     normalizar as normalizar_sku,
     reservar as reservar_sku,
@@ -189,9 +189,6 @@ class ProdutoRepository:
     ) -> tuple[list[dict], int]:
         q = (q or "").strip()
         with system_conn() as conn:
-            fts.ensure_fts(conn)
-            if q and not fts.is_empty(conn):
-                return self._search_fts(conn, q, familia_id, categoria, subcategoria, offset, limit)
             return self._browse(conn, q, familia_id, categoria, subcategoria, offset, limit)
 
     def _browse(
@@ -204,12 +201,19 @@ class ProdutoRepository:
         offset: int = 0,
         limit: int = 60,
     ) -> tuple[list[dict], int]:
+        joins_cat = " LEFT JOIN familias f ON f.id=p.familia_id" \
+            " LEFT JOIN categorias cat ON cat.id=p.categoria_id" \
+            " LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id"
         where = ["1=1"]
         params: list = []
+        order_params: list = []
+        order_sql = ""
         if q:
-            like = f"%{q}%"
-            where.append("(p.nome LIKE ? OR p.marca LIKE ? OR f.nome LIKE ?)")
-            params += [like, like, like]
+            wq, pq, oq, opq = montar_busca(q)
+            where.append(wq)
+            params += pq
+            order_sql = oq
+            order_params = opq
         if familia_id:
             where.append("p.familia_id=?")
             params.append(familia_id)
@@ -220,50 +224,13 @@ class ProdutoRepository:
             where.append("sub.nome=?")
             params.append(subcategoria)
         where_sql = " AND ".join(where)
-        joins_cat = " LEFT JOIN categorias cat ON cat.id=p.categoria_id LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id"
 
         total = conn.execute(
-            f"SELECT COUNT(*) AS n FROM produtos_cadastro p LEFT JOIN familias f ON f.id=p.familia_id{joins_cat} WHERE {where_sql}",
+            f"SELECT COUNT(*) AS n FROM produtos_cadastro p{joins_cat} WHERE {where_sql}",
             params,
         ).fetchone()["n"]
-        from_sql = f"FROM produtos_cadastro p LEFT JOIN familias f ON f.id=p.familia_id{joins_cat} WHERE {where_sql}"
-        rows = self._select_rows(conn, from_sql, params, offset, limit)
-        return [dict(r) for r in rows], total
-
-    def _search_fts(
-        self,
-        conn,
-        q: str,
-        familia_id: int | None,
-        categoria: str,
-        subcategoria: str,
-        offset: int,
-        limit: int,
-    ) -> tuple[list[dict], int]:
-        match = fts.search_query(q)
-        if not match:
-            return [], 0
-        where = "produtos_fts MATCH ?"
-        params: list = [match]
-        if familia_id:
-            where += " AND p.familia_id=?"
-            params.append(familia_id)
-        if categoria:
-            where += " AND cat.nome=?"
-            params.append(categoria)
-        if subcategoria:
-            where += " AND sub.nome=?"
-            params.append(subcategoria)
-
-        joins_cat = " LEFT JOIN categorias cat ON cat.id=p.categoria_id LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id"
-        total = conn.execute(
-            f"SELECT COUNT(*) AS n FROM produtos_fts ft JOIN produtos_cadastro p ON p.id=ft.produto_id{joins_cat}"
-            f" WHERE {where}",
-            params,
-        ).fetchone()["n"]
-        from_sql = f"FROM produtos_fts ft JOIN produtos_cadastro p ON p.id=ft.produto_id"
-        from_sql += f" LEFT JOIN familias f ON f.id=p.familia_id{joins_cat} WHERE {where}"
-        rows = self._select_rows(conn, from_sql, params, offset, limit, order_by="bm25(produtos_fts)")
+        from_sql = f"FROM produtos_cadastro p{joins_cat} WHERE {where_sql}"
+        rows = self._select_rows(conn, from_sql, params + order_params, offset, limit, order_by=order_sql)
         return [dict(r) for r in rows], total
 
     def _select_rows(self, conn, from_sql: str, params: list, offset: int, limit: int, order_by: str = "") -> list:
@@ -273,7 +240,7 @@ class ProdutoRepository:
         operacionais (preço, sku, etc.) — não há mais subconsultas em
         `variantes`.
         """
-        order = order_by or "p.nome COLLATE NOCASE"
+        order = order_by or "p.nome COLLATE NOCASE, p.id"
         return conn.execute(
             f"""
             SELECT p.*, f.nome AS familia_nome,
@@ -287,7 +254,7 @@ class ProdutoRepository:
                     WHERE im.produto_id=p.id
                     ORDER BY im.ordem, im.id LIMIT 1) AS imagem_filename
             {from_sql}
-            ORDER BY {order}, p.nome COLLATE NOCASE, p.id
+            ORDER BY {order}
             LIMIT ? OFFSET ?
             """,
             params + [limit, offset],
@@ -396,7 +363,6 @@ class ProdutoRepository:
             )
             if sku:
                 conn.execute("UPDATE produtos_cadastro SET sku=? WHERE id=?", (sku, produto_id))
-            fts.sync_product(conn, produto_id)
             return produto_id
 
     def update_product(
@@ -474,7 +440,6 @@ class ProdutoRepository:
             )
             if cur.rowcount == 0:
                 return False, {}
-            fts.sync_product(conn, produto_id)
             return True, {"criadas": 0, "desativadas": 0, "excluidas": 0, "bloqueadas": 0, "atributos_faltantes": 0}
 
     def delete_product(self, produto_id: int) -> tuple[bool, dict]:
@@ -487,7 +452,6 @@ class ProdutoRepository:
             )
             if cur.rowcount == 0:
                 return False, {}
-            fts.delete_product(conn, produto_id)
             return True, {"desativadas": 1, "excluidas": 0}
 
     # ------------------------------------------------------------------

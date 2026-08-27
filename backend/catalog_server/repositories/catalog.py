@@ -8,20 +8,11 @@ variações; cada linha de `produtos_cadastro` é um item com seu próprio preç
 from __future__ import annotations
 
 import json
-import re
 
-from catalog_server import fts
 from catalog_server.db import system_conn
 from catalog_server.grouping import PACKAGE_LABELS
+from catalog_server.repositories.busca import montar_busca
 from catalog_server.utils import image_url
-
-# Código de barras/código interno: curto, sem espaços e com dígitos.
-_CODE_RE = re.compile(r"^[A-Za-z0-9./-]{1,16}$")
-
-
-def _is_code_query(q: str) -> bool:
-    """Verdadeiro quando a busca parece um código (SKU/EAN) e não um nome."""
-    return bool(q) and any(c.isdigit() for c in q) and bool(_CODE_RE.fullmatch(q))
 
 
 def _parse_json_attrs(value) -> dict:
@@ -79,11 +70,7 @@ class CatalogRepository:
         q = (q or "").strip()
         ordenar = (ordenar or "").strip().lower()
         with system_conn() as conn:
-            fts.ensure_fts(conn)
-            if q and not fts.is_empty(conn) and not _is_code_query(q):
-                rows, total = self._search_flat(conn, categoria, subcategoria, q, classe, em_linha, offset, limit, ordenar)
-            else:
-                rows, total = self._browse_flat(conn, categoria, subcategoria, q, classe, em_linha, offset, limit, ordenar)
+            rows, total = self._browse_flat(conn, categoria, subcategoria, q, classe, em_linha, offset, limit, ordenar)
             produto_ids = [r["id"] for r in rows]
             attr_defs = self._load_attr_defs(conn, [r["familia_id"] for r in rows])
             attrs = self._load_product_attrs(conn, produto_ids, attr_defs)
@@ -96,64 +83,22 @@ class CatalogRepository:
         self, conn, categoria: str, subcategoria: str, q: str, classe: str, em_linha: bool, offset: int, limit: int, ordenar: str = ""
     ) -> tuple[list[dict], int]:
         joins = (
+            " LEFT JOIN familias f ON f.id=p.familia_id"
             " LEFT JOIN categorias cat ON cat.id=p.categoria_id"
             " LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id"
         )
         where = ["p.ativo=1"]
         params: list = []
-        if categoria:
-            where.append("cat.nome=?")
-            params.append(categoria)
-        if subcategoria:
-            where.append("sub.nome=?")
-            params.append(subcategoria)
-        if classe:
-            where.append("p.classe_abc=?")
-            params.append(classe)
-        if em_linha:
-            where.append("p.em_linha=1")
+        order_params: list = []
+        order_sql = ""
         if q:
-            like = f"%{q}%"
-            where.append("(p.nome LIKE ? OR p.marca LIKE ? OR p.sku LIKE ? OR p.ean LIKE ?)")
-            params += [like, like, like, like]
-        where_sql = " AND ".join(where)
-        base = f" FROM produtos_cadastro p{joins} WHERE {where_sql}"
-
-        total = conn.execute(
-            f"SELECT COUNT(*) AS n{base}", params
-        ).fetchone()["n"]
-        rows = conn.execute(
-            f"""
-            SELECT p.id, p.id AS produto_id, p.sku, p.ean, p.preco, p.old_price,
-                   p.pix_price, p.installment, p.marca AS marca_prod,
-                   p.nome, p.marca AS marca_var, p.familia_id,
-                   COALESCE(cat.nome, '') AS categoria,
-                   COALESCE(sub.nome, '') AS subcategoria, p.embalagem,
-                   p.classe_abc, p.ordem_abc,
-                   p.unidade_venda, p.embalagem AS embalagem_qtd, p.ncm
-            {base}
-            {_order_abc(ordenar, extra="p.id")}
-            LIMIT ? OFFSET ?
-            """,
-            params + [limit, offset],
-        ).fetchall()
-        return [dict(r) for r in rows], total
-
-    def _search_flat(
-        self, conn, categoria: str, subcategoria: str, q: str, classe: str, em_linha: bool, offset: int, limit: int, ordenar: str = ""
-    ) -> tuple[list[dict], int]:
-        match = fts.search_query(q)
-        if not match:
-            return [], 0
-        joins = (
-            " LEFT JOIN categorias cat ON cat.id=p.categoria_id"
-            " LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id"
-        )
-        where = [
-            "p.ativo=1",
-            "p.id IN (SELECT ft.produto_id FROM produtos_fts ft WHERE produtos_fts MATCH ?)",
-        ]
-        params: list = [match]
+            wq, pq, oex, opq = montar_busca(q)
+            where.append(wq)
+            params += pq
+            order_sql = "ORDER BY " + oex
+            order_params = opq
+        else:
+            order_sql = _order_abc(ordenar, extra="p.id")
         if categoria:
             where.append("cat.nome=?")
             params.append(categoria)
@@ -179,12 +124,13 @@ class CatalogRepository:
                    COALESCE(cat.nome, '') AS categoria,
                    COALESCE(sub.nome, '') AS subcategoria, p.embalagem,
                    p.classe_abc, p.ordem_abc,
-                   p.unidade_venda, p.embalagem AS embalagem_qtd, p.ncm
+                   p.unidade_venda, p.embalagem AS embalagem_qtd, p.ncm,
+                   p.descricao
             {base}
-            {_order_abc(ordenar, extra="p.id")}
+            {order_sql}
             LIMIT ? OFFSET ?
             """,
-            params + [limit, offset],
+            params + order_params + [limit, offset],
         ).fetchall()
         return [dict(r) for r in rows], total
 
@@ -503,6 +449,10 @@ SELECT p.id, p.sku, p.preco, p.marca, p.external_id,
             val = vattrs.get(d["id"])
             if val:
                 spec_parts.append(val)
+        # `spec` = descrição padronizada (Nome + características + Marca), que o
+        # PDV usa como rótulo; fallback para a composição de embalagem + atributos.
+        descricao = (row.get("descricao") or "").strip()
+        spec = descricao if descricao else " · ".join(spec_parts)
         fns = images.get(row["produto_id"], [])
         return {
             "group": False,
@@ -511,7 +461,7 @@ SELECT p.id, p.sku, p.preco, p.marca, p.external_id,
             "ean": row["ean"] or "",
             "name": row["nome"] or "",
             "base": row["nome"] or "",
-            "spec": " · ".join(spec_parts),
+            "spec": spec,
             "package": package,
             "package_label": PACKAGE_LABELS.get(package, ""),
             "attrs": vattrs,

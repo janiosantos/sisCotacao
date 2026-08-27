@@ -31,7 +31,6 @@ from app.parsers.product_parser import ProductParser
 from app.parsers.product_parser_anhangueraferramentas import ProductParserAnhangueraFerramentas
 from app.parsers.product_parser_casadosparafusos import ProductParserCasadosParafusos
 from app.parsers.product_parser_casamattos import ProductParserCasaMattos
-from catalog_server import fts
 from catalog_server import categorias
 from catalog_server import classification
 from catalog_server.db import system_conn
@@ -319,8 +318,6 @@ def criar_produto_por_url(
             "UPDATE produtos_cadastro SET sku=?, atributos=? WHERE id=?",
             (sku, json.dumps(attrs_json, ensure_ascii=False), vid),
         )
-
-        fts.sync_product(conn, produto_id)
 
     # Downloads de imagem ficam FORA da transação: não seguram o lock de
     # escrita durante requisições de rede (evita "database is locked"

@@ -48,8 +48,8 @@ def pg_schema():
         conn.commit()
     engine.dispose()
 
-    # Mesmo caminho do startup de produção: migrações + índice FTS
-    # (ensure_fts cria, entre outros, fts5_to_tsquery usada pela busca).
+    # Mesmo caminho do startup de produção: migrações (a 0091 cria extensões,
+    # f_unaccent e os índices pg_trgm da busca por descrição padronizada).
     from catalog_server.db import init_db
 
     init_db()

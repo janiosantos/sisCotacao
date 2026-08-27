@@ -59,14 +59,13 @@ def _ensure_migrations() -> None:
 
 
 def init_db() -> None:
-    """Garante schema mínimo (migrações + índice FTS tsvector). Idempotente."""
-    _ensure_migrations()
-    from catalog_server import fts
+    """Garante schema mínimo (migrações). Idempotente.
 
-    with system_conn() as conn:
-        fts.ensure_fts(conn)
-        if fts.is_empty(conn):
-            fts.rebuild(conn)
+    A busca usa ILIKE + pg_trgm sobre colunas de produtos_cadastro (extensões,
+    f_unaccent e índices criados pela migração 0091) — não há índice derivado a
+    reconstruir.
+    """
+    _ensure_migrations()
 
 
 @contextmanager

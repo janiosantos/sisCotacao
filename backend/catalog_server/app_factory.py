@@ -206,18 +206,8 @@ def create_app() -> Flask:
 
     app.secret_key = config.SECRET_KEY
 
-    # Índice de busca (tsvector): reconstrói no startup para cobrir produtos
-    # cadastrados antes do índice existir.
-    from catalog_server import fts
-    from catalog_server.db import system_conn
-
-    try:
-        with system_conn() as conn:
-            fts.ensure_fts(conn)
-            if fts.is_empty(conn):
-                fts.rebuild(conn)
-    except Exception:
-        app.logger.warning("Falha ao indexar a busca de produtos (FTS).", exc_info=True)
+    # A busca usa ILIKE + pg_trgm sobre produtos_cadastro (índices criados na
+    # migração 0091) — não há mais índice derivado (produtos_fts) a reconstruir.
 
     app.register_blueprint(api_catalog_bp)
     app.register_blueprint(api_dashboard_bp)

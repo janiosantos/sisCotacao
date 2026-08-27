@@ -4,10 +4,9 @@ Uso (dentro do container backend):
     python -m catalog_server.maintenance <tarefa>
 
 Tarefas:
-    health           Resumo do estado do catálogo (contagens).
-    diagnose_search  Valida que produtos com atributos retornam na busca FTS.
-    fts_rebuild      Reconstrói produtos_fts a partir das tabelas base
-                     (índice derivado/regenerável — não altera dados de origem).
+    health               Resumo do estado do catálogo (contagens).
+    padronizar_descricoes Recompõe a descricao padronizada (Nome + atributos +
+                         Marca) de todos os produtos — idempotente.
 
 A execução em produção é disparada pelo workflow `.github/workflows/maintenance.yml`
 (`workflow_dispatch`, input `task`), que roda no runner `siscom-prod` dentro do
@@ -17,69 +16,74 @@ from __future__ import annotations
 
 import sys
 
-from catalog_server import fts
 from catalog_server.db import system_conn
+
+_DESCRICAO_SQL = [
+    # Produtos com atributos (na ordem da família).
+    """
+    WITH attrs AS (
+        SELECT p.id AS produto_id,
+               string_agg(kv.value, ' ' ORDER BY fa.ordem, fa.id) AS vals
+        FROM produtos_cadastro p
+        JOIN familia_atributos fa ON fa.familia_id = p.familia_id
+        JOIN jsonb_each_text(p.atributos) kv ON kv.key = fa.nome
+        WHERE kv.value <> ''
+        GROUP BY p.id
+    )
+    UPDATE produtos_cadastro p
+    SET descricao = btrim(
+        coalesce(p.nome, '')
+        || CASE WHEN a.vals IS NOT NULL AND a.vals <> ''
+                THEN ' ' || a.vals ELSE '' END
+        || CASE WHEN btrim(coalesce(p.marca, '')) <> ''
+                THEN ' - ' || btrim(p.marca) ELSE '' END)
+    FROM attrs a
+    WHERE a.produto_id = p.id
+    """,
+    # Demais (sem atributos/família): Nome - Marca.
+    """
+    UPDATE produtos_cadastro p
+    SET descricao = btrim(
+        coalesce(p.nome, '')
+        || CASE WHEN btrim(coalesce(p.marca, '')) <> ''
+                THEN ' - ' || btrim(p.marca) ELSE '' END)
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM familia_atributos fa
+        JOIN jsonb_each_text(p.atributos) kv ON kv.key = fa.nome
+        WHERE fa.familia_id = p.familia_id AND kv.value <> ''
+    )
+    """,
+]
+
+
+def padronizar_descricoes(conn) -> None:
+    for sql in _DESCRICAO_SQL:
+        conn.execute(sql)
+    n = conn.execute(
+        "SELECT count(*) AS c FROM produtos_cadastro"
+        " WHERE btrim(coalesce(descricao, '')) <> ''"
+    ).fetchone()["c"]
+    print("descricoes padronizadas:", n)
 
 
 def health(conn) -> None:
     prods = conn.execute("SELECT count(*) AS c FROM produtos_cadastro").fetchone()["c"]
-    variants = conn.execute("SELECT count(*) AS c FROM produtos_cadastro").fetchone()["c"]
-    fts_rows = conn.execute("SELECT count(*) AS c FROM produtos_fts").fetchone()["c"]
-    with_attrs = conn.execute(
-        "SELECT count(*) AS c FROM produtos_fts "
-        "WHERE atributos IS NOT NULL AND atributos <> ''"
+    ativos = conn.execute(
+        "SELECT count(*) AS c FROM produtos_cadastro WHERE ativo=1"
+    ).fetchone()["c"]
+    com_desc = conn.execute(
+        "SELECT count(*) AS c FROM produtos_cadastro"
+        " WHERE btrim(coalesce(descricao, '')) <> ''"
     ).fetchone()["c"]
     print("produtos_cadastro :", prods)
-    print("produtos          :", variants)
-    print("produtos_fts      :", fts_rows)
-    print("produtos_fts+atr  :", with_attrs)
-
-
-def diagnose_search(conn) -> None:
-    with_attrs = conn.execute(
-        "SELECT count(*) AS c FROM produtos_fts "
-        "WHERE atributos IS NOT NULL AND atributos <> ''"
-    ).fetchone()["c"]
-    print("produtos_fts com atributos (populados):", with_attrs)
-
-    rows = conn.execute(
-        "SELECT produto_id, atributos FROM produtos_fts "
-        "WHERE atributos IS NOT NULL AND atributos <> '' LIMIT 15"
-    ).fetchall()
-
-    falhas = 0
-    for r in rows:
-        pid = r["produto_id"]
-        atributos = r["atributos"]
-        token = None
-        for w in atributos.replace("²", "").split():
-            if len(w) >= 3 and any(c.isalpha() for c in w):
-                token = w
-                break
-        if not token:
-            continue
-        match = fts.search_query(token)
-        hit = conn.execute(
-            "SELECT 1 FROM produtos_fts WHERE produto_id=? AND produtos_fts MATCH ?",
-            (pid, match),
-        ).fetchone()
-        status = "OK" if hit else "FALHOU"
-        if not hit:
-            falhas += 1
-        print("  pid=%d token=%r -> %s" % (pid, token, status))
-    print("Falhas: %d / %d" % (falhas, len(rows)))
-
-
-def fts_rebuild(conn) -> None:
-    fts.rebuild(conn)
-    n = conn.execute("SELECT count(*) AS c FROM produtos_fts").fetchone()["c"]
-    print("produtos_fts reconstruído:", n, "linhas")
+    print("produtos ativos   :", ativos)
+    print("com descricao     :", com_desc)
 
 
 TASKS = {
     "health": health,
-    "diagnose_search": diagnose_search,
-    "fts_rebuild": fts_rebuild,
+    "padronizar_descricoes": padronizar_descricoes,
 }
 
 

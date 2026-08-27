@@ -104,20 +104,7 @@ def translate_sql(sql: str) -> str:
         masked = re.sub(r"INSERT\s+OR\s+REPLACE\s+INTO", "INSERT INTO", masked, count=1, flags=re.IGNORECASE)
         upsert = "ON CONFLICT DO NOTHING"
 
-    # FTS: produtos_fts MATCH ? (FTS5) -> tsvector (Postgres)
-    masked = re.sub(
-        r"produtos_fts\s+MATCH\s+\?",
-        "fts @@ fts5_to_tsquery(?)",
-        masked,
-        flags=re.IGNORECASE,
-    )
-    # bm25(produtos_fts) (FTS5) -> ts_rank (Postgres)
-    masked = re.sub(
-        r"\bbm25\s*\(\s*produtos_fts\s*\)",
-        "ts_rank(fts, fts5_to_tsquery(?))",
-        masked,
-        flags=re.IGNORECASE,
-    )
+    # FTS removido (migração 0091): a busca usa ILIKE + pg_trgm sobre colunas.
 
     # LIKE case-insensitive (LIKE do SQLite é insensível por padrão)
     masked = re.sub(r"LIKE\s+\?\s+COLLATE\s+NOCASE", "ILIKE ?", masked, flags=re.IGNORECASE)
@@ -208,15 +195,6 @@ class PgCursor:
 
     def _execute(self, sql: str, params) -> None:
         translated = translate_sql(sql)
-        if "bm25(" in sql or "ts_rank(" in translated:
-            # o match é sempre o primeiro param nas queries FTS dos repos;
-            # injeta como literal para não deslocar LIMIT/OFFSET (%s posicional).
-            match = params[0] if params else ""
-            lit = match.replace("'", "''")
-            translated = translated.replace(
-                "ts_rank(fts, fts5_to_tsquery(%s))",
-                f"ts_rank(fts, fts5_to_tsquery('{lit}'))",
-            )
         raw = self._conn._conn.execute(translated, params or ())
         if raw.description is not None:
             self._description = [d[0] for d in raw.description]
