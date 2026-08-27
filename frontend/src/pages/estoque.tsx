@@ -377,7 +377,7 @@ function Movimentos({ depositos }: { depositos: Deposito[] }) {
               <option value="ajuste">Ajuste</option>
             </Select>
           </Field>
-          <Field label="Produto (ID da variante)">
+          <Field label="Produto (ID)">
             <Input type="number" min={1} value={form.variante_id} onChange={(e) => setForm({ ...form, variante_id: e.target.value })} />
           </Field>
           <Field label="Quantidade">
@@ -495,7 +495,7 @@ function Lotes({ depositos }: { depositos: Deposito[] }) {
               ))}
             </Select>
           </Field>
-          <Field label="Produto (ID da variante)">
+          <Field label="Produto (ID)">
             <Input type="number" min={1} value={form.variante_id} onChange={(e) => setForm({ ...form, variante_id: e.target.value })} />
           </Field>
           <Field label="Código do lote">
@@ -650,7 +650,7 @@ interface InventarioRow {
 }
 interface InventarioItem {
   id: number;
-  variante_id: number;
+  produto_id: number;
   produto_nome: string;
   sku: string;
   localizacao: string;

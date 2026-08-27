@@ -60,7 +60,7 @@ export function addItem(variantId: number, qty: number, det: Partial<DetalheCart
 export function addCustomItem(
   key: number,
   qty: number,
-  det: Partial<DetalheCartItem> & { custom: true; descricao?: string; produto_pai: number; marca?: string; atributos: Record<string, unknown> }
+  det: Partial<DetalheCartItem> & { custom: true; descricao?: string; produto_pai?: number; marca?: string; atributos?: Record<string, unknown> }
 ): void {
   const d = load();
   d.itens = d.itens || {};
@@ -421,19 +421,18 @@ export async function criarCotacao(btn: HTMLElement | null): Promise<void> {
   }
   const itensEnviar = lista.map(({ id, qty, detail }) => {
     if (detail.custom) {
-      const atributos: Record<number, string> = {};
-      Object.entries(detail.atributos || {}).forEach(([k, v]) => {
-        atributos[Number(k)] = String(v);
-      });
-      return {
-        produto_pai: detail.produto_pai,
-        descricao:
-          detail.descricao ||
-          `${detail.name || ""}${detail.spec ? ` — ${detail.spec}` : ""}`,
-        marca: detail.marca || detail.brand || "",
-        atributos,
-        quantidade: qty,
-      };
+      const descricao =
+        detail.descricao ||
+        `${detail.name || ""}${detail.spec ? ` — ${detail.spec}` : ""}`;
+      const marca = detail.marca || detail.brand || "";
+      if (detail.produto_pai) {
+        const atributos: Record<number, string> = {};
+        Object.entries(detail.atributos || {}).forEach(([k, v]) => {
+          atributos[Number(k)] = String(v);
+        });
+        return { produto_pai: detail.produto_pai, descricao, marca, atributos, quantidade: qty };
+      }
+      return { descricao, marca, quantidade: qty };
     }
     return { produto_id: id, quantidade: qty };
   });

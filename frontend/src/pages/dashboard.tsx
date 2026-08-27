@@ -16,12 +16,12 @@ interface DashboardData {
     estoque_baixo: number;
     valor_estoque: number;
   };
-  estoque_baixo: { variante_id: number; nome: string; sku: string; quantidade: number; estoque_minimo: number; deposito: string }[];
+  estoque_baixo: { produto_id: number; nome: string; sku: string; quantidade: number; estoque_minimo: number; deposito: string }[];
   top_vendas: { nome: string; sku: string; qtd: number; receita: number }[];
 }
 
 type Reposicao = {
-  variante_id: number;
+  produto_id: number;
   nome: string;
   sku: string;
   unidade_venda: string;
@@ -134,7 +134,7 @@ export default function Dashboard() {
                 <EmptyRow colSpan={4} message="Nenhum produto abaixo do mínimo" />
               ) : (
                 d.estoque_baixo.map((s) => (
-                  <tr key={s.variante_id}>
+                  <tr key={s.produto_id}>
                     <Cell>
                       <span className="font-medium">{s.nome}</span>
                       {s.sku ? <div className="font-mono text-xs text-gray-400">{s.sku}</div> : null}
@@ -157,7 +157,7 @@ export default function Dashboard() {
                 <EmptyRow colSpan={5} message="Nada a repor" />
               ) : (
                 reposicao.map((p) => (
-                  <tr key={p.variante_id}>
+                  <tr key={p.produto_id}>
                     <Cell>
                       <span className="font-medium">{p.nome}</span>
                       {p.sku ? <div className="font-mono text-xs text-gray-400">{p.sku}</div> : null}

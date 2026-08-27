@@ -1,6 +1,6 @@
 ﻿// pages/produtos.tsx — cadastro de produtos (famílias + produto pai + variações + imagens).
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   api,
   type Familia,
@@ -26,22 +26,35 @@ import { temPermissao } from "../perm";
 
 const PAGE = 60;
 
-interface VarianteLocal {
-  id?: number;
+interface DadosOperacionais {
   sku: string;
   ean: string;
-  preco: string | number;
-  prom: string | number;
-  peso: string | number;
+  preco: string;
+  prom: string;
+  peso: string;
   dimensoes: string;
   unidade_venda: string;
-  embalagem: string | number;
-  fator_conversao: string | number;
+  embalagem: string;
+  fator_conversao: string;
   localizacao: string;
   ncm: string;
   unidade_tributavel: string;
-  valores: Record<string, string>;
 }
+
+const DADOS_INICIAIS: DadosOperacionais = {
+  sku: "",
+  ean: "",
+  preco: "",
+  prom: "",
+  peso: "",
+  dimensoes: "",
+  unidade_venda: "",
+  embalagem: "",
+  fator_conversao: "",
+  localizacao: "",
+  ncm: "",
+  unidade_tributavel: "",
+};
 
 interface FornecedorRow {
   uid: string;
@@ -49,7 +62,6 @@ interface FornecedorRow {
   codigo: string;
   unidade: string;
   fator: string | number;
-  variante_idx: number;
 }
 
 interface ProdutoEditorForm {
@@ -70,32 +82,6 @@ const CA_RE = /(^|[^a-z0-9])(n\s?[º°]?\s?ca|ca|certificado|aprovacao)([^a-z0-9
 
 function normalize(str: string): string {
   return String(str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-}
-
-function varianteLabel(v: VarianteLocal, atributos: FamiliaAtributo[], idx: number): string {
-  return atributos.map((a) => v.valores[String(a.id)]).filter(Boolean).join(" · ") || `Variação ${idx + 1}`;
-}
-
-/** Reduz um texto a um trecho curto, só letras/números, maiúsculo — usado
- * para montar SKUs legíveis a partir do nome do produto e dos valores dos
- * atributos (ex.: "Cabo Flexível" + Cor=Azul + Bitola=2,5mm → CABOFL-AZUL-25MM). */
-function slugify(str: string, maxLen: number): string {
-  return normalize(str).replace(/[^a-z0-9]+/g, "").toUpperCase().slice(0, maxLen);
-}
-
-// Segmento de atributos do SKU estruturado ([GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS]).
-// `template` = familia.sku_atributos (nomes na ordem que compõem o SKU); vazio/nulo = usa todos.
-function gerarSkuAtributos(valores: Record<string, string>, atributos: FamiliaAtributo[], template?: string[] | null): string {
-  let selecionados: FamiliaAtributo[];
-  if (template && template.length) {
-    selecionados = template
-      .map((nome) => atributos.find((a) => a.nome.trim().toLowerCase() === nome.trim().toLowerCase()))
-      .filter((a): a is FamiliaAtributo => !!a);
-  } else {
-    selecionados = atributos;
-  }
-  const partes = selecionados.map((a) => slugify(valores[String(a.id)] || "", 12)).filter(Boolean);
-  return partes.join("-");
 }
 
 // Regras de validação de atributo "livre".
@@ -195,11 +181,11 @@ export default function Produtos() {
   };
 
   const excluir = async (id: number) => {
-    if (!window.confirm("Excluir este produto e todas as suas variações e imagens?")) return;
+    if (!window.confirm("Excluir este produto e as suas imagens?")) return;
     try {
       const res = await api.excluirProdutoCadastro(id);
       if (res.desativadas > 0) {
-        toast(`Produto desativado (não excluído): ${res.desativadas} variação(ões) possuem estoque/preço/fornecedor e foram preservadas.`, "warn");
+        toast(`Produto desativado (não excluído): possui estoque/preço/fornecedor e foi preservado.`, "warn");
       } else {
         toast("Produto excluído", "success");
       }
@@ -292,11 +278,11 @@ export default function Produtos() {
                     {p.categoria || p.familia_nome || "Sem categoria"}
                     {p.subcategoria ? ` / ${p.subcategoria}` : ""}
                   </span>{" "}
-                  {p.variant_count} variações {p.classe_abc ? <Badge tone="blue">{p.classe_abc}</Badge> : null}
+                  {p.classe_abc ? <Badge tone="blue">{p.classe_abc}</Badge> : null}
                 </p>
                 <p className="mt-1 line-clamp-2 text-sm font-medium text-gray-900">{p.nome}</p>
                 {p.marca ? <p className="text-xs text-gray-400">{p.marca}</p> : null}
-                <p className="mt-2 text-sm font-semibold text-gray-900">{p.price_min ? `a partir de ${fmtMoney(p.price_min)}` : "sem preço"}</p>
+                <p className="mt-2 text-sm font-semibold text-gray-900">{p.preco != null ? fmtMoney(p.preco) : p.price_min ? fmtMoney(p.price_min) : "sem preço"}</p>
               </div>
               <div className="flex gap-2 border-t border-gray-100 p-3">
                 <Button variant="primary" size="sm" className="flex-1" onClick={() => (location.hash = `#/produtos/${p.id}`)}>
@@ -847,8 +833,8 @@ function ModalEtiquetas({ open, onClose }: { open: boolean; onClose: () => void 
         </>
       }
     >
-      <p className="mb-3 text-sm text-gray-500">Informe os IDs das variantes (separados por vírgula) para gerar a folha de etiquetas.</p>
-      <Field label="IDs das variantes">
+      <p className="mb-3 text-sm text-gray-500">Informe os IDs dos produtos (separados por vírgula) para gerar a folha de etiquetas.</p>
+      <Field label="IDs dos produtos">
         <Textarea rows={3} placeholder="Ex.: 1, 2, 3, 10" value={ids} onChange={(e) => setIds(e.target.value)} />
       </Field>
     </Modal>
@@ -941,7 +927,7 @@ function ModalQuickAdd({
 // INDICADOR DE COMPLETUDE (Dados Gerais)
 // ===================================================================
 
-function CompletudeDadosGerais({ form, variantes }: { form: ProdutoEditorForm; variantes: VarianteLocal[] }) {
+function CompletudeDadosGerais({ form, dados }: { form: ProdutoEditorForm; dados: DadosOperacionais }) {
   const itens: { rotulo: string; preenchido: boolean; dica?: string }[] = [
     { rotulo: "Nome base do produto", preenchido: !!form.nome.trim() },
     { rotulo: "Marca", preenchido: !!form.marca.trim() },
@@ -950,7 +936,7 @@ function CompletudeDadosGerais({ form, variantes }: { form: ProdutoEditorForm; v
     { rotulo: "Grupo (SKU)", preenchido: !!form.grupo_id, dica: "1º segmento do SKU estruturado" },
     { rotulo: "Subgrupo (SKU)", preenchido: !!form.subgrupo_id, dica: "2º segmento do SKU estruturado" },
     { rotulo: "Código fabricante", preenchido: !!form.external_id.trim(), dica: "Referência do fornecedor" },
-    { rotulo: "Ao menos 1 variação com preço > 0", preenchido: variantes.some((v) => Number(v.preco) > 0) },
+    { rotulo: "Preço de venda > 0", preenchido: Number(dados.preco) > 0 },
   ];
   const preenchidos = itens.filter((i) => i.preenchido).length;
   const pct = Math.round((preenchidos / itens.length) * 100);
@@ -990,7 +976,7 @@ function CompletudeDadosGerais({ form, variantes }: { form: ProdutoEditorForm; v
 // ESTOQUE POR DEPÓSITO + SITUAÇÃO (aba Variações)
 // ===================================================================
 
-function EstoqueDeposito({ produtoId, variantes }: { produtoId: number; variantes: VarianteLocal[] }) {
+function EstoqueDeposito({ produtoId }: { produtoId: number }) {
   const [saldos, setSaldos] = useState<SaldoItem[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
@@ -1015,13 +1001,6 @@ function EstoqueDeposito({ produtoId, variantes }: { produtoId: number; variante
     };
   }, [produtoId]);
 
-  const porVariante = new Map<number, SaldoItem[]>();
-  for (const s of saldos) {
-    const arr = porVariante.get(s.variante_id) || [];
-    arr.push(s);
-    porVariante.set(s.variante_id, arr);
-  }
-
   const badgeSituacao = (sit?: string) =>
     sit === "ruptura" ? (
       <Badge tone="red">Ruptura</Badge>
@@ -1034,49 +1013,29 @@ function EstoqueDeposito({ produtoId, variantes }: { produtoId: number; variante
   if (carregando) return <p className="text-xs text-gray-400">Carregando estoque…</p>;
   if (erro) return <p className="text-xs text-red-500">Erro ao carregar estoque: {erro}</p>;
   if (saldos.length === 0)
-    return <p className="text-xs text-gray-400">Sem saldo registrado para as variações deste produto.</p>;
+    return <p className="text-xs text-gray-400">Sem saldo registrado para este produto.</p>;
 
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200 text-sm">
         <thead className="bg-gray-50">
           <tr>
-            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Variação</th>
             <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Depósito</th>
             <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Saldo</th>
             <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Situação</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {variantes.map((v, idx) => {
-            const linhas = (v.id != null ? porVariante.get(v.id) || [] : []).map((s) => ({ ...s }));
-            if (linhas.length === 0) {
-              return (
-                <tr key={idx} className="text-gray-500">
-                  <td className="px-3 py-1.5">{varianteLabel(v, [], idx)}</td>
-                  <td className="px-3 py-1.5 text-gray-400" colSpan={3}>
-                    sem saldo
-                  </td>
-                </tr>
-              );
-            }
-            return linhas.map((s, j) => (
-              <tr key={`${idx}-${j}`}>
-                {j === 0 && (
-                  <td className="px-3 py-1.5 font-medium" rowSpan={linhas.length}>
-                    {varianteLabel(v, [], idx)}
-                    {v.sku ? <span className="text-gray-400"> · {v.sku}</span> : null}
-                  </td>
-                )}
-                <td className="px-3 py-1.5">{s.deposito_nome}</td>
-                <td className="px-3 py-1.5">
-                  {s.quantidade}
-                  {s.reserva > 0 ? <span className="text-gray-400"> (reserva {s.reserva})</span> : null}
-                </td>
-                <td className="px-3 py-1.5">{badgeSituacao(s.situacao)}</td>
-              </tr>
-            ));
-          })}
+          {saldos.map((s, j) => (
+            <tr key={j}>
+              <td className="px-3 py-1.5 font-medium">{s.deposito_nome}</td>
+              <td className="px-3 py-1.5">
+                {s.quantidade}
+                {s.reserva > 0 ? <span className="text-gray-400"> (reserva {s.reserva})</span> : null}
+              </td>
+              <td className="px-3 py-1.5">{badgeSituacao(s.situacao)}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -1095,15 +1054,15 @@ export function ProdutoEditor() {
   const [produto, setProduto] = useState<ProdutoCadastro | null>(null);
   const [form, setForm] = useState({ familia_id: "", marca: "", marca_id: "", external_id: "", nome: "", categoria: "", subcategoria: "", grupo_id: "", subgrupo_id: "", descricao: "", termos_busca: "" });
   const [atributos, setAtributos] = useState<FamiliaAtributo[]>([]);
-  const [variantes, setVariantes] = useState<VarianteLocal[]>([]);
-  const [tab, setTab] = useState<"gerais" | "atributos" | "variacoes" | "imagens" | "fiscal">("gerais");
+  const [dados, setDados] = useState<DadosOperacionais>(DADOS_INICIAIS);
+  const [valores, setValores] = useState<Record<string, string>>({});
+  const [tab, setTab] = useState<"gerais" | "atributos" | "dados" | "imagens" | "fiscal">("gerais");
   const [carregando, setCarregando] = useState(true);
 
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [unidadesCompra, setUnidadesCompra] = useState<UnidadeCompra[]>([]);
   const [fornecedorRows, setFornecedorRows] = useState<FornecedorRow[]>([]);
   const fornecedorSeq = useRef(0);
-  const [skuAvisos, setSkuAvisos] = useState<Record<number, string>>({});
   const [quickAdd, setQuickAdd] = useState<"marca" | "grupo" | "subgrupo" | null>(null);
 
   useEffect(() => {
@@ -1192,13 +1151,14 @@ export function ProdutoEditor() {
 
       const st = buildAtributosState(fs, familiaId, prod);
       setAtributos(st.atributos);
-      setVariantes(st.variantes);
+      setDados(st.dados);
+      setValores(st.valores);
 
       if (prod) {
         const [f, u] = await Promise.all([api.listarFornecedores(true), api.listarUnidadesCompra(true)]).catch(() => [[], []] as [Fornecedor[], UnidadeCompra[]]);
         setFornecedores(f);
         setUnidadesCompra(u);
-        const rows = seedFornecedorRows(prod, st.variantes, fornecedorSeq);
+        const rows = seedFornecedorRows(prod, fornecedorSeq);
         setFornecedorRows(rows);
       }
 
@@ -1213,7 +1173,8 @@ export function ProdutoEditor() {
     setForm((f) => ({ ...f, familia_id: String(familiaId ?? "") }));
     const st = buildAtributosState(familias, familiaId, null);
     setAtributos(st.atributos);
-    setVariantes(st.variantes);
+    setDados(st.dados);
+    setValores(st.valores);
   };
 
   const trocarGrupo = (grupoId: string) => {
@@ -1247,147 +1208,25 @@ export function ProdutoEditor() {
     setForm((f) => ({ ...f, subgrupo_id: String(id) }));
   };
 
-  // Cadastro individual de variações: cada variante carrega seus próprios
-  // valores de atributo (subgrid na aba Variações).
-
-  const adicionarVariante = () => {
-    setVariantes((arr) => [
-      ...arr,
-      {
-        sku: "",
-        ean: "",
-        preco: "",
-        prom: "",
-        peso: "",
-        dimensoes: "",
-        unidade_venda: "",
-        embalagem: "",
-        fator_conversao: "",
-        localizacao: "",
-        ncm: "",
-        unidade_tributavel: "",
-        valores: {},
-      },
-    ]);
-  };
-
-  const removerVariante = (idx: number) => {
-    setVariantes((arr) => arr.filter((_, i) => i !== idx));
-  };
-
-  const atualizarValorVariante = (idx: number, attrId: number, value: string) => {
-    setVariantes((arr) =>
-      arr.map((v, i) => {
-        if (i !== idx) return v;
-        const novos = { ...v.valores };
-        if (value.trim()) novos[String(attrId)] = value.trim();
-        else delete novos[String(attrId)];
-        return { ...v, valores: novos };
-      })
-    );
-  };
-
-  const atualizarVariante = (idx: number, field: keyof VarianteLocal, value: string) => {
-    setVariantes((arr) => arr.map((v, i) => (i === idx ? { ...v, [field]: value } : v)));
-    if (field === "sku") {
-      setSkuAvisos((a) => ({ ...a, [idx]: "" }));
-    }
-  };
-
-  const aplicarParaTodos = (field: keyof VarianteLocal) => {
-    if (variantes.length < 2) return;
-    const valorBase = variantes[0][field];
-    setVariantes((arr) => arr.map((v) => ({ ...v, [field]: valorBase })));
-    toast(`Valor da 1ª linha aplicado a todas as variações.`, "success");
-  };
-
-  const gerarSkus = async () => {
-    if (!variantes.length) return;
-    const nomeBase = (form.nome || form.marca || "").trim();
-    const grupo = grupos.find((g) => String(g.id) === form.grupo_id);
-    const subgrupo = subgrupos.find((s) => String(s.id) === form.subgrupo_id);
-    const marcaCod =
-      marcas.find((m) =>
-        form.marca_id ? m.id === Number(form.marca_id) : m.nome === form.marca
-      )?.codigo || "";
-    const estruturado = !!(grupo?.codigo || subgrupo?.codigo || marcaCod);
-    try {
-      const res = await api.previewSkus({
-        base: nomeBase || "SKU",
-        produto_id: produto?.id ?? null,
-        grupo_cod: grupo?.codigo || "",
-        subgrupo_cod: subgrupo?.codigo || "",
-        marca_cod: marcaCod,
-        variantes: variantes.map((v) => {
-          const familiaObj = familias.find((f) => String(f.id) === form.familia_id);
-          const attrs = gerarSkuAtributos(v.valores, atributos, familiaObj?.sku_atributos);
-          return {
-            id: v.id ?? null,
-            sku: attrs,
-            attrs,
-          };
-        }),
-      });
-      const avisos: Record<number, string> = {};
-      setVariantes((arr) =>
-        arr.map((v, i) => {
-          const r = res.skus[i];
-          if (!r) return v;
-          v = { ...v, sku: r.sku || v.sku };
-          if (r.aviso) avisos[i] = r.aviso;
-          return v;
-        })
-      );
-      setSkuAvisos(avisos);
-      const nAvisos = Object.keys(avisos).length;
-      if (nAvisos)
-        toast(
-          `${nAvisos} SKU(s): vazio/duplicado/inválido ou emitido (mantido).`,
-          "warn"
-        );
-      else if (estruturado)
-        toast("SKUs estruturados gerados: [GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS].", "success");
-      else
-        toast("SKUs gerados a partir dos atributos.", "success");
-    } catch {
-      toast("Não foi possível gerar os SKUs.", "error");
-    }
-  };
-
   const salvar = async () => {
     if (!form.nome.trim()) {
       toast("Informe o nome base do produto", "error");
       return;
     }
-    if (!variantes.length) {
-      toast("Adicione ao menos uma variação", "error");
-      setTab("variacoes");
+    const obr = atributos.filter((a) => a.obrigatorio);
+    const faltando = obr.filter((a) => !(valores[a.nome] || "").trim());
+    if (faltando.length) {
+      toast(`Preencha os atributos obrigatórios: ${faltando.map((a) => a.nome).join(", ")}`, "error");
+      setTab("dados");
       return;
     }
-    // Validação por variante: atributos obrigatórios devem estar preenchidos
-    // (aplicável apenas quando a família define atributos).
-    const obr = atributos.filter((a) => a.obrigatorio);
-    if (obr.length) {
-      for (let i = 0; i < variantes.length; i++) {
-        const faltando = obr.filter((a) => !(variantes[i].valores[String(a.id)] || "").trim());
-        if (faltando.length) {
-          toast(`Variação ${i + 1}: preencha os atributos obrigatórios: ${faltando.map((a) => a.nome).join(", ")}`, "error");
-          setTab("variacoes");
-          return;
-        }
-      }
-    }
     const caAttrs = atributos.filter((a) => CA_RE.test(a.nome));
-    if (caAttrs.length) {
-      for (let i = 0; i < variantes.length; i++) {
-        for (const a of caAttrs) {
-          const v = variantes[i].valores[String(a.id)];
-          if (v && !/^[\d.\s]+$/.test(String(v).trim())) {
-            toast(`Variação ${i + 1}: o atributo "${a.nome}" deve ser um número de CA válido (ex.: 12345 ou 12.345).`, "error");
-            setTab("variacoes");
-            return;
-          }
-        }
+    for (const a of caAttrs) {
+      const v = valores[a.nome];
+      if (v && !/^[\d.\s]+$/.test(String(v).trim())) {
+        toast(`O atributo "${a.nome}" deve ser um número de CA válido (ex.: 12345 ou 12.345).`, "error");
+        setTab("dados");
+        return;
       }
     }
     const familia_id = Number(form.familia_id) || null;
@@ -1403,50 +1242,43 @@ export function ProdutoEditor() {
       subcategoria: form.subcategoria.trim(),
       grupo_id: form.grupo_id ? Number(form.grupo_id) : null,
       subgrupo_id: form.subgrupo_id ? Number(form.subgrupo_id) : null,
-      variantes: variantes.map((v) => ({
-        id: v.id,
-        sku: v.sku || "",
-        ean: v.ean || "",
-        preco: v.preco !== "" && v.preco != null ? Number(v.preco) : 0,
-        preco_promocional: v.prom !== "" && v.prom != null ? Number(v.prom) : null,
-        observacao: "",
-        peso: v.peso !== "" && v.peso != null ? Number(v.peso) : null,
-        dimensoes: v.dimensoes || "",
-        unidade_venda: v.unidade_venda || "UN",
-        embalagem: v.embalagem !== "" && v.embalagem != null ? Number(v.embalagem) : null,
-        fator_conversao: v.fator_conversao !== "" && v.fator_conversao != null ? Number(v.fator_conversao) : null,
-        localizacao: v.localizacao || "",
-        ncm: v.ncm || "",
-        unidade_tributavel: v.unidade_tributavel || "",
-        atributos: v.valores,
-      })),
+      sku: dados.sku || "",
+      ean: dados.ean || "",
+      preco: dados.preco !== "" && dados.preco != null ? Number(dados.preco) : 0,
+      preco_promocional: dados.prom !== "" ? Number(dados.prom) : null,
+      peso: dados.peso !== "" ? Number(dados.peso) : null,
+      dimensoes: dados.dimensoes || "",
+      unidade_venda: dados.unidade_venda || "UN",
+      embalagem: dados.embalagem !== "" ? Number(dados.embalagem) : null,
+      fator_conversao: dados.fator_conversao !== "" ? Number(dados.fator_conversao) : null,
+      localizacao: dados.localizacao || "",
+      ncm: dados.ncm || "",
+      unidade_tributavel: dados.unidade_tributavel || "",
+      atributos: valores,
     };
     try {
       let novoId = produto ? produto.id : null;
-      let desativadas = 0;
-      let bloqueadas = 0;
-      let criadas = 0;
-      let atributosFaltantes = 0;
       if (produto) {
         const res = await api.atualizarProdutoCadastro(produto.id, payload);
-        desativadas = res.variantes?.desativadas || 0;
-        bloqueadas = res.variantes?.bloqueadas || 0;
-        criadas = res.variantes?.criadas || 0;
-        atributosFaltantes = res.variantes?.atributos_faltantes || 0;
+        const desativadas = res.desativadas || 0;
+        const bloqueadas = res.bloqueadas || 0;
+        const criadas = res.criadas || 0;
+        const atributosFaltantes = res.atributos_faltantes || 0;
+        if (atributosFaltantes) {
+          toast(`Não foi possível salvar: ${atributosFaltantes} produto(s) sem os atributos obrigatórios da família.`, "error");
+          setTab("dados");
+          return;
+        }
+        const avisos: string[] = [];
+        if (desativadas) avisos.push(`${desativadas} registro(s) desativado(s) por possuir estoque/preço/fornecedor (nenhum dado foi excluído)`);
+        if (bloqueadas) avisos.push(`não foi possível remover ${bloqueadas} registro(s)`);
+        if (criadas) avisos.push(`${criadas} registro(s) criado(s) automaticamente`);
+        toast(avisos.length ? "Produto salvo. " + avisos.join("; ") : "Produto salvo", avisos.length ? "warn" : "success");
       } else {
         const res = await api.criarProdutoCadastro(payload);
         novoId = res.id;
+        toast("Produto salvo", "success");
       }
-      if (atributosFaltantes) {
-        toast(`Não foi possível salvar: ${atributosFaltantes} variação(ões) sem os atributos obrigatórios da família.`, "error");
-        setTab("variacoes");
-        return;
-      }
-      const avisos: string[] = [];
-      if (desativadas) avisos.push(`${desativadas} variação(ões) removida(s) foram desativadas por possuírem estoque/preço/fornecedor (nenhum dado foi excluído)`);
-      if (bloqueadas) avisos.push(`não foi possível remover ${bloqueadas} variação(ões): todo produto precisa de ao menos uma variação ativa`);
-      if (criadas) avisos.push(`${criadas} variação(ões) padrão criada(s) automaticamente`);
-      toast(avisos.length ? "Produto salvo. " + avisos.join("; ") : "Produto salvo", avisos.length ? "warn" : "success");
       location.hash = `#/produtos/${novoId}`;
     } catch (e) {
       toast("Erro ao salvar: " + (e as Error).message, "error");
@@ -1455,24 +1287,18 @@ export function ProdutoEditor() {
 
   const salvarFornecedor = async () => {
     if (!produto) return;
-    const porFornecedor: Record<number, Map<number, FornecedorVariantePayload>> = {};
-    const semId: VarianteLocal[] = [];
+    const porFornecedor: Record<number, FornecedorVariantePayload[]> = {};
     for (const r of fornecedorRows) {
       const fornecedorId = Number(r.fornecedor_id);
       if (!fornecedorId) continue;
-      const v = variantes[r.variante_idx];
-      if (!v) continue;
-      if (v.id == null || v.id === 0) {
-        if (!semId.includes(v)) semId.push(v);
-        continue;
-      }
-      (porFornecedor[fornecedorId] ||= new Map()).set(v.id, {
-        variante_id: v.id,
+      const item: FornecedorVariantePayload = {
+        produto_id: produto.id,
         codigo_fornecedor: r.codigo || "",
         descricao_fornecedor: "",
         unidade_compra: r.unidade || "",
         fator_conversao: r.fator !== "" && r.fator != null ? Number(r.fator) : 1,
-      });
+      };
+      (porFornecedor[fornecedorId] ||= []).push(item);
     }
     const envolver = new Set(Object.keys(porFornecedor).map(Number));
     for (const fv of produto.fornecedor_variantes || []) envolver.add(fv.fornecedor_id);
@@ -1480,25 +1306,24 @@ export function ProdutoEditor() {
     const erros: string[] = [];
     for (const fid of envolver) {
       try {
-        const itens = porFornecedor[fid] ? Array.from(porFornecedor[fid]!.values()) : [];
+        const itens = porFornecedor[fid] ? porFornecedor[fid]! : [];
         await api.salvarFornecedorVariantes(produto.id, fid, itens);
         sucesso.push(fornecedores.find((f) => f.id === fid)?.nome || "fornecedor " + fid);
       } catch (e) {
         erros.push((fornecedores.find((f) => f.id === fid)?.nome || String(fid)) + " (" + (e as Error).message + ")");
       }
     }
-    if (!sucesso.length && !erros.length && !semId.length) {
+    if (!sucesso.length && !erros.length) {
       toast("Adicione ao menos uma linha e selecione o fornecedor.", "warn");
       return;
     }
     if (sucesso.length) toast(`Códigos salvos: ${sucesso.join(", ")}`, "success");
-    if (semId.length) toast("As variações recém-geradas só vinculam após salvar o produto (Salvar produto).", "warn");
     if (erros.length) toast("Erro: " + erros.join("; "), "error");
   };
 
   const subcategorias = categoriasTree[form.categoria] || [];
   const duplicar = () => {
-    // Copia o cadastro como novo rascunho (mantém atributos/variantes p/ edição)
+    // Copia o cadastro como novo rascunho (mantém atributos/dados p/ edição)
     const copia = { ...form, id: undefined };
     sessionStorage.setItem("dup_produto", JSON.stringify(copia));
     location.hash = "#/produtos/novo";
@@ -1513,7 +1338,7 @@ export function ProdutoEditor() {
   const TABS: { key: typeof tab; label: string }[] = [
     { key: "gerais", label: "Dados Gerais" },
     { key: "atributos", label: "Atributos da Família" },
-    { key: "variacoes", label: "Matriz de Variações" },
+    { key: "dados", label: "Dados e Variação" },
     { key: "imagens", label: "Mídia e Anexos" },
     ...(id ? [{ key: "fiscal" as const, label: "Perfil Fiscal" }] : []),
   ];
@@ -1647,7 +1472,7 @@ export function ProdutoEditor() {
             </Field>
           </div>
           <aside className="space-y-4">
-            <CompletudeDadosGerais form={form} variantes={variantes} />
+            <CompletudeDadosGerais form={form} dados={dados} />
             <div className="rounded-lg border border-gray-200 bg-white p-4">
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Curva ABC · Gestão de Linha</div>
               {produto ? <AbcRecap p={produto} /> : <p className="text-sm text-gray-400">Salve o produto para ver os indicadores de gestão.</p>}
@@ -1658,7 +1483,7 @@ export function ProdutoEditor() {
 
       {tab === "atributos" && (
         <div>
-          <p className="mb-3 text-sm text-gray-500">Atributos definidos pela família selecionada (referência). Os valores de cada atributo são informados em cada variação, na aba Variações.</p>
+          <p className="mb-3 text-sm text-gray-500">Atributos definidos pela família selecionada (referência). Os valores de cada atributo são informados na aba Dados e Variação.</p>
           {!form.familia_id ? (
             <p className="py-8 text-center text-sm text-gray-400">Sem família — este produto não possui atributos.</p>
           ) : atributos.length === 0 ? (
@@ -1680,134 +1505,90 @@ export function ProdutoEditor() {
         </div>
       )}
 
-      {tab === "variacoes" && (
+      {tab === "dados" && (
         <div>
-          <div className="mb-3 flex flex-wrap items-center gap-3">
-            <Button variant="primary" onClick={adicionarVariante}>
-              ＋ Adicionar variação
-            </Button>
-            {variantes.length > 0 && (
-              <Button variant="secondary" onClick={() => void gerarSkus()}>
-                Gerar SKUs
-              </Button>
-            )}
-            {variantes.length > 0 && <span className="text-xs text-gray-500">{variantes.length} variação(ões)</span>}
-            {!variantes.length && <span className="text-xs text-gray-500">Clique em "Adicionar variação" para cadastrar cada variação individualmente.</span>}
-            {atributos.length > 0 && <span className="text-xs text-gray-400">Atributos da família: {atributos.map((a) => a.nome + (a.obrigatorio ? "*" : "")).join(" · ")}</span>}
+          <div className="mb-3">
+            <h4 className="text-sm font-semibold text-gray-900">Dados operacionais do produto</h4>
+            <p className="text-xs text-gray-500">Este produto é uma unidade única (antiga variação). Preencha os campos operacionais e, se houver família, os valores dos atributos.</p>
           </div>
 
-          {variantes.length > 0 && (
-            <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    {(
-                      [
-                        ["Variação", null],
-                        ["SKU", null],
-                        ["EAN", null],
-                        ["Preço", "preco"],
-                        ["Promo.", "prom"],
-                        ["Peso", "peso"],
-                        ["Dimensões", "dimensoes"],
-                        ["Unid.", "unidade_venda"],
-                        ["Emb.", "embalagem"],
-                        ["Fator", "fator_conversao"],
-                        ["Localização", "localizacao"],
-                        ["NCM", "ncm"],
-                        ["Unid. Trib.", "unidade_tributavel"],
-                        ["", null],
-                      ] as [string, keyof VarianteLocal | null][]
-                    ).map(([h, field]) => (
-                      <th key={h} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        <span className="inline-flex items-center gap-1">
-                          {h}
-                          {field && variantes.length > 1 && (
-                            <button
-                              type="button"
-                              title="Copiar o valor da 1ª linha para todas as variações"
-                              className="text-gray-400 hover:text-brand-600"
-                              onClick={() => aplicarParaTodos(field)}
-                            >
-                              ↓⁝
-                            </button>
-                          )}
-                        </span>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {variantes.map((v, idx) => (
-                    <Fragment key={idx}>
-                      <tr className="hover:bg-gray-50">
-                        <td className="px-3 py-1.5 font-medium">{varianteLabel(v, atributos, idx)}</td>
-                        <td className="px-3 py-1.5">
-                          <CellInput value={String(v.sku)} onChange={(x) => atualizarVariante(idx, "sku", x)} placeholder="SKU" error={!!skuAvisos[idx]} title={skuAvisos[idx]} />
-                        </td>
-                        <td className="px-3 py-1.5"><CellInput value={String(v.ean)} onChange={(x) => atualizarVariante(idx, "ean", x)} placeholder="EAN" /></td>
-                        <td className="px-3 py-1.5"><CellInput type="number" value={num(v.preco)} onChange={(x) => atualizarVariante(idx, "preco", x)} placeholder="R$" /></td>
-                        <td className="px-3 py-1.5"><CellInput type="number" value={num(v.prom)} onChange={(x) => atualizarVariante(idx, "prom", x)} placeholder="Promo" /></td>
-                        <td className="px-3 py-1.5"><CellInput type="number" value={num(v.peso)} onChange={(x) => atualizarVariante(idx, "peso", x)} placeholder="kg" /></td>
-                        <td className="px-3 py-1.5"><CellInput value={String(v.dimensoes)} onChange={(x) => atualizarVariante(idx, "dimensoes", x)} placeholder="CxLxA" /></td>
-                        <td className="px-3 py-1.5"><CellInput value={String(v.unidade_venda)} onChange={(x) => atualizarVariante(idx, "unidade_venda", x)} placeholder="UN" /></td>
-                        <td className="px-3 py-1.5"><CellInput type="number" value={num(v.embalagem)} onChange={(x) => atualizarVariante(idx, "embalagem", x)} placeholder="unid/cx" /></td>
-                        <td className="px-3 py-1.5"><CellInput type="number" value={num(v.fator_conversao)} onChange={(x) => atualizarVariante(idx, "fator_conversao", x)} placeholder="cx →" /></td>
-                        <td className="px-3 py-1.5"><CellInput value={String(v.localizacao)} onChange={(x) => atualizarVariante(idx, "localizacao", x)} placeholder="Endereço" /></td>
-                        <td className="px-3 py-1.5"><CellInput value={String(v.ncm)} onChange={(x) => atualizarVariante(idx, "ncm", x)} placeholder="NCM" /></td>
-                        <td className="px-3 py-1.5"><CellInput value={String(v.unidade_tributavel)} onChange={(x) => atualizarVariante(idx, "unidade_tributavel", x)} placeholder="UN" /></td>
-                        <td className="px-3 py-1.5">
-                          <button className="text-gray-400 hover:text-red-600" onClick={() => removerVariante(idx)}>
-                            ×
-                          </button>
-                        </td>
-                      </tr>
-                      {atributos.length > 0 && (
-                        <tr>
-                          <td colSpan={14} className="bg-gray-50/60 px-3 py-2">
-                            <div className="flex flex-wrap gap-3">
-                              {atributos.map((a) => {
-                                const val = v.valores[String(a.id)] || "";
-                                const err = a.tipo === "livre" && val ? validarValorAtributo(a.tipo, a.validacao, val) : "";
-                                return (
-                                  <div key={a.id} className="min-w-[150px] flex-1">
-                                    <label className="mb-0.5 block text-xs font-medium text-gray-600">
-                                      {a.nome} {a.obrigatorio ? <span className="text-red-500">*</span> : null}
-                                    </label>
-                                    {a.tipo === "lista" ? (
-                                      <select
-                                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs"
-                                        value={val}
-                                        onChange={(e) => atualizarValorVariante(idx, a.id, e.target.value)}
-                                      >
-                                        <option value="">—</option>
-                                        {(a.opcoes || []).map((o) => (
-                                          <option key={o} value={o}>{o}</option>
-                                        ))}
-                                      </select>
-                                    ) : (
-                                      <div>
-                                        <input
-                                          className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
-                                          inputMode={a.validacao === "numero" ? "decimal" : "text"}
-                                          value={val}
-                                          placeholder={a.validacao === "numero" ? "número" : a.validacao === "alphanumerico" ? "letras e números" : "texto"}
-                                          onChange={(e) => atualizarValorVariante(idx, a.id, e.target.value)}
-                                        />
-                                        {err && <p className="mt-0.5 text-[10px] text-red-500">{err}</p>}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </td>
-                        </tr>
+          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">SKU</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">EAN</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Preço</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Promo.</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Peso</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Dimensões</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Unid.</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Emb.</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Fator</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Localização</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">NCM</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Unid. Trib.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                <tr className="hover:bg-gray-50">
+                  <td className="px-3 py-1.5"><CellInput value={dados.sku} onChange={(x) => setDados((d) => ({ ...d, sku: x }))} placeholder="SKU" /></td>
+                  <td className="px-3 py-1.5"><CellInput value={dados.ean} onChange={(x) => setDados((d) => ({ ...d, ean: x }))} placeholder="EAN" /></td>
+                  <td className="px-3 py-1.5"><CellInput type="number" value={dados.preco} onChange={(x) => setDados((d) => ({ ...d, preco: x }))} placeholder="R$" /></td>
+                  <td className="px-3 py-1.5"><CellInput type="number" value={dados.prom} onChange={(x) => setDados((d) => ({ ...d, prom: x }))} placeholder="Promo" /></td>
+                  <td className="px-3 py-1.5"><CellInput type="number" value={dados.peso} onChange={(x) => setDados((d) => ({ ...d, peso: x }))} placeholder="kg" /></td>
+                  <td className="px-3 py-1.5"><CellInput value={dados.dimensoes} onChange={(x) => setDados((d) => ({ ...d, dimensoes: x }))} placeholder="CxLxA" /></td>
+                  <td className="px-3 py-1.5"><CellInput value={dados.unidade_venda} onChange={(x) => setDados((d) => ({ ...d, unidade_venda: x }))} placeholder="UN" /></td>
+                  <td className="px-3 py-1.5"><CellInput type="number" value={dados.embalagem} onChange={(x) => setDados((d) => ({ ...d, embalagem: x }))} placeholder="unid/cx" /></td>
+                  <td className="px-3 py-1.5"><CellInput type="number" value={dados.fator_conversao} onChange={(x) => setDados((d) => ({ ...d, fator_conversao: x }))} placeholder="cx →" /></td>
+                  <td className="px-3 py-1.5"><CellInput value={dados.localizacao} onChange={(x) => setDados((d) => ({ ...d, localizacao: x }))} placeholder="Endereço" /></td>
+                  <td className="px-3 py-1.5"><CellInput value={dados.ncm} onChange={(x) => setDados((d) => ({ ...d, ncm: x }))} placeholder="NCM" /></td>
+                  <td className="px-3 py-1.5"><CellInput value={dados.unidade_tributavel} onChange={(x) => setDados((d) => ({ ...d, unidade_tributavel: x }))} placeholder="UN" /></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {atributos.length > 0 && (
+            <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+              <h4 className="mb-1 text-sm font-semibold text-gray-900">Valores dos atributos da família</h4>
+              <p className="mb-3 text-xs text-gray-500">Preencha o valor de cada atributo do produto. Obrigatórios são marcados com *.</p>
+              <div className="flex flex-wrap gap-3">
+                {atributos.map((a) => {
+                  const val = valores[a.nome] || "";
+                  const err = a.tipo === "livre" && val ? validarValorAtributo(a.tipo, a.validacao, val) : "";
+                  return (
+                    <div key={a.id} className="min-w-[150px] flex-1">
+                      <label className="mb-0.5 block text-xs font-medium text-gray-600">
+                        {a.nome} {a.obrigatorio ? <span className="text-red-500">*</span> : null}
+                      </label>
+                      {a.tipo === "lista" ? (
+                        <select
+                          className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs"
+                          value={val}
+                          onChange={(e) => setValores((v) => ({ ...v, [a.nome]: e.target.value }))}
+                        >
+                          <option value="">—</option>
+                          {(a.opcoes || []).map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div>
+                          <input
+                            className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
+                            inputMode={a.validacao === "numero" ? "decimal" : "text"}
+                            value={val}
+                            placeholder={a.validacao === "numero" ? "número" : a.validacao === "alphanumerico" ? "letras e números" : "texto"}
+                            onChange={(e) => setValores((v) => ({ ...v, [a.nome]: e.target.value }))}
+                          />
+                          {err && <p className="mt-0.5 text-[10px] text-red-500">{err}</p>}
+                        </div>
                       )}
-                    </Fragment>
-                  ))}
-                </tbody>
-              </table>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -1817,7 +1598,7 @@ export function ProdutoEditor() {
               <p className="mb-3 text-xs text-gray-400">
                 Saldo e situação por depósito (ok/ruptura/excesso) calculados a partir dos estoque mínimo e máximo.
               </p>
-              <EstoqueDeposito produtoId={produto.id} variantes={variantes} />
+              <EstoqueDeposito produtoId={produto.id} />
             </div>
           ) : null}
 
@@ -1825,11 +1606,9 @@ export function ProdutoEditor() {
             <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
               <h4 className="mb-2 text-sm font-semibold text-gray-900">Códigos por fornecedor</h4>
               <p className="mb-3 text-xs text-gray-400">
-                Informe para cada variação o fornecedor, o código usado por ele, a unidade de compra e o fator de conversão (ex.: embalagem com 10 unidades → fator 10).
+                Informe para este produto o fornecedor, o código usado por ele, a unidade de compra e o fator de conversão (ex.: embalagem com 10 unidades → fator 10).
               </p>
               <FornecedorGrid
-                variantes={variantes}
-                atributos={atributos}
                 fornecedores={fornecedores}
                 unidadesCompra={unidadesCompra}
                 rows={fornecedorRows}
@@ -1843,7 +1622,7 @@ export function ProdutoEditor() {
               </div>
             </div>
           ) : (
-            <p className="mt-4 text-sm text-gray-400">Salve o produto para cadastrar os códigos dos fornecedores por variação.</p>
+            <p className="mt-4 text-sm text-gray-400">Salve o produto para cadastrar os códigos dos fornecedores.</p>
           )}
         </div>
       )}
@@ -1856,7 +1635,7 @@ export function ProdutoEditor() {
 
       {tab === "fiscal" && (
         <div>
-          {id ? <PerfilFiscalPanel variantes={variantes} produto={produto} /> : null}
+          {id ? <PerfilFiscalPanel produto={produto} /> : null}
         </div>
       )}
 
@@ -1879,10 +1658,6 @@ export function ProdutoEditor() {
       )}
     </div>
   );
-}
-
-function num(x: string | number): string {
-  return x !== "" && x != null ? String(x) : "";
 }
 
 function CellInput({ value, onChange, placeholder, type, error, title }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string; error?: boolean; title?: string }) {
@@ -1914,16 +1689,12 @@ function AbcRecap({ p }: { p: ProdutoCadastro }) {
 }
 
 function FornecedorGrid({
-  variantes,
-  atributos,
   fornecedores,
   unidadesCompra,
   rows,
   setRows,
   seq,
 }: {
-  variantes: VarianteLocal[];
-  atributos: FamiliaAtributo[];
   fornecedores: Fornecedor[];
   unidadesCompra: UnidadeCompra[];
   rows: FornecedorRow[];
@@ -1935,14 +1706,12 @@ function FornecedorGrid({
   };
 
   if (fornecedores.length === 0) return <p className="text-sm text-gray-400">Nenhum fornecedor ativo cadastrado.</p>;
-  if (!variantes.length) return <p className="text-sm text-gray-400">Gere as variações primeiro para associar os códigos.</p>;
 
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200 text-sm">
         <thead className="bg-gray-50">
           <tr>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Variação</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Fornecedor</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Código do fornecedor</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Unid. compra</th>
@@ -1953,16 +1722,6 @@ function FornecedorGrid({
         <tbody className="divide-y divide-gray-100">
           {rows.map((r) => (
             <tr key={r.uid}>
-              <td className="px-3 py-1.5">
-                <Select value={String(r.variante_idx)} onChange={(e) => atualizar(r.uid, { variante_idx: Number(e.target.value) })} className="py-1 text-xs">
-                  {variantes.map((v, i) => (
-                    <option key={i} value={i}>
-                      {varianteLabel(v, atributos, i)}
-                      {v.sku ? " · " + v.sku : ""}
-                    </option>
-                  ))}
-                </Select>
-              </td>
               <td className="px-3 py-1.5">
                 <Select value={r.fornecedor_id} onChange={(e) => atualizar(r.uid, { fornecedor_id: e.target.value })} className="py-1 text-xs">
                   <option value="">—</option>
@@ -2002,7 +1761,7 @@ function FornecedorGrid({
           ))}
         </tbody>
       </table>
-      <Button size="sm" className="mt-2" onClick={() => setRows([...rows, { uid: "fvr" + ++seq.current, variante_idx: 0, fornecedor_id: "", codigo: "", unidade: "", fator: "" }])}>
+      <Button size="sm" className="mt-2" onClick={() => setRows([...rows, { uid: "fvr" + ++seq.current, fornecedor_id: "", codigo: "", unidade: "", fator: "" }])}>
         + Adicionar linha
       </Button>
     </div>
@@ -2123,79 +1882,57 @@ function Imagens({ produto, setProduto }: { produto: ProdutoCadastro; setProduto
 function buildAtributosState(familias: Familia[], familiaId: number | null, produto: ProdutoCadastro | null) {
   let atributos: FamiliaAtributo[] = familias.find((x) => x.id === familiaId)?.atributos || [];
   if (produto && produto.atributos && produto.familia_id === familiaId) atributos = produto.atributos;
-  const variantes: VarianteLocal[] = [];
-  if (produto && produto.familia_id === familiaId) {
-    (produto.variantes || []).forEach((v) => {
-      const vals: Record<string, string> = {};
-      atributos.forEach((a) => {
-        const val = v.atributos ? v.atributos[String(a.id)] : undefined;
-        if (val) vals[String(a.id)] = val;
-      });
-      variantes.push({
-        id: v.id,
-        sku: v.sku || "",
-        ean: v.ean || "",
-        preco: v.preco || "",
-        prom: v.preco_promocional || "",
-        peso: v.peso || "",
-        dimensoes: v.dimensoes || "",
-        unidade_venda: v.unidade_venda || "",
-        embalagem: v.embalagem || "",
-        fator_conversao: v.fator_conversao || "",
-        localizacao: v.localizacao || "",
-        ncm: v.ncm || "",
-        unidade_tributavel: v.unidade_tributavel || "",
-        valores: vals,
-      });
-    });
+  let dados: DadosOperacionais = { ...DADOS_INICIAIS };
+  let valores: Record<string, string> = {};
+  if (produto) {
+    dados = {
+      sku: produto.sku ?? "",
+      ean: produto.ean ?? "",
+      preco: produto.preco?.toString() ?? "",
+      prom: produto.preco_promocional?.toString() ?? "",
+      peso: produto.peso?.toString() ?? "",
+      dimensoes: produto.dimensoes ?? "",
+      unidade_venda: produto.unidade_venda ?? "UN",
+      embalagem: produto.embalagem?.toString() ?? "",
+      fator_conversao: produto.fator_conversao?.toString() ?? "",
+      localizacao: produto.localizacao ?? "",
+      ncm: produto.ncm ?? "",
+      unidade_tributavel: produto.unidade_tributavel ?? "",
+    };
+    valores = produto.atributos_valores ?? {};
   }
-  return { atributos, variantes };
+  return { atributos, dados, valores };
 }
 
-function seedFornecedorRows(produto: ProdutoCadastro, variantes: VarianteLocal[], seq: React.MutableRefObject<number>): FornecedorRow[] {
+function seedFornecedorRows(produto: ProdutoCadastro, seq: React.MutableRefObject<number>): FornecedorRow[] {
   const rows: FornecedorRow[] = [];
-  const idxPorId: Record<number, number> = {};
-  variantes.forEach((v, i) => {
-    if (v.id != null) idxPorId[v.id] = i;
-  });
   for (const r of produto.fornecedor_variantes || []) {
     rows.push({
       uid: "fvr" + ++seq.current,
-      variante_idx: r.variante_id in idxPorId ? idxPorId[r.variante_id] : 0,
       fornecedor_id: String(r.fornecedor_id),
       codigo: r.codigo_fornecedor || "",
       unidade: r.unidade_compra || "",
       fator: r.fator_conversao ?? "",
     });
   }
-  if (!rows.length && variantes.length) {
-    rows.push({ uid: "fvr" + ++seq.current, variante_idx: 0, fornecedor_id: "", codigo: "", unidade: "", fator: "" });
+  if (!rows.length) {
+    rows.push({ uid: "fvr" + ++seq.current, fornecedor_id: "", codigo: "", unidade: "", fator: "" });
   }
   return rows;
 }
 
-// ─── Perfil fiscal (classificação por variante) ─────────────────────────
+// ─── Perfil fiscal (classificação do produto) ─────────────────────────
 
-function PerfilFiscalPanel({ variantes, produto }: { variantes: VarianteLocal[]; produto: ProdutoCadastro | null }) {
-  const comId = variantes.filter((v) => v.id != null);
-  const [varianteSel, setVarianteSel] = useState<number | null>(comId[0]?.id ?? null);
+function PerfilFiscalPanel({ produto }: { produto: ProdutoCadastro | null }) {
   const [efetivo, setEfetivo] = useState<PerfilFiscalEfetivo | null>(null);
   const [ncmBusca, setNcmBusca] = useState("");
   const [ncmResultados, setNcmResultados] = useState<{ codigo: string; descricao: string }[]>([]);
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
-    if (varianteSel == null) return;
-    api.perfilFiscalEfetivo(varianteSel).then(setEfetivo).catch(() => toast("Erro ao ler perfil fiscal", "error"));
-  }, [varianteSel]);
-
-  // Quando as variações carregarem (produto já salvo), seleciona a primeira
-  // por padrão — sem isso o painel fica travado em "carregando".
-  useEffect(() => {
-    if (varianteSel == null && comId.length > 0) {
-      setVarianteSel(comId[0]!.id!);
-    }
-  }, [comId, varianteSel]);
+    if (!produto) return;
+    api.perfilFiscalEfetivo(produto.id).then(setEfetivo).catch(() => toast("Erro ao ler perfil fiscal", "error"));
+  }, [produto]);
 
   const buscarNcm = async () => {
     if (!ncmBusca.trim()) return;
@@ -2207,10 +1944,10 @@ function PerfilFiscalPanel({ variantes, produto }: { variantes: VarianteLocal[];
   };
 
   const salvar = async () => {
-    if (varianteSel == null || !efetivo) return;
+    if (!produto || !efetivo) return;
     setSalvando(true);
     try {
-      const salvo = await api.perfilFiscalSalvar(varianteSel, efetivo.efetivo);
+      const salvo = await api.perfilFiscalSalvar(produto.id, efetivo.efetivo);
       setEfetivo({ ...efetivo, variante: salvo, efetivo: salvo });
       toast("Perfil fiscal salvo", "success");
     } catch (e) {
@@ -2220,16 +1957,15 @@ function PerfilFiscalPanel({ variantes, produto }: { variantes: VarianteLocal[];
     }
   };
 
-  if (comId.length === 0) {
-    return <p className="py-8 text-center text-sm text-gray-400">Salve o produto e crie variações para classificar o perfil fiscal.</p>;
+  if (!produto) {
+    return <p className="py-8 text-center text-sm text-gray-400">Salve o produto para classificar o perfil fiscal.</p>;
   }
 
   const campo = "w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm";
 
   const ncmRegex = /^\d{4}(\.\d{2})?(\.\d{2})?$/;
-  const varianteAtual = variantes.find((v) => v.id === varianteSel);
-  const precoOk = varianteAtual != null && Number(varianteAtual.preco) > 0;
-  const marcaOk = !!(produto?.marca || "").trim();
+  const precoOk = Number(produto.preco) > 0;
+  const marcaOk = !!(produto.marca || "").trim();
   const ncmOk = !!efetivo && ncmRegex.test((efetivo.efetivo.ncm || "").trim());
 
   const campoErro = "border-red-400 bg-red-50 focus:border-red-500";
@@ -2237,24 +1973,13 @@ function PerfilFiscalPanel({ variantes, produto }: { variantes: VarianteLocal[];
 
   const badgeHerdado = (override: boolean) =>
     override ? (
-      <Badge tone="amber">Override da variação</Badge>
+      <Badge tone="amber">Override</Badge>
     ) : (
-      <Badge tone="gray">Herdado do produto</Badge>
+      <Badge tone="gray">Padrão</Badge>
     );
 
   return (
     <div className="max-w-xl space-y-4">
-      <div>
-        <label className="text-xs uppercase text-gray-400">Variação</label>
-        <select className={campo} value={varianteSel ?? ""} onChange={(e) => setVarianteSel(Number(e.target.value))}>
-          {comId.map((v) => (
-            <option key={v.id} value={v.id!}>
-              {v.sku || `(sem SKU)`} {v.ean ? `· ${v.ean}` : ""}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {!efetivo ? (
         <p className="py-4 text-center text-sm text-gray-400">Carregando…</p>
       ) : (
@@ -2264,10 +1989,10 @@ function PerfilFiscalPanel({ variantes, produto }: { variantes: VarianteLocal[];
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Validações do cadastro</p>
             <ul className="space-y-1 text-xs">
               <li className={marcaOk ? "text-green-700" : "text-red-600"}>
-                {marcaOk ? "✔" : "✘"} Marca do produto preenchida ({produto?.marca || "—"})
+                {marcaOk ? "✔" : "✘"} Marca do produto preenchida ({produto.marca || "—"})
               </li>
               <li className={precoOk ? "text-green-700" : "text-red-600"}>
-                {precoOk ? "✔" : "✘"} Preço da variação &gt; 0 ({varianteAtual?.preco != null ? fmtMoney(Number(varianteAtual.preco)) : "—"})
+                {precoOk ? "✔" : "✘"} Preço do produto &gt; 0 ({produto.preco != null ? fmtMoney(Number(produto.preco)) : "—"})
               </li>
               <li className={ncmOk ? "text-green-700" : "text-red-600"}>
                 {ncmOk ? "✔" : "✘"} Formato NCM válido (ex.: 8544.42.00) — atual: {efetivo.efetivo.ncm || "vazio"}
@@ -2315,11 +2040,11 @@ function PerfilFiscalPanel({ variantes, produto }: { variantes: VarianteLocal[];
             <p className="rounded-md bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
               Perfil padrão do produto: NCM <b>{efetivo.produto.ncm || "—"}</b> · CEST{" "}
               <b>{efetivo.produto.cest || "—"}</b> · Origem <b>{efetivo.produto.origem ?? 0}</b> · Regime ST{" "}
-              <b>{efetivo.produto.regime_st || "—"}</b>. Edite um campo para sobrescrever nesta variação (override).
+              <b>{efetivo.produto.regime_st || "—"}</b>. Edite um campo para sobrescrever (override).
             </p>
           ) : (
             <p className="rounded-md bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
-              Sem perfil padrão no produto — os valores preenchidos aqui valem somente para esta variação.
+              Sem perfil padrão no produto — os valores preenchidos aqui valem somente para este produto.
             </p>
           )}
 

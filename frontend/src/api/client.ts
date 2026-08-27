@@ -605,9 +605,9 @@ export interface ItemListaCadastro {
   familia_nome: string | null;
   categoria: string;
   subcategoria: string;
-  variant_count: number;
   price_min: number | null;
   price_max: number | null;
+  preco?: number | null;
   imagem_url: string | null;
   classe_abc: string | null;
   em_linha: number;
@@ -664,7 +664,6 @@ export interface FamiliaPayload {
 export interface ImagemProduto {
   id: number;
   produto_id: number;
-  variante_id: number | null;
   url: string;
   url_origem?: string;
   ordem: number;
@@ -720,7 +719,7 @@ export interface VarianteCadastro {
 }
 
 export interface FornecedorVariante {
-  variante_id: number;
+  produto_id: number;
   fornecedor_id: number;
   codigo_fornecedor: string;
   descricao_fornecedor: string;
@@ -752,7 +751,24 @@ export interface ProdutoCadastro {
   criado_em: string;
   atualizado_em: string | null;
   atributos: FamiliaAtributo[];
-  variantes: VarianteCadastro[];
+  atributos_valores: Record<string, string>;
+  atributos_nomes?: Record<string, string>;
+  sku: string;
+  ean: string;
+  preco: number;
+  preco_promocional: number | null;
+  old_price?: number | null;
+  pix_price?: number | null;
+  custo_unitario?: number | null;
+  preco_venda?: number | null;
+  ncm: string;
+  peso?: number | null;
+  dimensoes?: string;
+  unidade_venda: string;
+  embalagem?: number | null;
+  fator_conversao?: number | null;
+  localizacao?: string;
+  unidade_tributavel?: string;
   imagens: ImagemProduto[];
   fornecedor_variantes: FornecedorVariante[];
   linha_produto?: string;
@@ -794,11 +810,29 @@ export interface ProdutoCadastroPayload {
   grupo_id?: number | null;
   subgrupo_id?: number | null;
   external_id?: string | null;
-  variantes: VarianteCadastroPayload[];
+  // Campos operacionais do produto (antiga variante única).
+  sku?: string;
+  ean?: string;
+  preco?: number;
+  preco_promocional?: number | null;
+  old_price?: number | null;
+  pix_price?: number | null;
+  custo_unitario?: number | null;
+  preco_venda?: number | null;
+  ncm?: string;
+  peso?: number | null;
+  dimensoes?: string;
+  unidade_venda?: string;
+  embalagem?: number | null;
+  fator_conversao?: number | null;
+  localizacao?: string;
+  unidade_tributavel?: string;
+  // Valores de atributos por NOME (modelo unificado).
+  atributos?: Record<string, string>;
 }
 
 export interface FornecedorVariantePayload {
-  variante_id: number;
+  produto_id: number;
   codigo_fornecedor: string;
   descricao_fornecedor: string;
   unidade_compra: string;
@@ -825,7 +859,6 @@ export interface ProdutoPreview {
 
 export interface CriarProdutoUrlResult {
   id: number;
-  variante_id: number;
   nome: string;
   marca: string;
   familia: string;
@@ -1092,7 +1125,7 @@ export const api = {
   criarProdutoCadastro: (payload: ProdutoCadastroPayload) =>
     request<{ id: number }>("POST", "/api/produtos-cadastro", payload),
   atualizarProdutoCadastro: (id: number, payload: ProdutoCadastroPayload) =>
-    request<{ ok: boolean; variantes: { excluidas: number; desativadas: number; bloqueadas: number; criadas: number; atributos_faltantes: number } }>("PUT", `/api/produtos-cadastro/${id}`, payload),
+    request<{ ok: boolean; excluidas: number; desativadas: number; bloqueadas: number; criadas: number; atributos_faltantes: number }>("PUT", `/api/produtos-cadastro/${id}`, payload),
   excluirProdutoCadastro: (id: number) =>
     request<{ ok: boolean; excluidas: number; desativadas: number }>("DELETE", `/api/produtos-cadastro/${id}`),
   parseUrlProduto: (url: string) =>
@@ -1974,7 +2007,7 @@ export interface Deposito {
 export interface SaldoItem {
   id: number;
   deposito_id: number;
-  variante_id: number;
+  produto_id: number;
   quantidade: number;
   reserva: number;
   atualizado_em: string;
@@ -2016,7 +2049,7 @@ export interface MovimentoResult {
 export interface MovimentoItem {
   id: number;
   deposito_id: number;
-  variante_id: number;
+  produto_id: number;
   tipo: string;
   quantidade: number;
   saldo_anterior: number;
@@ -2044,7 +2077,7 @@ export interface TransferenciaPayload {
 export interface LoteItem {
   id: number;
   deposito_id: number;
-  variante_id: number;
+  produto_id: number;
   codigo: string;
   data_fabricacao: string | null;
   data_validade: string | null;
@@ -2263,7 +2296,7 @@ export interface TabelaPrecoPayload {
 export interface TabelaPrecoItem {
   id: number;
   tabela_id: number;
-  variante_id: number;
+  produto_id: number;
   preco: number;
   margem: number | null;
   ativo: number | boolean;
@@ -2283,7 +2316,7 @@ export interface TabelaPrecoItemPayload {
 export interface TabelaPrecoItemMargem {
   id: number;
   tabela_id: number;
-  variante_id: number;
+  produto_id: number;
   preco: number;
   margem: number | null;
   ativo: number | boolean;
@@ -2332,7 +2365,7 @@ export interface PromocaoPayload {
 export interface PromocaoItem {
   id: number;
   promocao_id: number;
-  variante_id: number;
+  produto_id: number;
   preco_promocional: number;
   sku: string;
   preco_base: number;
@@ -2362,7 +2395,7 @@ export interface CstCode {
 
 export interface FiscalConfigItem {
   id: number;
-  variante_id: number;
+  produto_id: number;
   ncm: string;
   cfop: string | null;
   cst_icms: string | null;
@@ -2472,12 +2505,15 @@ export interface DiagnosticoVariacao {
 
 export interface DiagnosticoDetalhe {
   produto: { id: number; nome: string; marca: string; familia_id: number | null } | null;
-  variantes: { id: number; sku: string; ean: string; preco: number; atributos: string | null }[];
+  sku?: string;
+  ean?: string;
+  preco?: number;
+  atributos?: string | null;
 }
 
 export interface FornecedorPrefItem {
   id: number;
-  variante_id: number;
+  produto_id: number;
   fornecedor_id: number;
   fornecedor_nome: string;
   ranking: number;
@@ -2506,7 +2542,7 @@ export interface IbptItem {
 
 export interface SugestaoIbpt {
   id: number;
-  variante_id: number;
+  produto_id: number;
   ncm: string;
   descricao: string;
   confianca: number;
@@ -2583,7 +2619,7 @@ export interface CalculoPrecoFiscal {
 }
 
 export interface CalculoPreco {
-  variante_id: number;
+  produto_id: number;
   canal: string | null;
   tabela_id: number | null;
   tabela_nome: string | null;
@@ -2600,7 +2636,7 @@ export interface CalculoPreco {
 }
 
 export interface ItemPreviaReajuste {
-  variante_id: number;
+  produto_id: number;
   sku: string;
   produto_nome: string;
   marca: string;
@@ -2633,7 +2669,7 @@ export interface ReajusteResultado {
 export interface HistoricoPrecoItem {
   id: number;
   tabela_id: number;
-  variante_id: number;
+  produto_id: number;
   preco_anterior: number;
   preco_novo: number;
   margem_pct: number | null;
@@ -2651,7 +2687,7 @@ export interface HistoricoPrecoItem {
 
 export interface HistoricoFiscalItem {
   id: number;
-  variante_id: number;
+  produto_id: number;
   tipo: string;
   ncm: string;
   cfop: string | null;
@@ -2683,7 +2719,7 @@ export interface HistoricoFiscalItem {
 }
 
 export interface MargemVenda {
-  variante_id: number;
+  produto_id: number;
   produto_nome: string;
   sku: string;
   n_itens: number;
@@ -2704,7 +2740,7 @@ export interface DashboardData {
     estoque_baixo: number;
     valor_estoque: number;
   };
-  estoque_baixo: { variante_id: number; nome: string; sku: string; quantidade: number; estoque_minimo: number; deposito: string }[];
+  estoque_baixo: { produto_id: number; nome: string; sku: string; quantidade: number; estoque_minimo: number; deposito: string }[];
   top_vendas: { nome: string; sku: string; qtd: number; receita: number }[];
 }
 
@@ -2889,7 +2925,7 @@ export interface Garantia {
   cliente_nome: string;
   cliente_id: number | null;
   orcamento_id: number | null;
-  variante_id: number | null;
+  produto_id: number | null;
   produto_nome: string;
   data_venda: string | null;
   data_inicio: string;
@@ -2904,7 +2940,7 @@ export interface Garantia {
 export interface FornecedorPrecoItem {
   id: number;
   fornecedor_id: number;
-  variante_id: number;
+  produto_id: number;
   preco: number;
   prazo_entrega: number | null;
   icms: number;
@@ -2929,7 +2965,7 @@ export interface SolicitacaoCompra {
 export interface SolicitacaoItem {
   id: number;
   solicitacao_id: number;
-  variante_id: number;
+  produto_id: number;
   quantidade: number;
   justificativa: string;
   sku?: string;

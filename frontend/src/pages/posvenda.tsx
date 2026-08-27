@@ -345,7 +345,7 @@ function Devolucao() {
     const variante_id = parseInt(form.var, 10);
     const quantidade = parseFloat(form.qtd);
     if (!variante_id || quantidade <= 0) {
-      toast("Informe variante e quantidade", "error");
+      toast("Informe produto e quantidade", "error");
       return;
     }
     try {
@@ -370,7 +370,7 @@ function Devolucao() {
         <Field label="Orçamento (ID)">
           <Input type="number" placeholder="opcional" value={form.orc} onChange={(e) => setForm({ ...form, orc: e.target.value })} className="w-28" />
         </Field>
-        <Field label="Variante (ID)">
+        <Field label="Produto (ID)">
           <Input type="number" value={form.var} onChange={(e) => setForm({ ...form, var: e.target.value })} className="w-28" />
         </Field>
         <Field label="Quantidade">

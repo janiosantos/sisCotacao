@@ -21,8 +21,11 @@ interface Row {
   observacao: string;
 }
 interface Detalhe {
-  produto: { nome: string } | null;
-  variantes: { id: number; sku: string; ean: string; preco: number }[];
+  produto: { id: number; nome: string; marca: string; familia_id: number | null } | null;
+  sku?: string;
+  ean?: string;
+  preco?: number;
+  atributos?: string | null;
 }
 
 export default function DiagnosticoVariacoes() {
@@ -32,7 +35,6 @@ export default function DiagnosticoVariacoes() {
   const [tipo, setTipo] = useState("");
   const [q, setQ] = useState("");
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null);
-  const [detalheId, setDetalheId] = useState<number | null>(null);
 
   const carregar = async () => {
     try {
@@ -58,20 +60,6 @@ export default function DiagnosticoVariacoes() {
   const abrirDetalhe = async (id: number) => {
     try {
       setDetalhe(await api.detalhesDiagnosticoVariacao(id));
-      setDetalheId(id);
-    } catch (e) {
-      toast("Erro: " + (e as Error).message, "error");
-    }
-  };
-
-  const consolidar = async (principalId: number) => {
-    if (detalheId == null) return;
-    if (!window.confirm("Confirmar consolidação das ofertas neste produto?")) return;
-    try {
-      const r = await api.consolidarOfertas(detalheId, principalId);
-      toast(`${r.desativadas} ofertas consolidadas`, "success");
-      setDetalhe(null);
-      await carregar();
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
     }
@@ -146,24 +134,20 @@ export default function DiagnosticoVariacoes() {
         footer={<Button onClick={() => setDetalhe(null)}>Fechar</Button>}
       >
         <p className="mb-3 text-sm text-gray-500">
-          Escolha a variante principal. As demais ofertas com o mesmo EAN serão desativadas, mantendo histórico e referências.
+          Dados do produto (cada antiga variante é agora um produto independente).
         </p>
         <Table>
-          <THead cols={["ID", "SKU", "EAN", "Preço", ""]} />
+          <THead cols={["ID", "SKU", "EAN", "Preço", "Atributos"]} />
           <TBody>
-            {(detalhe?.variantes || []).map((v) => (
-              <tr key={v.id} className="hover:bg-gray-50">
-                <Cell>{v.id}</Cell>
-                <Cell className="font-mono text-xs">{v.sku || "—"}</Cell>
-                <Cell className="font-mono text-xs">{v.ean || "—"}</Cell>
-                <Cell>{fmtMoney(v.preco)}</Cell>
-                <Cell>
-                  <Button size="sm" variant="primary" onClick={() => void consolidar(v.id)}>
-                    Usar como principal
-                  </Button>
-                </Cell>
+            {detalhe ? (
+              <tr className="hover:bg-gray-50">
+                <Cell>{detalhe.produto?.id ?? "—"}</Cell>
+                <Cell className="font-mono text-xs">{detalhe.sku || "—"}</Cell>
+                <Cell className="font-mono text-xs">{detalhe.ean || "—"}</Cell>
+                <Cell>{detalhe.preco != null ? fmtMoney(detalhe.preco) : "—"}</Cell>
+                <Cell className="text-xs">{detalhe.atributos || "—"}</Cell>
               </tr>
-            ))}
+            ) : null}
           </TBody>
         </Table>
       </Modal>

@@ -119,7 +119,7 @@ interface Draft {
 }
 
 interface CardBusca {
-  group: boolean;
+  group?: boolean;
   id: number;
   name: string;
   sku: string;
@@ -128,7 +128,6 @@ interface CardBusca {
   price: number;
   price_min?: number;
   imagem_url?: string | null;
-  variants?: { id: number }[];
 }
 
 function novoDraft(): Draft {
@@ -347,7 +346,7 @@ function EtapaLista({
   }, [q, cat]);
 
   const adicionar = (p: CardBusca) => {
-    const vid = p.group && p.variants && p.variants[0] ? p.variants[0].id : p.id;
+    const vid = p.id;
     const exist = draft.itens.find((i) => i.produto_id === vid);
     const next = { ...draft, itens: [...draft.itens] };
     if (exist) {

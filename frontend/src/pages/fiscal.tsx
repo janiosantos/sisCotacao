@@ -439,7 +439,7 @@ function ModalFiscal({
     if (!config) return;
     const benef = form.beneficio_id || "";
     try {
-      await api.upsertFiscalConfig(config.variante_id, {
+      await api.upsertFiscalConfig(config.produto_id, {
         ncm: (form.ncm || "").trim() || undefined,
         cfop: (form.cfop || "").trim() || undefined,
         origem: parseInt(form.origem || "0", 10),
@@ -1019,7 +1019,7 @@ function Simulador() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-end gap-3">
-        <Field label="Produto / variante" className="min-w-[260px]">
+        <Field label="Produto" className="min-w-[260px]">
           <Input placeholder="Nome, SKU…" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </Field>
         <Field label="Cliente (opcional)" className="min-w-[200px]">

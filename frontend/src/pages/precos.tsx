@@ -421,7 +421,7 @@ function ModalGerarPrecos({
         {carregando ? <Loading message="Calculando prévia…" /> : null}
         {erro ? <div className="py-4 text-center text-sm text-gray-400">Erro: {erro}</div> : null}
         {previa && previa.itens.length === 0 && !carregando ? (
-          <div className="py-4 text-center text-sm text-gray-400">Nenhuma variante com custo para reajustar.</div>
+          <div className="py-4 text-center text-sm text-gray-400">Nenhum produto com custo para reajustar.</div>
         ) : null}
         {previa && previa.itens.length > 0 ? (
           <div>
@@ -432,7 +432,7 @@ function ModalGerarPrecos({
               <THead cols={["Produto", "Custo líquido", "Atual", "Sugerido", "Margem"]} />
               <TBody>
                 {previa.itens.slice(0, 60).map((i: ItemPreviaReajuste) => (
-                  <tr key={i.variante_id} className="hover:bg-gray-50">
+                  <tr key={i.produto_id} className="hover:bg-gray-50">
                     <Cell>
                       <span className="font-medium">{i.produto_nome}</span>
                       {i.sku ? <div className="font-mono text-xs text-gray-400">{i.sku}</div> : null}
@@ -954,12 +954,12 @@ function ModalAplicarPromocao({ promocao, onClose }: { promocao: Promocao | null
       }
     >
       <p className="mb-4 text-sm text-gray-500">
-        Aplica a promoção a produtos por ID da variante. Informe os IDs separados por vírgula.{" "}
+        Aplica a promoção a produtos por ID do produto. Informe os IDs separados por vírgula.{" "}
         {promocao?.tipo === "percentual"
           ? `Desconto de ${promocao.valor}% sobre o preço base.`
           : `Preço fixo de ${fmtMoney(promocao?.valor ?? 0)}.`}
       </p>
-      <Field label="IDs das variantes (separados por vírgula)">
+      <Field label="IDs dos produtos (separados por vírgula)">
         <Textarea rows={3} placeholder="Ex.: 1, 2, 3, 10, 15" value={ids} onChange={(e) => setIds(e.target.value)} />
       </Field>
     </Modal>
@@ -1044,7 +1044,7 @@ function Simulador() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-end gap-3">
-        <Field label="Produto / variante" className="min-w-[280px]">
+        <Field label="Produto" className="min-w-[280px]">
           <Input placeholder="Nome, SKU, marca…" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </Field>
         <Field label="Canal">
@@ -1105,7 +1105,7 @@ function Simulador() {
       {selecionada ? (
         <p className="mb-4 text-sm text-gray-600">
           Selecionado: <span className="font-medium">{selecionada.name}</span>
-          {selecionada.sku ? <span className="ml-2 font-mono text-xs text-gray-400">{selecionada.sku}</span> : null} (variante #{selecionada.id})
+          {selecionada.sku ? <span className="ml-2 font-mono text-xs text-gray-400">{selecionada.sku}</span> : null} (produto #{selecionada.id})
         </p>
       ) : null}
 
