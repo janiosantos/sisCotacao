@@ -16,8 +16,8 @@ on:
         type: choice
         options:
           - health
-          - diagnose_search
-          - fts_rebuild
+          - padronizar_descricoes
+          - normalizar_subcategorias
 
 jobs:
   maintenance:

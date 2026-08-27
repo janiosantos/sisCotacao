@@ -7,6 +7,9 @@ Tarefas:
     health               Resumo do estado do catálogo (contagens).
     padronizar_descricoes Recompõe a descricao padronizada (Nome + atributos +
                          Marca) de todos os produtos — idempotente.
+    normalizar_subcategorias Mescla subcategorias duplicadas dentro da mesma
+                         categoria (variação de caixa/acento/espaços) e
+                         reaponta os produtos — idempotente.
 
 A execução em produção é disparada pelo workflow `.github/workflows/maintenance.yml`
 (`workflow_dispatch`, input `task`), que roda no runner `siscom-prod` dentro do
@@ -81,9 +84,53 @@ def health(conn) -> None:
     print("com descricao     :", com_desc)
 
 
+def normalizar_subcategorias(conn) -> None:
+    """Mescla subcategorias duplicadas dentro da mesma categoria.
+
+    Duplicatas são variações de caixa/acento/espaços do mesmo nome (ex.:
+    "Chave De Roda" vs "Chave de Roda"). Mantém a de mais produtos (desempate
+    por id menor), reaponta os produtos e apaga as demais. Idempotente.
+    """
+    cur = conn.execute(
+        "SELECT id, categoria_id, nome,"
+        " btrim(regexp_replace(lower(f_unaccent(nome)), '\\s+', ' ', 'g')) AS chave"
+        " FROM subcategorias"
+    )
+    groups: dict[tuple, list] = {}
+    for r in cur.fetchall():
+        groups.setdefault((r["categoria_id"], r["chave"]), []).append(r)
+
+    mescladas = 0
+    movidos = 0
+    for (_cid, _chave), rows in groups.items():
+        if len(rows) < 2:
+            continue
+        keep = rows[0]
+        best = -1
+        for r in rows:
+            n = conn.execute(
+                "SELECT count(*) FROM produtos_cadastro WHERE subcategoria_id=?",
+                (r["id"],),
+            ).fetchone()[0]
+            if n > best or (n == best and r["id"] < keep["id"]):
+                keep, best = r, n
+        for r in rows:
+            if r["id"] == keep["id"]:
+                continue
+            up = conn.execute(
+                "UPDATE produtos_cadastro SET subcategoria_id=? WHERE subcategoria_id=?",
+                (keep["id"], r["id"]),
+            )
+            movidos += up.rowcount if up.rowcount and up.rowcount > 0 else 0
+            conn.execute("DELETE FROM subcategorias WHERE id=?", (r["id"],))
+            mescladas += 1
+    print(f"subcategorias mescladas: {mescladas} | produtos reapontados: {movidos}")
+
+
 TASKS = {
     "health": health,
     "padronizar_descricoes": padronizar_descricoes,
+    "normalizar_subcategorias": normalizar_subcategorias,
 }
 
 
