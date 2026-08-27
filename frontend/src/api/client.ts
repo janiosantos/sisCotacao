@@ -1804,6 +1804,7 @@ export interface CategoriaTree {
   id: number;
   nome: string;
   ativo: boolean;
+  subgrupo_id?: number | null;
   subcategorias: { id: number; nome: string; ativo: boolean; product_count: number }[];
 }
 

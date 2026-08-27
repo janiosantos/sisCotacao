@@ -18,6 +18,7 @@ import {
   type UnidadeCompra,
   type PerfilFiscalEfetivo,
   type SaldoItem,
+  type CategoriaTree,
 } from "../api/client";
 import { fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
@@ -1047,7 +1048,7 @@ export function ProdutoEditor() {
   const id = m ? Number(m[1]) : null;
 
   const [familias, setFamilias] = useState<Familia[]>([]);
-  const [categoriasTree, setCategoriasTree] = useState<Record<string, string[]>>({});
+  const [categoriasTree, setCategoriasTree] = useState<CategoriaTree[]>([]);
   const [marcas, setMarcas] = useState<Marca[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [subgrupos, setSubgrupos] = useState<Subgrupo[]>([]);
@@ -1088,11 +1089,11 @@ export function ProdutoEditor() {
       }
       setFamilias(fs);
 
-      let tree: Record<string, string[]> = {};
+      let tree: CategoriaTree[] = [];
       try {
-        tree = await api.listarCategorias();
+        tree = await api.listarCategoriasTree();
       } catch {
-        tree = {};
+        tree = [];
       }
       setCategoriasTree(tree);
 
@@ -1178,7 +1179,7 @@ export function ProdutoEditor() {
   };
 
   const trocarGrupo = (grupoId: string) => {
-    setForm((f) => ({ ...f, grupo_id: grupoId, subgrupo_id: "" }));
+    setForm((f) => ({ ...f, grupo_id: grupoId, subgrupo_id: "", categoria: "", subcategoria: "" }));
     if (!grupoId) {
       setSubgrupos([]);
       return;
@@ -1321,7 +1322,18 @@ export function ProdutoEditor() {
     if (erros.length) toast("Erro: " + erros.join("; "), "error");
   };
 
-  const subcategorias = categoriasTree[form.categoria] || [];
+  // Categorias disponíveis conforme Grupo/Subgrupo selecionados:
+// - subgrupo escolhido → categorias daquele subgrupo;
+// - só grupo escolhido → categorias dos subgrupos do grupo;
+// - nada → todas (mantém a atual se for customizada).
+  const subgrupoIdsDoGrupo = new Set(subgrupos.map((s) => s.id));
+  const categoriasFiltradas = categoriasTree.filter((c) => {
+    if (form.subgrupo_id) return c.subgrupo_id === Number(form.subgrupo_id);
+    if (form.grupo_id) return c.subgrupo_id != null && subgrupoIdsDoGrupo.has(c.subgrupo_id);
+    return true;
+  });
+  const catAtual = categoriasTree.find((c) => c.nome === form.categoria);
+  const subcategorias = catAtual ? catAtual.subcategorias.map((s) => s.nome) : [];
   const duplicar = () => {
     // Copia o cadastro como novo rascunho (mantém atributos/dados p/ edição)
     const copia = { ...form, id: undefined };
@@ -1425,21 +1437,37 @@ export function ProdutoEditor() {
               Grupo e subgrupo têm código próprio; a marca e os atributos completam o SKU.
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Categoria (opcional)">
-                <Input list="dlCategorias" placeholder="Fios e Cabos" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} />
-                <datalist id="dlCategorias">
-                  {[...new Set(Object.entries(categoriasTree).flatMap(([c, s]) => [c, ...(s || [])]))].map((c) => (
-                    <option key={c} value={c} />
+              <Field label="Categoria" hint={form.grupo_id ? "Filtrada pelo grupo/subgrupo" : ""}>
+                <Select
+                  value={form.categoria}
+                  onChange={(e) => setForm({ ...form, categoria: e.target.value, subcategoria: "" })}
+                  className="flex-1"
+                >
+                  <option value="">— selecione —</option>
+                  {categoriasFiltradas.map((c) => (
+                    <option key={c.id} value={c.nome}>
+                      {c.nome}
+                    </option>
                   ))}
-                </datalist>
+                  {form.categoria && !categoriasFiltradas.some((c) => c.nome === form.categoria) ? (
+                    <option value={form.categoria}>{form.categoria}</option>
+                  ) : null}
+                </Select>
               </Field>
-              <Field label="Subcategoria (opcional)">
-                <Input list="dlSubcategorias" placeholder="Cabo Flexível" value={form.subcategoria} onChange={(e) => setForm({ ...form, subcategoria: e.target.value })} />
-                <datalist id="dlSubcategorias">
+              <Field label="Subcategoria">
+                <Select
+                  value={form.subcategoria}
+                  onChange={(e) => setForm({ ...form, subcategoria: e.target.value })}
+                  className="flex-1"
+                  disabled={!form.categoria}
+                >
+                  <option value="">— selecione —</option>
                   {subcategorias.map((s) => (
-                    <option key={s} value={s} />
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
                   ))}
-                </datalist>
+                </Select>
               </Field>
             </div>
             <Field label="Família (opcional)">
