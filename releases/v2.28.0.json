@@ -1,0 +1,37 @@
+{
+  "versao": "v2.28.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [
+    "Combobox de categoria no cadastro: era uma lista gigante de todas as categorias+subcategorias (datalist) — agora é um seletor filtrado por Grupo/Subgrupo"
+  ],
+  "melhorias": [
+    "Taxonomia normalizada: Grupo → Subgrupo → Categoria (58.456 produtos vinculados a grupos/subgrupos; antes apenas 1 de 62.731)",
+    "Categoria/Subcategoria viram selects limitados pelas opções do grupo/subgrupo selecionado",
+    "Trocar de grupo reseta categoria/subcategoria para evitar combinação inválida"
+  ],
+  "recursos": [
+    "Migração 0092: categorias.subgrupo_id + criação de grupos/subgrupos (FER, ELE, HID, PAR, AUT, CON, SEG, CAS, MED, MOV) + vínculo das categorias e atribuição dos produtos",
+    "categorias-tree passa a incluir subgrupo_id por categoria"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.28.0",
+    "frontend": "siscom-frontend:v2.28.0"
+  },
+  "database": {
+    "migration": 92
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "taxonomia_grupos": true,
+    "categoria_filtrada": true
+  }
+}
