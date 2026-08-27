@@ -46,15 +46,15 @@ def main() -> int:
                           "cbs_vigencia_inicio": "2026-01-01", "cbs_vigencia_fim": "2026-12-31"})
 
     with system_conn() as conn:
-        vid_ok = conn.execute("SELECT id FROM variantes LIMIT 1").fetchone()["id"]
-        conn.execute("DELETE FROM fiscal_config WHERE variante_id=?", (vid_ok,))
-        conn.execute("INSERT INTO fiscal_config (variante_id, ncm, cfop, csosn, aliquota_icms) VALUES (?,?,?,?,?)",
+        vid_ok = conn.execute("SELECT id FROM produtos_cadastro LIMIT 1").fetchone()["id"]
+        conn.execute("DELETE FROM fiscal_config WHERE produto_id=?", (vid_ok,))
+        conn.execute("INSERT INTO fiscal_config (produto_id, ncm, cfop, csosn, aliquota_icms) VALUES (?,?,?,?,?)",
                      (vid_ok, "85362000", "5.102", "102", 18))
-        vid_st = conn.execute("SELECT id FROM variantes WHERE id <> ? LIMIT 1", (vid_ok,)).fetchone()["id"]
-        conn.execute("INSERT OR REPLACE INTO fiscal_config (variante_id, ncm, cfop, csosn, aliquota_icms) VALUES (?,?,?,?,?)",
+        vid_st = conn.execute("SELECT id FROM produtos_cadastro WHERE id <> ? LIMIT 1", (vid_ok,)).fetchone()["id"]
+        conn.execute("INSERT OR REPLACE INTO fiscal_config (produto_id, ncm, cfop, csosn, aliquota_icms) VALUES (?,?,?,?,?)",
                      (vid_st, "82041100", "5.102", "102", 18))
-        vid_sem = conn.execute("SELECT id FROM variantes WHERE id NOT IN (?,?) LIMIT 1", (vid_ok, vid_st)).fetchone()["id"]
-        conn.execute("INSERT OR REPLACE INTO fiscal_config (variante_id, ncm, cfop, csosn, aliquota_icms) VALUES (?,?,?,?,?)",
+        vid_sem = conn.execute("SELECT id FROM produtos_cadastro WHERE id NOT IN (?,?) LIMIT 1", (vid_ok, vid_st)).fetchone()["id"]
+        conn.execute("INSERT OR REPLACE INTO fiscal_config (produto_id, ncm, cfop, csosn, aliquota_icms) VALUES (?,?,?,?,?)",
                      (vid_sem, "", "5.102", "102", 18))
         conn.execute("UPDATE orcamentos SET modelo_documento='65'")
 
