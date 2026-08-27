@@ -70,7 +70,7 @@ def resolve(
 def listar() -> list[dict]:
     """Retorna todas as categorias com suas subcategorias e contagem de produtos."""
     with system_conn() as conn:
-        cats = conn.execute("SELECT id, nome, ativo FROM categorias ORDER BY nome").fetchall()
+        cats = conn.execute("SELECT id, nome, ativo, subgrupo_id FROM categorias ORDER BY nome").fetchall()
         result = []
         for c in cats:
             cid = int(c["id"])
@@ -91,6 +91,7 @@ def listar() -> list[dict]:
                 "id": c["id"],
                 "nome": c["nome"],
                 "ativo": bool(c["ativo"]),
+                "subgrupo_id": c["subgrupo_id"],
                 "subcategorias": subs_list,
             })
         return result
