@@ -1,0 +1,40 @@
+{
+  "versao": "v2.27.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [
+    "Busca de produtos: removeu o índice produtos_fts que casava termos dentro do texto cru do scraper (ruído — ex.: 'cabo' achava 'Abraçadeira' via 'fixação de cabos')",
+    "Ranking de busca: nome que começa com o termo e sku/ean exatos vêm antes de correspondências parciais"
+  ],
+  "melhorias": [
+    "Descrição padronizada: Nome + características/atributos (ordem da família) + Marca (ex.: 'Cabo Flexível 2,5mm² Verde 750V - SIL'), usada diretamente na busca e como rótulo no PDV",
+    "Busca por ILIKE + pg_trgm insensível a acentos/caixa, com ranking de relevância (multi-termo AND)",
+    "Cadastro de produto reordenado: Grupo → Subgrupo → Categoria → Subcategoria → Família → Marca → Nome → Descrição padrão → Termos de busca",
+    "Sugestão ao vivo da descrição padrão/PDV (botão 'usar como descrição') e sugestão de SKU a partir de nome + atributos + marca"
+  ],
+  "recursos": [
+    "Migração 0091: drop de produtos_fts e fts5_to_tsquery; índices GIN pg_trgm em f_unaccent(nome, marca, sku, ean, termos_busca, descricao); backfill da descricao padronizada",
+    "Busca compartilhada (repositories/busca.py) usada por catálogo (/api/produtos) e cadastro (/api/produtos-cadastro)"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.27.0",
+    "frontend": "siscom-frontend:v2.27.0"
+  },
+  "database": {
+    "migration": 91
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "busca_por_descricao": true,
+    "sem_produtos_fts": true,
+    "descricao_padronizada": true
+  }
+}
