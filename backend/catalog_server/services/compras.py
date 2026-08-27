@@ -4,6 +4,7 @@ de WhatsApp/e-mail para o fornecedor convidado.
 from __future__ import annotations
 
 import math
+import os
 import re
 from urllib.parse import quote
 
@@ -100,6 +101,17 @@ def montar_matriz(cotacao_id: int) -> dict | None:
 
 
 def base_url_for() -> str:
+    """URL pública base usada nos links de convite ao fornecedor.
+
+    Prioriza `PUBLIC_BASE_URL` (variável de ambiente) — necessária quando o
+    acesso externo passa por redirecionamento de porta (ex.: CGNAT redireciona
+    `:6173` para a porta 80 do nginx), pois `request.host_url` reflete o Host
+    interno/LAN e geraria links sem a porta pública. Sem a variável, usa o Host
+    da requisição.
+    """
+    public = os.getenv("PUBLIC_BASE_URL", "").strip()
+    if public:
+        return public.rstrip("/")
     return request.host_url.rstrip("/")
 
 

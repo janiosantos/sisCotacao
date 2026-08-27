@@ -34,6 +34,10 @@ services:
       - IMAGES_DIR=/app/images
       - CATALOG_HOST=0.0.0.0
       - APP_VERSION=${APP_VERSION:-dev}
+      # URL pública base dos links de convite ao fornecedor. Necessária porque o
+      # acesso externo passa por redirecionamento de porta (CGNAT :6173 -> 80):
+      # request.host_url refletiria o Host interno/LAN e geraria links sem a porta.
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://siscom.casalm.com.br:6173}
       # Migrações são aplicadas em passo explícito do pipeline (deploy.yml),
       # fora do processo web — evita crash-loop se uma migração falhar.
       - AUTO_MIGRATE=0

@@ -22,7 +22,7 @@ def portal_pagina(token: str):
 def portal_dados(token: str):
     ctx = compras_repo.public_portal(token)
     if ctx is None:
-        return jsonify({"error": "Link inválido ou expirado"}), 404
+        return jsonify({"error": "Link inválido"}), 404
     itens = compras_repo.portal_itens(token)
     produtos = catalog_repo.products_by_ids([i["produto_id"] for i in itens])
     for i in itens:
@@ -52,5 +52,5 @@ def portal_proposta(token: str):
         token, precos, condicao_pagamento, condicao_pagamento_dias
     )
     if not ok:
-        return jsonify({"error": "Link inválido ou expirado"}), 404
+        return jsonify({"error": "Link inválido"}), 404
     return jsonify({"ok": True})

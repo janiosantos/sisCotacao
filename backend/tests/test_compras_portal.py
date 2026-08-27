@@ -217,3 +217,17 @@ def test_lembrar_inexistente_404(system_db):
     _criar_cotacao(c, h, vid, fid)
     r = c.get("/api/compras/cotacoes/1/lembrar/9999", headers=h)
     assert r.status_code == 404
+
+
+def test_lembrar_link_respeita_public_base_url(system_db, monkeypatch):
+    """Com PUBLIC_BASE_URL configurada (ex.: acesso externo via redirecionamento
+    de porta/CGNAT), o link gerado usa a URL pública em vez do Host da requisição."""
+    vid = _produto_com_unidade(system_db)
+    fid = _fornecedor("Distribuidora Z")
+    c, h = _cliente_comprador(system_db)
+    _criar_cotacao(c, h, vid, fid)
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://siscom.casalm.com.br:6173")
+    r = c.get(f"/api/compras/cotacoes/1/lembrar/{fid}", headers=h)
+    assert r.status_code == 200
+    link = r.get_json()["link"]
+    assert link.startswith("http://siscom.casalm.com.br:6173/fornecedor/")
