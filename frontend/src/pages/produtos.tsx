@@ -1236,7 +1236,7 @@ export function ProdutoEditor() {
       marca: form.marca.trim(),
       marca_id: form.marca_id ? Number(form.marca_id) : null,
       external_id: form.external_id.trim() || null,
-      descricao: form.descricao.trim(),
+      descricao: form.descricao.trim() || descricaoSugerida,
       termos_busca: form.termos_busca.trim(),
       categoria: form.categoria.trim(),
       subcategoria: form.subcategoria.trim(),
@@ -1335,6 +1335,21 @@ export function ProdutoEditor() {
       ? "Padrão de cabos: Item + Bitola (mm²) + Tensão + Norma/Marca."
       : "Padrão: Item + Características (bitola, tensão, CA) + Marca.";
 
+  // Descrição padronizada: Nome + [valores dos atributos na ordem da família] + " - Marca".
+  // É usada diretamente na busca (características embutidas) e como rótulo no PDV.
+  const descricaoSugerida = [
+    form.nome.trim(),
+    ...atributos.map((a) => (valores[a.nome] || "").trim()).filter(Boolean),
+    form.marca.trim() ? `- ${form.marca.trim()}` : "",
+  ].filter(Boolean).join(" ");
+
+  const sugerirSku = () => {
+    const partes = [form.nome, ...atributos.map((a) => (valores[a.nome] || "").trim()), form.marca].filter((v) => v && v.trim());
+    const sku = normalize(partes.join(" ")).replace(/[^a-z0-9]+/g, "-").replace(/(^-+|-+$)/g, "").slice(0, 40).toUpperCase();
+    setDados((d) => ({ ...d, sku: sku || d.sku }));
+    toast(sku ? `SKU sugerido: ${sku}` : "Preencha nome/atributos/marca para sugerir o SKU.", sku ? "success" : "warn");
+  };
+
   const TABS: { key: typeof tab; label: string }[] = [
     { key: "gerais", label: "Dados Gerais" },
     { key: "atributos", label: "Atributos da Família" },
@@ -1377,6 +1392,56 @@ export function ProdutoEditor() {
       {tab === "gerais" && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-4 lg:col-span-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Grupo (SKU)" hint="1º segmento do SKU estruturado">
+                <div className="flex gap-2">
+                  <Select value={form.grupo_id} onChange={(e) => trocarGrupo(e.target.value)} className="flex-1">
+                    <option value="">—</option>
+                    {grupos.map((g) => (
+                      <option key={g.id} value={String(g.id)}>{g.codigo} · {g.nome}</option>
+                    ))}
+                  </Select>
+                  <Button size="sm" variant="ghost" title="Cadastrar novo grupo" onClick={() => setQuickAdd("grupo")}>
+                    +
+                  </Button>
+                </div>
+              </Field>
+              <Field label="Subgrupo (SKU)" hint="2º segmento do SKU estruturado">
+                <div className="flex gap-2">
+                  <Select value={form.subgrupo_id} onChange={(e) => setForm({ ...form, subgrupo_id: e.target.value })} className="flex-1" disabled={!form.grupo_id}>
+                    <option value="">—</option>
+                    {subgrupos.map((s) => (
+                      <option key={s.id} value={String(s.id)}>{s.codigo} · {s.nome}</option>
+                    ))}
+                  </Select>
+                  <Button size="sm" variant="ghost" title="Cadastrar novo subgrupo" disabled={!form.grupo_id} onClick={() => setQuickAdd("subgrupo")}>
+                    +
+                  </Button>
+                </div>
+              </Field>
+            </div>
+            <p className="text-xs text-gray-400">
+              SKU estruturado: <code>[GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS]</code> (ex.: ELE-CAB-SIL-25V).
+              Grupo e subgrupo têm código próprio; a marca e os atributos completam o SKU.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Categoria (opcional)">
+                <Input list="dlCategorias" placeholder="Fios e Cabos" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} />
+                <datalist id="dlCategorias">
+                  {[...new Set(Object.entries(categoriasTree).flatMap(([c, s]) => [c, ...(s || [])]))].map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </Field>
+              <Field label="Subcategoria (opcional)">
+                <Input list="dlSubcategorias" placeholder="Cabo Flexível" value={form.subcategoria} onChange={(e) => setForm({ ...form, subcategoria: e.target.value })} />
+                <datalist id="dlSubcategorias">
+                  {subcategorias.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
+              </Field>
+            </div>
             <Field label="Família (opcional)">
               <div className="flex gap-2">
                 <Select value={form.familia_id} onChange={(e) => trocarFamilia(Number(e.target.value) || null)} className="flex-1">
@@ -1413,58 +1478,16 @@ export function ProdutoEditor() {
                 {padraoText}
               </div>
             </Field>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Categoria (opcional)">
-                <Input list="dlCategorias" placeholder="Fios e Cabos" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} />
-                <datalist id="dlCategorias">
-                  {[...new Set(Object.entries(categoriasTree).flatMap(([c, s]) => [c, ...(s || [])]))].map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
-              </Field>
-              <Field label="Subcategoria (opcional)">
-                <Input list="dlSubcategorias" placeholder="Cabo Flexível" value={form.subcategoria} onChange={(e) => setForm({ ...form, subcategoria: e.target.value })} />
-                <datalist id="dlSubcategorias">
-                  {subcategorias.map((s) => (
-                    <option key={s} value={s} />
-                  ))}
-                </datalist>
-              </Field>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Grupo (SKU)" hint="1º segmento do SKU estruturado">
-                <div className="flex gap-2">
-                  <Select value={form.grupo_id} onChange={(e) => trocarGrupo(e.target.value)} className="flex-1">
-                    <option value="">—</option>
-                    {grupos.map((g) => (
-                      <option key={g.id} value={String(g.id)}>{g.codigo} · {g.nome}</option>
-                    ))}
-                  </Select>
-                  <Button size="sm" variant="ghost" title="Cadastrar novo grupo" onClick={() => setQuickAdd("grupo")}>
-                    +
-                  </Button>
-                </div>
-              </Field>
-              <Field label="Subgrupo (SKU)" hint="2º segmento do SKU estruturado">
-                <div className="flex gap-2">
-                  <Select value={form.subgrupo_id} onChange={(e) => setForm({ ...form, subgrupo_id: e.target.value })} className="flex-1" disabled={!form.grupo_id}>
-                    <option value="">—</option>
-                    {subgrupos.map((s) => (
-                      <option key={s.id} value={String(s.id)}>{s.codigo} · {s.nome}</option>
-                    ))}
-                  </Select>
-                  <Button size="sm" variant="ghost" title="Cadastrar novo subgrupo" disabled={!form.grupo_id} onClick={() => setQuickAdd("subgrupo")}>
-                    +
-                  </Button>
-                </div>
-              </Field>
-            </div>
-            <p className="text-xs text-gray-400">
-              SKU estruturado: <code>[GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS]</code> (ex.: ELE-CAB-SIL-25V).
-              Grupo e subgrupo têm código próprio; a marca e os atributos completam o SKU.
-            </p>
-            <Field label="Descrição (opcional)">
-              <Input value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
+            <Field label="Descrição padrão / PDV (opcional)">
+              <Input placeholder="Ex.: Cabo Flexível 2,5mm² Verde 750V - SIL" value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
+              <div className="mt-1 flex items-center gap-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600">
+                <span className="font-medium text-gray-700">Sugestão:</span>
+                <span className="flex-1 truncate">{descricaoSugerida || "— preencha nome, atributos e marca —"}</span>
+                <Button size="sm" variant="ghost" disabled={!descricaoSugerida} onClick={() => setForm({ ...form, descricao: descricaoSugerida })}>
+                  usar como descrição
+                </Button>
+              </div>
+              <p className="mt-1 text-xs text-gray-400">A descrição padronizada (nome + características + marca) é usada diretamente na busca e como rótulo no PDV.</p>
             </Field>
             <Field label="Termos de busca / sinônimos">
               <Input placeholder="Ex.: cabo, fio, 750V, antichama, barramento…" value={form.termos_busca} onChange={(e) => setForm({ ...form, termos_busca: e.target.value })} />
@@ -1507,9 +1530,14 @@ export function ProdutoEditor() {
 
       {tab === "dados" && (
         <div>
-          <div className="mb-3">
-            <h4 className="text-sm font-semibold text-gray-900">Dados operacionais do produto</h4>
-            <p className="text-xs text-gray-500">Este produto é uma unidade única (antiga variação). Preencha os campos operacionais e, se houver família, os valores dos atributos.</p>
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-semibold text-gray-900">Dados operacionais do produto</h4>
+              <p className="text-xs text-gray-500">Este produto é uma unidade única (antiga variação). Preencha os campos operacionais e, se houver família, os valores dos atributos.</p>
+            </div>
+            <Button size="sm" variant="ghost" onClick={sugerirSku} title="Gera um SKU a partir de nome + atributos + marca">
+              ✨ Sugerir SKU
+            </Button>
           </div>
 
           <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
