@@ -97,8 +97,7 @@ def marcar_em_linha(dry: bool = False) -> dict:
     with system_conn() as conn:
         rows = conn.execute(
             """SELECT p.id, cat.nome AS categoria, sub.nome AS subcategoria, p.nome,
-                      (SELECT MAX(v.preco) FROM variantes v
-                       WHERE v.produto_id=p.id AND v.ativo=1) AS preco_max
+                      CASE WHEN p.preco > 0 THEN p.preco END AS preco_max
                FROM produtos_cadastro p
                LEFT JOIN categorias cat ON cat.id=p.categoria_id
                LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id"""
@@ -253,17 +252,8 @@ WITH base AS (
     SELECT p.id,
            COALESCE(p.giro_esperado_mercado, 0.0)   AS giro,
            COALESCE(p.margem_lucro_estimada, 0.0)   AS margem,
-           COALESCE((
-               SELECT AVG(v.preco) FROM variantes v
-               WHERE v.produto_id = p.id AND v.ativo = 1
-           ), COALESCE((
-               SELECT AVG(v.preco_venda) FROM variantes v
-               WHERE v.produto_id = p.id AND v.ativo = 1
-           ), 0.0))                                  AS preco_venda,
-           COALESCE((
-               SELECT AVG(v.custo_unitario) FROM variantes v
-               WHERE v.produto_id = p.id AND v.ativo = 1 AND v.custo_unitario IS NOT NULL
-           ), 0.0)                                  AS custo_unitario
+           COALESCE(p.preco, COALESCE(p.preco_venda, 0.0)) AS preco_venda,
+           COALESCE(p.custo_unitario, 0.0) AS custo_unitario
     FROM produtos_cadastro p
     WHERE p.em_linha = 1
 ),
@@ -394,14 +384,13 @@ def prioridade_cotacao(
         params += list(linhas)
     where.append("p.ativo=1")
     where.append("p.em_linha=1")
-    where.append("EXISTS (SELECT 1 FROM variantes v WHERE v.produto_id=p.id AND v.ativo=1)")
     sql = f"""
         SELECT p.id, p.nome, p.marca, p.linha_produto,
                cat.nome AS categoria, sub.nome AS subcategoria,
                p.classe_abc, p.ordem_abc, p.margem_lucro_estimada,
                p.giro_esperado_mercado, p.lucro_total_estimado,
-               (SELECT MIN(v.preco) FROM variantes v WHERE v.produto_id=p.id AND v.ativo=1) AS preco_min,
-               (SELECT MIN(v.custo_unitario) FROM variantes v WHERE v.produto_id=p.id AND v.ativo=1 AND v.custo_unitario IS NOT NULL) AS custo_medio
+               p.preco AS preco_min,
+               p.custo_unitario AS custo_medio
         FROM produtos_cadastro p
         LEFT JOIN categorias cat ON cat.id=p.categoria_id
         LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id

@@ -25,14 +25,11 @@ def attrs(attr_ids: dict, **vals: str) -> dict:
     return {attr_ids[k]: v for k, v in vals.items()}
 
 
-def variante(sku: str, ean: str, atributos: dict, preco: float = 10.0) -> dict:
-    return {
-        "sku": sku,
-        "ean": ean,
-        "preco": preco,
-        "preco_promocional": None,
-        "observacao": "",
-        "atributos": atributos,
-        "ncm": "",
-        "unidade_venda": "MT",
-    }
+def produto_dados(sku: str, ean: str, preco: float = 10.0, **extra) -> dict:
+    """Dados operacionais de um produto (campos de `produtos_cadastro`).
+
+    No modelo unificado cada antiga variação tornou-se um produto próprio,
+    então o SKU/EAN/preço que antes viviam numa linha de `variantes` agora
+    são passados via `dados=...` ao criar o produto.
+    """
+    return {"sku": sku, "ean": ean, "preco": preco, **extra}

@@ -9,20 +9,20 @@ _CAMPOS = ("ncm", "cest", "origem", "regime_st", "fonte_url")
 def obter(variante_id: int) -> dict | None:
     with system_conn() as conn:
         row = conn.execute(
-            "SELECT variante_id, ncm, cest, origem, regime_st, fonte_url,"
-            " atualizado_em FROM product_fiscal_profile WHERE variante_id=?",
+            "SELECT produto_id, ncm, cest, origem, regime_st, fonte_url,"
+            " atualizado_em FROM product_fiscal_profile WHERE produto_id=?",
             (variante_id,),
         ).fetchone()
         return dict(row) if row else None
 
 
 def _produto_id_da_variante(variante_id: int) -> int | None:
-    """Resolve o produto de uma variante (para a hierarquia Produto→Variação)."""
+    """No modelo unificado cada produto é a antiga variante — o próprio id."""
     with system_conn() as conn:
         row = conn.execute(
-            "SELECT produto_id FROM variantes WHERE id=?", (variante_id,)
+            "SELECT id FROM produtos_cadastro WHERE id=?", (variante_id,)
         ).fetchone()
-        return int(row["produto_id"]) if row else None
+        return int(row["id"]) if row else None
 
 
 def obter_efetivo(variante_id: int) -> dict:
@@ -68,18 +68,18 @@ def salvar(variante_id: int, dados: dict) -> dict:
 
     with system_conn() as conn:
         existe = conn.execute(
-            "SELECT 1 FROM product_fiscal_profile WHERE variante_id=?",
+            "SELECT 1 FROM product_fiscal_profile WHERE produto_id=?",
             (variante_id,),
         ).fetchone()
         if existe:
             sets = ", ".join(f"{k}=?" for k in limpo)
             conn.execute(
                 f"UPDATE product_fiscal_profile SET {sets},"
-                " atualizado_em=now() WHERE variante_id=?",
+                " atualizado_em=now() WHERE produto_id=?",
                 (*limpo.values(), variante_id),
             )
         else:
-            cols = ["variante_id", *limpo.keys()]
+            cols = ["produto_id", *limpo.keys()]
             conn.execute(
                 f"INSERT INTO product_fiscal_profile ({', '.join(cols)})"
                 f" VALUES ({', '.join('?' for _ in cols)})",
@@ -87,7 +87,7 @@ def salvar(variante_id: int, dados: dict) -> dict:
             )
         conn.commit()
 
-    return {"variante_id": variante_id, **limpo}
+    return {"produto_id": variante_id, **limpo}
 
 
 def buscar_ncm(prefixo: str, limite: int = 20) -> list[dict]:

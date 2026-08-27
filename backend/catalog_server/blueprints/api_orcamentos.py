@@ -229,7 +229,6 @@ def atualizar(orcamento_id: int):
     # Gatilho: finalizar (conversão) → gerar contas a receber + baixar estoque
     if status == "finalizado":
         from datetime import datetime, timedelta
-        from catalog_server.db import system_conn as _sc
         from catalog_server.services.parcelas_venda import gerar_contas_receber
 
         orc = orcamento_repo.buscar(orcamento_id)
@@ -255,25 +254,17 @@ def atualizar(orcamento_id: int):
                 qtd = float(item.get("quantidade") or 0)
                 if qtd <= 0:
                     continue
-                vid = item.get("variante_id")
+                vid = item.get("produto_id") or item.get("variante_id")
                 if not vid:
-                    pid = item.get("produto_id")
-                    if pid:
-                        with _sc() as _conn:
-                            row = _conn.execute(
-                                "SELECT id FROM variantes WHERE produto_id=? AND ativo=1 LIMIT 1",
-                                (pid,),
-                            ).fetchone()
-                            vid = row["id"] if row else None
-                if vid:
-                    try:
-                        estoque_repo.movimentar(
-                            deposito_id=1, variante_id=vid,
-                            tipo="saida", quantidade=qtd,
-                            documento=orc.get("numero", ""),
-                        )
-                    except Exception:
-                        pass
+                    return jsonify({"error": "item sem produto"}), 400
+                try:
+                    estoque_repo.movimentar(
+                        deposito_id=1, variante_id=vid,
+                        tipo="saida", quantidade=qtd,
+                        documento=orc.get("numero", ""),
+                    )
+                except Exception:
+                    pass
 
             # Gatilho contábil (v2.15.0): venda autorizada → lançamento quando
             # configurado (default inativo — não altera o comportamento atual).

@@ -124,7 +124,7 @@ def preco_efetivo(variante_id: int, canal: str = "varejo") -> dict:
         with system_conn() as conn:
             row = conn.execute(
                 "SELECT preco FROM tabela_preco_itens"
-                " WHERE tabela_id=? AND variante_id=? AND ativo=1",
+                " WHERE tabela_id=? AND produto_id=? AND ativo=1",
                 (tabela["id"], variante_id),
             ).fetchone()
         if row and row["preco"]:
@@ -142,7 +142,7 @@ def preco_efetivo(variante_id: int, canal: str = "varejo") -> dict:
             "custo_liquido": calc.get("custo_liquido"),
         }
     with system_conn() as conn:
-        row = conn.execute("SELECT preco FROM variantes WHERE id=?", (variante_id,)).fetchone()
+        row = conn.execute("SELECT preco FROM produtos_cadastro WHERE id=?", (variante_id,)).fetchone()
     preco = float(row["preco"]) if row and row["preco"] else 0.0
     return {"variante_id": variante_id, "canal": canal, "preco": preco, "origem": "base"}
 
@@ -160,20 +160,19 @@ def previa_reajuste(
     mk = markup if markup is not None else float(tabela.get("markup") or 0)
 
     sql = """
-        SELECT v.id, v.sku, v.preco AS preco_atual, p.nome AS produto_nome, p.marca
-        FROM variantes v
-        JOIN produtos_cadastro p ON p.id = v.produto_id
-        WHERE v.ativo = 1
+        SELECT p.id, p.sku, p.preco AS preco_atual, p.nome AS produto_nome, p.marca
+        FROM produtos_cadastro p
+        WHERE p.ativo = 1
           AND (EXISTS (SELECT 1 FROM fornecedor_preco fp
-                       WHERE fp.variante_id = v.id AND fp.ativo = 1)
-               OR (v.custo_unitario IS NOT NULL AND v.custo_unitario > 0))
+                       WHERE fp.produto_id = p.id AND fp.ativo = 1)
+               OR (p.custo_unitario IS NOT NULL AND p.custo_unitario > 0))
     """
     params: list = []
     if termo:
         like = f"%{termo}%"
-        sql += " AND (p.nome LIKE ? OR v.sku LIKE ? OR p.marca LIKE ?)"
+        sql += " AND (p.nome LIKE ? OR p.sku LIKE ? OR p.marca LIKE ?)"
         params += [like, like, like]
-    sql += " ORDER BY p.nome, v.sku LIMIT ?"
+    sql += " ORDER BY p.nome, p.sku LIMIT ?"
     params.append(limit)
 
     with system_conn() as conn:
@@ -215,20 +214,20 @@ def aplicar_reajuste(
                 sem_custo += 1
                 continue
             row = conn.execute(
-                "SELECT preco FROM tabela_preco_itens WHERE tabela_id=? AND variante_id=?",
+                "SELECT preco FROM tabela_preco_itens WHERE tabela_id=? AND produto_id=?",
                 (tabela_id, it["variante_id"]),
             ).fetchone()
             preco_ant = float(row["preco"]) if row else 0.0
             conn.execute(
-                "INSERT INTO tabela_preco_itens (tabela_id, variante_id, preco, margem)"
+                "INSERT INTO tabela_preco_itens (tabela_id, produto_id, preco, margem)"
                 " VALUES (?,?,?,?)"
-                " ON CONFLICT(tabela_id, variante_id) DO UPDATE SET"
+                " ON CONFLICT(tabela_id, produto_id) DO UPDATE SET"
                 " preco=excluded.preco, margem=excluded.margem",
                 (tabela_id, it["variante_id"], it["preco_sugerido"], it["margem_efetiva_pct"]),
             )
             conn.execute(
                 "INSERT INTO preco_historico"
-                " (tabela_id, variante_id, preco_anterior, preco_novo, margem_pct, markup_pct,"
+                " (tabela_id, produto_id, preco_anterior, preco_novo, margem_pct, markup_pct,"
                 "  tipo, origem, usuario_id)"
                 " VALUES (?,?,?,?,?,?,'reajuste',?,?)",
                 (

@@ -119,12 +119,13 @@ def create_product():
         (data.get("marca") or "").strip(),
         (data.get("descricao") or "").strip(),
         (data.get("categoria") or "").strip(),
-        data.get("variantes") or [],
         (data.get("subcategoria") or "").strip(),
         (data.get("termos_busca") or "").strip(),
         external_id=data.get("external_id"),
         grupo_id=int(data["grupo_id"]) if data.get("grupo_id") else None,
         subgrupo_id=int(data["subgrupo_id"]) if data.get("subgrupo_id") else None,
+        dados=data.get("dados") or data,
+        atributos=data.get("atributos"),
     )
     return jsonify({"id": produto_id}), 201
 
@@ -144,23 +145,24 @@ def update_product(produto_id: int):
     nome = (data.get("nome") or "").strip()
     if not nome:
         return jsonify({"error": "Informe o nome base do produto"}), 400
-    ok, variantes_result = produto_repo.update_product(
+    ok, resultado = produto_repo.update_product(
         produto_id,
         int(familia_id) if familia_id else None,
         nome,
         (data.get("marca") or "").strip(),
         (data.get("descricao") or "").strip(),
         (data.get("categoria") or "").strip(),
-        data.get("variantes") or [],
         (data.get("subcategoria") or "").strip(),
         (data.get("termos_busca") or "").strip(),
         external_id=data.get("external_id"),
         grupo_id=int(data["grupo_id"]) if data.get("grupo_id") else None,
         subgrupo_id=int(data["subgrupo_id"]) if data.get("subgrupo_id") else None,
+        dados=data.get("dados") or data,
+        atributos=data.get("atributos"),
     )
     if not ok:
         return jsonify({"error": "Produto não encontrado"}), 404
-    return jsonify({"ok": True, "variantes": variantes_result})
+    return jsonify({"ok": True, **resultado})
 
 
 @api_produtos_bp.delete("/api/produtos-cadastro/<int:produto_id>")

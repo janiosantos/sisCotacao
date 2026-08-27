@@ -213,9 +213,9 @@ def salvar_perfil_variante(variante_id: int):
     from catalog_server.repositories.produtos import ProdutoRepository
 
     dados = request.get_json(silent=True) or {}
+    produto_id = variante_id
     prod = ProdutoRepository()
-    variante = prod.obter_variante(variante_id) if hasattr(prod, "obter_variante") else None
-    produto_id = (variante or {}).get("produto_id")
+    produto = prod.get_product(produto_id)
     return jsonify(fiscal_perfil.salvar_override_variante(
-        variante_id, dados, fiscal_perfil.obter_produto(produto_id) if produto_id else None
+        variante_id, dados, fiscal_perfil.obter_produto(produto_id) if produto else None
     ))

@@ -23,14 +23,14 @@ from catalog_server.db import system_conn
 
 def health(conn) -> None:
     prods = conn.execute("SELECT count(*) AS c FROM produtos_cadastro").fetchone()["c"]
-    variants = conn.execute("SELECT count(*) AS c FROM variantes").fetchone()["c"]
+    variants = conn.execute("SELECT count(*) AS c FROM produtos_cadastro").fetchone()["c"]
     fts_rows = conn.execute("SELECT count(*) AS c FROM produtos_fts").fetchone()["c"]
     with_attrs = conn.execute(
         "SELECT count(*) AS c FROM produtos_fts "
         "WHERE atributos IS NOT NULL AND atributos <> ''"
     ).fetchone()["c"]
     print("produtos_cadastro :", prods)
-    print("variantes         :", variants)
+    print("produtos          :", variants)
     print("produtos_fts      :", fts_rows)
     print("produtos_fts+atr  :", with_attrs)
 

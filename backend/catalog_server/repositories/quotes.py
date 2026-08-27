@@ -85,7 +85,7 @@ class QuoteRepository:
                    FROM cotacao_precos cp
                    JOIN cotacao_itens ci ON ci.id = cp.cotacao_item_id
                    LEFT JOIN fornecedor_variantes fv
-                          ON fv.fornecedor_id = cp.fornecedor_id AND fv.variante_id = ci.produto_id
+                           ON fv.fornecedor_id = cp.fornecedor_id AND fv.produto_id = ci.produto_id
                    WHERE ci.cotacao_id = ?""",
                 (cotacao_id,),
             ).fetchall()

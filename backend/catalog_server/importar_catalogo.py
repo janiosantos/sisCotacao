@@ -159,74 +159,23 @@ def importar_catalogo(produtos: list[dict]) -> dict:
         for (fname, fkey), values in fam_values.items():
             family_cache[fname] = _ensure_familia(conn, fname, fkey, values)
 
+        all_externals: set[str] = set()
         for (base, package), items in groups.items():
             items_sorted = sorted(items, key=lambda it: (it[0]["price"] or 0, it[0]["id"]))
             rep_p, rep_meta = items_sorted[0]
-            nome = display_name(base)
-            cat = rep_p.get("category") or ""
-            sub = rep_p.get("subcategory") or ""
-            marca = extract_brand(rep_p) or ""
-            descricao = rep_p.get("long_description") or rep_p.get("short_description") or ""
-            fname = _family_name(rep_meta, rep_p)
-            familia_id, label_to_id = family_cache.get(fname) or _ensure_familia(
-                conn, fname, rep_meta.get("family") or "", {}
-            )
-            external = str(rep_p.get("url") or rep_p.get("sku") or f"crawler-{rep_p['id']}").strip()
-            current_external = {str(p["url"] or p["sku"] or f"crawler-{p['id']}").strip() for p, _ in items}
-
-            found = conn.execute(
-                "SELECT id FROM produtos_cadastro WHERE external_id=?",
-                (external,),
-            ).fetchone()
-            if not found and rep_p.get("url"):
-                found = conn.execute(
-                    "SELECT id FROM produtos_cadastro WHERE url=? AND url<>''",
-                    (rep_p.get("url"),),
-                ).fetchone()
-            if not found:
-                for member in current_external:
-                    vrow = conn.execute(
-                        "SELECT produto_id AS id FROM variantes WHERE external_id=? AND external_id IS NOT NULL LIMIT 1",
-                        (member,),
-                    ).fetchone()
-                    if vrow:
-                        found = vrow
-                        break
-            if found:
-                produto_id = found["id"]
-                categoria_id, subcategoria_id = categorias.resolve(conn, cat, sub)
-                marca_id = marcas_repo.resolver(conn, marca)
-                conn.execute(
-                    "UPDATE produtos_cadastro SET familia_id=?, nome=?, marca=?, marca_id=?,"
-                    " descricao=?, categoria_id=?, subcategoria_id=?, embalagem=?, url=?,"
-                    " external_id=?, atualizado_em=datetime('now') WHERE id=?",
-                    (familia_id, nome, marca, marca_id, descricao, categoria_id, subcategoria_id,
-                     package or "", rep_p.get("url") or "", external, produto_id),
-                )
-                updated += 1
-            else:
-                categoria_id, subcategoria_id = categorias.resolve(conn, cat, sub)
-                marca_id = marcas_repo.resolver(conn, marca)
-                produto_id = conn.execute(
-                    "INSERT INTO produtos_cadastro (familia_id, nome, marca, marca_id, descricao,"
-                    " categoria_id, subcategoria_id, embalagem, url, external_id)"
-                    " VALUES (?,?,?,?,?,?,?,?,?,?)",
-                    (familia_id, nome, marca, marca_id, descricao, categoria_id, subcategoria_id,
-                     package or "", rep_p.get("url") or "", external),
-                ).lastrowid
-                created += 1
 
             for p, meta in items:
                 ext = str(p.get("url") or p.get("sku") or f"crawler-{p['id']}").strip()
-                vrow = conn.execute(
-                    "SELECT id FROM variantes WHERE produto_id=? AND external_id=?",
-                    (produto_id, ext),
-                ).fetchone()
-                if not vrow and p.get("url"):
-                    vrow = conn.execute(
-                        "SELECT id FROM variantes WHERE produto_id=? AND url=? AND url<>''",
-                        (produto_id, p.get("url")),
-                    ).fetchone()
+                all_externals.add(ext)
+                nome = display_name(base)
+                cat = p.get("category") or ""
+                sub = p.get("subcategory") or ""
+                marca = extract_brand(p) or (p.get("brand") or "")
+                descricao = p.get("long_description") or p.get("short_description") or ""
+                fname = _family_name(meta, p)
+                familia_id, _ = family_cache.get(fname) or _ensure_familia(
+                    conn, fname, meta.get("family") or "", {}
+                )
 
                 labels = dict(FAMILY_ATTR_LABELS.get(meta.get("family"), []))
                 attrs = {}
@@ -237,66 +186,75 @@ def importar_catalogo(produtos: list[dict]) -> dict:
                     if label:
                         attrs[label] = str(val)
 
-                if vrow:
-                    vid = vrow["id"]
+                found = conn.execute(
+                    "SELECT id FROM produtos_cadastro WHERE external_id=?",
+                    (ext,),
+                ).fetchone()
+                if not found and p.get("url"):
+                    found = conn.execute(
+                        "SELECT id FROM produtos_cadastro WHERE url=? AND url<>''",
+                        (p.get("url"),),
+                    ).fetchone()
+
+                if found:
+                    produto_id = found["id"]
+                    categoria_id, subcategoria_id = categorias.resolve(conn, cat, sub)
+                    marca_id = marcas_repo.resolver(conn, marca)
                     sku, _aviso = reservar_sku(
-                        p.get("sku") or "", produto_id, vid,
-                        base=rep_p.get("name") or "", ignorar_id=vid, conn=conn,
+                        p.get("sku") or "", produto_id, produto_id,
+                        base=rep_p.get("name") or "", ignorar_id=produto_id, conn=conn,
                     )
                     conn.execute(
-                        "UPDATE variantes SET sku=?, ean=?, preco=?, preco_promocional=?,"
-                        " old_price=?, pix_price=?, installment=?, url=?, marca=?, ativo=1,"
-                        " atributos=? WHERE id=?",
-                        (sku, p.get("ean") or "", p.get("price") or 0,
-                         p.get("pix_price"), p.get("old_price"), p.get("pix_price"),
-                         p.get("installment") or "", p.get("url") or "",
-                         extract_brand(p) or (p.get("brand") or ""),
-                         json.dumps(attrs, ensure_ascii=False), vid),
+                        "UPDATE produtos_cadastro SET familia_id=?, nome=?, marca=?, marca_id=?,"
+                        " descricao=?, categoria_id=?, subcategoria_id=?, embalagem=?, url=?,"
+                        " external_id=?, sku=?, ean=?, preco=?, preco_promocional=?, old_price=?,"
+                        " pix_price=?, atributos=?, atualizado_em=datetime('now') WHERE id=?",
+                        (familia_id, nome, marca, marca_id, descricao, categoria_id,
+                         subcategoria_id, package or "", p.get("url") or "", ext, sku,
+                         p.get("ean") or "", p.get("price") or 0, p.get("pix_price"),
+                         p.get("old_price"), p.get("pix_price"),
+                         json.dumps(attrs, ensure_ascii=False), produto_id),
                     )
+                    updated += 1
                 else:
+                    categoria_id, subcategoria_id = categorias.resolve(conn, cat, sub)
+                    marca_id = marcas_repo.resolver(conn, marca)
+                    produto_id = conn.execute(
+                        "INSERT INTO produtos_cadastro (familia_id, nome, marca, marca_id,"
+                        " descricao, categoria_id, subcategoria_id, embalagem, url, external_id,"
+                        " sku, ean, preco, preco_promocional, old_price, pix_price, atributos)"
+                        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (familia_id, nome, marca, marca_id, descricao, categoria_id,
+                         subcategoria_id, package or "", p.get("url") or "", ext,
+                         p.get("sku") or "", p.get("ean") or "", p.get("price") or 0,
+                         p.get("pix_price"), p.get("old_price"), p.get("pix_price"),
+                         json.dumps(attrs, ensure_ascii=False)),
+                    ).lastrowid
                     sku, _aviso = reservar_sku(
                         p.get("sku") or "", produto_id, 0,
                         base=rep_p.get("name") or "", conn=conn,
                     )
-                    vid = conn.execute(
-                        "INSERT INTO variantes (produto_id, sku, ean, preco,"
-                        " preco_promocional, old_price, pix_price, installment, url,"
-                        " external_id, marca, atributos)"
-                        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (produto_id, sku, p.get("ean") or "",
-                         p.get("price") or 0, p.get("pix_price"), p.get("old_price"),
-                         p.get("pix_price"), p.get("installment") or "",
-                         p.get("url") or "", ext, extract_brand(p) or (p.get("brand") or ""),
-                         json.dumps(attrs, ensure_ascii=False)),
-                    ).lastrowid
-                conn.execute("DELETE FROM variante_atributos WHERE variante_id=?", (vid,))
-                for attr_id, val in meta.get("attrs", {}).items():
-                    if not val:
-                        continue
-                    label = dict(FAMILY_ATTR_LABELS.get(meta.get("family"), [])).get(attr_id)
-                    aid = label_to_id.get(label) if label else None
-                    if aid:
-                        conn.execute(
-                            "INSERT INTO variante_atributos (variante_id, atributo_id, valor)"
-                            " VALUES (?,?,?)",
-                            (vid, aid, str(val)),
-                        )
+                    conn.execute(
+                        "UPDATE produtos_cadastro SET sku=? WHERE id=?", (sku, produto_id)
+                    )
+                    created += 1
 
-                conn.execute("DELETE FROM imagens_produto WHERE variante_id=?", (vid,))
+                conn.execute("DELETE FROM imagens_produto WHERE produto_id=?", (produto_id,))
                 for i, img in enumerate(p.get("images", [])):
                     if not img.get("filename"):
                         continue
                     conn.execute(
-                        "INSERT INTO imagens_produto (produto_id, variante_id, filename,"
-                        " url_origem, ordem) VALUES (?,?,?,?,?)",
-                        (produto_id, vid, img["filename"], img.get("url") or "", i),
+                        "INSERT INTO imagens_produto (produto_id, filename, url_origem, ordem)"
+                        " VALUES (?,?,?,?)",
+                        (produto_id, img["filename"], img.get("url") or "", i),
                     )
 
-            placeholders = ",".join("?" * len(current_external))
+        placeholders = ",".join("?" * len(all_externals))
+        if all_externals:
             conn.execute(
-                f"DELETE FROM variantes WHERE produto_id=? AND external_id IS NOT NULL"
+                f"DELETE FROM produtos_cadastro WHERE external_id IS NOT NULL"
                 f" AND external_id NOT IN ({placeholders})",
-                [produto_id] + list(current_external),
+                list(all_externals),
             )
 
         # Reindexa FTS dos produtos tocados no boot (via app_factory).

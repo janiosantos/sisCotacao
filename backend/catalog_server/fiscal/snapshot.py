@@ -32,7 +32,7 @@ def persistir(
             cur = conn.execute(
                 """
                 INSERT INTO fiscal_snapshot (
-                    documento_tipo, documento_id, document_number, variante_id,
+                    documento_tipo, documento_id, document_number, produto_id,
                     produto_nome, rule_id, rule_version, operation_date,
                     cfop, cst, csosn, bases, rates, values,
                     legal_reference, source_url, calculation_inputs, status
@@ -107,7 +107,7 @@ def montar_contextos_orcamento(orcamento_id: int):
             (orcamento_id,),
         ).fetchall()
         perfis = {
-            p["variante_id"]: dict(p)
+            p["produto_id"]: dict(p)
             for p in conn.execute("SELECT * FROM product_fiscal_profile").fetchall()
         }
 

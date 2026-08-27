@@ -57,7 +57,12 @@ def criar():
         if produto_id:
             resolved.append({"produto_id": int(produto_id), "quantidade": quantidade, "descricao": descricao})
             continue
-        # item livre: tamanho/cor fora do cadastro — registra a variação sob o pai
+        # item livre: tamanho/cor fora do cadastro — cada variação é agora um
+        # produto próprio em produtos_cadastro. Procura o produto da família
+        # cujos atributos (JSONB) casam com os informados.
+        from catalog_server.db import system_conn as _sc_q
+        import json as _json
+
         produto_pai = i.get("produto_pai") or i.get("produto_cadastro_id")
         if not produto_pai:
             return jsonify({"error": "Item sem produto válido"}), 400
@@ -66,14 +71,15 @@ def criar():
             atributos_int = {int(k): str(v) for k, v in atributos.items() if v not in (None, "")}
         except (TypeError, ValueError):
             return jsonify({"error": "Atributos inválidos no item livre"}), 400
-        try:
-            vid = produto_repo.find_or_create_variant(
-                int(produto_pai),
-                atributos_int,
-                marca=i.get("marca") or "",
-            )
-        except ValueError as e:
-            return jsonify({"error": str(e)}), 400
+        with _sc_q() as _conn:
+            row = _conn.execute(
+                "SELECT id FROM produtos_cadastro"
+                " WHERE familia_id=? AND ativo=1 AND atributos @> ?::jsonb LIMIT 1",
+                (int(produto_pai), _json.dumps(atributos_int, ensure_ascii=False)),
+            ).fetchone()
+            vid = row["id"] if row else None
+        if not vid:
+            return jsonify({"error": "Nenhum produto da família corresponde aos atributos informados"}), 400
         resolved.append({"produto_id": vid, "quantidade": quantidade, "descricao": descricao})
     cotacao_id, numero = quote_repo.create(
         titulo=(data.get("titulo") or "").strip(),

@@ -163,15 +163,12 @@ def ambiente_integracao():
     criados: dict[str, int] = {}
     with system_conn() as conn:
         pid = conn.execute(
-            "INSERT INTO produtos_cadastro (nome) VALUES ('PROD MOTOR V2')"
-        ).lastrowid
-        vid = conn.execute(
-            "INSERT INTO variantes (produto_id, sku) VALUES (?, ?)",
-            (pid, f"MOTORV2-{sufixo}"),
+            "INSERT INTO produtos_cadastro (nome, sku) VALUES (?, ?)",
+            ("PROD MOTOR V2", f"MOTORV2-{sufixo}"),
         ).lastrowid
         conn.execute(
-            "INSERT INTO fiscal_config (variante_id, aliquota_icms) VALUES (?, 18)",
-            (vid,),
+            "INSERT INTO fiscal_config (produto_id, aliquota_icms) VALUES (?, 18)",
+            (pid,),
         )
         eid = conn.execute(
             "INSERT INTO emitente (razao_social, cnpj, ativo, regime_tributario, uf)"
@@ -179,11 +176,10 @@ def ambiente_integracao():
             " 'simples_nacional', 'MG')"
         ).lastrowid
         conn.commit()
-        criados = {"produto": int(pid), "variante": int(vid), "emitente": int(eid)}
+        criados = {"produto": int(pid), "variante": int(pid), "emitente": int(eid)}
     yield criados
     with system_conn() as conn:
-        conn.execute("DELETE FROM fiscal_config WHERE variante_id=?", (criados["variante"],))
-        conn.execute("DELETE FROM variantes WHERE id=?", (criados["variante"],))
+        conn.execute("DELETE FROM fiscal_config WHERE produto_id=?", (criados["variante"],))
         conn.execute("DELETE FROM produtos_cadastro WHERE id=?", (criados["produto"],))
         conn.execute("DELETE FROM emitente WHERE id=?", (criados["emitente"],))
         conn.commit()

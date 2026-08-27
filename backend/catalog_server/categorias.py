@@ -147,7 +147,7 @@ def produtos_por_subcategoria(subcategoria_id: int, offset: int = 0, limit: int 
         ).fetchone()[0]
         rows = conn.execute(
             "SELECT p.id, p.nome, p.marca, p.external_id, p.familia_id,"
-            " (SELECT MIN(preco) FROM variantes v WHERE v.produto_id=p.id AND v.ativo=1 AND preco>0) AS price_min"
+            " CASE WHEN p.preco > 0 THEN p.preco END AS price_min"
             " FROM produtos_cadastro p WHERE p.subcategoria_id=? AND p.ativo=1"
             " ORDER BY p.nome COLLATE NOCASE LIMIT ? OFFSET ?",
             (subcategoria_id, limit, offset),

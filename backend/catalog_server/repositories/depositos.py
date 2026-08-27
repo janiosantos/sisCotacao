@@ -74,7 +74,7 @@ class ExpedicaoRepository:
     def add_item(self, exp_id: int, variante_id: int, quantidade: float, orcamento_id: int | None = None) -> int:
         with system_conn() as conn:
             return conn.execute(
-                "INSERT INTO expedicao_itens (expedicao_id, variante_id, quantidade, orcamento_id) VALUES (?,?,?,?)",
+                "INSERT INTO expedicao_itens (expedicao_id, produto_id, quantidade, orcamento_id) VALUES (?,?,?,?)",
                 (exp_id, variante_id, quantidade, orcamento_id),
             ).lastrowid
 

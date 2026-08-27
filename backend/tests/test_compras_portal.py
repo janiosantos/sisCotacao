@@ -56,21 +56,17 @@ def _cliente_comprador(system_db):
     return c, h
 
 
-def _variante_com_unidade(system_db) -> int:
-    """Cria um produto com variante (unidade_venda=CX, fator=12)."""
+def _produto_com_unidade(system_db) -> int:
+    """Cria um produto (unidade_venda=CX, fator=12)."""
     with system_conn() as conn:
         conn.execute(
-            "INSERT INTO produtos_cadastro (nome, ativo) VALUES ('Parafuso Zincado', 1)"
+            "INSERT INTO produtos_cadastro (nome, ativo, sku, ean, preco, unidade_venda, fator_conversao)"
+            " VALUES (%s,%s,%s,%s,%s,%s,%s)",
+            ('Parafuso Zincado', 1, 'PAR-ZIN-12', '7891000000001', 0.5, 'CX', 12),
         )
         pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
-        conn.execute(
-            "INSERT INTO variantes (produto_id, sku, ean, preco, unidade_venda, fator_conversao, ativo)"
-            " VALUES (%s,'PAR-ZIN-12','7891000000001',0.5,'CX',12,1)",
-            (pid,),
-        )
-        vid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
         conn.commit()
-        return vid
+        return pid
 
 
 def _fornecedor(nome: str = "Distribuidora X") -> int:
@@ -95,7 +91,7 @@ def _criar_cotacao(client, header, vid: int, fid: int) -> str:
 
 
 def test_portal_itens_sugere_unidade_da_variante(system_db):
-    vid = _variante_com_unidade(system_db)
+    vid = _produto_com_unidade(system_db)
     fid = _fornecedor()
     c, h = _cliente_comprador(system_db)
     token = _criar_cotacao(c, h, vid, fid)
@@ -109,7 +105,7 @@ def test_portal_itens_sugere_unidade_da_variante(system_db):
 
 
 def test_submit_proposta_grava_unidade_marca_motivo(system_db):
-    vid = _variante_com_unidade(system_db)
+    vid = _produto_com_unidade(system_db)
     fid = _fornecedor()
     c, h = _cliente_comprador(system_db)
     token = _criar_cotacao(c, h, vid, fid)
@@ -141,7 +137,7 @@ def test_submit_proposta_grava_unidade_marca_motivo(system_db):
 
 
 def test_submit_indisponivel_grava_motivo(system_db):
-    vid = _variante_com_unidade(system_db)
+    vid = _produto_com_unidade(system_db)
     fid = _fornecedor()
     c, h = _cliente_comprador(system_db)
     token = _criar_cotacao(c, h, vid, fid)
@@ -167,7 +163,7 @@ def test_submit_indisponivel_grava_motivo(system_db):
 
 
 def test_matriz_propaga_preco_embalagem_e_motivo(system_db):
-    vid = _variante_com_unidade(system_db)
+    vid = _produto_com_unidade(system_db)
     fid = _fornecedor()
     c, h = _cliente_comprador(system_db)
     token = _criar_cotacao(c, h, vid, fid)
@@ -200,7 +196,7 @@ def test_matriz_propaga_preco_embalagem_e_motivo(system_db):
 
 
 def test_lembrar_fornecedor_gera_whatsapp(system_db):
-    vid = _variante_com_unidade(system_db)
+    vid = _produto_com_unidade(system_db)
     fid = _fornecedor("Distribuidora Z")
     c, h = _cliente_comprador(system_db)
     token = _criar_cotacao(c, h, vid, fid)
@@ -215,7 +211,7 @@ def test_lembrar_fornecedor_gera_whatsapp(system_db):
 
 
 def test_lembrar_inexistente_404(system_db):
-    vid = _variante_com_unidade(system_db)
+    vid = _produto_com_unidade(system_db)
     fid = _fornecedor()
     c, h = _cliente_comprador(system_db)
     _criar_cotacao(c, h, vid, fid)

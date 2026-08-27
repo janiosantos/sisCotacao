@@ -58,7 +58,7 @@ def calculate(
 
     with system_conn() as conn:
         row = conn.execute(
-            "SELECT * FROM fiscal_config WHERE variante_id=?", (variante_id,)
+            "SELECT * FROM fiscal_config WHERE produto_id=?", (variante_id,)
         ).fetchone()
         if row is None:
             return None

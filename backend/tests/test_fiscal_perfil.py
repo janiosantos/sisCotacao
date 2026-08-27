@@ -12,15 +12,12 @@ from catalog_server.db import system_conn
 
 @pytest.fixture()
 def variante_id():
-    """Cria produto+variante mínimos para o perfil (SKU único por execução)."""
+    """Cria produto mínimo para o perfil (SKU único por execução)."""
     sufixo = uuid.uuid4().hex[:8]
     with system_conn() as conn:
-        pid = conn.execute(
-            "INSERT INTO produtos_cadastro (nome) VALUES ('PROD PERFIL TESTE')"
-        ).lastrowid
         vid = conn.execute(
-            "INSERT INTO variantes (produto_id, sku) VALUES (?, ?)",
-            (pid, f"PERFIL-{sufixo}"),
+            "INSERT INTO produtos_cadastro (nome, sku) VALUES (?, ?)",
+            ("PROD PERFIL TESTE", f"PERFIL-{sufixo}"),
         ).lastrowid
         conn.commit()
     return int(vid)

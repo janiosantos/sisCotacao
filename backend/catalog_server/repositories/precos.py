@@ -46,28 +46,27 @@ class TabelaPrecoRepository:
 
     def list_itens(self, tabela_id: int, termo: str | None = None) -> list[dict]:
         sql = (
-            "SELECT i.*, v.sku, v.preco AS preco_base, v.custo_unitario,"
+            "SELECT i.*, p.sku, p.preco AS preco_base, p.custo_unitario,"
             " p.nome AS produto_nome, p.marca"
             " FROM tabela_preco_itens i"
-            " JOIN variantes v ON v.id = i.variante_id"
-            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " JOIN produtos_cadastro p ON p.id = i.produto_id"
             " WHERE i.tabela_id = ?"
         )
         args: list = [tabela_id]
         if termo:
-            sql += " AND (p.nome LIKE ? OR v.sku LIKE ? OR p.marca LIKE ?)"
+            sql += " AND (p.nome LIKE ? OR p.sku LIKE ? OR p.marca LIKE ?)"
             like = f"%{termo}%"
             args.extend([like, like, like])
-        sql += " ORDER BY p.nome, v.sku"
+        sql += " ORDER BY p.nome, p.sku"
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
     def upsert_item(self, tabela_id: int, variante_id: int, preco: float, margem: float | None = None) -> bool:
         with system_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO tabela_preco_itens (tabela_id, variante_id, preco, margem)"
+                "INSERT INTO tabela_preco_itens (tabela_id, produto_id, preco, margem)"
                 " VALUES (?,?,?,?)"
-                " ON CONFLICT(tabela_id, variante_id) DO UPDATE SET preco=excluded.preco, margem=excluded.margem",
+                " ON CONFLICT(tabela_id, produto_id) DO UPDATE SET preco=excluded.preco, margem=excluded.margem",
                 (tabela_id, variante_id, preco, margem),
             )
             return cur.rowcount > 0
@@ -75,7 +74,7 @@ class TabelaPrecoRepository:
     def delete_item(self, tabela_id: int, variante_id: int) -> bool:
         with system_conn() as conn:
             cur = conn.execute(
-                "DELETE FROM tabela_preco_itens WHERE tabela_id=? AND variante_id=?",
+                "DELETE FROM tabela_preco_itens WHERE tabela_id=? AND produto_id=?",
                 (tabela_id, variante_id),
             )
             return cur.rowcount > 0
@@ -88,7 +87,7 @@ class TabelaPrecoRepository:
             m = margem if margem is not None else float(tab["margem_padrao"] or 0)
             mk = markup if markup is not None else float(tab["markup"] or 0)
             variantes = conn.execute(
-                "SELECT id, custo_unitario, preco FROM variantes WHERE custo_unitario IS NOT NULL AND custo_unitario > 0"
+                "SELECT id, custo_unitario, preco FROM produtos_cadastro WHERE custo_unitario IS NOT NULL AND custo_unitario > 0"
             ).fetchall()
             count = 0
             for v in variantes:
@@ -103,9 +102,9 @@ class TabelaPrecoRepository:
                 if novo_preco <= 0:
                     continue
                 conn.execute(
-                    "INSERT INTO tabela_preco_itens (tabela_id, variante_id, preco, margem)"
+                    "INSERT INTO tabela_preco_itens (tabela_id, produto_id, preco, margem)"
                     " VALUES (?,?,?,?)"
-                    " ON CONFLICT(tabela_id, variante_id) DO UPDATE SET preco=excluded.preco, margem=excluded.margem",
+                    " ON CONFLICT(tabela_id, produto_id) DO UPDATE SET preco=excluded.preco, margem=excluded.margem",
                     (tabela_id, vid, round(novo_preco, 2), round(m, 2)),
                 )
                 count += 1
@@ -153,28 +152,27 @@ class PromocaoRepository:
 
     def list_itens(self, promocao_id: int, termo: str | None = None) -> list[dict]:
         sql = (
-            "SELECT i.*, v.sku, v.preco AS preco_base,"
+            "SELECT i.*, p.sku, p.preco AS preco_base,"
             " p.nome AS produto_nome, p.marca"
             " FROM promocao_itens i"
-            " JOIN variantes v ON v.id = i.variante_id"
-            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " JOIN produtos_cadastro p ON p.id = i.produto_id"
             " WHERE i.promocao_id = ?"
         )
         args: list = [promocao_id]
         if termo:
-            sql += " AND (p.nome LIKE ? OR v.sku LIKE ?)"
+            sql += " AND (p.nome LIKE ? OR p.sku LIKE ?)"
             like = f"%{termo}%"
             args.extend([like, like])
-        sql += " ORDER BY p.nome, v.sku"
+        sql += " ORDER BY p.nome, p.sku"
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
     def upsert_item(self, promocao_id: int, variante_id: int, preco_promocional: float) -> bool:
         with system_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO promocao_itens (promocao_id, variante_id, preco_promocional)"
+                "INSERT INTO promocao_itens (promocao_id, produto_id, preco_promocional)"
                 " VALUES (?,?,?)"
-                " ON CONFLICT(promocao_id, variante_id) DO UPDATE SET preco_promocional=excluded.preco_promocional",
+                " ON CONFLICT(promocao_id, produto_id) DO UPDATE SET preco_promocional=excluded.preco_promocional",
                 (promocao_id, variante_id, preco_promocional),
             )
             return cur.rowcount > 0
@@ -182,7 +180,7 @@ class PromocaoRepository:
     def delete_item(self, promocao_id: int, variante_id: int) -> bool:
         with system_conn() as conn:
             cur = conn.execute(
-                "DELETE FROM promocao_itens WHERE promocao_id=? AND variante_id=?",
+                "DELETE FROM promocao_itens WHERE promocao_id=? AND produto_id=?",
                 (promocao_id, variante_id),
             )
             return cur.rowcount > 0
@@ -198,7 +196,7 @@ class PromocaoRepository:
                 preco_prom = valor
             elif tipo == "percentual":
                 with system_conn() as conn:
-                    row = conn.execute("SELECT preco FROM variantes WHERE id=?", (vid,)).fetchone()
+                    row = conn.execute("SELECT preco FROM produtos_cadastro WHERE id=?", (vid,)).fetchone()
                     if row:
                         preco_prom = round(float(row["preco"] or 0) * (1 - valor / 100), 2)
             if preco_prom is not None and preco_prom > 0:
@@ -258,22 +256,21 @@ class RevisaoRepository:
 
     def list_itens_com_margem(self, tabela_id: int, termo: str | None = None) -> list[dict]:
         sql = (
-            "SELECT i.*, v.sku, v.preco AS preco_base, v.custo_unitario,"
+            "SELECT i.*, p.sku, p.preco AS preco_base, p.custo_unitario,"
             " p.nome AS produto_nome, p.marca,"
-            " CASE WHEN i.preco > 0 AND (v.custo_unitario > 0)"
-            "  THEN ROUND(((i.preco - v.custo_unitario) / i.preco) * 100, 2)"
+            " CASE WHEN i.preco > 0 AND (p.custo_unitario > 0)"
+            "  THEN ROUND(((i.preco - p.custo_unitario) / i.preco) * 100, 2)"
             "  ELSE NULL END AS margem_pct"
             " FROM tabela_preco_itens i"
-            " JOIN variantes v ON v.id = i.variante_id"
-            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " JOIN produtos_cadastro p ON p.id = i.produto_id"
             " WHERE i.tabela_id = ?"
         )
         args: list = [tabela_id]
         if termo:
-            sql += " AND (p.nome LIKE ? OR v.sku LIKE ?)"
+            sql += " AND (p.nome LIKE ? OR p.sku LIKE ?)"
             like = f"%{termo}%"
             args.extend([like, like])
-        sql += " ORDER BY p.nome, v.sku"
+        sql += " ORDER BY p.nome, p.sku"
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
@@ -291,11 +288,10 @@ class PrecoHistoricoRepository:
         limit: int = 200,
     ) -> list[dict]:
         sql = (
-            "SELECT h.*, v.sku, p.nome AS produto_nome, p.marca, t.nome AS tabela_nome,"
+            "SELECT h.*, p.sku, p.nome AS produto_nome, p.marca, t.nome AS tabela_nome,"
             " u.nome AS usuario_nome"
             " FROM preco_historico h"
-            " JOIN variantes v ON v.id = h.variante_id"
-            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " JOIN produtos_cadastro p ON p.id = h.produto_id"
             " JOIN tabelas_preco t ON t.id = h.tabela_id"
             " LEFT JOIN usuarios u ON u.id = h.usuario_id"
         )
@@ -304,11 +300,11 @@ class PrecoHistoricoRepository:
             conds.append("h.tabela_id=?")
             args.append(tabela_id)
         if variante_id:
-            conds.append("h.variante_id=?")
+            conds.append("h.produto_id=?")
             args.append(variante_id)
         if termo:
             like = f"%{termo}%"
-            conds.append("(p.nome LIKE ? OR v.sku LIKE ? OR t.nome LIKE ?)")
+            conds.append("(p.nome LIKE ? OR p.sku LIKE ? OR t.nome LIKE ?)")
             args += [like, like, like]
         if conds:
             sql += " WHERE " + " AND ".join(conds)

@@ -69,18 +69,17 @@ SELECT p.id AS id,
        COALESCE((
            SELECT group_concat(tok, ' ')
            FROM (
-               SELECT v.sku AS tok FROM variantes v
-               WHERE v.produto_id = p.id AND v.ativo = 1 AND v.sku <> ''
+               SELECT p.sku AS tok
                UNION
-               SELECT v.ean FROM variantes v
-               WHERE v.produto_id = p.id AND v.ativo = 1 AND v.ean <> ''
-           )
+               SELECT p.ean AS tok
+           ) t
+           WHERE tok <> ''
        ), '') AS skus,
        COALESCE(p.termos_busca, '') AS termos_busca,
        COALESCE((
            SELECT group_concat(kv.value, ' ')
-           FROM variantes v, jsonb_each_text(v.atributos) kv(key, value)
-           WHERE v.produto_id = p.id AND v.ativo = 1 AND kv.value <> ''
+           FROM jsonb_each_text(p.atributos) kv(key, value)
+           WHERE kv.value <> ''
        ), '') AS atributos
 FROM produtos_cadastro p
 LEFT JOIN familias f ON f.id = p.familia_id

@@ -11,7 +11,7 @@ from catalog_server.repositories.precos import (
 )
 from catalog_server.repositories.produtos import ProdutoRepository
 
-from helpers import attrs, criar_familia, variante
+from helpers import criar_familia, produto_dados
 
 repo = ProdutoRepository()
 
@@ -24,22 +24,19 @@ def tabela(system_db):
 @pytest.fixture()
 def variante_id(system_db):
     fid = criar_familia(repo)
-    aid = {a["nome"]: str(a["id"]) for a in repo.get_familia(fid)["atributos"]}
     pid = repo.create_product(
         familia_id=fid,
         nome="Cabo Flexível Sil",
         marca="Sil",
         descricao="",
         categoria="Eletrica",
-        variantes=[variante("SKU-PRECO", "7893001", attrs(aid, Bitola="2,5mm"), preco=10.0)],
+        dados=produto_dados("SKU-PRECO", "7893001", preco=10.0),
+        atributos={"Bitola": "2,5mm"},
     )
     with system_conn() as conn:
-        vid = conn.execute(
-            "SELECT id FROM variantes WHERE sku='SKU-PRECO'"
-        ).fetchone()[0]
         # custo para a geração de preço
-        conn.execute("UPDATE variantes SET custo_unitario=8.0 WHERE id=?", (vid,))
-    return vid
+        conn.execute("UPDATE produtos_cadastro SET custo_unitario=8.0 WHERE id=?", (pid,))
+    return pid
 
 
 def test_tabela_crud(tabela):

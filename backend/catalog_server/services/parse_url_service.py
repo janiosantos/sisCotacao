@@ -298,10 +298,10 @@ def criar_produto_por_url(
         ).lastrowid
 
         vid = conn.execute(
-            "INSERT INTO variantes (produto_id, sku, ean, preco, preco_promocional, old_price,"
+            "INSERT INTO produtos_cadastro (sku, ean, preco, preco_promocional, old_price,"
             " pix_price, installment, url, marca, atributos)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (produto_id, "", data.get("ean") or "", preco, pix, old,
+            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            ("", data.get("ean") or "", preco, pix, old,
              pix, data.get("installment") or "", url_final, marca,
              json.dumps({}, ensure_ascii=False)),
         ).lastrowid
@@ -312,17 +312,11 @@ def criar_produto_por_url(
             label = labels.get(aid)
             if label:
                 attrs_json[label] = str(val)
-            faid = label_to_id.get(label) if label else None
-            if faid:
-                conn.execute(
-                    "INSERT INTO variante_atributos (variante_id, atributo_id, valor) VALUES (?,?,?)",
-                    (vid, faid, str(val)),
-                )
         sku, _aviso = reservar_sku(
             data.get("sku") or "", produto_id, vid, base=base, conn=conn,
         )
         conn.execute(
-            "UPDATE variantes SET sku=?, atributos=? WHERE id=?",
+            "UPDATE produtos_cadastro SET sku=?, atributos=? WHERE id=?",
             (sku, json.dumps(attrs_json, ensure_ascii=False), vid),
         )
 
@@ -345,17 +339,16 @@ def criar_produto_por_url(
     if imagens_rows:
         with system_conn() as conn:
             conn.executemany(
-                "INSERT INTO imagens_produto (produto_id, variante_id, filename, url_origem, ordem)"
-                " VALUES (?,?,?,?,?)",
+                "INSERT INTO imagens_produto (produto_id, filename, url_origem, ordem)"
+                " VALUES (?,?,?,?)",
                 [
-                    (produto_id, vid, filename, url_origem, i)
+                    (produto_id, filename, url_origem, i)
                     for i, (filename, url_origem) in enumerate(imagens_rows)
                 ],
             )
 
     return {
-        "id": produto_id,
-        "variante_id": vid,
+        "id": vid,
         "nome": base,
         "marca": marca,
         "familia": fname,

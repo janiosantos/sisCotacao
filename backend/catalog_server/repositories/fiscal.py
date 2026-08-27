@@ -29,11 +29,10 @@ class FiscalConfigRepository:
     def get(self, variante_id: int) -> dict | None:
         with system_conn() as conn:
             row = conn.execute(
-                "SELECT f.*, v.sku, p.nome AS produto_nome, p.marca"
+                "SELECT f.*, p.sku, p.nome AS produto_nome, p.marca"
                 " FROM fiscal_config f"
-                " JOIN variantes v ON v.id = f.variante_id"
-                " JOIN produtos_cadastro p ON p.id = v.produto_id"
-                " WHERE f.variante_id = ?",
+                " JOIN produtos_cadastro p ON p.id = f.produto_id"
+                " WHERE f.produto_id = ?",
                 (variante_id,),
             ).fetchone()
             return dict(row) if row else None
@@ -79,8 +78,8 @@ class FiscalConfigRepository:
         vals = list(texto.values()) + list(numeros.values()) + [beneficio_id]
         with system_conn() as conn:
             cur = conn.execute(
-                f"INSERT INTO fiscal_config (variante_id, {', '.join(cols)}) VALUES (?, {', '.join('?' for _ in cols)})"
-                f" ON CONFLICT(variante_id) DO UPDATE SET"
+                f"INSERT INTO fiscal_config (produto_id, {', '.join(cols)}) VALUES (?, {', '.join('?' for _ in cols)})"
+                f" ON CONFLICT(produto_id) DO UPDATE SET"
                 f" {', '.join(f'{c}=COALESCE(excluded.{c}, fiscal_config.{c})' for c in cols)}",
                 [variante_id] + vals,
             )
@@ -88,35 +87,34 @@ class FiscalConfigRepository:
 
     def list(self, page: int = 0, limit: int = 100, termo: str | None = None) -> list[dict]:
         sql = (
-            "SELECT f.*, v.sku, v.preco, p.nome AS produto_nome, p.marca,"
+            "SELECT f.*, p.sku, p.preco, p.nome AS produto_nome, p.marca,"
             " cat.nome AS categoria"
             " FROM fiscal_config f"
-            " JOIN variantes v ON v.id = f.variante_id"
-            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " JOIN produtos_cadastro p ON p.id = f.produto_id"
             " LEFT JOIN categorias cat ON cat.id = p.categoria_id"
         )
         args: list = []
         if termo:
-            sql += " WHERE (p.nome LIKE ? OR v.sku LIKE ? OR f.ncm LIKE ?)"
+            sql += " WHERE (p.nome LIKE ? OR p.sku LIKE ? OR f.ncm LIKE ?)"
             like = f"%{termo}%"
             args.extend([like, like, like])
-        sql += " ORDER BY p.nome, v.sku LIMIT ? OFFSET ?"
+        sql += " ORDER BY p.nome, p.sku LIMIT ? OFFSET ?"
         args.extend([limit, page * limit])
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
     def gerar_config_padrao(self, cfop_padrao: str = "5.102", cst_icms: str = "00") -> int:
         with system_conn() as conn:
-            existentes = {r["variante_id"] for r in conn.execute(
-                "SELECT variante_id FROM fiscal_config"
+            existentes = {r["produto_id"] for r in conn.execute(
+                "SELECT produto_id FROM fiscal_config"
             ).fetchall()}
-            variantes = conn.execute("SELECT id, ncm FROM variantes").fetchall()
+            variantes = conn.execute("SELECT id, ncm FROM produtos_cadastro").fetchall()
             count = 0
             for v in variantes:
                 if v["id"] in existentes:
                     continue
                 conn.execute(
-                    "INSERT INTO fiscal_config (variante_id, ncm, cfop, cst_icms, cst_pis, cst_cofins,"
+                    "INSERT INTO fiscal_config (produto_id, ncm, cfop, cst_icms, cst_pis, cst_cofins,"
                     " aliquota_icms, aliquota_pis, aliquota_cofins)"
                     " VALUES (?,?,?,?,?,?,?,?,?)",
                     (v["id"], v["ncm"] or "", cfop_padrao, cst_icms, "01", "01", 18, 1.65, 7.6),
@@ -130,7 +128,7 @@ class FiscalConfigRepository:
         """Snapshot atual da fiscal_config em fiscal_config_historico (auditoria)."""
         with system_conn() as conn:
             cfg = conn.execute(
-                "SELECT * FROM fiscal_config WHERE variante_id=?", (variante_id,)
+                "SELECT * FROM fiscal_config WHERE produto_id=?", (variante_id,)
             ).fetchone()
             if cfg is None:
                 return 0
@@ -142,7 +140,7 @@ class FiscalConfigRepository:
             )
             cur = conn.execute(
                 f"INSERT INTO fiscal_config_historico"
-                f" (variante_id, tipo, {cols}, usuario_id)"
+                f" (produto_id, tipo, {cols}, usuario_id)"
                 f" VALUES (?,?,{', '.join('?' for _ in cols.split(','))},?)",
                 [variante_id, tipo] + [cfg[c.strip()] for c in cols.split(",")] + [usuario_id],
             )
@@ -150,19 +148,18 @@ class FiscalConfigRepository:
 
     def list_historico(self, termo: str | None = None, variante_id: int | None = None, limit: int = 200) -> list[dict]:
         sql = (
-            "SELECT h.*, v.sku, p.nome AS produto_nome, p.marca, u.nome AS usuario_nome"
+            "SELECT h.*, p.sku, p.nome AS produto_nome, p.marca, u.nome AS usuario_nome"
             " FROM fiscal_config_historico h"
-            " JOIN variantes v ON v.id = h.variante_id"
-            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " JOIN produtos_cadastro p ON p.id = h.produto_id"
             " LEFT JOIN usuarios u ON u.id = h.usuario_id"
         )
         conds, args = [], []
         if variante_id:
-            conds.append("h.variante_id=?")
+            conds.append("h.produto_id=?")
             args.append(variante_id)
         if termo:
             like = f"%{termo}%"
-            conds.append("(p.nome LIKE ? OR v.sku LIKE ? OR h.ncm LIKE ?)")
+            conds.append("(p.nome LIKE ? OR p.sku LIKE ? OR h.ncm LIKE ?)")
             args += [like, like, like]
         if conds:
             sql += " WHERE " + " AND ".join(conds)

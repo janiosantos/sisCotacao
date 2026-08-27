@@ -16,14 +16,11 @@ def _setup():
             (f"DEP INV {sufixo}",),
         ).lastrowid
         pid = conn.execute(
-            "INSERT INTO produtos_cadastro (nome) VALUES ('PROD INV')"
-        ).lastrowid
-        vid = conn.execute(
-            "INSERT INTO variantes (produto_id, sku) VALUES (?, ?)",
-            (pid, f"INV-{sufixo}"),
+            "INSERT INTO produtos_cadastro (nome, sku) VALUES (?, ?)",
+            ('PROD INV', f"INV-{sufixo}"),
         ).lastrowid
         conn.commit()
-    return int(did), int(vid)
+    return int(did), int(pid)
 
 
 def test_inventario_corrige_saldo_com_fato():
@@ -51,12 +48,12 @@ def test_reconciliar_tudo_identifica_divergencia():
     # força divergência: mexe direto no saldo materializado
     with system_conn() as conn:
         conn.execute(
-            "UPDATE estoque_saldo SET quantidade=99 WHERE deposito_id=? AND variante_id=?",
+            "UPDATE estoque_saldo SET quantidade=99 WHERE deposito_id=? AND produto_id=?",
             (did, vid),
         )
         conn.commit()
     div = estoque_repo.reconciliar_tudo(did)
-    assert any(d["variante_id"] == vid for d in div)
+    assert any(d["produto_id"] == vid for d in div)
 
 
 def test_api_inventario():

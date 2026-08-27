@@ -29,19 +29,19 @@ def preco_compra(variante_id: int, fornecedor_id: int | None = None) -> float | 
         if fornecedor_id:
             row = conn.execute(
                 "SELECT preco FROM fornecedor_preco"
-                " WHERE variante_id=? AND fornecedor_id=? AND ativo=1",
+                " WHERE produto_id=? AND fornecedor_id=? AND ativo=1",
                 (variante_id, fornecedor_id),
             ).fetchone()
         else:
             row = conn.execute(
                 "SELECT preco FROM fornecedor_preco"
-                " WHERE variante_id=? AND ativo=1 ORDER BY preco ASC LIMIT 1",
+                " WHERE produto_id=? AND ativo=1 ORDER BY preco ASC LIMIT 1",
                 (variante_id,),
             ).fetchone()
         if row:
             return float(row["preco"])
         row = conn.execute(
-            "SELECT custo_unitario FROM variantes WHERE id=?", (variante_id,)
+            "SELECT custo_unitario FROM produtos_cadastro WHERE id=?", (variante_id,)
         ).fetchone()
         if row and row["custo_unitario"]:
             return float(row["custo_unitario"])

@@ -16,21 +16,21 @@ class EstoqueRepository:
         familia_id: int | None = None,
         produto_id: int | None = None,
     ) -> list[dict]:
+        produto_id = produto_id if produto_id is not None else variante_id
         sql = (
-            "SELECT s.id, s.deposito_id, s.variante_id, s.quantidade, s.reserva,"
+            "SELECT s.id, s.deposito_id, s.produto_id, s.quantidade, s.reserva,"
             " s.atualizado_em, d.nome AS deposito_nome,"
-            " v.sku, v.preco, p.nome AS produto_nome, p.marca,"
+            " p.sku, p.preco, p.nome AS produto_nome, p.marca,"
             " p.familia_id, f.nome AS familia_nome,"
-            " v.unidade_venda, v.embalagem, v.fator_conversao, v.ncm,"
-            " v.unidade_tributavel, v.localizacao,"
+            " p.unidade_venda, p.embalagem, p.fator_conversao, p.ncm,"
+            " p.unidade_tributavel, p.localizacao,"
             " s.estoque_minimo, s.estoque_maximo,"
             " CASE WHEN s.estoque_minimo > 0 AND s.quantidade < s.estoque_minimo THEN 'ruptura'"
             "  WHEN s.estoque_maximo > 0 AND s.quantidade > s.estoque_maximo THEN 'excesso'"
             "  ELSE 'ok' END AS situacao"
             " FROM estoque_saldo s"
             " JOIN depositos d ON d.id = s.deposito_id"
-            " JOIN variantes v ON v.id = s.variante_id"
-            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " JOIN produtos_cadastro p ON p.id = s.produto_id"
             " LEFT JOIN familias f ON f.id = p.familia_id"
         )
         where: list[str] = []
@@ -38,22 +38,19 @@ class EstoqueRepository:
         if deposito_id is not None:
             where.append("s.deposito_id = ?")
             args.append(deposito_id)
-        if variante_id is not None:
-            where.append("s.variante_id = ?")
-            args.append(variante_id)
+        if produto_id is not None:
+            where.append("s.produto_id = ?")
+            args.append(produto_id)
         if familia_id is not None:
             where.append("p.familia_id = ?")
             args.append(familia_id)
-        if produto_id is not None:
-            where.append("p.id = ?")
-            args.append(produto_id)
         if termo:
-            where.append("(p.nome LIKE ? OR v.sku LIKE ? OR p.marca LIKE ?)")
+            where.append("(p.nome LIKE ? OR p.sku LIKE ? OR p.marca LIKE ?)")
             like = f"%{termo}%"
             args.extend([like, like, like])
         if where:
             sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY p.nome, v.sku"
+        sql += " ORDER BY p.nome, p.sku"
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
@@ -69,12 +66,13 @@ class EstoqueRepository:
         usuario_id: int | None = None,
         _conn=None,
     ) -> dict:
+        produto_id = variante_id
         ctx = system_conn() if _conn is None else None
         conn = _conn or ctx.__enter__()
         try:
             saldo_row = conn.execute(
-                "SELECT id, quantidade FROM estoque_saldo WHERE deposito_id=? AND variante_id=?",
-                (deposito_id, variante_id),
+                "SELECT id, quantidade FROM estoque_saldo WHERE deposito_id=? AND produto_id=?",
+                (deposito_id, produto_id),
             ).fetchone()
             if saldo_row:
                 saldo_atual = float(saldo_row["quantidade"] or 0)
@@ -82,13 +80,13 @@ class EstoqueRepository:
             else:
                 saldo_atual = 0.0
                 conn.execute(
-                    "INSERT INTO estoque_saldo (deposito_id, variante_id, quantidade, reserva)"
+                    "INSERT INTO estoque_saldo (deposito_id, produto_id, quantidade, reserva)"
                     " VALUES (?,?,0,0)",
-                    (deposito_id, variante_id),
+                    (deposito_id, produto_id),
                 )
                 saldo_id = conn.execute(
-                    "SELECT id FROM estoque_saldo WHERE deposito_id=? AND variante_id=?",
-                    (deposito_id, variante_id),
+                    "SELECT id FROM estoque_saldo WHERE deposito_id=? AND produto_id=?",
+                    (deposito_id, produto_id),
                 ).fetchone()["id"]
 
             if tipo in ("entrada", "inventario"):
@@ -108,12 +106,12 @@ class EstoqueRepository:
             )
 
             cur = conn.execute(
-                "INSERT INTO estoque_movimento (deposito_id, variante_id, tipo, quantidade,"
+                "INSERT INTO estoque_movimento (deposito_id, produto_id, tipo, quantidade,"
                 " saldo_anterior, saldo_posterior, documento, observacao, lote_id, usuario_id)"
                 " VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (
                     deposito_id,
-                    variante_id,
+                    produto_id,
                     tipo,
                     quantidade,
                     saldo_atual,
@@ -152,6 +150,7 @@ class EstoqueRepository:
         """Fato de estoque idempotente (ADR 0003): retrida com a mesma
         `idempotency_key` devolve o movimento original sem reprocessar.
         Tipos reserva/liberacao movem a coluna RESERVA, não o saldo."""
+        produto_id = variante_id
         if not idempotency_key:
             idempotency_key = f"auto-{uuid.uuid4().hex}"
 
@@ -173,8 +172,8 @@ class EstoqueRepository:
 
             row = conn.execute(
                 "SELECT id, quantidade, reserva FROM estoque_saldo"
-                " WHERE deposito_id=? AND variante_id=?",
-                (deposito_id, variante_id),
+                " WHERE deposito_id=? AND produto_id=?",
+                (deposito_id, produto_id),
             ).fetchone()
             if row:
                 saldo_atual = float(row["quantidade"] or 0)
@@ -182,14 +181,14 @@ class EstoqueRepository:
                 saldo_id = row["id"]
             else:
                 conn.execute(
-                    "INSERT INTO estoque_saldo (deposito_id, variante_id, quantidade, reserva)"
+                    "INSERT INTO estoque_saldo (deposito_id, produto_id, quantidade, reserva)"
                     " VALUES (?,?,0,0)",
-                    (deposito_id, variante_id),
+                    (deposito_id, produto_id),
                 )
                 saldo_atual, reserva_atual = 0.0, 0.0
                 saldo_id = conn.execute(
-                    "SELECT id FROM estoque_saldo WHERE deposito_id=? AND variante_id=?",
-                    (deposito_id, variante_id),
+                    "SELECT id FROM estoque_saldo WHERE deposito_id=? AND produto_id=?",
+                    (deposito_id, produto_id),
                 ).fetchone()["id"]
 
             q = float(quantidade)
@@ -226,13 +225,13 @@ class EstoqueRepository:
                 )
 
             cur = conn.execute(
-                "INSERT INTO estoque_movimento (deposito_id, variante_id, tipo,"
+                "INSERT INTO estoque_movimento (deposito_id, produto_id, tipo,"
                 " quantidade, saldo_anterior, saldo_posterior, documento,"
                 " observacao, lote_id, usuario_id, idempotency_key,"
                 " origem_tipo, origem_id)"
                 " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
-                    deposito_id, variante_id, tipo, quantidade,
+                    deposito_id, produto_id, tipo, quantidade,
                     saldo_atual, novo_saldo, documento, observacao,
                     lote_id, usuario_id, idempotency_key,
                     origem_tipo, origem_id,
@@ -250,10 +249,11 @@ class EstoqueRepository:
             ctx.__exit__(None, None, None)
 
     def reconciliar(self, deposito_id: int, variante_id: int) -> dict:
+        produto_id = variante_id
         with system_conn() as conn:
             row = conn.execute(
                 "SELECT * FROM reconciliar_estoque(?, ?)",
-                (deposito_id, variante_id),
+                (deposito_id, produto_id),
             ).fetchone()
             return dict(row) if row else {}
 
@@ -261,7 +261,7 @@ class EstoqueRepository:
         """Lista saldos com divergência entre o materializado e o derivado
         (chamado pelo gate de CI/staging para alertar desalinhamentos)."""
         sql = (
-            "SELECT s.deposito_id, s.variante_id, s.quantidade AS materializado,"
+            "SELECT s.deposito_id, s.produto_id, s.quantidade AS materializado,"
             " COALESCE(d.derivado, 0) AS derivado"
             " FROM estoque_saldo s"
             " LEFT JOIN LATERAL ("
@@ -269,7 +269,7 @@ class EstoqueRepository:
             "     ('entrada','transferencia','inventario') THEN m.quantidade"
             "     ELSE -m.quantidade END),0) AS derivado"
             "   FROM estoque_movimento m WHERE m.deposito_id=s.deposito_id"
-            "     AND m.variante_id=s.variante_id"
+            "     AND m.produto_id=s.produto_id"
             " ) d ON TRUE"
         )
         where: list[str] = []
@@ -295,11 +295,12 @@ class EstoqueRepository:
     ) -> dict:
         """Ajuste por inventário: cria um FATO tipo 'inventario' que leva o
         saldo à quantidade contada (motivo registrado)."""
+        produto_id = variante_id
         with system_conn() as conn:
             atual = conn.execute(
                 "SELECT quantidade FROM estoque_saldo"
-                " WHERE deposito_id=? AND variante_id=?",
-                (deposito_id, variante_id),
+                " WHERE deposito_id=? AND produto_id=?",
+                (deposito_id, produto_id),
             ).fetchone()
             saldo_atual = float(atual["quantidade"] or 0) if atual else 0.0
             diff = float(quantidade_contada) - saldo_atual
@@ -316,7 +317,7 @@ class EstoqueRepository:
         # 'inventario' soma a diferença para atingir a contagem
         return self.movimentar_fato(
             deposito_id,
-            variante_id,
+            produto_id,
             "inventario",
             diff,
             idempotency_key=idempotency_key,
@@ -334,22 +335,22 @@ class EstoqueRepository:
         tipo: str | None = None,
         limit: int = 100,
     ) -> list[dict]:
+        produto_id = variante_id
         sql = (
             "SELECT m.*, d.nome AS deposito_nome,"
-            " v.sku, p.nome AS produto_nome, p.marca"
+            " p.sku, p.nome AS produto_nome, p.marca"
             " FROM estoque_movimento m"
             " JOIN depositos d ON d.id = m.deposito_id"
-            " JOIN variantes v ON v.id = m.variante_id"
-            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " JOIN produtos_cadastro p ON p.id = m.produto_id"
         )
         where: list[str] = []
         args: list = []
         if deposito_id is not None:
             where.append("m.deposito_id = ?")
             args.append(deposito_id)
-        if variante_id is not None:
-            where.append("m.variante_id = ?")
-            args.append(variante_id)
+        if produto_id is not None:
+            where.append("m.produto_id = ?")
+            args.append(produto_id)
         if tipo:
             where.append("m.tipo = ?")
             args.append(tipo)
@@ -378,22 +379,22 @@ class EstoqueRepository:
 class LoteRepository:
 
     def list(self, deposito_id: int | None = None, variante_id: int | None = None) -> list[dict]:
+        produto_id = variante_id
         sql = (
             "SELECT l.*, d.nome AS deposito_nome,"
-            " v.sku, p.nome AS produto_nome, p.marca"
+            " p.sku, p.nome AS produto_nome, p.marca"
             " FROM lotes l"
             " JOIN depositos d ON d.id = l.deposito_id"
-            " JOIN variantes v ON v.id = l.variante_id"
-            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " JOIN produtos_cadastro p ON p.id = l.produto_id"
         )
         where: list[str] = []
         args: list = []
         if deposito_id is not None:
             where.append("l.deposito_id = ?")
             args.append(deposito_id)
-        if variante_id is not None:
-            where.append("l.variante_id = ?")
-            args.append(variante_id)
+        if produto_id is not None:
+            where.append("l.produto_id = ?")
+            args.append(produto_id)
         if where:
             sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY l.data_validade, l.codigo"
@@ -416,7 +417,7 @@ class LoteRepository:
     ) -> int:
         with system_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO lotes (deposito_id, variante_id, codigo, quantidade, data_fabricacao, data_validade)"
+                "INSERT INTO lotes (deposito_id, produto_id, codigo, quantidade, data_fabricacao, data_validade)"
                 " VALUES (?,?,?,?,?,?)",
                 (deposito_id, variante_id, codigo.strip(), quantidade, data_fabricacao, data_validade),
             )

@@ -81,7 +81,7 @@ def snapshot_orcamento(orcamento_id: int) -> dict | None:
             valores = {k: res.get(k) for k in _COLS}
             conn.execute(
                 f"INSERT INTO orcamento_itens_fiscal"
-                f" (orcamento_id, item_id, variante_id, resultado_json, status_validacao,"
+                f" (orcamento_id, item_id, produto_id, resultado_json, status_validacao,"
                 f"  regra_id, regra_nome, regra_versao, regra_fonte, regra_origem,"
                 f"  regra_produto_id, regra_produto_nome, regra_produto_versao, {', '.join(_COLS)})"
                 f" VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,{', '.join('?' for _ in _COLS)})",

@@ -46,11 +46,11 @@ def _ocupado(conn, sku: str, ignorar_id: int | None = None) -> bool:
         return False
     if ignorar_id is None:
         row = conn.execute(
-            "SELECT 1 FROM variantes WHERE sku = ?", (sku,)
+            "SELECT 1 FROM produtos_cadastro WHERE sku = ?", (sku,)
         ).fetchone()
     else:
         row = conn.execute(
-            "SELECT 1 FROM variantes WHERE sku = ? AND id <> ?",
+            "SELECT 1 FROM produtos_cadastro WHERE sku = ? AND id <> ?",
             (sku, ignorar_id),
         ).fetchone()
     return row is not None
@@ -178,7 +178,7 @@ def _gerar_lote(
         # Imutabilidade: SKU já emitido em operação comercial não é alterado.
         if ignorar_id and sku_emitido(conn, ignorar_id):
             row = conn.execute(
-                "SELECT sku FROM variantes WHERE id=?", (ignorar_id,)
+                "SELECT sku FROM produtos_cadastro WHERE id=?", (ignorar_id,)
             ).fetchone()
             sku_atual = normalizar(row["sku"]) if row else ""
             if sku_atual:
@@ -220,29 +220,31 @@ def _gerar_lote(
 # ---------------------------------------------------------------------------
 
 
-def _tabelas_com_variante_id(conn) -> list[str]:
-    """Tabelas operacionais que referenciam `variante_id` (uso do SKU)."""
+def _tabelas_com_produto_id(conn) -> list[str]:
+    """Tabelas operacionais que referenciam `produto_id` (uso do SKU)."""
     rows = conn.execute(
         "SELECT table_name FROM information_schema.columns"
-        " WHERE column_name='variante_id' AND table_schema='public'"
+        " WHERE column_name='produto_id' AND table_schema='public'"
+        "   AND table_name NOT IN ('variante_produto_map','variante_atributos')"
     ).fetchall()
     return [r["table_name"] for r in rows]
 
 
-def sku_emitido(conn, variante_id: int) -> bool:
-    """True se a variante já foi usada em operação comercial (SKU imutável).
+def sku_emitido(conn, produto_id: int) -> bool:
+    """True se o produto já foi usado em operação comercial (SKU imutável).
 
-    Verifica todas as tabelas que possuem `variante_id`: venda (orcamentos),
-    compra (solicitacoes), estoque (saldo/movimento/lotes), nota fiscal
-    (fiscal_config/orcamento_itens_fiscal), integrações (fornecedor_*),
-    histórico (preco_historico) etc. Tabelas ausentes no ambiente são ignoradas.
+    Verifica todas as tabelas que possuem `produto_id` (antiga `variante_id`):
+    venda (orcamentos), compra (solicitacoes), estoque (saldo/movimento/lotes),
+    nota fiscal (fiscal_config/orcamento_itens_fiscal), integrações
+    (fornecedor_*), histórico (preco_historico) etc. Tabelas ausentes no
+    ambiente são ignoradas.
     """
-    if not variante_id:
+    if not produto_id:
         return False
-    for t in _tabelas_com_variante_id(conn):
+    for t in _tabelas_com_produto_id(conn):
         try:
             row = conn.execute(
-                f"SELECT 1 FROM {t} WHERE variante_id=?", (variante_id,)
+                f"SELECT 1 FROM {t} WHERE produto_id=?", (produto_id,)
             ).fetchone()
         except Exception:
             continue

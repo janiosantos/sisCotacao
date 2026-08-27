@@ -15,14 +15,13 @@ def prod_var():
     sufixo = uuid.uuid4().hex[:8]
     with system_conn() as conn:
         pid = conn.execute(
-            "INSERT INTO produtos_cadastro (nome) VALUES ('PROD HIERARQUIA')"
-        ).lastrowid
-        vid = conn.execute(
-            "INSERT INTO variantes (produto_id, sku) VALUES (?, ?)",
-            (pid, f"HIER-{sufixo}"),
+            "INSERT INTO produtos_cadastro (nome, sku) VALUES (?, ?)",
+            ("PROD HIERARQUIA", f"HIER-{sufixo}"),
         ).lastrowid
         conn.commit()
-    return int(pid), int(vid)
+    # No modelo unificado a "variação" é o próprio produto: o mesmo id serve
+    # de produto (produto_fiscal_profile) e de override (product_fiscal_profile).
+    return int(pid), int(pid)
 
 
 @pytest.fixture()

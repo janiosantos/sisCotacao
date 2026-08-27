@@ -7,17 +7,16 @@ class FornecedorPrecoRepository:
 
     def list(self, fornecedor_id: int | None = None, variante_id: int | None = None) -> list[dict]:
         sql = (
-            "SELECT f.*, v.sku, p.nome AS produto_nome, fn.nome AS fornecedor_nome"
+            "SELECT f.*, p.sku, p.nome AS produto_nome, fn.nome AS fornecedor_nome"
             " FROM fornecedor_preco f"
-            " JOIN variantes v ON v.id = f.variante_id"
-            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " JOIN produtos_cadastro p ON p.id = f.produto_id"
             " JOIN fornecedores fn ON fn.id = f.fornecedor_id WHERE 1=1"
         )
         args: list = []
         if fornecedor_id:
             sql += " AND f.fornecedor_id = ?"; args.append(fornecedor_id)
         if variante_id:
-            sql += " AND f.variante_id = ?"; args.append(variante_id)
+            sql += " AND f.produto_id = ?"; args.append(variante_id)
         sql += " ORDER BY p.nome"
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
@@ -25,8 +24,8 @@ class FornecedorPrecoRepository:
     def upsert(self, fornecedor_id: int, variante_id: int, preco: float, prazo: int | None = None, icms: float = 0, ipi: float = 0) -> int:
         with system_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO fornecedor_preco (fornecedor_id, variante_id, preco, prazo_entrega, icms, ipi)"
-                " VALUES (?,?,?,?,?,?) ON CONFLICT(fornecedor_id, variante_id) DO UPDATE SET"
+                "INSERT INTO fornecedor_preco (fornecedor_id, produto_id, preco, prazo_entrega, icms, ipi)"
+                " VALUES (?,?,?,?,?,?) ON CONFLICT(fornecedor_id, produto_id) DO UPDATE SET"
                 " preco=excluded.preco, prazo_entrega=excluded.prazo_entrega, icms=excluded.icms, ipi=excluded.ipi",
                 (fornecedor_id, variante_id, preco, prazo, icms, ipi),
             )
@@ -55,10 +54,9 @@ class SolicitacaoRepository:
             if row is None:
                 return None
             itens = conn.execute(
-                """SELECT si.*, v.sku, v.unidade_venda, p.nome AS produto_nome
+                """SELECT si.*, p.sku, p.unidade_venda, p.nome AS produto_nome
                    FROM solicitacao_itens si
-                   JOIN variantes v ON v.id=si.variante_id
-                   JOIN produtos_cadastro p ON p.id=v.produto_id
+                   JOIN produtos_cadastro p ON p.id=si.produto_id
                    WHERE si.solicitacao_id=? ORDER BY si.id""",
                 (sc_id,),
             ).fetchall()
@@ -83,7 +81,7 @@ class SolicitacaoRepository:
     def add_item(self, sc_id: int, variante_id: int, quantidade: float, justificativa: str = "") -> int:
         with system_conn() as conn:
             return conn.execute(
-                "INSERT INTO solicitacao_itens (solicitacao_id, variante_id, quantidade, justificativa) VALUES (?,?,?,?)",
+                "INSERT INTO solicitacao_itens (solicitacao_id, produto_id, quantidade, justificativa) VALUES (?,?,?,?)",
                 (sc_id, variante_id, quantidade, justificativa.strip()),
             ).lastrowid
 
@@ -96,15 +94,14 @@ class FornecedorPreferencialRepository:
 
     def list(self, variante_id: int | None = None) -> list[dict]:
         sql = (
-            "SELECT f.*, fn.nome AS fornecedor_nome, v.sku, p.nome AS produto_nome"
+            "SELECT f.*, fn.nome AS fornecedor_nome, p.sku, p.nome AS produto_nome"
             " FROM fornecedor_preferencial f"
             " JOIN fornecedores fn ON fn.id = f.fornecedor_id"
-            " JOIN variantes v ON v.id = f.variante_id"
-            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " JOIN produtos_cadastro p ON p.id = f.produto_id"
         )
         args: list = []
         if variante_id:
-            sql += " WHERE f.variante_id = ?"; args.append(variante_id)
+            sql += " WHERE f.produto_id = ?"; args.append(variante_id)
         sql += " ORDER BY f.ranking, fn.nome"
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
@@ -112,8 +109,8 @@ class FornecedorPreferencialRepository:
     def upsert(self, variante_id: int, fornecedor_id: int, ranking: int = 1, preco: float | None = None, prazo: int | None = None) -> int:
         with system_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO fornecedor_preferencial (variante_id, fornecedor_id, ranking, ultimo_preco, ultimo_prazo)"
-                " VALUES (?,?,?,?,?) ON CONFLICT(variante_id, fornecedor_id) DO UPDATE SET"
+                "INSERT INTO fornecedor_preferencial (produto_id, fornecedor_id, ranking, ultimo_preco, ultimo_prazo)"
+                " VALUES (?,?,?,?,?) ON CONFLICT(produto_id, fornecedor_id) DO UPDATE SET"
                 " ranking=excluded.ranking, ultimo_preco=excluded.ultimo_preco, ultimo_prazo=excluded.ultimo_prazo",
                 (variante_id, fornecedor_id, ranking, preco, prazo),
             )
@@ -181,10 +178,9 @@ class IbptRepository:
         limit: int = 200,
     ) -> list[dict]:
         sql = (
-            "SELECT s.*, v.sku, p.nome AS produto_nome, p.marca"
+            "SELECT s.*, p.sku, p.nome AS produto_nome, p.marca"
             " FROM ibpt_sugestoes s"
-            " JOIN variantes v ON v.id = s.variante_id"
-            " JOIN produtos_cadastro p ON p.id = v.produto_id"
+            " JOIN produtos_cadastro p ON p.id = s.produto_id"
         )
         conds, args = [], []
         if status and status in ("pendente", "aplicada", "rejeitada"):
@@ -192,7 +188,7 @@ class IbptRepository:
             args.append(status)
         if q:
             like = f"%{q}%"
-            conds.append("(p.nome LIKE ? OR v.sku LIKE ? OR s.ncm LIKE ?)")
+            conds.append("(p.nome LIKE ? OR p.sku LIKE ? OR s.ncm LIKE ?)")
             args += [like, like, like]
         if confianca_min is not None:
             conds.append("s.confianca >= ?")

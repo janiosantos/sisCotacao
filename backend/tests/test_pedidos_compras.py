@@ -54,21 +54,19 @@ def _setup_pedido(system_db, c, h) -> tuple[int, int]:
     from catalog_server.repositories import supplier_repo
 
     with system_conn() as conn:
-        conn.execute("INSERT INTO produtos_cadastro (nome, ativo) VALUES ('Argamassa', 1)")
-        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
         conn.execute(
-            "INSERT INTO variantes (produto_id, sku, ean, preco, unidade_venda, fator_conversao, ativo)"
-            " VALUES (%s,'ARG-20','7891000000002',10,'SC',20,1)",
-            (pid,),
+            "INSERT INTO produtos_cadastro (nome, ativo, sku, ean, preco, unidade_venda, fator_conversao)"
+            " VALUES (%s,%s,%s,%s,%s,%s,%s)",
+            ('Argamassa', 1, 'ARG-20', '7891000000002', 10, 'SC', 20),
         )
-        vid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
+        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
         conn.commit()
 
     fid = supplier_repo.create({"nome": "Argamassas BR", "whatsapp": "5511998887777"})
     r = c.post("/api/compras/cotacoes", headers=h, json={
         "apelido": "Cotação Argamassa",
         "comprador": "Loja",
-        "itens": [{"produto_id": vid, "quantidade": 40}],
+        "itens": [{"produto_id": pid, "quantidade": 40}],
         "fornecedores": [{"fornecedor_id": fid}],
     })
     assert r.status_code == 200, r.get_json()
@@ -139,18 +137,16 @@ def test_receber_pedido_ja_recebido_bloqueia(system_db):
 def test_solicitacao_detalhe_com_itens(system_db):
     c, h = _admin_client(system_db)
     with system_conn() as conn:
-        conn.execute("INSERT INTO produtos_cadastro (nome, ativo) VALUES ('Cimento', 1)")
-        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
         conn.execute(
-            "INSERT INTO variantes (produto_id, sku, ean, preco, unidade_venda, ativo)"
-            " VALUES (%s,'CIM-50','7891000000003',32,'SC',1)",
-            (pid,),
+            "INSERT INTO produtos_cadastro (nome, ativo, sku, ean, preco, unidade_venda)"
+            " VALUES (%s,%s,%s,%s,%s,%s)",
+            ('Cimento', 1, 'CIM-50', '7891000000003', 32, 'SC'),
         )
-        vid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
+        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
         conn.commit()
     r = c.post("/api/solicitacoes-compra", headers=h, json={"codigo": "SOL-001", "descricao": "Repor estoque"})
     sc_id = r.get_json()["id"]
-    c.post(f"/api/solicitacoes-compra/{sc_id}/itens", headers=h, json={"variante_id": vid, "quantidade": 10})
+    c.post(f"/api/solicitacoes-compra/{sc_id}/itens", headers=h, json={"variante_id": pid, "quantidade": 10})
 
     d = c.get(f"/api/solicitacoes-compra/{sc_id}", headers=h)
     assert d.status_code == 200
@@ -165,14 +161,12 @@ def test_editar_quantidade_item_cotacao_compras(system_db):
     (tela 'aguardando respostas') usa o PATCH de itens da cotação."""
     c, h = _admin_client(system_db)
     with system_conn() as conn:
-        conn.execute("INSERT INTO produtos_cadastro (nome, ativo) VALUES ('Cimento', 1)")
-        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
         conn.execute(
-            "INSERT INTO variantes (produto_id, sku, ean, preco, unidade_venda, ativo)"
-            " VALUES (%s,'CIM-50','7891000000003',32,'SC',1)",
-            (pid,),
+            "INSERT INTO produtos_cadastro (nome, ativo, sku, ean, preco, unidade_venda)"
+            " VALUES (%s,%s,%s,%s,%s,%s)",
+            ('Cimento', 1, 'CIM-50', '7891000000003', 32, 'SC'),
         )
-        vid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
+        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
         conn.commit()
     from catalog_server.repositories import supplier_repo
 
@@ -180,7 +174,7 @@ def test_editar_quantidade_item_cotacao_compras(system_db):
     r = c.post("/api/compras/cotacoes", headers=h, json={
         "apelido": "Cotação Cimento",
         "comprador": "Loja",
-        "itens": [{"produto_id": vid, "quantidade": 10}],
+        "itens": [{"produto_id": pid, "quantidade": 10}],
         "fornecedores": [{"fornecedor_id": fid}],
     })
     assert r.status_code == 200, r.get_json()

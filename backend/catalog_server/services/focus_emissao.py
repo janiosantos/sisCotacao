@@ -40,7 +40,7 @@ def _itens_payload(orcamento_id: int) -> list[dict]:
         perfil = {}
         with system_conn() as conn:
             pf = conn.execute(
-                "SELECT * FROM product_fiscal_profile WHERE variante_id=?",
+                "SELECT * FROM product_fiscal_profile WHERE produto_id=?",
                 (vid,),
             ).fetchone()
             perfil = dict(pf) if pf else {}

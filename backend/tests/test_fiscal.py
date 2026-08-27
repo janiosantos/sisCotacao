@@ -13,7 +13,7 @@ from catalog_server.repositories.fiscal import (
 )
 from catalog_server.repositories.produtos import ProdutoRepository
 
-from helpers import attrs, criar_familia, variante
+from helpers import criar_familia
 
 repo = ProdutoRepository()
 
@@ -21,26 +21,19 @@ repo = ProdutoRepository()
 @pytest.fixture()
 def variante_id(system_db):
     fid = criar_familia(repo, ncm_padrao="85444900")
-    aid = {a["nome"]: str(a["id"]) for a in repo.get_familia(fid)["atributos"]}
     pid = repo.create_product(
         familia_id=fid,
         nome="Cabo Flexível Sil",
         marca="Sil",
         descricao="",
         categoria="Eletrica",
-        variantes=[variante("SKU-FISCAL", "7894001", attrs(aid, Bitola="2,5mm"), preco=10.0)],
+        dados={"sku": "SKU-FISCAL", "ean": "7894001", "preco": 10.0, "ncm": "85444900"},
+        atributos={"Bitola": "2,5mm"},
     )
-    with system_conn() as conn:
-        return conn.execute(
-            "SELECT id FROM variantes WHERE sku='SKU-FISCAL'"
-        ).fetchone()[0]
-
-
-def test_sync_ncm_cria_fiscal_config(variante_id):
-    cfg = fiscal_config_repo.get(variante_id)
-    assert cfg is not None
-    assert cfg["ncm"] == "85444900"  # herdado da família
-    assert cfg["variante_id"] == variante_id
+    # O antigo _sync_ncm criava a fiscal_config no create_product; agora é
+    # criada explicitamente para os testes de histórico/1:1 abaixo.
+    fiscal_config_repo.upsert(pid, ncm="85444900")
+    return pid
 
 
 def test_fiscal_config_upsert_eh_1para1(variante_id):
@@ -57,7 +50,7 @@ def test_fiscal_config_upsert_eh_1para1(variante_id):
     assert cfg["aliquota_icms"] == 18.0
     with system_conn() as conn:
         n = conn.execute(
-            "SELECT COUNT(*) FROM fiscal_config WHERE variante_id=?", (variante_id,)
+            "SELECT COUNT(*) FROM fiscal_config WHERE produto_id=?", (variante_id,)
         ).fetchone()[0]
     assert n == 1  # upsert não duplica a linha
 
@@ -72,7 +65,7 @@ def test_registrar_historico_config(variante_id):
 
 
 def test_gerar_config_padrao(variante_id):
-    # já existe config do _sync_ncm; gerar deve ignorar (1:1 preservado)
+    # já existe config criada no fixture; gerar deve ignorar (1:1 preservado)
     count = fiscal_config_repo.gerar_config_padrao()
     assert count == 0
     with system_conn() as conn:

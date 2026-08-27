@@ -59,7 +59,7 @@ class GarantiaRepository:
     ) -> int:
         with system_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO garantia (cliente_nome, cliente_id, orcamento_id, variante_id,"
+                "INSERT INTO garantia (cliente_nome, cliente_id, orcamento_id, produto_id,"
                 " produto_nome, data_venda, data_inicio, data_fim, dias, descricao, observacao)"
                 " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (cliente_nome.strip(), cliente_id, orcamento_id, variante_id,

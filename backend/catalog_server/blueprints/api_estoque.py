@@ -92,10 +92,10 @@ def registrar_movimento():
     if erros:
         return jsonify({"error": "Campos inválidos: " + ", ".join(erros)}), 400
 
-    # Valida se a variante existe
+    # Valida se o produto existe
     with system_conn() as conn:
-        if not conn.execute("SELECT 1 FROM variantes WHERE id=?", (variante_id,)).fetchone():
-            return jsonify({"error": f"Variante {variante_id} não encontrada"}), 404
+        if not conn.execute("SELECT 1 FROM produtos_cadastro WHERE id=?", (variante_id,)).fetchone():
+            return jsonify({"error": f"Produto {variante_id} não encontrado"}), 404
         if not conn.execute("SELECT 1 FROM depositos WHERE id=?", (deposito_id,)).fetchone():
             return jsonify({"error": f"Depósito {deposito_id} não encontrado"}), 404
 

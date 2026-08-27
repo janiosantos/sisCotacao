@@ -51,8 +51,8 @@ def resumo() -> dict:
             " WHERE estoque_minimo > 0 AND quantidade <= estoque_minimo"
         ).fetchone()
         valor_estoque = conn.execute(
-            "SELECT COALESCE(SUM(s.quantidade * COALESCE(v.custo_unitario,0)),0) t"
-            " FROM estoque_saldo s JOIN variantes v ON v.id=s.variante_id"
+            "SELECT COALESCE(SUM(s.quantidade * COALESCE(p.custo_unitario,0)),0) t"
+            " FROM estoque_saldo s JOIN produtos_cadastro p ON p.id=s.produto_id"
         ).fetchone()
 
     return {
@@ -71,10 +71,9 @@ def resumo() -> dict:
 def estoque_baixo_lista(limit: int = 10) -> list[dict]:
     with system_conn() as conn:
         return [dict(r) for r in conn.execute(
-            "SELECT s.variante_id, p.nome, v.sku, s.quantidade, s.estoque_minimo, s.deposito_id, d.nome AS deposito"
+            "SELECT s.produto_id, p.nome, p.sku, s.quantidade, s.estoque_minimo, s.deposito_id, d.nome AS deposito"
             " FROM estoque_saldo s"
-            " JOIN variantes v ON v.id=s.variante_id"
-            " JOIN produtos_cadastro p ON p.id=v.produto_id"
+            " JOIN produtos_cadastro p ON p.id=s.produto_id"
             " LEFT JOIN depositos d ON d.id=s.deposito_id"
             " WHERE s.estoque_minimo > 0 AND s.quantidade <= s.estoque_minimo"
             " ORDER BY (s.quantidade - s.estoque_minimo) ASC LIMIT ?",
@@ -86,13 +85,12 @@ def top_vendas(limit: int = 5) -> list[dict]:
     dias30 = (date.today() - timedelta(days=30)).isoformat()
     with system_conn() as conn:
         return [dict(r) for r in conn.execute(
-            "SELECT p.nome, v.sku, SUM(oi.quantidade) AS qtd,"
+            "SELECT p.nome, p.sku, SUM(oi.quantidade) AS qtd,"
             " SUM(oi.preco_unitario * oi.quantidade) AS receita"
             " FROM orcamento_itens oi"
             " JOIN orcamentos o ON o.id=oi.orcamento_id"
             "  AND o.status IN ('finalizado','fechado','recebido') AND date(o.criado_em)>=?"
-            " JOIN variantes v ON v.id=oi.produto_id"
-            " JOIN produtos_cadastro p ON p.id=v.produto_id"
-            " GROUP BY oi.produto_id, p.nome, v.sku ORDER BY receita DESC LIMIT ?",
+            " JOIN produtos_cadastro p ON p.id=oi.produto_id"
+            " GROUP BY oi.produto_id, p.nome, p.sku ORDER BY receita DESC LIMIT ?",
             (dias30, limit),
         ).fetchall()]

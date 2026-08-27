@@ -11,12 +11,9 @@ from catalog_server.fiscal.snapshot import explicar, persistir
 def _variante():
     sufixo = uuid_hex()
     with system_conn() as conn:
-        pid = conn.execute(
-            "INSERT INTO produtos_cadastro (nome) VALUES ('SNAP PROD')"
-        ).lastrowid
         vid = conn.execute(
-            "INSERT INTO variantes (produto_id, sku) VALUES (?, ?)",
-            (pid, f"SNAP-{sufixo}"),
+            "INSERT INTO produtos_cadastro (nome, sku) VALUES (?, ?)",
+            ("SNAP PROD", f"SNAP-{sufixo}"),
         ).lastrowid
         conn.commit()
     return int(vid)

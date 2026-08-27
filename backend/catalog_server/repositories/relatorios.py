@@ -66,7 +66,7 @@ class RelatorioRepository:
         (Motor Fiscal → Custo). Receita = preço de venda × quantidade."""
         with system_conn() as conn:
             rows = conn.execute("""
-                SELECT v.id AS variante_id, p.nome AS produto_nome, v.sku,
+                SELECT p.id AS variante_id, p.nome AS produto_nome, p.sku,
                        COUNT(*) AS n_itens,
                        SUM(oi.quantidade) AS qtd_total,
                        SUM(oi.preco_unitario * oi.quantidade) AS receita
@@ -74,9 +74,8 @@ class RelatorioRepository:
                 JOIN orcamentos o ON o.id = oi.orcamento_id
                      AND o.status IN ('fechado','finalizado','recebido')
                      AND date(o.criado_em) BETWEEN ? AND ?
-                JOIN variantes v ON v.id = oi.produto_id
-                JOIN produtos_cadastro p ON p.id = v.produto_id
-                GROUP BY v.id
+                JOIN produtos_cadastro p ON p.id = oi.produto_id
+                GROUP BY p.id
                 ORDER BY receita DESC
             """, (data_inicio, data_fim)).fetchall()
             out = []

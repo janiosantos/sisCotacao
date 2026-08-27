@@ -41,7 +41,7 @@ class ComprasRepository:
             for i in itens:
                 vid = int(i["produto_id"])
                 unidade = conn.execute(
-                    "SELECT unidade_venda FROM variantes WHERE id=?", (vid,)
+                    "SELECT unidade_venda FROM produtos_cadastro WHERE id=?", (vid,)
                 ).fetchone()
                 conn.execute(
                     "INSERT OR IGNORE INTO cotacao_itens (cotacao_id, produto_id, quantidade, unidade_solicitada)"
@@ -156,11 +156,11 @@ class ComprasRepository:
             rows = conn.execute(
                 """SELECT ci.id AS cotacao_item_id, ci.produto_id, ci.quantidade,
                           ci.unidade_solicitada,
-                          v.unidade_venda, v.fator_conversao, v.embalagem, v.marca
+                          p.unidade_venda, p.fator_conversao, p.embalagem, p.marca
                    FROM cotacao_fornecedores cf
                    JOIN cotacoes c ON c.id = cf.cotacao_id
                    JOIN cotacao_itens ci ON ci.cotacao_id = c.id
-                   LEFT JOIN variantes v ON v.id = ci.produto_id
+                   LEFT JOIN produtos_cadastro p ON p.id = ci.produto_id
                    WHERE cf.token=? ORDER BY ci.id""",
                 (token,),
             ).fetchall()

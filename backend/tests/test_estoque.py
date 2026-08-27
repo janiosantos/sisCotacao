@@ -7,7 +7,7 @@ from catalog_server.db import system_conn
 from catalog_server.repositories.estoque import estoque_repo, lote_repo
 from catalog_server.repositories.produtos import ProdutoRepository
 
-from helpers import attrs, criar_familia, variante
+from helpers import criar_familia, produto_dados
 
 repo = ProdutoRepository()
 
@@ -26,25 +26,22 @@ def deposito_2(system_db):
 @pytest.fixture()
 def variante_id(system_db):
     fid = criar_familia(repo)
-    aid = {a["nome"]: str(a["id"]) for a in repo.get_familia(fid)["atributos"]}
     pid = repo.create_product(
         familia_id=fid,
         nome="Cabo Flexível Sil",
         marca="Sil",
         descricao="",
         categoria="Eletrica",
-        variantes=[variante("SKU-EST", "7892001", attrs(aid, Bitola="2,5mm"), preco=10.0)],
+        dados=produto_dados("SKU-EST", "7892001", preco=10.0),
+        atributos={"Bitola": "2,5mm"},
     )
-    with system_conn() as conn:
-        return conn.execute(
-            "SELECT id FROM variantes WHERE sku='SKU-EST'"
-        ).fetchone()[0]
+    return pid
 
 
 def _saldo(variante_id):
     with system_conn() as conn:
         row = conn.execute(
-            "SELECT quantidade FROM estoque_saldo WHERE deposito_id=? AND variante_id=?",
+            "SELECT quantidade FROM estoque_saldo WHERE deposito_id=? AND produto_id=?",
             (DEPOSITO, variante_id),
         ).fetchone()
     return row["quantidade"] if row else None
@@ -95,7 +92,7 @@ def test_transferir_entre_depositos(variante_id, deposito_2):
     assert _saldo(variante_id) == 5
     with system_conn() as conn:
         destino = conn.execute(
-            "SELECT quantidade FROM estoque_saldo WHERE deposito_id=? AND variante_id=?",
+            "SELECT quantidade FROM estoque_saldo WHERE deposito_id=? AND produto_id=?",
             (deposito_2, variante_id),
         ).fetchone()["quantidade"]
     assert destino == 3

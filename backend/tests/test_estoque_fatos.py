@@ -19,14 +19,11 @@ def dep_var():
             (f"DEP TESTE FATOS {sufixo}",),
         ).lastrowid
         pid = conn.execute(
-            "INSERT INTO produtos_cadastro (nome) VALUES ('PROD FATOS')"
-        ).lastrowid
-        vid = conn.execute(
-            "INSERT INTO variantes (produto_id, sku) VALUES (?, ?)",
-            (pid, f"FATOS-{sufixo}"),
+            "INSERT INTO produtos_cadastro (nome, sku) VALUES (?, ?)",
+            ('PROD FATOS', f"FATOS-{sufixo}"),
         ).lastrowid
         conn.commit()
-    return int(did), int(vid)
+    return int(did), int(pid)
 
 
 @pytest.fixture()

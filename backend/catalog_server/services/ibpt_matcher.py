@@ -45,9 +45,9 @@ def gerar_sugestoes(limite: int | None = None, confianca_min: float | None = Non
 
     with system_conn() as conn:
         produtos = [dict(r) for r in conn.execute(
-            "SELECT v.id AS variante_id, p.nome, p.marca"
-            " FROM variantes v JOIN produtos_cadastro p ON p.id=v.produto_id"
-            " WHERE v.ativo=1 AND (v.ncm IS NULL OR v.ncm='')"
+            "SELECT p.id AS produto_id, p.nome, p.marca"
+            " FROM produtos_cadastro p"
+            " WHERE p.ativo=1 AND (p.ncm IS NULL OR p.ncm='')"
         ).fetchall()]
 
     sugestoes = []
@@ -79,16 +79,16 @@ def gerar_sugestoes(limite: int | None = None, confianca_min: float | None = Non
         conf = round(conf * 100, 1)
         if conf < conf_min:
             continue
-        sugestoes.append((prod["variante_id"], ibpt[ib]["ncm"], ibpt[ib]["descricao"], conf))
+        sugestoes.append((prod["produto_id"], ibpt[ib]["ncm"], ibpt[ib]["descricao"], conf))
         if limite and len(sugestoes) >= limite:
             break
 
     if sugestoes:
         with system_conn() as conn:
             conn.executemany(
-                "INSERT INTO ibpt_sugestoes (variante_id, ncm, descricao, confianca, status)"
+                "INSERT INTO ibpt_sugestoes (produto_id, ncm, descricao, confianca, status)"
                 " VALUES (?,?,?,?,'pendente')"
-                " ON CONFLICT(variante_id) DO UPDATE SET"
+                " ON CONFLICT(produto_id) DO UPDATE SET"
                 " ncm=excluded.ncm, descricao=excluded.descricao,"
                 " confianca=excluded.confianca, status='pendente'",
                 sugestoes,
@@ -97,24 +97,27 @@ def gerar_sugestoes(limite: int | None = None, confianca_min: float | None = Non
 
 
 def _aplicar_uma(conn, variante_id: int, ncm: str) -> None:
-    conn.execute("UPDATE variantes SET ncm=? WHERE id=?", (ncm, variante_id))
+    conn.execute(
+        "UPDATE produtos_cadastro SET ncm=COALESCE(NULLIF(?, ''), ncm) WHERE id=?",
+        (ncm, variante_id),
+    )
     # propaga para fiscal_config (mesma conexão, sem aninhar)
-    if conn.execute("SELECT 1 FROM fiscal_config WHERE variante_id=?", (variante_id,)).fetchone():
-        conn.execute("UPDATE fiscal_config SET ncm=? WHERE variante_id=?", (ncm, variante_id))
+    if conn.execute("SELECT 1 FROM fiscal_config WHERE produto_id=?", (variante_id,)).fetchone():
+        conn.execute("UPDATE fiscal_config SET ncm=? WHERE produto_id=?", (ncm, variante_id))
     else:
-        conn.execute("INSERT INTO fiscal_config (variante_id, ncm) VALUES (?,?)", (variante_id, ncm))
+        conn.execute("INSERT INTO fiscal_config (produto_id, ncm) VALUES (?,?)", (variante_id, ncm))
 
 
 def aplicar(confianca_min: float | None = None) -> dict:
     conf_min = confianca_min if confianca_min is not None else 0.0
     with system_conn() as conn:
         pendentes = [dict(r) for r in conn.execute(
-            "SELECT id, variante_id, ncm FROM ibpt_sugestoes"
+            "SELECT id, produto_id, ncm FROM ibpt_sugestoes"
             " WHERE status='pendente' AND confianca >= ?",
             (conf_min,),
         ).fetchall()]
         for s in pendentes:
-            _aplicar_uma(conn, s["variante_id"], s["ncm"])
+            _aplicar_uma(conn, s["produto_id"], s["ncm"])
             conn.execute(
                 "UPDATE ibpt_sugestoes SET status='aplicada', aplicado_em=datetime('now') WHERE id=?",
                 (s["id"],),
@@ -125,12 +128,12 @@ def aplicar(confianca_min: float | None = None) -> dict:
 def aplicar_uma(sugestao_id: int) -> bool:
     with system_conn() as conn:
         s = conn.execute(
-            "SELECT variante_id, ncm FROM ibpt_sugestoes WHERE id=? AND status='pendente'",
+            "SELECT produto_id, ncm FROM ibpt_sugestoes WHERE id=? AND status='pendente'",
             (sugestao_id,),
         ).fetchone()
         if s is None:
             return False
-        _aplicar_uma(conn, s["variante_id"], s["ncm"])
+        _aplicar_uma(conn, s["produto_id"], s["ncm"])
         conn.execute(
             "UPDATE ibpt_sugestoes SET status='aplicada', aplicado_em=datetime('now') WHERE id=?",
             (sugestao_id,),
@@ -148,8 +151,7 @@ def resumo_categorias(limite: int = 200) -> list[dict]:
                    COUNT(*) AS n_produtos,
                    ROUND(AVG(s.confianca),1) AS confianca_media
             FROM ibpt_sugestoes s
-            JOIN variantes v ON v.id=s.variante_id
-            JOIN produtos_cadastro p ON p.id=v.produto_id
+            JOIN produtos_cadastro p ON p.id=s.produto_id
             LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id
             LEFT JOIN ibpt i ON i.ncm=s.ncm
             WHERE s.status='pendente'
@@ -184,9 +186,8 @@ def aplicar_por_categoria(subcategoria_id: int, ncm: str) -> dict:
         return {"aplicados": 0, "erro": "NCM inválido"}
     with system_conn() as conn:
         vids = [r["id"] for r in conn.execute(
-            "SELECT v.id FROM variantes v"
-            " JOIN produtos_cadastro p ON p.id=v.produto_id"
-            " WHERE p.subcategoria_id=? AND v.ativo=1 AND (v.ncm IS NULL OR v.ncm='')",
+            "SELECT p.id FROM produtos_cadastro p"
+            " WHERE p.subcategoria_id=? AND p.ativo=1 AND (p.ncm IS NULL OR p.ncm='')",
             (subcategoria_id,),
         ).fetchall()]
         for vid in vids:
@@ -195,7 +196,7 @@ def aplicar_por_categoria(subcategoria_id: int, ncm: str) -> dict:
             ph = ", ".join("?" for _ in vids)
             conn.execute(
                 f"UPDATE ibpt_sugestoes SET status='aplicada', aplicado_em=datetime('now')"
-                f" WHERE variante_id IN ({ph}) AND ncm=?",
+                f" WHERE produto_id IN ({ph}) AND ncm=?",
                 vids + [ncm],
             )
         return {"aplicados": len(vids)}

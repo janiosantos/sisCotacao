@@ -3,7 +3,7 @@ r"""Popula fornecedor_variantes com distribuidores B2B de materiais
 elétricos/hidráulicos, parafusos, ferramentas e casa & jardim (região SE).
 
 Idempotente: adiciona fornecedores inexistentes e usa INSERT OR IGNORE
-(respeita UNIQUE(variante_id, fornecedor_id)). Rode com:
+(respeita UNIQUE(produto_id, fornecedor_id)). Rode com:
 >.venv\Scripts\python.exe catalog_server\scripts_populate_suppliers.py
 """
 from __future__ import annotations
@@ -93,14 +93,13 @@ def main() -> None:
             )
         name2id = {r["nome"]: r["id"] for r in conn.execute("SELECT id, nome FROM fornecedores").fetchall()}
 
-        # todas as variantes ativas, com o nome da categoria do produto
+        # todos os produtos ativos, com o nome da categoria
         rows = conn.execute(
             """
-            SELECT v.id AS variante_id, cat.nome AS categoria
-            FROM variantes v
-            JOIN produtos_cadastro p ON p.id=v.produto_id AND p.ativo=1
+            SELECT p.id AS produto_id, cat.nome AS categoria
+            FROM produtos_cadastro p
             LEFT JOIN categorias cat ON cat.id=p.categoria_id
-            WHERE v.ativo=1
+            WHERE p.ativo=1
             """
         ).fetchall()
 
@@ -115,12 +114,12 @@ def main() -> None:
                 fid = name2id.get(nome)
                 if fid is None:
                     continue
-                batch.append((r["variante_id"], fid, "", "", "", 1.0))
+                batch.append((r["produto_id"], fid, "", "", "", 1.0))
 
         before = conn.execute("SELECT COUNT(*) FROM fornecedor_variantes").fetchone()[0]
         conn.executemany(
             "INSERT OR IGNORE INTO fornecedor_variantes"
-            " (variante_id, fornecedor_id, codigo_fornecedor, descricao_fornecedor,"
+            " (produto_id, fornecedor_id, codigo_fornecedor, descricao_fornecedor,"
             "  unidade_compra, fator_conversao) VALUES (?,?,?,?,?,?)",
             batch,
         )
