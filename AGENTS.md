@@ -203,7 +203,7 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 
 ### Fiscal / Publicação (aguardam decisão do usuário)
 6. Ligar `FISCAL_ENGINE_V2` em PRODUÇÃO (após deploy autorizado das releases v1.11→v2.14).
-7. Contract futuro: DROP físico do EAV (`variante_atributos`) e `fiscal_config` após período de coexistência.
+7. ~~Contract futuro: DROP físico do EAV (`variante_atributos`) e `fiscal_config` após período de coexistência.~~ ✅ **entregue (v2.26.0)** — EAV `variante_atributos` + `variantes` + `variante_produto_map` dropados na migração 0090; `fiscal_config`/`product_fiscal_profile`/`fiscal_snapshot`/`ibpt_sugestoes` tiveram a coluna renomeada para `produto_id` (0087).
 8. Renomear pasta raiz para `casa-lm` (manual: fechar editores, renomear, reabrir — ambas máquinas).
 
 ### Ambiente / infra
@@ -400,3 +400,33 @@ Boleto e PIX são emitidos **a partir da conta a receber** (Financeiro), via **p
 
 ### OpenAPI
 Cresceu de 51 → 56 paths (lote pagar/receber, preview, ver/excluir grupo, anexo).
+
+## 20. Unificação produto/variante (v2.26.0)
+
+**Entregue (v2.26.0)** — migrações `0085_produto_unificado_expand` → `0090_produto_unificado_contract`.
+
+### Conceito
+Cada antiga `variantes` virou um **produto independente** em `produtos_cadastro` (Opção A). A tabela `variantes`, o EAV `variante_atributos` e a tabela de apoio `variante_produto_map` foram **eliminadas**. Não há mais editor de variações no cadastro: o produto carrega seus próprios dados operacionais e atributos.
+
+### Banco (cadeia Expand→Migrate→Contract)
+- **0085 (Expand)**: `produtos_cadastro` ganhou colunas operacionais (sku, ean, preco, preco_promocional, old_price, pix_price, custo_unitario, preco_venda, ncm, peso, dimensoes, unidade_venda, embalagem, fator_conversao, localizacao, unidade_tributavel) + backfill da variante principal.
+- **0086 (Migrate)**: criou `variante_produto_map` (62.731 linhas) + **3.048 produtos novos** para as variantes extras (total 62.731).
+- **0087 (Reapontamento)**: `variante_id` → `produto_id` em ~20 tabelas de negócio (idempotente; técnica de offset p/ preservar constraints únicas no espaço compartilhado de ids; mescla de `estoque_saldo` somando quantidades).
+- **0088 (Atributos)**: valores do EAV movidos para `produtos_cadastro.atributos` (JSONB por nome).
+- **0089 (Funções)**: `reconciliar_estoque()` recriada com `produto_id`.
+- **0090 (Contract)**: `DROP` de `variantes`, `variante_atributos`, `variante_produto_map` (destrutiva; backup pré-aplicação; `backward` requer restore).
+
+### Backend
+- `repositories/produtos.py`: CRUD unificado (criar/editar produto com `dados` operacionais + `atributos` por nome); sem `_replace_variantes`/`find_or_create_variant`. `get_product` devolve `atributos` = **definições da família** e `atributos_valores` = **valores por nome**.
+- Repos/services/blueprints reescritos para `produto_id` (estoque, preços, fiscal, compras, loja, catálogo, quotes, importar_catalogo, fts, abc, categorias). Nenhuma referência SQL a `variantes` restante.
+- Catálogo (`repositories/catalog.py`) é **flat**: um card por produto (`group:false`, `price` único), sem matriz de variações.
+
+### Frontend
+- `produtos.tsx`: aba/editor de **Variações removido**; formulário edita o produto diretamente + atributos por nome.
+- `catalogo.tsx`: cards unitários (sem `GroupCard`/`ModalVariante`/matriz 2D).
+- `cart.ts`: chaves do carrinho por `produto_id`; `addCustomItem` sem `produto_pai`/atributos.
+- `client.ts`: `ProdutoCadastro`/`ProdutoCadastroPayload` sem `variantes[]`; leituras `produto_id`.
+- Relabels "variante"→"produto" nas telas secundárias.
+
+### Testes
+Backend **189 testes** verdes (suíte total caiu de 194 para 189 — testes de variantes removidos/substituídos). Frontend: typecheck + 13 testes + build verdes. Validado em **staging** (CI, migrações em banco vazio 0052→0090, health, smoke, reconciliação).
