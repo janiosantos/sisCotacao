@@ -1,0 +1,51 @@
+{
+  "versao": "v2.26.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [
+    "Sku_service imutabilidade de SKU passa a operar sobre produtos_cadastro (variantes eliminada)",
+    "reconciliar_estoque() recriada com produto_id (corpo da função desatualizado após o reapontamento)",
+    "Importação do catálogo: cada item vira produto independente (fim da reconciliação por variantes)"
+  ],
+  "melhorias": [
+    "Unificação produto/variante: cada antiga variante virou um produto independente em produtos_cadastro",
+    "Cadastro de produto sem editor de variações — o formulário edita o produto diretamente (sku, ean, preço, ncm, atributos por nome)",
+    "Catálogo flat: um card por produto (sem matriz 2D de variações e sem GroupCard)",
+    "Carrinho (RFQ) chaveado por produto_id; item livre simplificado",
+    "Relabels 'variante' → 'produto' nas telas de estoque, preços, fiscal, pós-venda, diagnóstico e dashboard"
+  ],
+  "recursos": [
+    "Migração 0085: Expand — produtos_cadastro herda dados operacionais da variante principal",
+    "Migração 0086: Migrate — variante_produto_map + 3.048 produtos novos (total 62.731)",
+    "Migração 0087: Reapontamento — variante_id → produto_id em ~20 tabelas de negócio (idempotente, offset p/ constraints únicas, mescla de estoque_saldo somando)",
+    "Migração 0088: atributos do EAV movidos para produtos_cadastro.atributos (JSONB por nome)",
+    "Migração 0089: reconciliar_estoque() recriada com produto_id",
+    "Migração 0090: Contract — DROP de variantes, variante_atributos e variante_produto_map (destrutiva; backup pré-aplicação)",
+    "GET /api/produtos-cadastro/<id> agora devolve atributos_valores (valores por nome) além de atributos (definições da família)"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.26.0",
+    "frontend": "siscom-frontend:v2.26.0"
+  },
+  "database": {
+    "migration": 90
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "produto_unificado": true,
+    "catalogo_flat": true,
+    "contract_variantes": true
+  },
+  "rollback": {
+    "aplicacao": "imagens prev (siscom-backend:v2.25.0 / siscom-frontend:v2.25.0)",
+    "banco": "dump pré-migração (Backups/pre-contract-*-*.csv das tabelas eliminadas + pre-migracao-produtos-20260825-224931.dump p/ anterior à 0085); Contract 0090 não é reversível via backward — exige restore"
+  }
+}
