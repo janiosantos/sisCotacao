@@ -443,16 +443,21 @@ SELECT p.id, p.sku, p.preco, p.marca, p.external_id,
         defs = attr_defs.get(row["familia_id"], [])
         package = row["embalagem"] or None
         spec_parts: list[str] = []
-        if package:
+        if package and str(package).strip() not in ("", "1"):
             spec_parts.append(PACKAGE_LABELS.get(package, package) or package)
         for d in defs:
             val = vattrs.get(d["id"])
             if val:
                 spec_parts.append(val)
-        # `spec` = descrição padronizada (Nome + características + Marca), que o
-        # PDV usa como rótulo; fallback para a composição de embalagem + atributos.
-        descricao = (row.get("descricao") or "").strip()
-        spec = descricao if descricao else " · ".join(spec_parts)
+        # `spec` = características DISTINTIVAS (embalagem + atributos + marca +
+        # unidade) — permite identificar a variante na busca rápida (o nome já
+        # aparece separado). A descricao (etiqueta completa) é exposta à parte.
+        marca = (row["marca_prod"] or row["marca_var"] or "").strip()
+        unidade = (row.get("unidade_venda") or "").strip()
+        for extra in (marca, unidade):
+            if extra and extra not in spec_parts:
+                spec_parts.append(extra)
+        spec = " · ".join(spec_parts)
         fns = images.get(row["produto_id"], [])
         return {
             "group": False,
@@ -462,6 +467,7 @@ SELECT p.id, p.sku, p.preco, p.marca, p.external_id,
             "name": row["nome"] or "",
             "base": row["nome"] or "",
             "spec": spec,
+            "descricao": (row.get("descricao") or "").strip(),
             "package": package,
             "package_label": PACKAGE_LABELS.get(package, ""),
             "attrs": vattrs,

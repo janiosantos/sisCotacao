@@ -9,6 +9,7 @@ export interface ProdutoResumo {
   sku: string;
   name: string;
   spec?: string;
+  descricao?: string;
   brand?: string;
   price: number;
   pix_price?: number;
