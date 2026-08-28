@@ -12,6 +12,7 @@ from catalog_server.repositories import (
     grupos as grupos_repo,
 )
 from catalog_server.services import imagens_service, parse_url_service
+from catalog_server.services import imagens_lote
 from catalog_server.services import sku_service
 from catalog_server.db import system_conn
 from catalog_server.utils import image_url
@@ -263,6 +264,62 @@ def baixar_imagens_url(produto_id: int):
         "total": len(baixadas),
         "erros": erros,
     })
+
+
+# ----------------------------------------------------------------------
+# Imagens em lote (fornecedor): irmãos, busca no site, preview, aplicar
+# ----------------------------------------------------------------------
+
+
+@api_produtos_bp.get("/api/produtos/<int:produto_id>/irmaos")
+def irmaos(produto_id: int):
+    """Irmãos do produto (mesmo nome + marca + cor, variando a bitola)."""
+    with system_conn() as conn:
+        return jsonify(imagens_lote.irmaos(conn, produto_id))
+
+
+@api_produtos_bp.post("/api/produtos/imagens/buscar-fornecedor")
+def buscar_imagens_fornecedor():
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    if not url:
+        return jsonify({"error": "Informe a URL de busca do fornecedor"}), 400
+    try:
+        return jsonify({"itens": imagens_lote.buscar_fornecedor(url)})
+    except Exception as exc:
+        return jsonify({"error": f"Não foi possível buscar: {exc}"}), 502
+
+
+@api_produtos_bp.post("/api/produtos/imagens/preview-fornecedor")
+def preview_imagens_fornecedor():
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    if not url:
+        return jsonify({"error": "Informe a URL do produto"}), 400
+    try:
+        return jsonify({"imagens": imagens_lote.preview_imagens(url)})
+    except Exception as exc:
+        return jsonify({"error": f"Não foi possível acessar a URL: {exc}"}), 502
+
+
+@api_produtos_bp.post("/api/produtos/imagens/aplicar-lote")
+def aplicar_imagens_lote():
+    data = request.get_json(silent=True) or {}
+    produto_ids = [int(x) for x in (data.get("produto_ids") or []) if str(x).isdigit()]
+    urls = [
+        (u.get("url") or "").strip()
+        for u in (data.get("imagens") or [])
+        if isinstance(u, dict) and (u.get("url") or "").strip()
+    ]
+    if not produto_ids:
+        return jsonify({"error": "Selecione ao menos um produto"}), 400
+    if not urls:
+        return jsonify({"error": "Selecione ao menos uma imagem"}), 400
+    try:
+        resultado = imagens_lote.baixar_lote(produto_ids, urls, produto_repo)
+        return jsonify(resultado)
+    except Exception as exc:
+        return jsonify({"error": f"Erro ao aplicar: {exc}"}), 500
 
 
 @api_produtos_bp.delete("/api/imagens/<int:imagem_id>")

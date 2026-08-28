@@ -189,6 +189,27 @@ def _image_size(content: bytes) -> tuple[int, int] | None:
     return None
 
 
+def _conteudo_duplicado(produto_id: int, content: bytes) -> bool:
+    """True se o produto já possui uma imagem com o mesmo conteúdo (MD5).
+
+    A mesma foto costuma aparecer em URLs diferentes (thumb/full, srcset);
+    a dedup por URL não a pega. Compara o hash do conteúdo com os arquivos
+    já salvos da pasta do produto.
+    """
+    folder = _folder(produto_id)
+    if not folder.exists():
+        return False
+    novo = hashlib.md5(content).hexdigest()
+    for f in folder.iterdir():
+        if f.is_file():
+            try:
+                if hashlib.md5(f.read_bytes()).hexdigest() == novo:
+                    return True
+            except OSError:
+                continue
+    return False
+
+
 def _save_bytes(produto_id: int, url: str, content: bytes) -> Path:
     folder = _folder(produto_id)
     folder.mkdir(parents=True, exist_ok=True)
@@ -261,6 +282,9 @@ def baixar_de_url(produto_id: int, url: str, repo) -> tuple[list[dict], list[str
             size = _image_size(r.content)
             if size and max(size) < _MIN_DIMENSION:
                 ignoradas += 1
+                continue
+            if _conteudo_duplicado(produto_id, r.content):
+                ignoradas += 1  # mesma foto já existente (URL diferente)
                 continue
             target = _save_bytes(produto_id, u, r.content)
             repo.add_imagem(produto_id, str(target), url_origem=u)

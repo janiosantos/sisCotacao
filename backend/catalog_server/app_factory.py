@@ -73,6 +73,7 @@ _RECURSO_POR_PREFIXO: list[tuple[str, str]] = [
     # Cadastros
     ("/api/produtos-cadastro", "produtos"),
     ("/api/imagens", "produtos"),
+    ("/api/produtos/imagens", "produtos"),
     ("/api/familias", "produtos"),
     ("/api/marcas", "produtos"),
     ("/api/grupos", "produtos"),
