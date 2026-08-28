@@ -124,6 +124,7 @@ export default function Produtos() {
   const [modalEtiquetas, setModalEtiquetas] = useState(false);
   const [modalImportar, setModalImportar] = useState(false);
   const [loteProduto, setLoteProduto] = useState<number | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -166,7 +167,7 @@ export default function Produtos() {
     return () => {
       alive = false;
     };
-  }, [filters, page]);
+  }, [filters, page, refreshKey]);
 
   const onSearch = (v: string) => {
     setBusca(v);
@@ -330,7 +331,13 @@ export default function Produtos() {
       <ModalImportarUrl open={modalUrl} onClose={() => setModalUrl(false)} />
       <ModalImportarCatalogo open={modalImportar} onClose={() => setModalImportar(false)} />
       <ModalEtiquetas open={modalEtiquetas} onClose={() => setModalEtiquetas(false)} />
-      {loteProduto != null && <ModalImagensLote produtoId={loteProduto} onClose={() => setLoteProduto(null)} />}
+      {loteProduto != null && (
+        <ModalImagensLote
+          produtoId={loteProduto}
+          onClose={() => setLoteProduto(null)}
+          onAplicado={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
     </div>
   );
 }
@@ -2175,12 +2182,13 @@ const SITES_IMAGENS: { id: string; nome: string; url: (t: string) => string }[] 
 interface IrmaoItem {
   id: number;
   nome: string;
+  marca: string;
   sku: string;
   descricao: string;
   atributos: Record<string, string>;
 }
 
-function ModalImagensLote({ produtoId, onClose }: { produtoId: number; onClose: () => void }) {
+function ModalImagensLote({ produtoId, onClose, onAplicado }: { produtoId: number; onClose: () => void; onAplicado?: () => void }) {
   const [irmaos, setIrmaos] = useState<IrmaoItem[]>([]);
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [carregandoIrmaos, setCarregandoIrmaos] = useState(true);
@@ -2189,8 +2197,9 @@ function ModalImagensLote({ produtoId, onClose }: { produtoId: number; onClose: 
   const [itens, setItens] = useState<{ url: string; name: string; thumb?: string }[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [prodUrl, setProdUrl] = useState("");
-  const [preview, setPreview] = useState<{ url: string }[]>([]);
+  const [preview, setPreview] = useState<{ url: string; md5?: string; largura?: number | null; altura?: number | null }[]>([]);
   const [imgsSel, setImgsSel] = useState<Set<string>>(new Set());
+  const [favUrl, setFavUrl] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [aplicando, setAplicando] = useState(false);
   const [erro, setErro] = useState("");
@@ -2203,8 +2212,8 @@ function ModalImagensLote({ produtoId, onClose }: { produtoId: number; onClose: 
         setSel(new Set(ir.map((x) => x.id)));
         const base = ir[0]?.nome || "";
         const cor = ir[0]?.atributos["Cor"] || "";
-        const marca = ir[0]?.atributos["Marca"] || "";
-        setTermo([base.split(" ").slice(0, 2).join(" "), cor, marca].filter(Boolean).join(" ").replace(/\s+/g, "+"));
+        const fabricante = ir[0]?.marca || "";
+        setTermo([base.split(" ").slice(0, 2).join(" "), cor, fabricante].filter(Boolean).join(" ").replace(/\s+/g, "+"));
       } catch {
         setErro("Não foi possível carregar os irmãos.");
       } finally {
@@ -2239,6 +2248,7 @@ function ModalImagensLote({ produtoId, onClose }: { produtoId: number; onClose: 
       const res = await api.previewImagensFornecedor(url);
       setPreview(res.imagens || []);
       setImgsSel(new Set((res.imagens || []).map((i) => i.url)));
+      setFavUrl((res.imagens || [])[0]?.url || "");
     } catch (e) {
       setErro("Falha no preview: " + (e as Error).message);
     } finally {
@@ -2248,15 +2258,22 @@ function ModalImagensLote({ produtoId, onClose }: { produtoId: number; onClose: 
 
   const aplicar = async () => {
     const ids = [...sel];
-    const urls = [...imgsSel].map((u) => ({ url: u }));
+    const urls = [...imgsSel];
     if (!ids.length) return toast("Nenhum produto do lote selecionado", "error");
     if (!urls.length) return toast("Nenhuma imagem selecionada", "error");
     setAplicando(true);
     setErro("");
     try {
-      const res = await api.aplicarImagensLote(ids, urls);
-      toast(`${res.aplicadas} imagem(ns) aplicada(s) a ${ids.length} produto(s)`, res.erros.length ? "warn" : "success");
+      const res = await api.aplicarImagensLote(ids, urls, favUrl || undefined);
+      const dedup = (res as { deduplicadas?: number }).deduplicadas || 0;
+      if (res.aplicadas === 0 && res.erros.length === 0) {
+        toast(dedup ? `Nenhuma imagem nova aplicada — ${dedup} já existiam nos produtos (dedup).` : "Nenhuma imagem foi aplicada.", "warn");
+      } else {
+        const extra = dedup ? ` (${dedup} já existiam)` : "";
+        toast(`${res.aplicadas} imagem(ns) aplicada(s) a ${ids.length} produto(s)${extra}`, res.erros.length ? "warn" : "success");
+      }
       if (res.erros.length) setErro(res.erros.slice(0, 3).join(" | "));
+      onAplicado?.();
     } catch (e) {
       setErro("Erro ao aplicar: " + (e as Error).message);
     } finally {
@@ -2349,7 +2366,7 @@ function ModalImagensLote({ produtoId, onClose }: { produtoId: number; onClose: 
           <h4 className="mb-1 text-sm font-semibold text-gray-900">Imagens do produto (marque as que quer)</h4>
           <div className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto">
             {preview.map((p) => (
-              <label key={p.url} className="relative cursor-pointer rounded border p-1">
+              <label key={p.md5 || p.url} className="relative cursor-pointer rounded border p-1">
                 <input
                   type="checkbox"
                   className="absolute left-1 top-1"
@@ -2361,10 +2378,22 @@ function ModalImagensLote({ produtoId, onClose }: { produtoId: number; onClose: 
                     setImgsSel(n);
                   }}
                 />
+                <button
+                  type="button"
+                  className={`absolute right-1 top-1 rounded px-1 text-sm shadow ${favUrl === p.url ? "bg-amber-400 text-white" : "bg-white text-gray-400 hover:text-amber-500"}`}
+                  title="Marcar como foto favorita (capa)"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setFavUrl(favUrl === p.url ? "" : p.url);
+                  }}
+                >
+                  ★
+                </button>
                 <img src={p.url} loading="lazy" alt="" className="h-20 w-full object-contain" />
               </label>
             ))}
           </div>
+          <p className="mt-1 text-xs text-gray-400">Marque as fotos que quer usar e clique na ★ da foto favorita (será a capa).</p>
         </div>
       ) : null}
     </Modal>

@@ -1144,7 +1144,7 @@ export const api = {
       { url }
     ),
   listarIrmaos: (produtoId: number) =>
-    request<{ id: number; nome: string; sku: string; descricao: string; atributos: Record<string, string> }[]>(
+    request<{ id: number; nome: string; marca: string; sku: string; descricao: string; atributos: Record<string, string> }[]>(
       "GET",
       `/api/produtos/${produtoId}/irmaos`
     ),
@@ -1155,16 +1155,16 @@ export const api = {
       { url }
     ),
   previewImagensFornecedor: (url: string) =>
-    request<{ imagens: { url: string }[] }>(
+    request<{ imagens: { url: string; md5?: string; largura?: number | null; altura?: number | null }[] }>(
       "POST",
       "/api/produtos/imagens/preview-fornecedor",
       { url }
     ),
-  aplicarImagensLote: (produtoIds: number[], imagens: { url: string }[]) =>
-    request<{ aplicadas: number; erros: string[]; por_produto: Record<string, number> }>(
+  aplicarImagensLote: (produtoIds: number[], urls: string[], favorita?: string) =>
+    request<{ aplicadas: number; deduplicadas?: number; erros: string[]; por_produto: Record<string, number> }>(
       "POST",
       "/api/produtos/imagens/aplicar-lote",
-      { produto_ids: produtoIds, imagens }
+      { produto_ids: produtoIds, imagens: urls.map((u) => ({ url: u })), favorita }
     ),
   excluirImagem: (imagemId: number) =>
     request<{ ok: boolean }>("DELETE", `/api/imagens/${imagemId}`),
