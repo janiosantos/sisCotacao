@@ -609,6 +609,8 @@ export interface ItemListaCadastro {
   price_min: number | null;
   price_max: number | null;
   preco?: number | null;
+  sku?: string;
+  descricao?: string;
   imagem_url: string | null;
   classe_abc: string | null;
   em_linha: number;
@@ -1140,6 +1142,29 @@ export const api = {
       "POST",
       `/api/produtos-cadastro/${produtoId}/imagens-url`,
       { url }
+    ),
+  listarIrmaos: (produtoId: number) =>
+    request<{ id: number; nome: string; sku: string; descricao: string; atributos: Record<string, string> }[]>(
+      "GET",
+      `/api/produtos/${produtoId}/irmaos`
+    ),
+  buscarImagensFornecedor: (url: string) =>
+    request<{ itens: { url: string; name: string; thumb?: string }[] }>(
+      "POST",
+      "/api/produtos/imagens/buscar-fornecedor",
+      { url }
+    ),
+  previewImagensFornecedor: (url: string) =>
+    request<{ imagens: { url: string }[] }>(
+      "POST",
+      "/api/produtos/imagens/preview-fornecedor",
+      { url }
+    ),
+  aplicarImagensLote: (produtoIds: number[], imagens: { url: string }[]) =>
+    request<{ aplicadas: number; erros: string[]; por_produto: Record<string, number> }>(
+      "POST",
+      "/api/produtos/imagens/aplicar-lote",
+      { produto_ids: produtoIds, imagens }
     ),
   excluirImagem: (imagemId: number) =>
     request<{ ok: boolean }>("DELETE", `/api/imagens/${imagemId}`),

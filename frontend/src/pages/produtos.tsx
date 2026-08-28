@@ -123,6 +123,7 @@ export default function Produtos() {
   const [modalUrl, setModalUrl] = useState(false);
   const [modalEtiquetas, setModalEtiquetas] = useState(false);
   const [modalImportar, setModalImportar] = useState(false);
+  const [loteProduto, setLoteProduto] = useState<number | null>(null);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -282,12 +283,23 @@ export default function Produtos() {
                   {p.classe_abc ? <Badge tone="blue">{p.classe_abc}</Badge> : null}
                 </p>
                 <p className="mt-1 line-clamp-2 text-sm font-medium text-gray-900">{p.nome}</p>
+                {(() => {
+                  const detalhe =
+                    p.descricao && p.nome && p.descricao.toLowerCase().startsWith(p.nome.toLowerCase())
+                      ? p.descricao.slice(p.nome.length).replace(/^[\s:·-]+/, "").trim()
+                      : p.descricao || "";
+                  return detalhe ? <p className="mt-0.5 line-clamp-2 text-xs text-gray-600">{detalhe}</p> : null;
+                })()}
+                {p.sku ? <p className="mt-0.5 font-mono text-[11px] text-gray-400">SKU: {p.sku}</p> : null}
                 {p.marca ? <p className="text-xs text-gray-400">{p.marca}</p> : null}
                 <p className="mt-2 text-sm font-semibold text-gray-900">{p.preco != null ? fmtMoney(p.preco) : p.price_min ? fmtMoney(p.price_min) : "sem preço"}</p>
               </div>
               <div className="flex gap-2 border-t border-gray-100 p-3">
                 <Button variant="primary" size="sm" className="flex-1" onClick={() => (location.hash = `#/produtos/${p.id}`)}>
                   Editar
+                </Button>
+                <Button size="sm" variant="ghost" title="Baixar imagens em lote (irmãos)" onClick={() => setLoteProduto(p.id)}>
+                  🖼️
                 </Button>
                 {temPermissao("produtos", "excluir") ? (
                   <Button variant="danger" size="sm" onClick={() => void excluir(p.id)}>
@@ -318,6 +330,7 @@ export default function Produtos() {
       <ModalImportarUrl open={modalUrl} onClose={() => setModalUrl(false)} />
       <ModalImportarCatalogo open={modalImportar} onClose={() => setModalImportar(false)} />
       <ModalEtiquetas open={modalEtiquetas} onClose={() => setModalEtiquetas(false)} />
+      {loteProduto != null && <ModalImagensLote produtoId={loteProduto} onClose={() => setLoteProduto(null)} />}
     </div>
   );
 }
@@ -2146,5 +2159,214 @@ function PerfilFiscalPanel({ produto }: { produto: ProdutoCadastro | null }) {
         </>
       )}
     </div>
+  );
+}
+
+// ===================================================================
+// Imagens em lote (fornecedor)
+// ===================================================================
+
+const SITES_IMAGENS: { id: string; nome: string; url: (t: string) => string }[] = [
+  { id: "casadoeletricista", nome: "Casa do Eletricista", url: (t) => `https://www.casadoeletricistasc.com.br/procura?procura=${t}` },
+  { id: "casadosparafusos", nome: "Casa dos Parafusos", url: (t) => `https://www.casadosparafusos.com/busca?busca=${t}` },
+  { id: "anhanguera", nome: "Anhanguera Ferramentas", url: (t) => `https://www.anhangueraferramentas.com.br/busca?q=${t}` },
+];
+
+interface IrmaoItem {
+  id: number;
+  nome: string;
+  sku: string;
+  descricao: string;
+  atributos: Record<string, string>;
+}
+
+function ModalImagensLote({ produtoId, onClose }: { produtoId: number; onClose: () => void }) {
+  const [irmaos, setIrmaos] = useState<IrmaoItem[]>([]);
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [carregandoIrmaos, setCarregandoIrmaos] = useState(true);
+  const [site, setSite] = useState(SITES_IMAGENS[0].id);
+  const [termo, setTermo] = useState("");
+  const [itens, setItens] = useState<{ url: string; name: string; thumb?: string }[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const [prodUrl, setProdUrl] = useState("");
+  const [preview, setPreview] = useState<{ url: string }[]>([]);
+  const [imgsSel, setImgsSel] = useState<Set<string>>(new Set());
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [aplicando, setAplicando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const ir = await api.listarIrmaos(produtoId);
+        setIrmaos(ir);
+        setSel(new Set(ir.map((x) => x.id)));
+        const base = ir[0]?.nome || "";
+        const cor = ir[0]?.atributos["Cor"] || "";
+        const marca = ir[0]?.atributos["Marca"] || "";
+        setTermo([base.split(" ").slice(0, 2).join(" "), cor, marca].filter(Boolean).join(" ").replace(/\s+/g, "+"));
+      } catch {
+        setErro("Não foi possível carregar os irmãos.");
+      } finally {
+        setCarregandoIrmaos(false);
+      }
+    })();
+  }, [produtoId]);
+
+  const urlBusca = () => {
+    const t = encodeURIComponent((termo || "").trim().replace(/\s+/g, "+"));
+    return SITES_IMAGENS.find((s) => s.id === site)?.url(t) || "";
+  };
+
+  const buscar = async () => {
+    setBuscando(true);
+    setErro("");
+    try {
+      const res = await api.buscarImagensFornecedor(urlBusca());
+      setItens(res.itens || []);
+    } catch (e) {
+      setErro("Falha na busca: " + (e as Error).message);
+    } finally {
+      setBuscando(false);
+    }
+  };
+
+  const carregarPreview = async (url: string) => {
+    setProdUrl(url);
+    setPreviewLoading(true);
+    setErro("");
+    try {
+      const res = await api.previewImagensFornecedor(url);
+      setPreview(res.imagens || []);
+      setImgsSel(new Set((res.imagens || []).map((i) => i.url)));
+    } catch (e) {
+      setErro("Falha no preview: " + (e as Error).message);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const aplicar = async () => {
+    const ids = [...sel];
+    const urls = [...imgsSel].map((u) => ({ url: u }));
+    if (!ids.length) return toast("Nenhum produto do lote selecionado", "error");
+    if (!urls.length) return toast("Nenhuma imagem selecionada", "error");
+    setAplicando(true);
+    setErro("");
+    try {
+      const res = await api.aplicarImagensLote(ids, urls);
+      toast(`${res.aplicadas} imagem(ns) aplicada(s) a ${ids.length} produto(s)`, res.erros.length ? "warn" : "success");
+      if (res.erros.length) setErro(res.erros.slice(0, 3).join(" | "));
+    } catch (e) {
+      setErro("Erro ao aplicar: " + (e as Error).message);
+    } finally {
+      setAplicando(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Imagens em lote" footer={
+      <>
+        <Button onClick={onClose}>Fechar</Button>
+        <Button variant="primary" onClick={() => void aplicar()} disabled={aplicando}>
+          {aplicando ? "Aplicando…" : `Aplicar imagens aos ${sel.size} produto(s)`}
+        </Button>
+      </>
+    }>
+      {erro ? <p className="mb-2 rounded bg-red-50 p-2 text-xs text-red-700">{erro}</p> : null}
+
+      <div className="mb-3">
+        <h4 className="mb-1 text-sm font-semibold text-gray-900">Lote (irmãos)</h4>
+        {carregandoIrmaos ? (
+          <Loading />
+        ) : irmaos.length === 0 ? (
+          <p className="text-sm text-gray-400">Nenhum irmão encontrado (mesmo nome + marca + cor).</p>
+        ) : (
+          <div className="max-h-40 overflow-y-auto rounded border border-gray-200">
+            {irmaos.map((x) => {
+              const bitola = x.atributos["Bitola / Tamanho"] || x.atributos["Bitola"] || "";
+              return (
+                <label key={x.id} className="flex items-center gap-2 border-b border-gray-100 px-2 py-1 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={sel.has(x.id)}
+                    onChange={(e) => {
+                      const n = new Set(sel);
+                      if (e.target.checked) n.add(x.id);
+                      else n.delete(x.id);
+                      setSel(n);
+                    }}
+                  />
+                  <span className="flex-1 truncate">{x.nome}</span>
+                  <span className="text-xs text-gray-500">{bitola || x.sku}</span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">Fornecedor</label>
+          <Select value={site} onChange={(e) => setSite(e.target.value)} className="w-full">
+            {SITES_IMAGENS.map((s) => (
+              <option key={s.id} value={s.id}>{s.nome}</option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">Termo da busca</label>
+          <Input value={termo} onChange={(e) => setTermo(e.target.value)} />
+        </div>
+      </div>
+      <div className="mb-3 flex gap-2">
+        <Input className="flex-1" readOnly value={urlBusca()} />
+        <Button variant="primary" onClick={() => void buscar()} disabled={buscando || !termo.trim()}>
+          {buscando ? "Buscando…" : "Buscar"}
+        </Button>
+      </div>
+
+      {itens.length > 0 && (
+        <div className="mb-3 max-h-44 overflow-y-auto rounded border border-gray-200">
+          {itens.map((it) => (
+            <button
+              key={it.url}
+              onClick={() => void carregarPreview(it.url)}
+              className={`flex w-full items-center gap-2 border-b border-gray-100 px-2 py-1.5 text-left text-sm hover:bg-gray-50 ${prodUrl === it.url ? "bg-orange-50" : ""}`}
+            >
+              {it.thumb ? <img src={it.thumb} alt="" className="h-8 w-8 rounded object-contain" /> : <span className="h-8 w-8" />}
+              <span className="flex-1 truncate">{it.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {previewLoading ? (
+        <Loading />
+      ) : preview.length > 0 ? (
+        <div>
+          <h4 className="mb-1 text-sm font-semibold text-gray-900">Imagens do produto (marque as que quer)</h4>
+          <div className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto">
+            {preview.map((p) => (
+              <label key={p.url} className="relative cursor-pointer rounded border p-1">
+                <input
+                  type="checkbox"
+                  className="absolute left-1 top-1"
+                  checked={imgsSel.has(p.url)}
+                  onChange={(e) => {
+                    const n = new Set(imgsSel);
+                    if (e.target.checked) n.add(p.url);
+                    else n.delete(p.url);
+                    setImgsSel(n);
+                  }}
+                />
+                <img src={p.url} loading="lazy" alt="" className="h-20 w-full object-contain" />
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </Modal>
   );
 }
