@@ -668,7 +668,6 @@ export interface ImagemProduto {
   id: number;
   produto_id: number;
   url: string;
-  url_origem?: string;
   ordem: number;
 }
 
