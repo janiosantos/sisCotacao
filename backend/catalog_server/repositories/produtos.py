@@ -462,7 +462,6 @@ class ProdutoRepository:
         self,
         produto_id: int,
         filename: str,
-        url_origem: str = "",
     ) -> int:
         with system_conn() as conn:
             row = conn.execute(
@@ -470,9 +469,9 @@ class ProdutoRepository:
                 (produto_id,),
             ).fetchone()
             cur = conn.execute(
-                "INSERT INTO imagens_produto (produto_id, filename, url_origem, ordem)"
-                " VALUES (?,?,?,?)",
-                (produto_id, filename, url_origem or "", row["n"]),
+                "INSERT INTO imagens_produto (produto_id, filename, ordem)"
+                " VALUES (?,?,?)",
+                (produto_id, filename, row["n"]),
             )
             return cur.lastrowid
 

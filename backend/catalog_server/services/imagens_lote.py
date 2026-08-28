@@ -253,7 +253,7 @@ def baixar_lote(
                 deduplicadas += 1  # foto já existente neste produto
                 continue
             target = imagens_service._save_bytes(pid, u, r.content)
-            img_id = repo.add_imagem(pid, str(target), url_origem=u)
+            img_id = repo.add_imagem(pid, target)
             aplicadas += 1
             por_produto[pid] = por_produto.get(pid, 0) + 1
             if u == favorita_url:

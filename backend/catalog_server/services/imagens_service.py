@@ -210,25 +210,30 @@ def _conteudo_duplicado(produto_id: int, content: bytes) -> bool:
     return False
 
 
-def _save_bytes(produto_id: int, url: str, content: bytes) -> Path:
+def _relpath(produto_id: int, name: str) -> str:
+    """Caminho RELATIVO ao IMAGES_DIR (ex.: cadastro/62470/foto.jpg)."""
+    return (Path("cadastro") / str(produto_id) / name).as_posix()
+
+
+def _save_bytes(produto_id: int, url: str, content: bytes) -> str:
     folder = _folder(produto_id)
     folder.mkdir(parents=True, exist_ok=True)
     basename = re.sub(r"[^A-Za-z0-9._-]", "_", Path(urlparse(url).path).name)
     suffix = Path(basename).suffix.lower()
     if suffix not in _IMG_EXT:
         suffix = ".jpg"
-    stem = Path(basename).stem[:40] or "imagem"
-    digest = hashlib.md5(url.encode("utf-8")).hexdigest()[:8]
-    target = folder / f"{stem}_{digest}{suffix}"
+    digest = hashlib.md5(url.encode("utf-8")).hexdigest()[:10]
+    target = folder / f"img_{digest}{suffix}"
     if not target.exists():
         target.write_bytes(content)
-    return target
+    # Retorna o caminho RELATIVO ao IMAGES_DIR (portátil).
+    return _relpath(produto_id, target.name)
 
 
-def salvar_uploads(produto_id: int, files, repo) -> list[Path]:
+def salvar_uploads(produto_id: int, files, repo) -> list[str]:
     folder = _folder(produto_id)
     folder.mkdir(parents=True, exist_ok=True)
-    saved: list[Path] = []
+    saved: list[str] = []
     for f in files:
         if not f or not f.filename:
             continue
@@ -237,8 +242,9 @@ def salvar_uploads(produto_id: int, files, repo) -> list[Path]:
             ext = ".jpg"
         target = folder / f"upload_{uuid.uuid4().hex[:12]}{ext}"
         f.save(target)
-        repo.add_imagem(produto_id, str(target), url_origem="")
-        saved.append(target)
+        rel = _relpath(produto_id, target.name)
+        repo.add_imagem(produto_id, rel)
+        saved.append(rel)
     return saved
 
 
@@ -287,8 +293,8 @@ def baixar_de_url(produto_id: int, url: str, repo) -> tuple[list[dict], list[str
                 ignoradas += 1  # mesma foto já existente (URL diferente)
                 continue
             target = _save_bytes(produto_id, u, r.content)
-            repo.add_imagem(produto_id, str(target), url_origem=u)
-            baixadas.append({"filename": str(target), "url_origem": u})
+            repo.add_imagem(produto_id, target)
+            baixadas.append({"filename": target})
         except Exception as exc:
             erros.append(f"{u}: {exc}")
     if not baixadas and ignoradas:
@@ -299,6 +305,8 @@ def baixar_de_url(produto_id: int, url: str, repo) -> tuple[list[dict], list[str
 def remover_arquivo(filename: str) -> None:
     try:
         p = Path(filename)
+        if not p.is_absolute():
+            p = IMAGES_DIR / p  # filename relativo ao IMAGES_DIR
         if p.is_file():
             p.unlink()
     except OSError:

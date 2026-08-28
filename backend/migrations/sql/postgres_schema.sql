@@ -709,7 +709,6 @@ CREATE TABLE imagens_produto (
   produto_id INTEGER NOT NULL ,
   variante_id INTEGER ,
   filename TEXT NOT NULL,
-  url_origem TEXT DEFAULT '',
   ordem INTEGER NOT NULL DEFAULT 0
 );
 

@@ -244,9 +244,9 @@ def importar_catalogo(produtos: list[dict]) -> dict:
                     if not img.get("filename"):
                         continue
                     conn.execute(
-                        "INSERT INTO imagens_produto (produto_id, filename, url_origem, ordem)"
-                        " VALUES (?,?,?,?)",
-                        (produto_id, img["filename"], img.get("url") or "", i),
+                        "INSERT INTO imagens_produto (produto_id, filename, ordem)"
+                        " VALUES (?,?,?)",
+                        (produto_id, img["filename"], i),
                     )
 
         placeholders = ",".join("?" * len(all_externals))

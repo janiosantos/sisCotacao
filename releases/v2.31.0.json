@@ -1,0 +1,35 @@
+{
+  "versao": "v2.31.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [
+    "Armazenamento de imagens: `filename` deixa de guardar caminho absoluto — agora é o caminho RELATIVO ao diretório de imagens (IMAGES_DIR). Caminhos absolutos quebravam ao mover a pasta `images/` ou ao trocar de servidor"
+  ],
+  "melhorias": [
+    "Nome dos arquivos de imagem não usa mais o nome original da URL (ex.: `img_da0b218144.jpg`) — determinístico por URL e independente do nome do fornecedor",
+    "Removida a coluna `imagens_produto.url_origem` (desnecessária: as fotos já estão armazenadas no filesystem)",
+    "Binários permanecem no filesystem (`IMAGES_DIR`), nunca no banco — melhor abordagem para ERP (PostgreSQL não é ideal para BLOBs de imagem; streaming/cache/backup mais simples)"
+  ],
+  "recursos": [
+    "Migração 0093: normalização em massa de 107.789 filenames absolutos → relativos + DROP de `url_origem`"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.31.0",
+    "frontend": "siscom-frontend:v2.31.0"
+  },
+  "database": {
+    "migration": 93
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "imagens_filename_relativo": true
+  }
+}

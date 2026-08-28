@@ -325,22 +325,22 @@ def criar_produto_por_url(
     imagens = _absolute_images(data.get("images") or [], data.get("final_url") or url)
     baixadas = 0
     erros = 0
-    imagens_rows: list[tuple[str, str]] = []
+    imagens_rows: list[str] = []
     for img_url in imagens:
         target = _baixar_imagem(produto_id, img_url, url_final)
         if target is None:
             erros += 1
             continue
-        imagens_rows.append((str(target), img_url))
+        imagens_rows.append(target)
         baixadas += 1
     if imagens_rows:
         with system_conn() as conn:
             conn.executemany(
-                "INSERT INTO imagens_produto (produto_id, filename, url_origem, ordem)"
-                " VALUES (?,?,?,?)",
+                "INSERT INTO imagens_produto (produto_id, filename, ordem)"
+                " VALUES (?,?,?)",
                 [
-                    (produto_id, filename, url_origem, i)
-                    for i, (filename, url_origem) in enumerate(imagens_rows)
+                    (produto_id, filename, i)
+                    for i, filename in enumerate(imagens_rows)
                 ],
             )
 
