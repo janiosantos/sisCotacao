@@ -19,7 +19,7 @@ def setup(system_db):
         familia_id=fid,
         nome="Cabo Flexível Sil",
         marca="Sil",
-        descricao="Cabo 750V",
+        descricao="Cabo Flexível 2,5mm Verde 750V - Sil",
         categoria="Eletrica",
         dados=produto_dados("ELE-CAB-SIL-25V", "7891001", preco=10.0),
         atributos={"Bitola": "2,5mm", "Cor": "Verde"},
@@ -28,7 +28,7 @@ def setup(system_db):
         familia_id=fid,
         nome="Cabo Flexível Sil",
         marca="Sil",
-        descricao="Cabo 750V",
+        descricao="Cabo Flexível 2,5mm Azul 750V - Sil",
         categoria="Eletrica",
         dados=produto_dados("ELE-CAB-SIL-25A", "7891002", preco=12.0),
         atributos={"Bitola": "2,5mm", "Cor": "Azul"},
@@ -156,12 +156,12 @@ def test_busca_por_caracteristica_na_descricao(busca):
     assert any(c["id"] == busca["p1"] for c in cards)
 
 
-def test_busca_multi_termo_eh_or(busca):
-    """Multi-termo usa OR: qualquer palavra do termo casa na descricao."""
+def test_busca_multi_termo_exige_2_palavras(busca):
+    """'cabo azul' exige ≥2 palavras na descricao: p2 (cabo+azul) casa; p1 (só cabo) não."""
     cards, total = catalog.list_products(q="cabo azul", limit=10)
     ids = [c["id"] for c in cards]
-    assert busca["p1"] in ids  # 'cabo'
-    assert busca["p2"] in ids  # 'cabo' + 'azul'
+    assert busca["p2"] in ids
+    assert busca["p1"] not in ids
 
 
 def test_busca_sku_exato_prioritario(busca):

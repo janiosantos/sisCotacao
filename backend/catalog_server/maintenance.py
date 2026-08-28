@@ -10,6 +10,11 @@ Tarefas:
     normalizar_subcategorias Mescla subcategorias duplicadas dentro da mesma
                          categoria (variação de caixa/acento/espaços) e
                          reaponta os produtos — idempotente.
+    reclassificar_cabos  Corrige cabos elétricos ("Cabo Energia ... Flex ...
+                         750V" e "Cabo Flex/Flexível") classificados como
+                         Ferramentas, movendo para ELE / Fios e Cabos
+                         Elétricos / Cabo Flexível 750V; normaliza "Conheça
+                         Cabo Flex" (nome/descrição) — idempotente.
 
 A execução em produção é disparada pelo workflow `.github/workflows/maintenance.yml`
 (`workflow_dispatch`, input `task`), que roda no runner `siscom-prod` dentro do
@@ -127,10 +132,70 @@ def normalizar_subcategorias(conn) -> None:
     print(f"subcategorias mescladas: {mescladas} | produtos reapontados: {movidos}")
 
 
+def reclassificar_cabos(conn) -> None:
+    """Corrige cabos elétricos classificados como Ferramentas.
+
+    Cabos elétricos ("Cabo Energia Pvc/cobre Flex ... 750V", "Cabo Flex",
+    "Cabo Flexível") e os "Conheça Cabo Flex" (mesma família de SKU 55xxx)
+    caíram em FER/Ferramentas. Move para ELE / Fios e Cabos Elétricos /
+    subcategoria "Cabo Flexível 750V" e normaliza os "Conheça Cabo Flex"
+    (nome/descrição). Idempotente.
+    """
+    g = conn.execute("SELECT id FROM grupos WHERE codigo='ELE'").fetchone()
+    if not g:
+        print("grupo ELE não existe; nada a fazer")
+        return
+    grupo_id = int(g["id"])
+    subgrupo_id = int(conn.execute(
+        "SELECT id FROM subgrupos WHERE grupo_id=? AND codigo='CAB'", (grupo_id,)
+    ).fetchone()["id"])
+    cat = conn.execute(
+        "SELECT id FROM categorias WHERE nome='Fios e Cabos Elétricos'"
+    ).fetchone()
+    if not cat:
+        print("categoria 'Fios e Cabos Elétricos' não existe")
+        return
+    cat_id = int(cat["id"])
+    sub = conn.execute(
+        "SELECT id FROM subcategorias WHERE categoria_id=? AND nome='Cabo Flexível 750V'",
+        (cat_id,),
+    ).fetchone()
+    if not sub:
+        print("subcategoria 'Cabo Flexível 750V' não existe")
+        return
+    sub_id = int(sub["id"])
+
+    # f_unaccent remove acentos/cedilha — o padrão usa a forma sem acento.
+    detect = "f_unaccent(lower(nome)) ~ '^cabo energia|^cabo flex|^conheca cabo flex'"
+    rows = conn.execute(
+        f"SELECT id, nome FROM produtos_cadastro WHERE grupo_id <> ? AND ({detect})",
+        (grupo_id,),
+    ).fetchall()
+    print(f"cabos a reclassificar: {len(rows)}")
+    for r in rows[:15]:
+        print(f"  id={r['id']} | {r['nome'][:55]}")
+
+    # Normaliza os "Conheça Cabo Flex" (nomes suspeitos -> cabo real).
+    conn.execute(
+        "UPDATE produtos_cadastro"
+        " SET nome='Cabo Flexível 750V', descricao='Cabo Flexível 750V - SIL'"
+        " WHERE f_unaccent(lower(nome)) ~ '^conheca cabo flex'"
+    )
+    # Reclassifica para ELE / Fios e Cabos Elétricos / Cabo Flexível 750V.
+    cur = conn.execute(
+        "UPDATE produtos_cadastro"
+        " SET categoria_id=?, subcategoria_id=?, grupo_id=?, subgrupo_id=?"
+        f" WHERE grupo_id <> ? AND ({detect})",
+        (cat_id, sub_id, grupo_id, subgrupo_id, grupo_id),
+    )
+    print("reclassificados:", cur.rowcount)
+
+
 TASKS = {
     "health": health,
     "padronizar_descricoes": padronizar_descricoes,
     "normalizar_subcategorias": normalizar_subcategorias,
+    "reclassificar_cabos": reclassificar_cabos,
 }
 
 

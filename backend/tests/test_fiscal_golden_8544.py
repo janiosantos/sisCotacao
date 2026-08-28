@@ -25,7 +25,7 @@ def _helpers():
 
 
 @pytest.fixture()
-def seeds(limpa_engine_rules):
+def seeds(limpa_engine_rules, pg_schema):
     m = _helpers()
     criadas: list[int] = []
     with system_conn() as conn:
@@ -38,6 +38,12 @@ def seeds(limpa_engine_rules):
             fonte="https://www.legisweb.com.br/legislacao/?id=415741",
         )
         vid1 = m._versao(conn, rid1)
+        # Hermético contra clock skew PG x Python (CURRENT_DATE do servidor pode
+        # estar adiantado e tornar valid_from > operation_date).
+        conn.execute(
+            "UPDATE fiscal_engine_rule_version SET valid_from='2000-01-01' WHERE id=%s",
+            (vid1,),
+        )
         m._condicoes(conn, vid1, {
             "tax_regime": "simples_nacional",
             "uf_origin": "MG",
@@ -74,8 +80,12 @@ def seeds(limpa_engine_rules):
 
 
 @pytest.fixture()
-def limpa_engine_rules():
-    """Limpa regras de engine antes/depois para hermeticidade."""
+def limpa_engine_rules(pg_schema):
+    """Limpa regras de engine antes/depois para hermeticidade.
+
+    `pg_schema` (sessão) garante o banco migrado antes do primeiro
+    `system_conn()` — evita reaplicação de migração em estado intermediário.
+    """
     def _limpar():
         with system_conn() as conn:
             conn.execute(

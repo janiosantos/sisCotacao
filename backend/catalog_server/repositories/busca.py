@@ -1,10 +1,15 @@
 """Busca de produtos por termo — ILIKE + pg_trgm (sem produtos_fts).
 
-Foco na **descricao padronizada** (Nome + características + Marca): a entrada do
-usuário é quebrada em palavras e a busca casa se **qualquer** palavra OU o
-**texto digitado por inteiro** aparecer na descricao — busca por "qualquer
-palavra". SKU/EAN também são considerados (busca por código). Ranking prioriza
-descricao que começa com o termo e códigos exatos.
+Foco na **descricao padronizada** (Nome + características + Marca). A entrada é
+quebrada em palavras; a relevância é pela **cobertura** (quantas palavras do
+termo a descricao contém):
+
+- **1 palavra**: casa se a palavra estiver na descricao OU no sku/ean (busca
+  por código). Ranking: descricao prefixo > sku/ean exato > contém.
+- **2+ palavras**: exige texto completo na descricao OU **pelo menos 2 palavras**
+  na descricao OU o código (sku/ean) contendo o texto completo — evita que
+  "cabo flexivel azul" traga "Caixa Azul" (1/3). ORDER BY **cobertura DESC** →
+  descricao prefixo → sku/ean exato → nome.
 """
 from __future__ import annotations
 
@@ -22,13 +27,16 @@ def tokens(q: str) -> list[str]:
     return out
 
 
+def _cobertura(alias: str, n: int) -> str:
+    """Expressão SQL: nº de palavras do termo presentes na descricao."""
+    return " + ".join(
+        f"(CASE WHEN f_unaccent({alias}.descricao) ILIKE f_unaccent(?) THEN 1 ELSE 0 END)"
+        for _ in range(n)
+    )
+
+
 def montar_busca(q: str, alias: str = "p") -> tuple[str, list, str, list]:
     """Monta (where_sql, where_params, order_expr, order_params).
-
-    - WHERE (OR): texto completo na descricao/sku/ean OU qualquer palavra na
-      descricao — `f_unaccent(campo) ILIKE f_unaccent('%<palavra>%')`.
-    - order_expr: CASE de relevância (descricao prefixo > sku/ean exatos >
-      prefixo de código > descricao contém > nome prefixo > demais).
 
     Os params são separados (WHERE × ORDER BY) porque a contagem usa só o WHERE.
     """
@@ -38,30 +46,49 @@ def montar_busca(q: str, alias: str = "p") -> tuple[str, list, str, list]:
 
     P = alias
     qpat = f"%{q}%"
+    token_params = [f"%{t}%" for t in toks]
+    N = len(toks)
 
-    # WHERE — OR sobre descricao (texto completo + palavras) e código (sku/ean).
-    ors = [
-        f"f_unaccent({P}.descricao) ILIKE f_unaccent(?)",
-        f"f_unaccent({P}.sku) ILIKE f_unaccent(?)",
-        f"f_unaccent({P}.ean) ILIKE f_unaccent(?)",
-    ]
-    where_params: list = [qpat, qpat, qpat]
-    for t in toks:
-        ors.append(f"f_unaccent({P}.descricao) ILIKE f_unaccent(?)")
-        where_params.append(f"%{t}%")
-    where_sql = "(" + " OR ".join(ors) + ")"
+    if N == 1:
+        where_sql = (
+            "("
+            f"f_unaccent({P}.descricao) ILIKE f_unaccent(?)"
+            f" OR f_unaccent({P}.sku) ILIKE f_unaccent(?)"
+            f" OR f_unaccent({P}.ean) ILIKE f_unaccent(?)"
+            ")"
+        )
+        where_params = [qpat, qpat, qpat]
+        rank = (
+            f"CASE"
+            f" WHEN f_unaccent({P}.descricao) ILIKE f_unaccent(?) || '%' THEN 90"
+            f" WHEN f_unaccent({P}.sku) = f_unaccent(?) THEN 85"
+            f" WHEN f_unaccent({P}.ean) = f_unaccent(?) THEN 80"
+            f" WHEN f_unaccent({P}.sku) ILIKE f_unaccent(?) || '%' THEN 70"
+            f" WHEN f_unaccent({P}.descricao) ILIKE '%' || f_unaccent(?) || '%' THEN 60"
+            f" ELSE 20 END"
+        )
+        order_params = [q, q, q, q, q]
+        order_expr = f"{rank} DESC, {P}.nome COLLATE NOCASE, {P}.id"
+        return where_sql, where_params, order_expr, order_params
 
-    t0 = toks[0]
-    rank = (
-        f"CASE"
-        f" WHEN f_unaccent({P}.descricao) ILIKE f_unaccent(?) || '%' THEN 90"
-        f" WHEN f_unaccent({P}.sku) = f_unaccent(?) THEN 85"
-        f" WHEN f_unaccent({P}.ean) = f_unaccent(?) THEN 80"
-        f" WHEN f_unaccent({P}.sku) ILIKE f_unaccent(?) || '%' THEN 70"
-        f" WHEN f_unaccent({P}.descricao) ILIKE '%' || f_unaccent(?) || '%' THEN 60"
-        f" WHEN f_unaccent({P}.nome) ILIKE f_unaccent(?) || '%' THEN 50"
-        f" ELSE 20 END"
+    cov = _cobertura(P, N)
+    # WHERE (2+ palavras): texto completo na descricao OU cobertura >= 2 OU código.
+    where_sql = (
+        "("
+        f"f_unaccent({P}.descricao) ILIKE f_unaccent(?)"
+        f" OR ({cov}) >= 2"
+        f" OR f_unaccent({P}.sku) ILIKE f_unaccent(?)"
+        f" OR f_unaccent({P}.ean) ILIKE f_unaccent(?)"
+        ")"
     )
-    order_params = [q, q, q, q, q, t0]
-    order_expr = f"{rank} DESC, {P}.nome COLLATE NOCASE, {P}.id"
-    return where_sql, where_params, order_expr, order_params
+    where_params = [qpat] + token_params + [qpat, qpat]
+
+    order_sql = (
+        f"({cov}) DESC,"
+        f"(CASE WHEN f_unaccent({P}.descricao) ILIKE f_unaccent(?) || '%' THEN 1 ELSE 0 END) DESC,"
+        f"(CASE WHEN f_unaccent({P}.sku) = f_unaccent(?) THEN 1 ELSE 0 END) DESC,"
+        f"(CASE WHEN f_unaccent({P}.ean) = f_unaccent(?) THEN 1 ELSE 0 END) DESC,"
+        f"{P}.nome COLLATE NOCASE, {P}.id"
+    )
+    order_params = token_params + [q, q, q]
+    return where_sql, where_params, order_sql, order_params
