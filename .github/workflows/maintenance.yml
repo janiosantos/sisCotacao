@@ -18,6 +18,7 @@ on:
           - health
           - padronizar_descricoes
           - normalizar_subcategorias
+          - reclassificar_cabos
 
 jobs:
   maintenance:
