@@ -57,3 +57,12 @@ def test_conteudo_duplicado_por_md5(system_db):
         assert imagens_service._conteudo_duplicado(pid, b"outro-conteudo") is False
     finally:
         shutil.rmtree(folder, ignore_errors=True)
+
+
+def test_baixar_lote_limites(system_db):
+    res = imagens_lote.baixar_lote(list(range(1, 30)), [], "", None)
+    assert res["aplicadas"] == 0
+    assert any("20 produtos" in e for e in res["erros"])
+    res = imagens_lote.baixar_lote([1], [f"url-{i}" for i in range(25)], "", None)
+    assert res["aplicadas"] == 0
+    assert any("20 imagens" in e for e in res["erros"])

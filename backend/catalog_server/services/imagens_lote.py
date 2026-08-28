@@ -15,6 +15,7 @@ casadoeletricistasc (extração genérica de cards de produto + parsers).
 """
 from __future__ import annotations
 
+import hashlib
 import re
 from urllib.parse import urljoin, urlparse
 
@@ -47,12 +48,26 @@ def _reg_domain(host: str) -> str:
 
 
 def _fetch_html(url: str) -> tuple[str, str]:
-    """Baixa o HTML e devolve (html, url_final)."""
+    """Baixa o HTML e devolve (html, url_final). Com 1 retry em timeout/5xx."""
     session = requests.Session()
     session.headers.update(_HEADERS)
-    resp = session.get(url, timeout=30)
-    resp.raise_for_status()
-    return resp.text, resp.url
+    for tentativa in range(2):
+        try:
+            resp = session.get(url, timeout=30)
+            if resp.status_code >= 500:
+                if tentativa == 0:
+                    continue
+            resp.raise_for_status()
+            return resp.text, resp.url
+        except requests.Timeout:
+            if tentativa == 0:
+                continue
+            raise
+        except requests.RequestException:
+            if tentativa == 0 and resp.status_code >= 500:
+                continue
+            raise
+    raise requests.RequestException(f"falha ao acessar {url}")
 
 
 def _thumb_from_img(tag: str) -> str:
@@ -129,55 +144,134 @@ _NAO_PRODUTO = re.compile(
 
 
 def preview_imagens(url: str) -> list[dict]:
-    """Extrai as URLs de imagem de uma página de produto (melhor resolução).
+    """Extrai e VALIDA as fotos de uma página de produto (melhor resolução).
 
-    Prioriza as fotos do produto (caminho `/produtos/` ou `/produto/`) em boa
-    resolução, descartando miniaturas e banners/config do site.
+    Baixa cada candidata (com 1 retry), descarta miniaturas/banners/config e
+    **deduplica por conteúdo (MD5)** — a mesma foto aparece em URLs diferentes
+    (og:image, srcset, src). Devolve apenas fotos distintas, baixáveis e com
+    dimensões/tamanho, limitado a 20.
     """
     html, final_url = _fetch_html(url)
     urls = imagens_service._extract_image_urls(html, final_url or url)
     ok = [u for u in urls if not _TINY_PATH.search(u) and not _NAO_PRODUTO.search(u)]
     produtos = [u for u in ok if "/produtos/" in u or "/produto/" in u]
-    escolhidas = (produtos or ok)[:10]
-    return [{"url": u} for u in escolhidas]
+    candidatas = (produtos or ok)[:30]
 
-
-def baixar_lote(produto_ids: list[int], urls: list[str], repo) -> dict:
-    """Baixa cada imagem (uma vez) e atribui a todos os produtos do lote.
-
-    Reusa o pipeline de `imagens_service` (min. dimensão + dedup MD5 por
-    produto). Devolve {aplicadas, erros, por_produto}.
-    """
     session = requests.Session()
     session.headers.update(_HEADERS)
-    aplicadas = 0
-    erros: list[str] = []
-    por_produto: dict[int, int] = {pid: 0 for pid in produto_ids}
-
-    for u in urls:
-        u = (u or "").strip()
-        if not u:
-            continue
+    por_md5: dict[str, dict] = {}
+    for u in candidatas:
         try:
-            r = session.get(u, timeout=30, headers={"Referer": u})
-            r.raise_for_status()
+            r = _baixar(session, u, referer=final_url or url)
             ctype = r.headers.get("Content-Type", "")
             if not (ctype.startswith("image/") or imagens_service._is_direct_image(u)):
                 continue
             size = imagens_service._image_size(r.content)
             if size and max(size) < imagens_service._MIN_DIMENSION:
                 continue
+            md5 = hashlib.md5(r.content).hexdigest()
+            if md5 in por_md5:
+                continue  # mesma foto, URL diferente
+            por_md5[md5] = {
+                "url": u,
+                "md5": md5,
+                "largura": size[0] if size else None,
+                "altura": size[1] if size else None,
+                "size_kb": round(len(r.content) / 1024),
+            }
+        except Exception:
+            continue
+    return list(por_md5.values())[:20]
+
+
+def _baixar(session, url: str, referer: str = "", tentativas: int = 1) -> requests.Response:
+    """GET com retry em timeout/5xx. `tentativas` = retries extras além da 1ª."""
+    headers = {"Referer": referer} if referer else {}
+    ultimo: Exception | None = None
+    for i in range(tentativas + 1):
+        try:
+            r = session.get(url, timeout=30, headers=headers)
+            if r.status_code >= 500 and i < tentativas:
+                continue
+            r.raise_for_status()
+            return r
+        except (requests.Timeout, requests.RequestException) as exc:
+            ultimo = exc
+            if i >= tentativas:
+                break
+    raise ultimo if ultimo else requests.RequestException(f"falha ao baixar {url}")
+
+
+def baixar_lote(
+    produto_ids: list[int],
+    urls: list[str],
+    favorita_url: str = "",
+    repo=None,
+) -> dict:
+    """Baixa cada imagem (com retry) e atribui a todos os produtos do lote.
+
+    - Limites: até 20 produtos e 20 imagens por lote.
+    - Dedup por conteúdo (MD5) **por produto** (a mesma foto pode ir para
+      vários produtos; não duplica dentro do mesmo produto).
+    - A foto **favorita** vira a capa (ordem 0) em cada produto.
+    Devolve {aplicadas, erros, por_produto}.
+    """
+    if repo is None:
+        from catalog_server.repositories import produto_repo as _r
+
+        repo = _r
+    if len(produto_ids) > 20:
+        return {"aplicadas": 0, "erros": ["Limite de 20 produtos por lote"], "por_produto": {}}
+    urls = [u.strip() for u in urls if u and u.strip()]
+    if len(urls) > 20:
+        return {"aplicadas": 0, "erros": ["Limite de 20 imagens por lote"], "por_produto": {}}
+
+    session = requests.Session()
+    session.headers.update(_HEADERS)
+    aplicadas = 0
+    deduplicadas = 0
+    erros: list[str] = []
+    por_produto: dict[int, int] = {pid: 0 for pid in produto_ids}
+    fav_ids: dict[int, int] = {}
+
+    for u in urls:
+        try:
+            r = _baixar(session, u, referer=u, tentativas=1)
+            ctype = r.headers.get("Content-Type", "")
+            if not (ctype.startswith("image/") or imagens_service._is_direct_image(u)):
+                erros.append(f"{u}: não é imagem")
+                continue
+            size = imagens_service._image_size(r.content)
+            if size and max(size) < imagens_service._MIN_DIMENSION:
+                erros.append(f"{u}: imagem muito pequena")
+                continue
         except Exception as exc:
             erros.append(f"{u}: {exc}")
             continue
         for pid in produto_ids:
             if imagens_service._conteudo_duplicado(pid, r.content):
+                deduplicadas += 1  # foto já existente neste produto
                 continue
             target = imagens_service._save_bytes(pid, u, r.content)
-            repo.add_imagem(pid, str(target), url_origem=u)
+            img_id = repo.add_imagem(pid, str(target), url_origem=u)
             aplicadas += 1
             por_produto[pid] = por_produto.get(pid, 0) + 1
-    return {"aplicadas": aplicadas, "erros": erros, "por_produto": por_produto}
+            if u == favorita_url:
+                fav_ids[pid] = img_id
+
+    # Foto favorita -> capa (ordem 0) em cada produto.
+    if favorita_url:
+        for pid, img_id in fav_ids.items():
+            try:
+                repo.set_imagem_capa(pid, img_id)
+            except Exception:
+                pass
+    return {
+        "aplicadas": aplicadas,
+        "deduplicadas": deduplicadas,
+        "erros": erros,
+        "por_produto": por_produto,
+    }
 
 
 def irmaos(conn, produto_id: int) -> list[dict]:
@@ -197,7 +291,7 @@ def irmaos(conn, produto_id: int) -> list[dict]:
     cor = str(atributos.get("Cor") or "").strip()
 
     rows = conn.execute(
-        "SELECT id, nome, sku, descricao, atributos FROM produtos_cadastro"
+        "SELECT id, nome, marca, sku, descricao, atributos FROM produtos_cadastro"
         " WHERE ativo=1 AND id<>? AND f_unaccent(lower(nome))=f_unaccent(lower(?))"
         "   AND f_unaccent(lower(marca))=f_unaccent(lower(?))"
         " ORDER BY id",
@@ -211,6 +305,7 @@ def irmaos(conn, produto_id: int) -> list[dict]:
         out.append({
             "id": r["id"],
             "nome": r["nome"],
+            "marca": r["marca"] or "",
             "sku": r["sku"] or "",
             "descricao": (r["descricao"] or "").strip(),
             "atributos": {k: str(v) for k, v in attrs.items()},

@@ -315,8 +315,11 @@ def aplicar_imagens_lote():
         return jsonify({"error": "Selecione ao menos um produto"}), 400
     if not urls:
         return jsonify({"error": "Selecione ao menos uma imagem"}), 400
+    favorita = (data.get("favorita") or "").strip()
     try:
-        resultado = imagens_lote.baixar_lote(produto_ids, urls, produto_repo)
+        resultado = imagens_lote.baixar_lote(
+            produto_ids, urls, favorita_url=favorita, repo=produto_repo
+        )
         return jsonify(resultado)
     except Exception as exc:
         return jsonify({"error": f"Erro ao aplicar: {exc}"}), 500
