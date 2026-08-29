@@ -87,7 +87,11 @@ services:
     volumes:
       - certbot-etc:/etc/letsencrypt
       - certbot-www:/var/www/certbot
-      - ../../deployment/certbot/cloudflare.ini:/etc/cloudflare/cloudflare.ini:ro
+      # Credencial do Cloudflare FORA do workspace do runner (o checkout limpa
+      # arquivos não versionados). Crie /home/jpsantos/siscom/certbot/cloudflare.ini
+      # (ver cloudflare.ini.example). Montagem de DIRETÓRIO evita o erro
+      # "mount a directory onto a file" quando o arquivo ainda não existe.
+      - /home/jpsantos/siscom/certbot:/etc/cloudflare:ro
     environment:
       - DOMAIN=${DOMAIN:-siscom.casalm.com.br}
       - CERTBOT_EMAIL=${CERTBOT_EMAIL:-contato@casalm.com.br}
@@ -95,7 +99,7 @@ services:
     command: >
       -c '
         while [ ! -f /etc/cloudflare/cloudflare.ini ]; do
-          echo "Aguardando deployment/certbot/cloudflare.ini (token Cloudflare Zone:DNS:Edit)..."
+          echo "Aguardando credencial: crie /home/jpsantos/siscom/certbot/cloudflare.ini (token Cloudflare Zone:DNS:Edit; ver cloudflare.ini.example)..."
           sleep 30
         done
         if [ ! -d "/etc/letsencrypt/live/${DOMAIN}" ]; then
