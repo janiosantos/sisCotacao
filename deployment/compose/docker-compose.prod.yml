@@ -94,6 +94,10 @@ services:
     entrypoint: /bin/sh
     command: >
       -c '
+        while [ ! -f /etc/cloudflare/cloudflare.ini ]; do
+          echo "Aguardando deployment/certbot/cloudflare.ini (token Cloudflare Zone:DNS:Edit)..."
+          sleep 30
+        done
         if [ ! -d "/etc/letsencrypt/live/${DOMAIN}" ]; then
           certbot certonly --dns-cloudflare --dns-cloudflare-credentials /etc/cloudflare/cloudflare.ini \
             -d "${DOMAIN}" --email "${CERTBOT_EMAIL}" --agree-tos --no-eff-email --non-interactive
