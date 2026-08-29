@@ -83,7 +83,10 @@ services:
   # Pré-requisito: criar deployment/certbot/cloudflare.ini com o token da API
   # (permissão Zone:DNS:Edit) e chmod 600. Ver cloudflare.ini.example.
   certbot:
-    image: certbot/certbot:latest
+    build:
+      context: ../../deployment/certbot
+      dockerfile: Dockerfile
+    image: siscom-certbot:latest
     volumes:
       - certbot-etc:/etc/letsencrypt
       - certbot-www:/var/www/certbot

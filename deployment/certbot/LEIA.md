@@ -57,7 +57,7 @@ docker compose -f deployment/compose/docker-compose.prod.yml exec certbot certbo
 |---|---|---|
 | `certbot` falha na emissão | Token inválido/sem permissão | Confira o token e o escopo Zone:DNS:Edit |
 | `certbot` aguardando credencial | `/home/jpsantos/siscom/certbot/cloudflare.ini` não existe | Crie o arquivo (chmod 600) — o certbot emite no próximo loop |
-| `certbot: error: unrecognized arguments: --dns-cloudflare` | Plugin ausente na imagem | Use `certbot/dns-cloudflare` no lugar de `certbot/certbot` no compose |
+| `certbot: error: unrecognized arguments: --dns-cloudflare-credentials` | Plugin ausente na imagem | A imagem `siscom-certbot` (build do `deployment/certbot/Dockerfile`) instala `certbot-dns-cloudflare`. Reconstrua: `docker compose ... up -d --build certbot` |
 | Site continua em HTTP após emissão | nginx ainda não recarregou | `docker compose -f ... restart frontend` (ou aguarde ~60s — o entrypoint troca para TLS) |
 | Porta pública errada | Roteador apontando 80 em vez de 443 | Ajuste o redirecionamento p/ porta interna 443 |
 
