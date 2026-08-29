@@ -1,0 +1,12 @@
+# Credenciais da API do Cloudflare para o desafio DNS-01 do Let's Encrypt.
+#
+# COMO USAR:
+#   1. Copie este arquivo para cloudflare.ini (mesma pasta).
+#   2. Gere um API Token no Cloudflare com permissão: Zone → DNS → Edit
+#      (escopo: o domínio casalm.com.br).
+#   3. Preencha o token abaixo e proteja o arquivo: chmod 600 cloudflare.ini
+#      (o certbot recusa credenciais legíveis por outros usuários).
+#
+# ATENÇÃO: NUNCA commite este arquivo (já está no .gitignore).
+#
+dns_cloudflare_api_token = COLE_SEU_TOKEN_AQUI

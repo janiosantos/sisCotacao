@@ -66,6 +66,10 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 ## 6. Tarefas pendentes (priorizadas)
 
 **Alta**
+- [ ] **Ativar TLS/Let's Encrypt em produção** (`siscom.casalm.com.br`, DNS-01 via Cloudflare):
+  criar `deployment/certbot/cloudflare.ini` (token Zone:DNS:Edit, chmod 600), ajustar o
+  redirecionamento de porta para a 443 interna e `docker compose up -d --build` — ver
+  `deployment/certbot/LEIA.md`. Renovação automática (certbot a cada 12h + nginx reload).
 - [ ] Integrar o **site institucional** (`CASA_LM/site`) à API pública — apontar `siteConfig.ts` para `/api/publico/*` e consumir paginação (`has_more`).
 - [ ] **Sincronizar a VM** (10.189.14.9) com os commits recentes: `git pull` + `docker compose up -d --build` + `versioning apply` (schema 96).
 

@@ -114,7 +114,8 @@ jobs:
           docker compose -f deployment/compose/docker-compose.prod.yml exec -T backend \
             python -m migrations status
           for i in $(seq 1 30); do
-            if curl -fsS http://localhost/api/health >/dev/null 2>&1; then
+            if curl -ksfSL https://localhost/api/health >/dev/null 2>&1 \
+               || curl -ksfSL http://localhost/api/health >/dev/null 2>&1; then
               echo "backend OK"; exit 0
             fi
             sleep 3

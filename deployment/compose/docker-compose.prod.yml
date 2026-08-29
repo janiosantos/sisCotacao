@@ -38,7 +38,7 @@ services:
       # acessada (Host header / X-Forwarded-*). PUBLIC_BASE_URL é override
       # explícito, opcional — use apenas se o comprador acessa pela LAN e os
       # fornecedores pela porta pública (ex.: redirecionamento de porta/CGNAT):
-      #   - PUBLIC_BASE_URL=http://siscom.casalm.com.br:6173
+      #   - PUBLIC_BASE_URL=https://siscom.casalm.com.br:6173
       # Migrações são aplicadas em passo explícito do pipeline (deploy.yml),
       # fora do processo web — evita crash-loop se uma migração falhar.
       - AUTO_MIGRATE=0
@@ -61,15 +61,52 @@ services:
       dockerfile: Dockerfile.prod
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      # Certificados Let's Encrypt (emitidos pelo serviço certbot) + webroot ACME.
+      - certbot-etc:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+    environment:
+      - DOMAIN=${DOMAIN:-siscom.casalm.com.br}
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1/ || exit 1"]
+      test: ["CMD-SHELL", "wget -qO /dev/null --no-check-certificate https://127.0.0.1/ -T 5 2>/dev/null || wget -qO /dev/null http://127.0.0.1/ -T 5 2>/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
     restart: unless-stopped
 
+  # Let's Encrypt — desafio DNS-01 via Cloudflare (funciona atrás de CGNAT,
+  # sem precisar abrir portas 80/443). Emite na 1ª subida e renova a cada 12h.
+  # Pré-requisito: criar deployment/certbot/cloudflare.ini com o token da API
+  # (permissão Zone:DNS:Edit) e chmod 600. Ver cloudflare.ini.example.
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+      - ../../deployment/certbot/cloudflare.ini:/etc/cloudflare/cloudflare.ini:ro
+    environment:
+      - DOMAIN=${DOMAIN:-siscom.casalm.com.br}
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL:-contato@casalm.com.br}
+    entrypoint: /bin/sh
+    command: >
+      -c '
+        if [ ! -d "/etc/letsencrypt/live/${DOMAIN}" ]; then
+          certbot certonly --dns-cloudflare --dns-cloudflare-credentials /etc/cloudflare/cloudflare.ini \
+            -d "${DOMAIN}" --email "${CERTBOT_EMAIL}" --agree-tos --no-eff-email --non-interactive
+        fi
+        trap exit TERM
+        while :; do
+          certbot renew --non-interactive --quiet
+          sleep 12h & wait $${!}
+        done
+      '
+    restart: unless-stopped
+
 volumes:
   postgres-data:
+  certbot-etc:
+  certbot-www:

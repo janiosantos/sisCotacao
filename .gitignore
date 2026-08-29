@@ -51,3 +51,6 @@ deploy-images.tar
 catalog-data.dump
 prod-backup-*.dump
 backups/
+
+# Credenciais Cloudflare para Let's Encrypt (DNS-01)
+deployment/certbot/cloudflare.ini
