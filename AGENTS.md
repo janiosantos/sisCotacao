@@ -12,6 +12,13 @@ aplicação de migrações em ambientes não-dev) sem confirmação explícita d
   deploy por conta própria.
 - Exceção: nenhuma. Se houver urgência declarada, perguntar antes.
 
+## 📋 CONTEXTO_SESSAO.md — leitura e atualização obrigatórias
+
+Este projeto é trabalhado por **múltiplos agentes de codificação** (opencode, Codex e afins).
+- **LEIA `CONTEXTO_SESSAO.md` no início de toda sessão** (estado do projeto, logs, pendências, próximos passos).
+- **ATUALIZE ao final de toda sessão**: log do que foi implementado, tarefas pendentes e próximos passos.
+- Mantenha sempre fiel ao estado real (commitado/deployado).
+
 ## Aplicação de patches
 
 Os patches (arquivos `.patch`, normalmente em `PATCH/`) são aplicados **em ordem sequencial**.

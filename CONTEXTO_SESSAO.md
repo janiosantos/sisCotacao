@@ -1,0 +1,99 @@
+# CONTEXTO_SESSAO — Estado do Projeto (leitura obrigatória para agentes)
+
+> **Regra para agentes (opencode, Codex e afins):**
+> 1. **LEIA este arquivo + `AGENTS.md` no início de cada sessão.**
+> 2. **ATUALIZE ao final de cada sessão**: log de implementações, tarefas pendentes e próximos passos.
+> 3. Nunca invente estado — reflita o que está realmente commitado/deployado.
+
+---
+
+## 1. O que é o projeto
+
+ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nome técnico do repo: `ecommerce_scraper`
+(raiz: `C:\Users\jpsantos\Documents\Projetos\ecommerce_scraper`; remoto `https://github.com/janiosantos/sisCotacao`, branch `main`).
+
+- **Backend**: Python 3.14 · Flask · PostgreSQL 16 · `psycopg` (com shim `pgsql` que emula `sqlite3`)
+- **Frontend**: React + TypeScript + Vite + Tailwind (SPA em `frontend/`)
+- **Infra**: Docker Compose + nginx (proxy `/api`, `/images`, impressões e portal)
+- **Site institucional** (em paralelo): `C:\Users\jpsantos\Documents\Projetos\CASA_LM\site` — consumirá a **API pública** deste backend.
+
+## 2. Regras de ouro (não negociáveis)
+
+1. **DEPLOY para STAGING/PRODUÇÃO SOMENTE com confirmação explícita do usuário.** Commit/push é seguro; deploy não.
+2. Migrações **versionadas** em `backend/migrations/versions/` com `RISCO` + `MUDANCA` (o_que/porque). `AUTO_MIGRATE=0` — aplicar por comando explícito.
+3. Todo código vai para Git (`main`). Frontend **nunca** acessa o PostgreSQL diretamente (só a API).
+4. Mudança incompatível de contrato → Expand/Migrate/Contract (ciclo A–F).
+5. Testar: backend `pytest` (207), frontend `npm run typecheck` + `npm run build` + vitest.
+6. Fonte da verdade de imagens de produto = **filesystem** `images/cadastro/<produto_id>/`; banco guarda só o caminho relativo.
+
+## 3. Ambientes e acesso
+
+| Ambiente | Onde | Frontend | Observações |
+|---|---|---|---|
+| DEV (notebook) | Docker local | `http://localhost:8080` | código bind-mount; migrações por comando |
+| VM | `jpsantos@10.189.14.9` (`~/Projetos/ecommerce_scraper`) | `http://10.189.14.9:8080` | sudo `Mudar@123`; sempre `git pull` antes de operar |
+| STAGING | servidor (projeto `siscom-staging`) | `:8081` | banco nasce vazio e é migrado pelo pipeline |
+| PRODUÇÃO | servidor | domínio | só recebe release confirmada |
+
+- Banco dev: `localhost:5432/catalog` (catalog/catalog) — mesmo banco do docker local.
+- Banco de teste: `catalog_test` (env `TEST_PG_URL=postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test`).
+- **Atenção**: rodar o backend FORA do docker grava imagens em `backend/images` (errado). Usar `IMAGES_DIR=C:\Users\jpsantos\Documents\Projetos\ecommerce_scraper\images`.
+
+## 4. Estado atual
+
+- **Versão publicada**: `v2.32.2` (produção e staging — produção antes do staging por exceção pedida).
+- **Schema**: migrações `0052..0096` aplicadas (schema_version 96). Cadeia atual: 92 → 93 → 94 → 96 (a **0095 foi removida** — nunca commitada; era limpeza destrutiva indevida).
+- **Imagens**: 189.094 linhas em `imagens_produto`, 0 sem arquivo físico; arquivos em `images/cadastro/`.
+- **Produtos**: ~62.731 em `produtos_cadastro`; **~3.215 sem imagem** (fios desmembrados e afins).
+- **API pública**: `GET /api/publico/produtos` (paginado: `offset`/`limit` máx 100 + `has_more`; busca `?q=`; filtros `categoria`, `subcategoria`, `marca`, `em_linha`), `GET /api/publico/produtos/{id}`, `GET /api/publico/categorias`, `GET /api/publico/marcas`. Sem token, CORS `*`, sem vazamento interno.
+- **Página demo**: `GET /demo-publico.html` (busca, filtros, paginação, detalhe).
+- **OpenAPI**: `backend/openapi.json` (60 paths) servido em `/api/openapi.json`.
+
+## 5. Log de implementações (recentes)
+
+| Versão | O que foi feito |
+|---|---|
+| **v2.32.2** | Paginação explícita em `/api/publico/produtos` (`has_more`), busca `?q=`; correção da página demo (erro claro de JSON); AGENTS.md com regra de deploy. Deploy prod→staging (exceção). |
+| **v2.32.1** | Página demo `/demo-publico.html` (consome a API pública). |
+| **v2.32.0** | API pública `/api/publico/*` (produtos/detalhe/categorias/marcas) + CORS + OpenAPI (56→60 paths). |
+| **v2.31.0** | Imagens: `filename` relativo ao `IMAGES_DIR` (0093), padronização física em `cadastro/` (0094), **remoção da 0095** (nunca commitada), reconstrução de vínculos a partir do filesystem (0096, +81.305 linhas). 189.094 linhas, 0 quebradas. |
+| **v2.30.0** | Imagens em lote por fornecedor (busca/preview/aplicar), dedup MD5, retry 1x, limites 20/20, favorita = capa. |
+| **v2.29.x** | Busca: relevância por cobertura de palavras; spec distintivo no card (atributos+marca+unidade). |
+| **v2.28.0** | Taxonomia grupos/subgrupos (0092), combobox categoria filtrado, `reclassificar_cabos`, `normalizar_subcategorias`. |
+| **v2.27.0** | Descrição padronizada (nome+atributos+marca) + busca ILIKE/pg_trgm (0091; `produtos_fts` removido). |
+| **v2.26.0** | Unificação produto/variante (0085–0090): variantes viraram produtos independentes; EAV `variante_atributos` dropado. |
+
+## 6. Tarefas pendentes (priorizadas)
+
+**Alta**
+- [ ] Integrar o **site institucional** (`CASA_LM/site`) à API pública — apontar `siteConfig.ts` para `/api/publico/*` e consumir paginação (`has_more`).
+- [ ] **Sincronizar a VM** (10.189.14.9) com os commits recentes: `git pull` + `docker compose up -d --build` + `versioning apply` (schema 96).
+
+**Média**
+- [ ] ~**3.215 produtos sem imagem** — aplicar "imagens em lote" por fornecedor (fios desmembrados, etc.).
+- [ ] Homologação **Focus NFe** com credenciais reais (NF-e/NFC-e) — adapters prontos em staging.
+- [ ] Ligar **`FISCAL_ENGINE_V2` em PRODUÇÃO** (após deploy autorizado das releases 1.11→2.14).
+- [ ] Renomear pasta raiz para `casa-lm` (manual, fechar editores; o site já está em `CASA_LM/site`).
+
+**Baixa / infra**
+- [ ] Remover arquivos soltos `2.5mm²` sem linha em `images/cadastro/62455` e `62461` (restos de teste).
+- [ ] Limpeza opcional: ~2.742 pastas `images/cadastro/<id>/` de produtos que não existem mais.
+- [ ] Ampliar cobertura de testes frontend (vitest — esqueleto pronto).
+- [ ] OpenAPI fase 2 (crescer por blueprint tocado).
+
+## 7. Próximos passos sugeridos
+
+1. Validar produção: `/api/health`, `/api/pronto`, `/api/publico/produtos?limit=5` (has_more), `/demo-publico.html`.
+2. Sincronizar a VM.
+3. Confirmar a integração do site institucional (buscar/filtrar/paginar pelo `has_more`).
+4. Rodar "imagens em lote" para os produtos sem imagem (grupo ELE / fios).
+
+## 8. Convenções de trabalho para agentes
+
+- **Começar**: ler `AGENTS.md` + `CONTEXTO_SESSAO.md` + `git log --oneline -15`.
+- **Terminar**: atualizar `CONTEXTO_SESSAO.md` (log + pendências + próximos passos) e commit/push.
+- **Backend**: após alterar, `python -m py_compile <arquivo>`; testes `pytest` (env `TEST_PG_URL` apontando para `catalog_test`). 207 testes verdes hoje.
+- **Frontend**: `npm run typecheck` e `npm run build` (a partir de `frontend/`); testes `npm test`.
+- **Migração nova**: arquivo `NNNN_*.py` em `backend/migrations/versions/` com `VERSION`, `RISCO`, `NAME`, `MUDANCA`, `guard`, `forward`, `backward`. Aplicar no dev com `python -m catalog_server.versioning apply --origem local`. Testar banco vazio→head (o CI do staging faz isso).
+- **Deploy**: NUNCA sem confirmação explícita do usuário (ver AGENTS.md). Apresentar resumo e aguardar.
+- **Manter os dois ambientes em sincronia** (notebook ↔ VM) via git pull/push.
