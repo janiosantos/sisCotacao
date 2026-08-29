@@ -20,6 +20,8 @@ def _sanitizar(card: dict) -> dict:
         "ean": card.get("ean") or "",
         "nome": card.get("name") or "",
         "marca": card.get("brand") or "",
+        "grupo": card.get("grupo") or "",
+        "grupo_nome": card.get("grupo_nome") or "",
         "categoria": card.get("category") or "",
         "subcategoria": card.get("subcategoria") or "",
         "preco": card.get("price") or 0,
@@ -43,6 +45,7 @@ def publico_produtos():
     items, total = catalog_repo.list_products(
         categoria=(request.args.get("categoria") or "").strip(),
         subcategoria=(request.args.get("subcategoria") or "").strip(),
+        grupo=(request.args.get("grupo") or "").strip(),
         q=(request.args.get("q") or "").strip(),
         em_linha=request.args.get("em_linha", "1") != "0",
         offset=offset,
@@ -67,12 +70,20 @@ def publico_produto(produto_id: int):
     p = catalog_repo.product(produto_id)
     if p is None:
         return jsonify({"error": "Produto não encontrado"}), 404
+    grupo_codigo = grupo_nome = ""
     with system_conn() as conn:
         row = conn.execute(
-            "SELECT descricao, unidade_venda, embalagem, atributos"
+            "SELECT descricao, unidade_venda, embalagem, atributos, grupo_id"
             " FROM produtos_cadastro WHERE id=?",
             (produto_id,),
         ).fetchone()
+        if row and row["grupo_id"]:
+            g = conn.execute(
+                "SELECT codigo, nome FROM grupos WHERE id=?",
+                (row["grupo_id"],),
+            ).fetchone()
+            if g:
+                grupo_codigo, grupo_nome = g["codigo"], g["nome"]
     imagens = p.get("image_urls") or []
     return jsonify(
         {
@@ -82,6 +93,8 @@ def publico_produto(produto_id: int):
             "nome": p.get("name") or "",
             "marca": p.get("brand") or "",
             "cor": p.get("color") or "",
+            "grupo": grupo_codigo,
+            "grupo_nome": grupo_nome,
             "categoria": p.get("category") or "",
             "subcategoria": p.get("subcategoria") or "",
             "preco": p.get("price") or 0,
@@ -116,3 +129,23 @@ def publico_marcas():
             " ORDER BY marca"
         ).fetchall()
     return jsonify({"marcas": [r["marca"] for r in rows]})
+
+
+@api_publico_bp.route("/api/publico/grupos", methods=["GET", "OPTIONS"])
+def publico_grupos():
+    if request.method == "OPTIONS":
+        return ("", 204)
+    with system_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT g.codigo, g.nome, COUNT(p.id) AS total
+            FROM grupos g
+            LEFT JOIN produtos_cadastro p ON p.grupo_id=g.id AND p.ativo=1
+            WHERE g.ativo=1
+            GROUP BY g.id, g.codigo, g.nome
+            ORDER BY g.codigo
+            """
+        ).fetchall()
+    return jsonify(
+        {"grupos": [{"codigo": r["codigo"], "nome": r["nome"], "total": r["total"]} for r in rows]}
+    )

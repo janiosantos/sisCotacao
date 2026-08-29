@@ -2220,6 +2220,15 @@
        "default": 30,
        "maximum": 100
       }
+     },
+     {
+      "name": "grupo",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Filtra pelo grupo (código ou nome, ex.: ELE ou ELETRICO)"
      }
     ],
     "responses": {
@@ -2326,6 +2335,46 @@
            "type": "array",
            "items": {
             "type": "string"
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/publico/grupos": {
+   "get": {
+    "tags": [
+     "publico"
+    ],
+    "summary": "Lista de grupos do catálogo (público)",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "Grupos com código, nome e total de produtos",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "grupos": {
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "codigo": {
+              "type": "string"
+             },
+             "nome": {
+              "type": "string"
+             },
+             "total": {
+              "type": "integer"
+             }
+            }
            }
           }
          }
@@ -3885,6 +3934,14 @@
       "items": {
        "type": "string"
       }
+     },
+     "grupo": {
+      "type": "string",
+      "description": "Código do grupo (ELE, HID, FER, PAR...)"
+     },
+     "grupo_nome": {
+      "type": "string",
+      "description": "Nome do grupo (ELETRICO, HIDRAULICO...)"
      }
     }
    }

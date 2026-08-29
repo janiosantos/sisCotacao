@@ -73,6 +73,7 @@
 
   <div class="filtros">
     <input id="q" type="search" placeholder="Buscar produto (nome, marca, especificação)…">
+    <select id="grp"></select>
     <select id="cat"></select>
     <select id="subcat"></select>
     <select id="marca"></select>
@@ -145,11 +146,18 @@ function erro(msg){
 
 async function carregarFiltros(){
   try {
-    const [cats, marcas] = await Promise.all([
+    const [cats, marcas, grupos] = await Promise.all([
       api("/api/publico/categorias"),
       api("/api/publico/marcas"),
+      api("/api/publico/grupos"),
     ]);
     categorias = cats || {};
+    const selGrp = document.getElementById("grp");
+    selGrp.innerHTML = '<option value="">Todos os grupos</option>';
+    for (const g of (grupos.grupos || [])) {
+      const o = document.createElement("option");
+      o.value = g.codigo; o.textContent = g.nome + " (" + g.codigo + ")"; selGrp.appendChild(o);
+    }
     const selCat = document.getElementById("cat");
     selCat.innerHTML = '<option value="">Todas as categorias</option>';
     for (const c of Object.keys(categorias).sort()) {
@@ -182,10 +190,12 @@ function atualizarSubcat(){
 function qs(){
   const p = new URLSearchParams();
   const q = document.getElementById("q").value.trim();
+  const grp = document.getElementById("grp").value;
   const cat = document.getElementById("cat").value;
   const sub = document.getElementById("subcat").value;
   const mar = document.getElementById("marca").value;
   if (q) p.set("q", q);
+  if (grp) p.set("grupo", grp);
   if (cat) p.set("categoria", cat);
   if (sub) p.set("subcategoria", sub);
   if (mar) p.set("marca", mar);
@@ -240,7 +250,7 @@ function card(p){
     `<div class="info"><div class="nome">${escapeHtml(p.nome || "")}</div>` +
     `<div class="marca">${escapeHtml(p.marca || "")}</div>` +
     `<div class="preco">${preco}</div>` +
-    `<div class="cat">${escapeHtml([p.categoria, p.subcategoria].filter(Boolean).join(" › "))}</div></div>`;
+    `<div class="cat">${escapeHtml([p.grupo_nome || p.grupo, p.categoria, p.subcategoria].filter(Boolean).join(" › "))}</div></div>`;
   div.onclick = () => detalhe(p.id);
   return div;
 }
@@ -269,6 +279,7 @@ async function detalhe(id){
         `<div><div class="k">Preço</div><div class="v">${fmtBRL(p.preco)}</div></div>` +
         (promo ? `<div>${promo}</div>` : "") +
         `<div><div class="k">Categoria</div><div class="v">${escapeHtml(p.categoria || "—")}</div></div>` +
+        `<div><div class="k">Grupo</div><div class="v">${escapeHtml(p.grupo_nome || p.grupo || "—")}</div></div>` +
         `<div><div class="k">Subcategoria</div><div class="v">${escapeHtml(p.subcategoria || "—")}</div></div>` +
         `<div><div class="k">SKU</div><div class="v">${escapeHtml(p.sku || "—")}</div></div>` +
         `<div><div class="k">EAN</div><div class="v">${escapeHtml(p.ean || "—")}</div></div>` +

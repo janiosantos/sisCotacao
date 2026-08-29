@@ -23,6 +23,7 @@ def listar_produtos():
     items, total = catalog_repo.list_products(
         categoria=(request.args.get("categoria") or "").strip(),
         subcategoria=(request.args.get("subcategoria") or "").strip(),
+        grupo=(request.args.get("grupo") or "").strip(),
         q=(request.args.get("q") or "").strip(),
         classe=classe,
         em_linha=request.args.get("em_linha", "1") != "0",
@@ -41,6 +42,7 @@ def produtos_abc_resumo():
         catalog_repo.resumo_abc(
             categoria=(request.args.get("categoria") or "").strip(),
             subcategoria=(request.args.get("subcategoria") or "").strip(),
+            grupo=(request.args.get("grupo") or "").strip(),
             q=(request.args.get("q") or "").strip(),
             em_linha=request.args.get("em_linha", "1") != "0",
         )

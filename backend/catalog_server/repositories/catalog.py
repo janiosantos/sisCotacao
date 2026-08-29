@@ -50,6 +50,7 @@ class CatalogRepository:
         self,
         categoria: str = "",
         subcategoria: str = "",
+        grupo: str = "",
         q: str = "",
         classe: str = "",
         em_linha: bool = True,
@@ -65,12 +66,12 @@ class CatalogRepository:
         compatibilidade da assinatura — o comportamento é sempre "flat": um
         card por produto com seu próprio preço. `classe` filtra pela Curva ABC.
         `em_linha=True` (padrão) exclui equipamentos de alto valor marcados
-        `em_linha=0`.
+        `em_linha=0`. `grupo` filtra pelo grupo (código ou nome, ex.: ELE/ELETRICO).
         """
         q = (q or "").strip()
         ordenar = (ordenar or "").strip().lower()
         with system_conn() as conn:
-            rows, total = self._browse_flat(conn, categoria, subcategoria, q, classe, em_linha, offset, limit, ordenar)
+            rows, total = self._browse_flat(conn, categoria, subcategoria, grupo, q, classe, em_linha, offset, limit, ordenar)
             produto_ids = [r["id"] for r in rows]
             attr_defs = self._load_attr_defs(conn, [r["familia_id"] for r in rows])
             attrs = self._load_product_attrs(conn, produto_ids, attr_defs)
@@ -80,12 +81,13 @@ class CatalogRepository:
         return cards, total
 
     def _browse_flat(
-        self, conn, categoria: str, subcategoria: str, q: str, classe: str, em_linha: bool, offset: int, limit: int, ordenar: str = ""
+        self, conn, categoria: str, subcategoria: str, grupo: str, q: str, classe: str, em_linha: bool, offset: int, limit: int, ordenar: str = ""
     ) -> tuple[list[dict], int]:
         joins = (
             " LEFT JOIN familias f ON f.id=p.familia_id"
             " LEFT JOIN categorias cat ON cat.id=p.categoria_id"
             " LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id"
+            " LEFT JOIN grupos grp ON grp.id=p.grupo_id"
         )
         where = ["p.ativo=1"]
         params: list = []
@@ -105,6 +107,9 @@ class CatalogRepository:
         if subcategoria:
             where.append("sub.nome=?")
             params.append(subcategoria)
+        if grupo:
+            where.append("(grp.codigo ILIKE ? OR grp.nome ILIKE ?)")
+            params += [grupo, grupo]
         if classe:
             where.append("p.classe_abc=?")
             params.append(classe)
@@ -123,6 +128,8 @@ class CatalogRepository:
                    p.nome, p.marca AS marca_var, p.familia_id,
                    COALESCE(cat.nome, '') AS categoria,
                    COALESCE(sub.nome, '') AS subcategoria, p.embalagem,
+                   COALESCE(grp.codigo, '') AS grupo_codigo,
+                   COALESCE(grp.nome, '') AS grupo_nome,
                    p.classe_abc, p.ordem_abc,
                    p.unidade_venda, p.embalagem AS embalagem_qtd, p.ncm,
                    p.descricao
@@ -189,13 +196,14 @@ class CatalogRepository:
         return tree
 
     def resumo_abc(
-        self, categoria: str = "", subcategoria: str = "", q: str = "", em_linha: bool = True
+        self, categoria: str = "", subcategoria: str = "", grupo: str = "", q: str = "", em_linha: bool = True
     ) -> dict:
         """Contagem de produtos por classe ABC sob os mesmos filtros do catálogo."""
         q = (q or "").strip()
         joins = (
             " LEFT JOIN categorias cat ON cat.id=p.categoria_id"
             " LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id"
+            " LEFT JOIN grupos grp ON grp.id=p.grupo_id"
         )
         where = ["p.ativo=1"]
         params: list = []
@@ -205,6 +213,9 @@ class CatalogRepository:
         if subcategoria:
             where.append("sub.nome=?")
             params.append(subcategoria)
+        if grupo:
+            where.append("(grp.codigo ILIKE ? OR grp.nome ILIKE ?)")
+            params += [grupo, grupo]
         if em_linha:
             where.append("p.em_linha=1")
         if q:
@@ -478,6 +489,8 @@ SELECT p.id, p.sku, p.preco, p.marca, p.external_id,
             "installment": row["installment"] or "",
             "category": row["categoria"] or "",
             "subcategory": row["subcategoria"] or "",
+            "grupo": row.get("grupo_codigo") or "",
+            "grupo_nome": row.get("grupo_nome") or "",
             "classe_abc": row["classe_abc"] or "",
             "unidade_venda": row["unidade_venda"] or "",
             "embalagem_qtd": row["embalagem_qtd"],

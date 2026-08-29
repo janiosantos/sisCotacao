@@ -52,6 +52,72 @@ def test_publico_produtos_busca(system_db):
     assert r.get_json()["total"] == 0
 
 
+def test_publico_produtos_filtro_grupo(system_db):
+    """Filtro por grupo (código ou nome) na listagem pública."""
+    from catalog_server import db
+    from catalog_server.app_factory import create_app
+
+    with db.system_conn() as conn:
+        for cod, nome in (("ELE", "ELETRICO"), ("HID", "HIDRAULICO")):
+            conn.execute(
+                "INSERT INTO grupos (codigo, nome) VALUES (?, ?) ON CONFLICT (codigo) DO NOTHING",
+                (cod, nome),
+            )
+        g_ele = conn.execute("SELECT id FROM grupos WHERE codigo='ELE'").fetchone()["id"]
+        g_hid = conn.execute("SELECT id FROM grupos WHERE codigo='HID'").fetchone()["id"]
+        conn.execute(
+            "INSERT INTO produtos_cadastro (nome, sku, ativo, preco, grupo_id)"
+            " VALUES ('Cabo 10mm ELE', 'ELE-1', 1, 50, ?)",
+            (g_ele,),
+        )
+        conn.execute(
+            "INSERT INTO produtos_cadastro (nome, sku, ativo, preco, grupo_id)"
+            " VALUES ('Registro HID', 'HID-1', 1, 30, ?)",
+            (g_hid,),
+        )
+
+    c = create_app().test_client()
+    r = c.get("/api/publico/produtos?grupo=ELE&limit=10")
+    assert r.status_code == 200
+    data = r.get_json()
+    assert data["total"] >= 1
+    for item in data["items"]:
+        assert item["grupo"] == "ELE"
+        assert item["grupo_nome"] == "ELETRICO"
+    # por nome (case-insensitive)
+    r2 = c.get("/api/publico/produtos?grupo=hidraulico&limit=10")
+    d2 = r2.get_json()
+    assert d2["total"] >= 1
+    for item in d2["items"]:
+        assert item["grupo"] == "HID"
+
+
+def test_publico_grupos(system_db):
+    """Lista de grupos públicos (código, nome, total)."""
+    from catalog_server import db
+    from catalog_server.app_factory import create_app
+
+    with db.system_conn() as conn:
+        conn.execute(
+            "INSERT INTO grupos (codigo, nome) VALUES ('ELE', 'ELETRICO') ON CONFLICT (codigo) DO NOTHING"
+        )
+        gid = conn.execute("SELECT id FROM grupos WHERE codigo='ELE'").fetchone()["id"]
+        conn.execute(
+            "INSERT INTO produtos_cadastro (nome, sku, ativo, grupo_id)"
+            " VALUES ('Cabo 10mm', 'ELE-9', 1, ?)",
+            (gid,),
+        )
+
+    c = create_app().test_client()
+    r = c.get("/api/publico/grupos")
+    assert r.status_code == 200
+    grupos = r.get_json()["grupos"]
+    assert grupos
+    ele = next(g for g in grupos if g["codigo"] == "ELE")
+    assert ele["nome"] == "ELETRICO"
+    assert ele["total"] >= 1
+
+
 def test_publico_produto_detalhe(system_db):
     from catalog_server.app_factory import create_app
 
