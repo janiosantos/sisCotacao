@@ -1,3653 +1,3887 @@
 {
-  "openapi": "3.0.3",
-  "info": {
-    "title": "sisCotacao — API",
-    "description": "Contrato dos endpoints principais do ERP (fase 1). Autenticação por Bearer token emitido em /api/login (TTL 7 dias). Portal do fornecedor usa token próprio na URL e está fora deste contrato.",
-    "version": "v1"
+ "openapi": "3.0.3",
+ "info": {
+  "title": "sisCotacao — API",
+  "description": "Contrato dos endpoints principais do ERP (fase 1). Autenticação por Bearer token emitido em /api/login (TTL 7 dias). Portal do fornecedor usa token próprio na URL e está fora deste contrato.",
+  "version": "v1"
+ },
+ "servers": [
+  {
+   "url": "/",
+   "description": "Mesma origem (nginx proxy /api)"
+  }
+ ],
+ "security": [
+  {
+   "bearerAuth": []
+  }
+ ],
+ "tags": [
+  {
+   "name": "infra",
+   "description": "Liveness/readiness (abertos)"
   },
-  "servers": [
-    {
-      "url": "/",
-      "description": "Mesma origem (nginx proxy /api)"
-    }
-  ],
-  "security": [
-    {
-      "bearerAuth": []
-    }
-  ],
-  "tags": [
-    {
-      "name": "infra",
-      "description": "Liveness/readiness (abertos)"
-    },
-    {
-      "name": "auth",
-      "description": "Autenticação (abertos)"
-    },
-    {
-      "name": "sistema",
-      "description": "Versionamento e atualizações"
-    },
-    {
-      "name": "flags",
-      "description": "Feature flags"
-    },
-    {
-      "name": "produtos",
-      "description": "Importação de produto por URL"
-    },
-    {
-      "name": "estoque",
-      "description": "Saldo e movimentos de estoque por depósito"
-    },
-    {
-      "name": "fiscal",
-      "description": "Perfil fiscal do produto e classificação"
-    },
-    {
-      "name": "contabil",
-      "description": "Gatilhos contábeis por evento e lançamentos"
-    },
-    {
-      "name": "permissoes",
-      "description": "Controle de acesso por perfil (RBAC)"
-    }
-  ],
-  "paths": {
-    "/api/health": {
-      "get": {
-        "tags": [
-          "infra"
-        ],
-        "summary": "Liveness do container (não checa o banco)",
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "Processo vivo",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "ok"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/pronto": {
-      "get": {
-        "tags": [
-          "infra"
-        ],
-        "summary": "Readiness real — executa SELECT 1 no banco",
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "Sistema utilizável",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProntoOK"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Banco indisponível",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Erro"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/login": {
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Autentica e emite o token da sessão",
-        "security": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Autenticado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoginOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Credenciais inválidas ou usuário inativo",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Erro"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/logout": {
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Encerra a sessão local (token é client-side)",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
-    "/api/sistema/status": {
-      "get": {
-        "tags": [
-          "sistema"
-        ],
-        "summary": "Versão app × schema e pendências por risco",
-        "responses": {
-          "200": {
-            "description": "Estado de atualização",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SistemaStatus"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/NaoAutenticado"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Erro"
-                }
-              }
-            },
-            "description": "Erro de infraestrutura"
-          }
-        }
-      }
-    },
-    "/api/sistema/updates/apply": {
-      "post": {
-        "tags": [
-          "sistema"
-        ],
-        "summary": "Aplica migrações pendentes por nível de risco",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApplyIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Migrações aplicadas (ou nada pendente)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SistemaStatus"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Falha ao aplicar",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Erro"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/sistema/updates/log": {
-      "get": {
-        "tags": [
-          "sistema"
-        ],
-        "summary": "Histórico de atualizações aplicadas (últimos 50)",
-        "responses": {
-          "200": {
-            "description": "Eventos mais recentes primeiro",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "log": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/AtualizacaoLog"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Erro"
-                }
-              }
-            },
-            "description": "Erro de infraestrutura"
-          }
-        }
-      }
-    },
-    "/api/sistema/releases/pendentes": {
-      "get": {
-        "tags": [
-          "sistema"
-        ],
-        "summary": "Manifestos de release ainda não publicados",
-        "responses": {
-          "200": {
-            "description": "Rascunhos acumulados em dev",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "pendentes": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Manifesto"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Erro"
-                }
-              }
-            },
-            "description": "Erro de infraestrutura"
-          }
-        }
-      }
-    },
-    "/api/flags": {
-      "get": {
-        "tags": [
-          "flags"
-        ],
-        "summary": "Feature flags registradas com estado atual",
-        "responses": {
-          "200": {
-            "description": "Lista das flags do registro oficial",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "flags": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/FeatureFlag"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/flags/{nome}": {
-      "put": {
-        "tags": [
-          "flags"
-        ],
-        "summary": "Liga/desliga uma flag registrada (rollback comportamental)",
-        "parameters": [
-          {
-            "name": "nome",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "ativo"
-                ],
-                "properties": {
-                  "ativo": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Estado gravado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    },
-                    "nome": {
-                      "type": "string"
-                    },
-                    "ativo": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Flag não registrada",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Erro"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/produtos-cadastro/parse-url": {
-      "post": {
-        "tags": [
-          "produtos"
-        ],
-        "summary": "Baixa a página do produto e devolve preview para conferência",
-        "description": "Requer página de produto; usa os parsers por domínio. Timeout de rede: 40s.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "url"
-                ],
-                "properties": {
-                  "url": {
-                    "type": "string",
-                    "format": "uri"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Preview estruturado do produto",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParsePreview"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "URL ausente/inválida ou produto não identificado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Erro"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/estoque/saldo": {
-      "get": {
-        "tags": [
-          "estoque"
-        ],
-        "summary": "Saldo por depósito com situação (ok/ruptura/excesso)",
-        "description": "Filtra por depósito, variante, família ou produto; cada linha traz `estoque_minimo`/`estoque_maximo` e `situacao` calculada.",
-        "parameters": [
-          {
-            "name": "deposito_id",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "variante_id",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "familia_id",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "produto_id",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Linhas de saldo",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SaldoItem"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/fiscal/perfil-efetivo/{variante_id}": {
-      "get": {
-        "tags": [
-          "fiscal"
-        ],
-        "summary": "Perfil fiscal efetivo da variação (hierarquia Produto→Variação)",
-        "description": "Retorna o perfil padrão do produto (herdado), o override da variação (quando existir), o efetivo mesclado e os campos em override — para a UI mostrar herdado vs override.",
-        "parameters": [
-          {
-            "name": "variante_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Perfil efetivo",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PerfilFiscalEfetivo"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/contabil/gatilhos": {
-      "get": {
-        "tags": [
-          "contabil"
-        ],
-        "summary": "Gatilhos contábeis configurados por evento",
-        "responses": {
-          "200": {
-            "description": "Lista de gatilhos",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatilhosOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/contabil/gatilhos/{evento_tipo}": {
-      "put": {
-        "tags": [
-          "contabil"
-        ],
-        "summary": "Configura o gatilho contábil de um evento (contas débito/crédito)",
-        "parameters": [
-          {
-            "name": "evento_tipo",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "venda_autorizada",
-                "compra",
-                "ajuste"
-              ]
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GatilhoIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Gatilho salvo",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContabilGatilho"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "evento inválido ou ativo sem contas",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Erro"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/contabil/lancamentos": {
-      "get": {
-        "tags": [
-          "contabil"
-        ],
-        "summary": "Lançamentos contábeis gerados pelos gatilhos (idempotentes por evento)",
-        "parameters": [
-          {
-            "name": "limite",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 100
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Lançamentos recentes",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LancamentosOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/perfis": {
-      "get": {
-        "tags": [
-          "permissoes"
-        ],
-        "summary": "Perfis com matriz de permissões por recurso",
-        "responses": {
-          "200": {
-            "description": "Perfis (Administrador marcado como superuser)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/PerfilAcesso"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "permissoes"
-        ],
-        "summary": "Cria um perfil novo",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PerfilCRUDIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Perfil criado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "integer"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Nome reservado/duplicado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Erro"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/perfis/{perfil_id}/permissoes": {
-      "put": {
-        "tags": [
-          "permissoes"
-        ],
-        "summary": "Grava a matriz de permissões de um perfil",
-        "parameters": [
-          {
-            "name": "perfil_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MatrizPermissoesIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Matriz salva"
-          },
-          "400": {
-            "description": "Administrador é superuser (não usa matriz)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Erro"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/permissoes/catalogo": {
-      "get": {
-        "tags": [
-          "permissoes"
-        ],
-        "summary": "Catálogo de recursos e ações disponíveis",
-        "responses": {
-          "200": {
-            "description": "Recursos e ações",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogoPermissoes"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/usuarios/{usuario_id}/perfis": {
-      "put": {
-        "tags": [
-          "permissoes"
-        ],
-        "summary": "Define os perfis (N:N) de um usuário",
-        "parameters": [
-          {
-            "name": "usuario_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "perfil_ids": {
-                    "type": "array",
-                    "items": {
-                      "type": "integer"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Perfis atualizados"
-          }
-        }
-      }
-    },
-    "/api/usuarios/{usuario_id}/overrides": {
-      "put": {
-        "tags": [
-          "permissoes"
-        ],
-        "summary": "Concede ações extras por tela (override nunca remove)",
-        "parameters": [
-          {
-            "name": "usuario_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "conceder": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  "negar": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  "overrides": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "description": "Formato legado (concessões)"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Overrides atualizados"
-          }
-        }
-      }
-    },
-    "/api/perfis/{perfil_id}": {
-      "put": {
-        "tags": [
-          "permissoes"
-        ],
-        "summary": "Renomeia/atualiza um perfil",
-        "parameters": [
-          {
-            "name": "perfil_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PerfilCRUDIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Perfil atualizado"
-          },
-          "400": {
-            "description": "Reservado/duplicado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Erro"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "permissoes"
-        ],
-        "summary": "Exclui um perfil (bloqueia Administrador e perfis em uso)",
-        "parameters": [
-          {
-            "name": "perfil_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Perfil excluído"
-          },
-          "400": {
-            "description": "Em uso/reservado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Erro"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/perfis/{perfil_id}/ativo": {
-      "patch": {
-        "tags": [
-          "permissoes"
-        ],
-        "summary": "Ativa/desativa um perfil",
-        "parameters": [
-          {
-            "name": "perfil_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "ativo",
-            "in": "query",
-            "schema": {
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Estado alterado"
-          }
-        }
-      }
-    },
-    "/api/webhooks/tecnospeed": {
-      "post": {
-        "tags": [
-          "sistema"
-        ],
-        "summary": "Webhook público de atualização de status na SEFAZ (Tecnospeed)",
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "Recebido"
-          }
-        }
-      }
-    },
-    "/api/orcamentos/{orcamento_id}/reabrir": {
-      "post": {
-        "tags": [
-          "orcamentos"
-        ],
-        "summary": "Reabre um pedido finalizado para correção (exige permissão de aprovação); revoga autorização de desconto acima da alçada",
-        "parameters": [
-          {
-            "name": "orcamento_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Reaberto (status liberado, virou_pedido=0)"
-          },
-          "403": {
-            "description": "Sem permissão de aprovação"
-          },
-          "400": {
-            "description": "Não é pedido finalizado"
-          }
-        }
-      }
-    },
-    "/api/orcamentos/pendentes-aprovacao": {
-      "get": {
-        "tags": [
-          "orcamentos"
-        ],
-        "summary": "Fila do aprovador: orçamentos/pedidos com desconto pendente que o usuário logado pode autorizar",
-        "responses": {
-          "200": {
-            "description": "Lista de pendentes"
-          }
-        }
-      }
-    },
-    "/api/orcamentos/{orcamento_id}/rejeitar-desconto": {
-      "post": {
-        "tags": [
-          "orcamentos"
-        ],
-        "summary": "Rejeita o desconto de um orçamento (motivo obrigatório)",
-        "parameters": [
-          {
-            "name": "orcamento_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "motivo": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Rejeitado"
-          },
-          "400": {
-            "description": "Motivo ausente"
-          }
-        }
-      }
-    },
-    "/api/clientes": {
-      "get": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Lista clientes (com segmento/categoria)",
-        "parameters": [
-          {
-            "name": "somente_ativos",
-            "in": "query",
-            "schema": {
-              "type": "boolean"
-            }
-          },
-          {
-            "name": "vendedor_id",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Lista de clientes",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Cliente"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Cria cliente",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClienteIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Cliente criado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/clientes/contexto": {
-      "get": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Dados auxiliares do formulário (vendedores, condições, tabelas, fiscal, segmentos)",
-        "responses": {
-          "200": {
-            "description": "Contexto de cadastro",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContextoCliente"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/clientes/{cliente_id}": {
-      "get": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Detalha cliente",
-        "responses": {
-          "200": {
-            "description": "Cliente",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Cliente"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Atualiza cliente",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClienteIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/clientes/{cliente_id}/situacao": {
-      "get": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Situação de crédito do cliente (limite, utilizado, atraso; excede_limite com total)",
-        "parameters": [
-          {
-            "name": "total",
-            "in": "query",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Situação de crédito",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClienteSituacao"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/clientes/{cliente_id}/apoio-comercial": {
-      "get": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Apoio comercial",
-        "responses": {
-          "200": {
-            "description": "Apoio",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClienteApoioComercial"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Salva apoio comercial (condição/tabela/limite/transportadora)",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClienteApoioComercial"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/clientes/{cliente_id}/apoio-fiscal": {
-      "get": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Apoio fiscal (CFOP/CST/CSOSN/CEST)",
-        "responses": {
-          "200": {
-            "description": "Apoio",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClienteApoioFiscal"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Salva apoio fiscal",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClienteApoioFiscal"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/clientes/{cliente_id}/enderecos": {
-      "get": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Endereços do cliente",
-        "responses": {
-          "200": {
-            "description": "Endereços",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ClienteEndereco"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Cria endereço",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClienteEnderecoIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Endereço criado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/clientes/{cliente_id}/contatos": {
-      "get": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Contatos do cliente",
-        "responses": {
-          "200": {
-            "description": "Contatos",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ClienteContato"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Cria contato",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClienteContatoIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Contato criado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/clientes/{cliente_id}/interacoes": {
-      "get": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Histórico de interações do cliente (ligação/visita/email/whatsapp/follow_up)",
-        "responses": {
-          "200": {
-            "description": "Interações",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ClienteInteracao"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Registra interação",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InteracaoIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Interação criada",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/fornecedores": {
-      "get": {
-        "tags": [
-          "fornecedores"
-        ],
-        "summary": "Lista fornecedores (busca por termo/categoria)",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "categoria",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "somente_ativos",
-            "in": "query",
-            "schema": {
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Lista de fornecedores",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Fornecedor"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "fornecedores"
-        ],
-        "summary": "Cria fornecedor",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FornecedorIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Fornecedor criado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/fornecedores/contexto": {
-      "get": {
-        "tags": [
-          "fornecedores"
-        ],
-        "summary": "Dados auxiliares do formulário (categorias, condições)",
-        "responses": {
-          "200": {
-            "description": "Contexto",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContextoFornecedor"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/fornecedores/{fornecedor_id}": {
-      "get": {
-        "tags": [
-          "fornecedores"
-        ],
-        "summary": "Detalha fornecedor",
-        "responses": {
-          "200": {
-            "description": "Fornecedor",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Fornecedor"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "fornecedores"
-        ],
-        "summary": "Atualiza fornecedor",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FornecedorIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/fornecedores/{fornecedor_id}/contatos": {
-      "get": {
-        "tags": [
-          "fornecedores"
-        ],
-        "summary": "Contatos do fornecedor",
-        "responses": {
-          "200": {
-            "description": "Contatos",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/FornecedorContato"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "fornecedores"
-        ],
-        "summary": "Cria contato do fornecedor",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FornecedorContatoIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Contato criado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/compras/cotacoes/{cotacao_id}/lembrar/{fornecedor_id}": {
-      "get": {
-        "tags": [
-          "compras"
-        ],
-        "summary": "Reenvia convite de um fornecedor (gera link/whatsapp/e-mail para o pendente)",
-        "responses": {
-          "200": {
-            "description": "Convite regenerado com link e URLs de contato",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Invite"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/fornecedor/{token}/proposta": {
-      "post": {
-        "tags": [
-          "portal-fornecedor"
-        ],
-        "summary": "Representante envia proposta (por item: preço, unidade, fator, marca, motivo, observação)",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "precos": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/PrecoProposta"
-                    }
-                  },
-                  "condicao_pagamento": {
-                    "type": "string"
-                  },
-                  "condicao_pagamento_dias": {
-                    "type": "integer"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Proposta registrada",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/fornecedor/{token}": {
-      "get": {
-        "tags": [
-          "portal-fornecedor"
-        ],
-        "summary": "Dados públicos do portal do fornecedor (itens com unidade/fator sugeridos)",
-        "responses": {
-          "200": {
-            "description": "Contexto do portal"
-          }
-        }
-      }
-    },
-    "/api/compras/pedidos/{pedido_id}/receber": {
-      "post": {
-        "tags": [
-          "compras"
-        ],
-        "summary": "Recebe pedido de compra: entrada de estoque + conta a pagar + status recebido",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "deposito_id": {
-                    "type": "integer"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Pedido recebido",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    },
-                    "total": {
-                      "type": "number"
-                    },
-                    "itens": {
-                      "type": "integer"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/solicitacoes-compra/{sc_id}": {
-      "get": {
-        "tags": [
-          "compras"
-        ],
-        "summary": "Solicitação de compra com itens (para integrar no pipeline)",
-        "responses": {
-          "200": {
-            "description": "Solicitação com itens"
-          }
-        }
-      }
-    },
-    "/api/financeiro/receber/{conta_id}/cobranca": {
-      "post": {
-        "tags": [
-          "financeiro"
-        ],
-        "summary": "Emite boleto ou PIX para a conta (provedor por prioridade)",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "operacao": {
-                    "type": "string",
-                    "enum": [
-                      "boleto",
-                      "pix"
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Cobrança emitida",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CobrancaResultado"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/financeiro/receber/{conta_id}/cobranca/status": {
-      "get": {
-        "tags": [
-          "financeiro"
-        ],
-        "summary": "Consulta status da cobrança na plataforma",
-        "responses": {
-          "200": {
-            "description": "Status da cobrança",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status_cobranca": {
-                      "type": "string"
-                    },
-                    "status_plataforma": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/financeiro/receber/{conta_id}/comprovante": {
-      "post": {
-        "tags": [
-          "financeiro"
-        ],
-        "summary": "Anexa comprovante de depósito/TED (multipart)",
-        "responses": {
-          "200": {
-            "description": "Comprovante salvo",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    },
-                    "filename": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/webhooks/payments/{provider}": {
-      "post": {
-        "tags": [
-          "webhooks"
-        ],
-        "summary": "Webhook de pagamento (baixa automática, idempotente)",
-        "responses": {
-          "200": {
-            "description": "Processado"
-          }
-        }
-      }
-    },
-    "/api/payment-providers": {
-      "get": {
-        "tags": [
-          "financeiro"
-        ],
-        "summary": "Lista provedores e configurações",
-        "responses": {
-          "200": {
-            "description": "Provedores e configs"
-          }
-        }
-      }
-    },
-    "/api/payment-providers/config": {
-      "put": {
-        "tags": [
-          "financeiro"
-        ],
-        "summary": "Salva configuração de provedor (credenciais/prioridade)",
-        "responses": {
-          "200": {
-            "description": "Ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/financeiro/pagar/lote": {
-      "post": {
-        "tags": [
-          "financeiro"
-        ],
-        "summary": "Cria contas a pagar parceladas (condição/manual/datas) ou recorrentes",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "fornecedor": {
-                    "type": "string"
-                  },
-                  "descricao": {
-                    "type": "string"
-                  },
-                  "documento": {
-                    "type": "string"
-                  },
-                  "valor": {
-                    "type": "number"
-                  },
-                  "data_emissao": {
-                    "type": "string"
-                  },
-                  "modo": {
-                    "type": "string",
-                    "enum": [
-                      "condicao",
-                      "manual",
-                      "datas"
-                    ]
-                  },
-                  "condicao_pagamento_id": {
-                    "type": "integer"
-                  },
-                  "n_parcelas": {
-                    "type": "integer"
-                  },
-                  "intervalo_dias": {
-                    "type": "integer"
-                  },
-                  "recorrencia": {
-                    "type": "string"
-                  },
-                  "frequencia": {
-                    "type": "string",
-                    "enum": [
-                      "mensal",
-                      "semanal",
-                      "anual"
-                    ]
-                  },
-                  "n_ocorrencias": {
-                    "type": "integer"
-                  },
-                  "dia": {
-                    "type": "integer"
-                  },
-                  "origem_tipo": {
-                    "type": "string"
-                  },
-                  "origem_id": {
-                    "type": "integer"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Lote criado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoteResultado"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/financeiro/receber/lote": {
-      "post": {
-        "tags": [
-          "financeiro"
-        ],
-        "summary": "Cria contas a receber parceladas ou recorrentes",
-        "responses": {
-          "201": {
-            "description": "Lote criado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoteResultado"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/financeiro/lote/preview": {
-      "post": {
-        "tags": [
-          "financeiro"
-        ],
-        "summary": "Calcula as parcelas sem gravar (preview)",
-        "responses": {
-          "200": {
-            "description": "Parcelas calculadas"
-          }
-        }
-      }
-    },
-    "/api/financeiro/lote/{tabela}/{grupo_id}": {
-      "get": {
-        "tags": [
-          "financeiro"
-        ],
-        "summary": "Lista as parcelas do grupo",
-        "responses": {
-          "200": {
-            "description": "Parcelas do grupo"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "financeiro"
-        ],
-        "summary": "Exclui as parcelas EM ABERTO do grupo",
-        "responses": {
-          "200": {
-            "description": "Excluídas",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    },
-                    "excluidas": {
-                      "type": "integer"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/financeiro/anexo/{tabela}/{conta_id}": {
-      "post": {
-        "tags": [
-          "financeiro"
-        ],
-        "summary": "Anexa documento/boleto/comprovante ao lançamento (multipart)",
-        "responses": {
-          "200": {
-            "description": "Anexo salvo"
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "financeiro"
-        ],
-        "summary": "Lista anexos do lançamento",
-        "responses": {
-          "200": {
-            "description": "Lista de anexos"
-          }
-        }
-      }
-    }
+  {
+   "name": "auth",
+   "description": "Autenticação (abertos)"
   },
-  "components": {
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "HMAC (base64.payload.signature), TTL 7 dias"
+  {
+   "name": "sistema",
+   "description": "Versionamento e atualizações"
+  },
+  {
+   "name": "flags",
+   "description": "Feature flags"
+  },
+  {
+   "name": "produtos",
+   "description": "Importação de produto por URL"
+  },
+  {
+   "name": "estoque",
+   "description": "Saldo e movimentos de estoque por depósito"
+  },
+  {
+   "name": "fiscal",
+   "description": "Perfil fiscal do produto e classificação"
+  },
+  {
+   "name": "contabil",
+   "description": "Gatilhos contábeis por evento e lançamentos"
+  },
+  {
+   "name": "permissoes",
+   "description": "Controle de acesso por perfil (RBAC)"
+  },
+  {
+   "name": "publico",
+   "description": "API pública para o site institucional (sem token)"
+  }
+ ],
+ "paths": {
+  "/api/health": {
+   "get": {
+    "tags": [
+     "infra"
+    ],
+    "summary": "Liveness do container (não checa o banco)",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "Processo vivo",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "status": {
+           "type": "string",
+           "example": "ok"
+          }
+         }
+        }
+       }
       }
+     }
+    }
+   }
+  },
+  "/api/pronto": {
+   "get": {
+    "tags": [
+     "infra"
+    ],
+    "summary": "Readiness real — executa SELECT 1 no banco",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "Sistema utilizável",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProntoOK"
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "Banco indisponível",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Erro"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/login": {
+   "post": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Autentica e emite o token da sessão",
+    "security": [],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LoginIn"
+       }
+      }
+     }
     },
     "responses": {
-      "NaoAutenticado": {
-        "description": "Token ausente, inválido ou expirado",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Erro"
-            }
-          }
+     "200": {
+      "description": "Autenticado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LoginOut"
         }
+       }
       }
-    },
-    "schemas": {
-      "Erro": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "string"
-          },
-          "code": {
-            "type": "string",
-            "example": "db_indisponivel"
-          }
+     },
+     "401": {
+      "description": "Credenciais inválidas ou usuário inativo",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Erro"
         }
-      },
-      "ProntoOK": {
-        "type": "object",
-        "properties": {
-          "pronto": {
-            "type": "boolean",
-            "example": true
-          }
-        }
-      },
-      "LoginIn": {
-        "type": "object",
-        "required": [
-          "login",
-          "senha"
-        ],
-        "properties": {
-          "login": {
-            "type": "string"
-          },
-          "senha": {
-            "type": "string",
-            "format": "password"
-          }
-        }
-      },
-      "LoginOut": {
-        "type": "object",
-        "properties": {
-          "autenticado": {
-            "type": "boolean",
-            "example": true
-          },
-          "token": {
-            "type": "string",
-            "description": "Bearer para as demais rotas"
-          },
-          "id": {
-            "type": "integer"
-          },
-          "nome": {
-            "type": "string"
-          },
-          "login": {
-            "type": "string"
-          },
-          "perfil": {
-            "type": "string",
-            "enum": [
-              "admin",
-              "vendedor"
-            ]
-          }
-        }
-      },
-      "ApplyIn": {
-        "type": "object",
-        "properties": {
-          "risco": {
-            "type": "string",
-            "enum": [
-              "critica",
-              "rotina",
-              "melhoria",
-              "todos"
-            ],
-            "default": "todos"
-          }
-        }
-      },
-      "MigracaoPendente": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "risco": {
-            "type": "string",
-            "enum": [
-              "critica",
-              "melhoria",
-              "rotina",
-              "n/c"
-            ]
-          },
-          "mudanca": {
-            "type": "object",
-            "nullable": true,
-            "properties": {
-              "o_que": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "porque": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "novidades": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      },
-      "SistemaStatus": {
-        "type": "object",
-        "properties": {
-          "app_version": {
-            "type": "string"
-          },
-          "schema_version": {
-            "type": "integer"
-          },
-          "schema_max": {
-            "type": "integer"
-          },
-          "applied": {
-            "type": "integer"
-          },
-          "total_migrations": {
-            "type": "integer"
-          },
-          "pending": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MigracaoPendente"
-            }
-          },
-          "pending_por_risco": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "integer"
-            }
-          },
-          "atualizado": {
-            "type": "boolean"
-          },
-          "ok": {
-            "type": "boolean",
-            "description": "presente em updates/apply"
-          },
-          "nivel": {
-            "type": "string",
-            "description": "presente em updates/apply"
-          }
-        }
-      },
-      "AtualizacaoLog": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "executado_em": {
-            "type": "string"
-          },
-          "nivel": {
-            "type": "string"
-          },
-          "versao_app": {
-            "type": "string"
-          },
-          "schema_antes": {
-            "type": "integer"
-          },
-          "schema_depois": {
-            "type": "integer"
-          },
-          "total_aplicadas": {
-            "type": "integer"
-          },
-          "origem": {
-            "type": "string",
-            "enum": [
-              "deploy",
-              "painel",
-              "release"
-            ]
-          },
-          "usuario": {
-            "type": "string",
-            "nullable": true
-          },
-          "erro": {
-            "type": "string",
-            "nullable": true
-          },
-          "versao_release": {
-            "type": "string",
-            "nullable": true
-          },
-          "componentes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "nullable": true
-          },
-          "correcoes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "nullable": true
-          },
-          "melhorias": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "nullable": true
-          },
-          "recursos": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "nullable": true
-          }
-        }
-      },
-      "Manifesto": {
-        "type": "object",
-        "properties": {
-          "versao": {
-            "type": "string"
-          },
-          "componentes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "correcoes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "melhorias": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "recursos": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "FeatureFlag": {
-        "type": "object",
-        "properties": {
-          "nome": {
-            "type": "string"
-          },
-          "descricao": {
-            "type": "string"
-          },
-          "ativo": {
-            "type": "boolean"
-          }
-        }
-      },
-      "ParsePreview": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string"
-          },
-          "nome": {
-            "type": "string"
-          },
-          "sku": {
-            "type": "string"
-          },
-          "ean": {
-            "type": "string"
-          },
-          "marca": {
-            "type": "string"
-          },
-          "cor": {
-            "type": "string"
-          },
-          "preco": {
-            "type": "number",
-            "nullable": true
-          },
-          "preco_de": {
-            "type": "number",
-            "nullable": true
-          },
-          "preco_pix": {
-            "type": "number",
-            "nullable": true
-          },
-          "parcelamento": {
-            "type": "string"
-          },
-          "fotos": {
-            "type": "integer"
-          },
-          "family_key": {
-            "type": "string",
-            "nullable": true
-          },
-          "familia_nome": {
-            "type": "string"
-          },
-          "base": {
-            "type": "string"
-          },
-          "atributos": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "label": {
-                  "type": "string"
-                },
-                "valor": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      },
-      "SaldoItem": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "deposito_id": {
-            "type": "integer"
-          },
-          "variante_id": {
-            "type": "integer"
-          },
-          "quantidade": {
-            "type": "number"
-          },
-          "reserva": {
-            "type": "number"
-          },
-          "deposito_nome": {
-            "type": "string"
-          },
-          "sku": {
-            "type": "string"
-          },
-          "preco": {
-            "type": "number"
-          },
-          "estoque_minimo": {
-            "type": "number",
-            "nullable": true
-          },
-          "estoque_maximo": {
-            "type": "number",
-            "nullable": true
-          },
-          "situacao": {
-            "type": "string",
-            "enum": [
-              "ok",
-              "ruptura",
-              "excesso"
-            ]
-          }
-        }
-      },
-      "PerfilFiscal": {
-        "type": "object",
-        "properties": {
-          "variante_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "produto_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "ncm": {
-            "type": "string"
-          },
-          "cest": {
-            "type": "string"
-          },
-          "origem": {
-            "type": "integer"
-          },
-          "regime_st": {
-            "type": "string"
-          },
-          "fonte_url": {
-            "type": "string",
-            "nullable": true
-          },
-          "atualizado_em": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "PerfilFiscalEfetivo": {
-        "type": "object",
-        "properties": {
-          "variante_id": {
-            "type": "integer"
-          },
-          "produto_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "produto": {
-            "$ref": "#/components/schemas/PerfilFiscal",
-            "nullable": true
-          },
-          "variante": {
-            "$ref": "#/components/schemas/PerfilFiscal",
-            "nullable": true
-          },
-          "efetivo": {
-            "$ref": "#/components/schemas/PerfilFiscal"
-          },
-          "override_campos": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "boolean"
-            }
-          }
-        }
-      },
-      "ContabilGatilho": {
-        "type": "object",
-        "properties": {
-          "evento_tipo": {
-            "type": "string"
-          },
-          "ativo": {
-            "type": "boolean"
-          },
-          "debito_conta_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "credito_conta_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "descricao": {
-            "type": "string"
-          },
-          "debito_codigo": {
-            "type": "string"
-          },
-          "debito_nome": {
-            "type": "string"
-          },
-          "credito_codigo": {
-            "type": "string"
-          },
-          "credito_nome": {
-            "type": "string"
-          }
-        }
-      },
-      "GatilhoIn": {
-        "type": "object",
-        "properties": {
-          "ativo": {
-            "type": "boolean",
-            "default": false
-          },
-          "debito_conta_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "credito_conta_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "descricao": {
-            "type": "string"
-          }
-        }
-      },
-      "GatilhosOut": {
-        "type": "object",
-        "properties": {
-          "gatilhos": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ContabilGatilho"
-            }
-          },
-          "eventos": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "LancamentoContabil": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "evento_tipo": {
-            "type": "string"
-          },
-          "evento_id": {
-            "type": "integer"
-          },
-          "idempotency_key": {
-            "type": "string"
-          },
-          "debito_conta_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "credito_conta_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "valor": {
-            "type": "string"
-          },
-          "historico": {
-            "type": "string"
-          },
-          "periodo_competencia": {
-            "type": "string"
-          },
-          "origem_tipo": {
-            "type": "string"
-          },
-          "criado_em": {
-            "type": "string"
-          }
-        }
-      },
-      "LancamentosOut": {
-        "type": "object",
-        "properties": {
-          "lancamentos": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/LancamentoContabil"
-            }
-          }
-        }
-      },
-      "PerfilAcesso": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "nome": {
-            "type": "string"
-          },
-          "descricao": {
-            "type": "string"
-          },
-          "ativo": {
-            "type": "boolean"
-          },
-          "superuser": {
-            "type": "boolean"
-          },
-          "permissoes": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          }
-        }
-      },
-      "MatrizPermissoesIn": {
-        "type": "object",
-        "properties": {
-          "permissoes": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          }
-        }
-      },
-      "CatalogoPermissoes": {
-        "type": "object",
-        "properties": {
-          "recursos": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "codigo": {
-                  "type": "string"
-                },
-                "nome": {
-                  "type": "string"
-                },
-                "grupo": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "acoes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "PerfilCRUDIn": {
-        "type": "object",
-        "properties": {
-          "nome": {
-            "type": "string"
-          },
-          "descricao": {
-            "type": "string"
-          },
-          "permissoes": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          }
-        }
-      },
-      "Cliente": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "nome": {
-            "type": "string"
-          },
-          "tipo_pessoa": {
-            "type": "string"
-          },
-          "doc": {
-            "type": "string",
-            "nullable": true
-          },
-          "email": {
-            "type": "string",
-            "nullable": true
-          },
-          "telefone": {
-            "type": "string",
-            "nullable": true
-          },
-          "whatsapp": {
-            "type": "string",
-            "nullable": true
-          },
-          "cidade": {
-            "type": "string",
-            "nullable": true
-          },
-          "uf": {
-            "type": "string",
-            "nullable": true
-          },
-          "vendedor_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "vendedor_nome": {
-            "type": "string",
-            "nullable": true
-          },
-          "limite_credito": {
-            "type": "number"
-          },
-          "ativo": {
-            "type": "integer"
-          },
-          "segmento": {
-            "type": "string"
-          },
-          "categoria": {
-            "type": "string"
-          }
-        }
-      },
-      "ClienteIn": {
-        "type": "object",
-        "required": [
-          "nome"
-        ],
-        "properties": {
-          "nome": {
-            "type": "string"
-          },
-          "tipo_pessoa": {
-            "type": "string"
-          },
-          "doc": {
-            "type": "string",
-            "nullable": true
-          },
-          "email": {
-            "type": "string",
-            "nullable": true
-          },
-          "telefone": {
-            "type": "string",
-            "nullable": true
-          },
-          "whatsapp": {
-            "type": "string",
-            "nullable": true
-          },
-          "cidade": {
-            "type": "string",
-            "nullable": true
-          },
-          "uf": {
-            "type": "string",
-            "nullable": true
-          },
-          "cep": {
-            "type": "string",
-            "nullable": true
-          },
-          "vendedor_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "limite_credito": {
-            "type": "number"
-          },
-          "observacoes": {
-            "type": "string",
-            "nullable": true
-          },
-          "contribuinte": {
-            "type": "string"
-          },
-          "ie": {
-            "type": "string"
-          },
-          "segmento": {
-            "type": "string"
-          },
-          "categoria": {
-            "type": "string"
-          }
-        }
-      },
-      "ClienteSituacao": {
-        "type": "object",
-        "properties": {
-          "nome": {
-            "type": "string"
-          },
-          "limite_credito": {
-            "type": "number"
-          },
-          "limite_utilizado": {
-            "type": "number"
-          },
-          "limite_disponivel": {
-            "type": "number"
-          },
-          "saldo_em_atraso": {
-            "type": "number"
-          },
-          "tem_atraso": {
-            "type": "boolean"
-          },
-          "excede_limite": {
-            "type": "boolean"
-          },
-          "excede_por_atraso": {
-            "type": "boolean"
-          }
-        }
-      },
-      "ClienteApoioComercial": {
-        "type": "object",
-        "properties": {
-          "condicao_pagamento_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "tabela_preco_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "limite_credito": {
-            "type": "number"
-          },
-          "transportadora": {
-            "type": "string"
-          }
-        }
-      },
-      "ClienteApoioFiscal": {
-        "type": "object",
-        "properties": {
-          "cfop_padrao": {
-            "type": "string"
-          },
-          "cfop_entrada": {
-            "type": "string"
-          },
-          "cfop_saida": {
-            "type": "string"
-          },
-          "cst_icms": {
-            "type": "string"
-          },
-          "cst_pis": {
-            "type": "string"
-          },
-          "cst_cofins": {
-            "type": "string"
-          },
-          "cst_csosn": {
-            "type": "string"
-          },
-          "cest": {
-            "type": "string"
-          },
-          "aliquota_icms": {
-            "type": "number"
-          },
-          "aliquota_icms_st": {
-            "type": "number"
-          },
-          "aliquota_pis": {
-            "type": "number"
-          },
-          "aliquota_cofins": {
-            "type": "number"
-          }
-        }
-      },
-      "ClienteEndereco": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "tipo": {
-            "type": "string"
-          },
-          "cep": {
-            "type": "string"
-          },
-          "logradouro": {
-            "type": "string"
-          },
-          "numero": {
-            "type": "string"
-          },
-          "bairro": {
-            "type": "string"
-          },
-          "cidade": {
-            "type": "string"
-          },
-          "uf": {
-            "type": "string"
-          }
-        }
-      },
-      "ClienteEnderecoIn": {
-        "type": "object",
-        "required": [
-          "tipo"
-        ],
-        "properties": {
-          "tipo": {
-            "type": "string",
-            "enum": [
-              "cobranca",
-              "entrega",
-              "faturamento"
-            ]
-          },
-          "cep": {
-            "type": "string"
-          },
-          "logradouro": {
-            "type": "string"
-          },
-          "numero": {
-            "type": "string"
-          },
-          "bairro": {
-            "type": "string"
-          },
-          "cidade": {
-            "type": "string"
-          },
-          "uf": {
-            "type": "string"
-          }
-        }
-      },
-      "ClienteContato": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "nome": {
-            "type": "string"
-          },
-          "cargo": {
-            "type": "string"
-          },
-          "telefone": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          }
-        }
-      },
-      "ClienteContatoIn": {
-        "type": "object",
-        "required": [
-          "nome"
-        ],
-        "properties": {
-          "nome": {
-            "type": "string"
-          },
-          "cargo": {
-            "type": "string"
-          },
-          "telefone": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          }
-        }
-      },
-      "ClienteInteracao": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "cliente_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "cliente_nome": {
-            "type": "string"
-          },
-          "tipo": {
-            "type": "string"
-          },
-          "descricao": {
-            "type": "string"
-          },
-          "data_contato": {
-            "type": "string"
-          },
-          "data_proximo_contato": {
-            "type": "string",
-            "nullable": true
-          },
-          "usuario_id": {
-            "type": "integer",
-            "nullable": true
-          }
-        }
-      },
-      "InteracaoIn": {
-        "type": "object",
-        "required": [
-          "tipo",
-          "data_contato"
-        ],
-        "properties": {
-          "tipo": {
-            "type": "string",
-            "enum": [
-              "ligacao",
-              "visita",
-              "email",
-              "whatsapp",
-              "follow_up",
-              "outro"
-            ]
-          },
-          "descricao": {
-            "type": "string"
-          },
-          "data_contato": {
-            "type": "string"
-          },
-          "data_proximo_contato": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "ContextoCliente": {
-        "type": "object",
-        "properties": {
-          "vendedores": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "condicoes_pagamento": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "tabelas_preco": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "cfop": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "cst_icms": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "cst_pis": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "cst_cofins": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "csosn": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "cest": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "segmentos": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "categorias": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          }
-        }
-      },
-      "Fornecedor": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "nome": {
-            "type": "string"
-          },
-          "razao_social": {
-            "type": "string",
-            "nullable": true
-          },
-          "cnpj_cpf": {
-            "type": "string",
-            "nullable": true
-          },
-          "representante": {
-            "type": "string",
-            "nullable": true
-          },
-          "whatsapp": {
-            "type": "string",
-            "nullable": true
-          },
-          "email": {
-            "type": "string",
-            "nullable": true
-          },
-          "telefone": {
-            "type": "string",
-            "nullable": true
-          },
-          "cidade": {
-            "type": "string",
-            "nullable": true
-          },
-          "uf": {
-            "type": "string",
-            "nullable": true
-          },
-          "categoria": {
-            "type": "string"
-          },
-          "condicao_pagamento_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "prazo_entrega_dias": {
-            "type": "integer"
-          },
-          "nota": {
-            "type": "number"
-          },
-          "ativo": {
-            "type": "integer"
-          }
-        }
-      },
-      "FornecedorIn": {
-        "type": "object",
-        "required": [
-          "nome"
-        ],
-        "properties": {
-          "nome": {
-            "type": "string"
-          },
-          "razao_social": {
-            "type": "string",
-            "nullable": true
-          },
-          "cnpj_cpf": {
-            "type": "string",
-            "nullable": true
-          },
-          "representante": {
-            "type": "string",
-            "nullable": true
-          },
-          "whatsapp": {
-            "type": "string",
-            "nullable": true
-          },
-          "email": {
-            "type": "string",
-            "nullable": true
-          },
-          "telefone": {
-            "type": "string",
-            "nullable": true
-          },
-          "endereco": {
-            "type": "string",
-            "nullable": true
-          },
-          "numero": {
-            "type": "string",
-            "nullable": true
-          },
-          "bairro": {
-            "type": "string",
-            "nullable": true
-          },
-          "cidade": {
-            "type": "string",
-            "nullable": true
-          },
-          "uf": {
-            "type": "string",
-            "nullable": true
-          },
-          "cep": {
-            "type": "string",
-            "nullable": true
-          },
-          "categoria": {
-            "type": "string"
-          },
-          "condicao_pagamento_id": {
-            "type": "integer",
-            "nullable": true
-          },
-          "prazo_entrega_dias": {
-            "type": "integer"
-          },
-          "nota": {
-            "type": "number"
-          },
-          "observacoes": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "FornecedorContato": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "fornecedor_id": {
-            "type": "integer"
-          },
-          "nome": {
-            "type": "string"
-          },
-          "cargo": {
-            "type": "string"
-          },
-          "telefone": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          }
-        }
-      },
-      "FornecedorContatoIn": {
-        "type": "object",
-        "required": [
-          "nome"
-        ],
-        "properties": {
-          "nome": {
-            "type": "string"
-          },
-          "cargo": {
-            "type": "string"
-          },
-          "telefone": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          }
-        }
-      },
-      "ContextoFornecedor": {
-        "type": "object",
-        "properties": {
-          "categorias": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "condicoes_pagamento": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          }
-        }
-      },
-      "IdOut": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          }
-        }
-      },
-      "OkOut": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "type": "boolean"
-          }
-        }
-      },
-      "PrecoProposta": {
-        "type": "object",
-        "properties": {
-          "cotacao_item_id": {
-            "type": "integer"
-          },
-          "preco_unitario": {
-            "type": "number"
-          },
-          "desconto": {
-            "type": "number"
-          },
-          "prazo_entrega_dias": {
-            "type": "integer"
-          },
-          "disponibilidade_estoque": {
-            "type": "integer",
-            "enum": [
-              0,
-              1
-            ]
-          },
-          "unidade_compra": {
-            "type": "string"
-          },
-          "fator_conversao": {
-            "type": "number"
-          },
-          "marca_ofertada": {
-            "type": "string"
-          },
-          "motivo_indisponibilidade": {
-            "type": "string",
-            "enum": [
-              "em_falta_estoque",
-              "nao_trabalha_linha",
-              "descontinuado",
-              "fora_regiao",
-              "outro",
-              ""
-            ]
-          },
-          "observacao": {
-            "type": "string"
-          }
-        }
-      },
-      "Invite": {
-        "type": "object",
-        "properties": {
-          "fornecedor_id": {
-            "type": "integer"
-          },
-          "nome": {
-            "type": "string"
-          },
-          "representante": {
-            "type": "string",
-            "nullable": true
-          },
-          "status": {
-            "type": "string"
-          },
-          "link": {
-            "type": "string"
-          },
-          "whatsapp_url": {
-            "type": "string"
-          },
-          "mailto_url": {
-            "type": "string"
-          },
-          "data_limite_retorno": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "CobrancaResultado": {
-        "type": "object",
-        "properties": {
-          "operacao": {
-            "type": "string"
-          },
-          "provider": {
-            "type": "string"
-          },
-          "payment_id": {
-            "type": "string"
-          },
-          "status_cobranca": {
-            "type": "string"
-          },
-          "linha_digitavel": {
-            "type": "string"
-          },
-          "codigo_barras": {
-            "type": "string"
-          },
-          "nosso_numero": {
-            "type": "string"
-          },
-          "url_boleto": {
-            "type": "string"
-          },
-          "payload_pix": {
-            "type": "string"
-          },
-          "qr_code_base64": {
-            "type": "string"
-          },
-          "txid": {
-            "type": "string"
-          },
-          "url_pix": {
-            "type": "string"
-          }
-        }
-      },
-      "LoteResultado": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "type": "boolean"
-          },
-          "grupo_id": {
-            "type": "string"
-          },
-          "ids": {
-            "type": "array",
-            "items": {
-              "type": "integer"
-            }
-          },
-          "n_parcelas": {
-            "type": "integer"
-          }
-        }
+       }
       }
+     }
     }
+   }
+  },
+  "/api/logout": {
+   "post": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Encerra a sessão local (token é client-side)",
+    "responses": {
+     "200": {
+      "description": "OK"
+     }
+    }
+   }
+  },
+  "/api/sistema/status": {
+   "get": {
+    "tags": [
+     "sistema"
+    ],
+    "summary": "Versão app × schema e pendências por risco",
+    "responses": {
+     "200": {
+      "description": "Estado de atualização",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SistemaStatus"
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/NaoAutenticado"
+     },
+     "500": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Erro"
+        }
+       }
+      },
+      "description": "Erro de infraestrutura"
+     }
+    }
+   }
+  },
+  "/api/sistema/updates/apply": {
+   "post": {
+    "tags": [
+     "sistema"
+    ],
+    "summary": "Aplica migrações pendentes por nível de risco",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ApplyIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Migrações aplicadas (ou nada pendente)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SistemaStatus"
+        }
+       }
+      }
+     },
+     "500": {
+      "description": "Falha ao aplicar",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Erro"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/sistema/updates/log": {
+   "get": {
+    "tags": [
+     "sistema"
+    ],
+    "summary": "Histórico de atualizações aplicadas (últimos 50)",
+    "responses": {
+     "200": {
+      "description": "Eventos mais recentes primeiro",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "log": {
+           "type": "array",
+           "items": {
+            "$ref": "#/components/schemas/AtualizacaoLog"
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "500": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Erro"
+        }
+       }
+      },
+      "description": "Erro de infraestrutura"
+     }
+    }
+   }
+  },
+  "/api/sistema/releases/pendentes": {
+   "get": {
+    "tags": [
+     "sistema"
+    ],
+    "summary": "Manifestos de release ainda não publicados",
+    "responses": {
+     "200": {
+      "description": "Rascunhos acumulados em dev",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "pendentes": {
+           "type": "array",
+           "items": {
+            "$ref": "#/components/schemas/Manifesto"
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "500": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Erro"
+        }
+       }
+      },
+      "description": "Erro de infraestrutura"
+     }
+    }
+   }
+  },
+  "/api/flags": {
+   "get": {
+    "tags": [
+     "flags"
+    ],
+    "summary": "Feature flags registradas com estado atual",
+    "responses": {
+     "200": {
+      "description": "Lista das flags do registro oficial",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "flags": {
+           "type": "array",
+           "items": {
+            "$ref": "#/components/schemas/FeatureFlag"
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/flags/{nome}": {
+   "put": {
+    "tags": [
+     "flags"
+    ],
+    "summary": "Liga/desliga uma flag registrada (rollback comportamental)",
+    "parameters": [
+     {
+      "name": "nome",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "ativo"
+        ],
+        "properties": {
+         "ativo": {
+          "type": "boolean"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Estado gravado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "nome": {
+           "type": "string"
+          },
+          "ativo": {
+           "type": "boolean"
+          }
+         }
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Flag não registrada",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Erro"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/produtos-cadastro/parse-url": {
+   "post": {
+    "tags": [
+     "produtos"
+    ],
+    "summary": "Baixa a página do produto e devolve preview para conferência",
+    "description": "Requer página de produto; usa os parsers por domínio. Timeout de rede: 40s.",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "url"
+        ],
+        "properties": {
+         "url": {
+          "type": "string",
+          "format": "uri"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Preview estruturado do produto",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ParsePreview"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "URL ausente/inválida ou produto não identificado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Erro"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/estoque/saldo": {
+   "get": {
+    "tags": [
+     "estoque"
+    ],
+    "summary": "Saldo por depósito com situação (ok/ruptura/excesso)",
+    "description": "Filtra por depósito, variante, família ou produto; cada linha traz `estoque_minimo`/`estoque_maximo` e `situacao` calculada.",
+    "parameters": [
+     {
+      "name": "deposito_id",
+      "in": "query",
+      "schema": {
+       "type": "integer"
+      }
+     },
+     {
+      "name": "variante_id",
+      "in": "query",
+      "schema": {
+       "type": "integer"
+      }
+     },
+     {
+      "name": "familia_id",
+      "in": "query",
+      "schema": {
+       "type": "integer"
+      }
+     },
+     {
+      "name": "produto_id",
+      "in": "query",
+      "schema": {
+       "type": "integer"
+      }
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Linhas de saldo",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/SaldoItem"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/fiscal/perfil-efetivo/{variante_id}": {
+   "get": {
+    "tags": [
+     "fiscal"
+    ],
+    "summary": "Perfil fiscal efetivo da variação (hierarquia Produto→Variação)",
+    "description": "Retorna o perfil padrão do produto (herdado), o override da variação (quando existir), o efetivo mesclado e os campos em override — para a UI mostrar herdado vs override.",
+    "parameters": [
+     {
+      "name": "variante_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Perfil efetivo",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PerfilFiscalEfetivo"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/contabil/gatilhos": {
+   "get": {
+    "tags": [
+     "contabil"
+    ],
+    "summary": "Gatilhos contábeis configurados por evento",
+    "responses": {
+     "200": {
+      "description": "Lista de gatilhos",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GatilhosOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/contabil/gatilhos/{evento_tipo}": {
+   "put": {
+    "tags": [
+     "contabil"
+    ],
+    "summary": "Configura o gatilho contábil de um evento (contas débito/crédito)",
+    "parameters": [
+     {
+      "name": "evento_tipo",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "venda_autorizada",
+        "compra",
+        "ajuste"
+       ]
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GatilhoIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Gatilho salvo",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ContabilGatilho"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "evento inválido ou ativo sem contas",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Erro"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/contabil/lancamentos": {
+   "get": {
+    "tags": [
+     "contabil"
+    ],
+    "summary": "Lançamentos contábeis gerados pelos gatilhos (idempotentes por evento)",
+    "parameters": [
+     {
+      "name": "limite",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "default": 100
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Lançamentos recentes",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LancamentosOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/perfis": {
+   "get": {
+    "tags": [
+     "permissoes"
+    ],
+    "summary": "Perfis com matriz de permissões por recurso",
+    "responses": {
+     "200": {
+      "description": "Perfis (Administrador marcado como superuser)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/PerfilAcesso"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "permissoes"
+    ],
+    "summary": "Cria um perfil novo",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PerfilCRUDIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Perfil criado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "id": {
+           "type": "integer"
+          }
+         }
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Nome reservado/duplicado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Erro"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/perfis/{perfil_id}/permissoes": {
+   "put": {
+    "tags": [
+     "permissoes"
+    ],
+    "summary": "Grava a matriz de permissões de um perfil",
+    "parameters": [
+     {
+      "name": "perfil_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/MatrizPermissoesIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Matriz salva"
+     },
+     "400": {
+      "description": "Administrador é superuser (não usa matriz)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Erro"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/permissoes/catalogo": {
+   "get": {
+    "tags": [
+     "permissoes"
+    ],
+    "summary": "Catálogo de recursos e ações disponíveis",
+    "responses": {
+     "200": {
+      "description": "Recursos e ações",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CatalogoPermissoes"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/usuarios/{usuario_id}/perfis": {
+   "put": {
+    "tags": [
+     "permissoes"
+    ],
+    "summary": "Define os perfis (N:N) de um usuário",
+    "parameters": [
+     {
+      "name": "usuario_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "perfil_ids": {
+          "type": "array",
+          "items": {
+           "type": "integer"
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Perfis atualizados"
+     }
+    }
+   }
+  },
+  "/api/usuarios/{usuario_id}/overrides": {
+   "put": {
+    "tags": [
+     "permissoes"
+    ],
+    "summary": "Concede ações extras por tela (override nunca remove)",
+    "parameters": [
+     {
+      "name": "usuario_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "conceder": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "array",
+           "items": {
+            "type": "string"
+           }
+          }
+         },
+         "negar": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "array",
+           "items": {
+            "type": "string"
+           }
+          }
+         },
+         "overrides": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "array",
+           "items": {
+            "type": "string"
+           }
+          },
+          "description": "Formato legado (concessões)"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Overrides atualizados"
+     }
+    }
+   }
+  },
+  "/api/perfis/{perfil_id}": {
+   "put": {
+    "tags": [
+     "permissoes"
+    ],
+    "summary": "Renomeia/atualiza um perfil",
+    "parameters": [
+     {
+      "name": "perfil_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PerfilCRUDIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Perfil atualizado"
+     },
+     "400": {
+      "description": "Reservado/duplicado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Erro"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "permissoes"
+    ],
+    "summary": "Exclui um perfil (bloqueia Administrador e perfis em uso)",
+    "parameters": [
+     {
+      "name": "perfil_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Perfil excluído"
+     },
+     "400": {
+      "description": "Em uso/reservado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Erro"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/perfis/{perfil_id}/ativo": {
+   "patch": {
+    "tags": [
+     "permissoes"
+    ],
+    "summary": "Ativa/desativa um perfil",
+    "parameters": [
+     {
+      "name": "perfil_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     },
+     {
+      "name": "ativo",
+      "in": "query",
+      "schema": {
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Estado alterado"
+     }
+    }
+   }
+  },
+  "/api/webhooks/tecnospeed": {
+   "post": {
+    "tags": [
+     "sistema"
+    ],
+    "summary": "Webhook público de atualização de status na SEFAZ (Tecnospeed)",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "Recebido"
+     }
+    }
+   }
+  },
+  "/api/orcamentos/{orcamento_id}/reabrir": {
+   "post": {
+    "tags": [
+     "orcamentos"
+    ],
+    "summary": "Reabre um pedido finalizado para correção (exige permissão de aprovação); revoga autorização de desconto acima da alçada",
+    "parameters": [
+     {
+      "name": "orcamento_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Reaberto (status liberado, virou_pedido=0)"
+     },
+     "403": {
+      "description": "Sem permissão de aprovação"
+     },
+     "400": {
+      "description": "Não é pedido finalizado"
+     }
+    }
+   }
+  },
+  "/api/orcamentos/pendentes-aprovacao": {
+   "get": {
+    "tags": [
+     "orcamentos"
+    ],
+    "summary": "Fila do aprovador: orçamentos/pedidos com desconto pendente que o usuário logado pode autorizar",
+    "responses": {
+     "200": {
+      "description": "Lista de pendentes"
+     }
+    }
+   }
+  },
+  "/api/orcamentos/{orcamento_id}/rejeitar-desconto": {
+   "post": {
+    "tags": [
+     "orcamentos"
+    ],
+    "summary": "Rejeita o desconto de um orçamento (motivo obrigatório)",
+    "parameters": [
+     {
+      "name": "orcamento_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "motivo": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Rejeitado"
+     },
+     "400": {
+      "description": "Motivo ausente"
+     }
+    }
+   }
+  },
+  "/api/clientes": {
+   "get": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Lista clientes (com segmento/categoria)",
+    "parameters": [
+     {
+      "name": "somente_ativos",
+      "in": "query",
+      "schema": {
+       "type": "boolean"
+      }
+     },
+     {
+      "name": "vendedor_id",
+      "in": "query",
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Lista de clientes",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/Cliente"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Cria cliente",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ClienteIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Cliente criado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/IdOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/clientes/contexto": {
+   "get": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Dados auxiliares do formulário (vendedores, condições, tabelas, fiscal, segmentos)",
+    "responses": {
+     "200": {
+      "description": "Contexto de cadastro",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ContextoCliente"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/clientes/{cliente_id}": {
+   "get": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Detalha cliente",
+    "responses": {
+     "200": {
+      "description": "Cliente",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Cliente"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Atualiza cliente",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ClienteIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Ok",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/OkOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/clientes/{cliente_id}/situacao": {
+   "get": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Situação de crédito do cliente (limite, utilizado, atraso; excede_limite com total)",
+    "parameters": [
+     {
+      "name": "total",
+      "in": "query",
+      "schema": {
+       "type": "number"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Situação de crédito",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ClienteSituacao"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/clientes/{cliente_id}/apoio-comercial": {
+   "get": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Apoio comercial",
+    "responses": {
+     "200": {
+      "description": "Apoio",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ClienteApoioComercial"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Salva apoio comercial (condição/tabela/limite/transportadora)",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ClienteApoioComercial"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Ok",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/OkOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/clientes/{cliente_id}/apoio-fiscal": {
+   "get": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Apoio fiscal (CFOP/CST/CSOSN/CEST)",
+    "responses": {
+     "200": {
+      "description": "Apoio",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ClienteApoioFiscal"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Salva apoio fiscal",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ClienteApoioFiscal"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Ok",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/OkOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/clientes/{cliente_id}/enderecos": {
+   "get": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Endereços do cliente",
+    "responses": {
+     "200": {
+      "description": "Endereços",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/ClienteEndereco"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Cria endereço",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ClienteEnderecoIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Endereço criado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/IdOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/clientes/{cliente_id}/contatos": {
+   "get": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Contatos do cliente",
+    "responses": {
+     "200": {
+      "description": "Contatos",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/ClienteContato"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Cria contato",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ClienteContatoIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Contato criado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/IdOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/clientes/{cliente_id}/interacoes": {
+   "get": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Histórico de interações do cliente (ligação/visita/email/whatsapp/follow_up)",
+    "responses": {
+     "200": {
+      "description": "Interações",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/ClienteInteracao"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "clientes"
+    ],
+    "summary": "Registra interação",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/InteracaoIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Interação criada",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/IdOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/fornecedores": {
+   "get": {
+    "tags": [
+     "fornecedores"
+    ],
+    "summary": "Lista fornecedores (busca por termo/categoria)",
+    "parameters": [
+     {
+      "name": "q",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "categoria",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "somente_ativos",
+      "in": "query",
+      "schema": {
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Lista de fornecedores",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/Fornecedor"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "fornecedores"
+    ],
+    "summary": "Cria fornecedor",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/FornecedorIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Fornecedor criado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/IdOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/fornecedores/contexto": {
+   "get": {
+    "tags": [
+     "fornecedores"
+    ],
+    "summary": "Dados auxiliares do formulário (categorias, condições)",
+    "responses": {
+     "200": {
+      "description": "Contexto",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ContextoFornecedor"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/fornecedores/{fornecedor_id}": {
+   "get": {
+    "tags": [
+     "fornecedores"
+    ],
+    "summary": "Detalha fornecedor",
+    "responses": {
+     "200": {
+      "description": "Fornecedor",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Fornecedor"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "fornecedores"
+    ],
+    "summary": "Atualiza fornecedor",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/FornecedorIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Ok",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/OkOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/fornecedores/{fornecedor_id}/contatos": {
+   "get": {
+    "tags": [
+     "fornecedores"
+    ],
+    "summary": "Contatos do fornecedor",
+    "responses": {
+     "200": {
+      "description": "Contatos",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/FornecedorContato"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "fornecedores"
+    ],
+    "summary": "Cria contato do fornecedor",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/FornecedorContatoIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Contato criado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/IdOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/compras/cotacoes/{cotacao_id}/lembrar/{fornecedor_id}": {
+   "get": {
+    "tags": [
+     "compras"
+    ],
+    "summary": "Reenvia convite de um fornecedor (gera link/whatsapp/e-mail para o pendente)",
+    "responses": {
+     "200": {
+      "description": "Convite regenerado com link e URLs de contato",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Invite"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/fornecedor/{token}/proposta": {
+   "post": {
+    "tags": [
+     "portal-fornecedor"
+    ],
+    "summary": "Representante envia proposta (por item: preço, unidade, fator, marca, motivo, observação)",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "precos": {
+          "type": "array",
+          "items": {
+           "$ref": "#/components/schemas/PrecoProposta"
+          }
+         },
+         "condicao_pagamento": {
+          "type": "string"
+         },
+         "condicao_pagamento_dias": {
+          "type": "integer"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Proposta registrada",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/fornecedor/{token}": {
+   "get": {
+    "tags": [
+     "portal-fornecedor"
+    ],
+    "summary": "Dados públicos do portal do fornecedor (itens com unidade/fator sugeridos)",
+    "responses": {
+     "200": {
+      "description": "Contexto do portal"
+     }
+    }
+   }
+  },
+  "/api/compras/pedidos/{pedido_id}/receber": {
+   "post": {
+    "tags": [
+     "compras"
+    ],
+    "summary": "Recebe pedido de compra: entrada de estoque + conta a pagar + status recebido",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "deposito_id": {
+          "type": "integer"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Pedido recebido",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "total": {
+           "type": "number"
+          },
+          "itens": {
+           "type": "integer"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/solicitacoes-compra/{sc_id}": {
+   "get": {
+    "tags": [
+     "compras"
+    ],
+    "summary": "Solicitação de compra com itens (para integrar no pipeline)",
+    "responses": {
+     "200": {
+      "description": "Solicitação com itens"
+     }
+    }
+   }
+  },
+  "/api/financeiro/receber/{conta_id}/cobranca": {
+   "post": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Emite boleto ou PIX para a conta (provedor por prioridade)",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "operacao": {
+          "type": "string",
+          "enum": [
+           "boleto",
+           "pix"
+          ]
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Cobrança emitida",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CobrancaResultado"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/financeiro/receber/{conta_id}/cobranca/status": {
+   "get": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Consulta status da cobrança na plataforma",
+    "responses": {
+     "200": {
+      "description": "Status da cobrança",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "status_cobranca": {
+           "type": "string"
+          },
+          "status_plataforma": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/financeiro/receber/{conta_id}/comprovante": {
+   "post": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Anexa comprovante de depósito/TED (multipart)",
+    "responses": {
+     "200": {
+      "description": "Comprovante salvo",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "filename": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/webhooks/payments/{provider}": {
+   "post": {
+    "tags": [
+     "webhooks"
+    ],
+    "summary": "Webhook de pagamento (baixa automática, idempotente)",
+    "responses": {
+     "200": {
+      "description": "Processado"
+     }
+    }
+   }
+  },
+  "/api/payment-providers": {
+   "get": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Lista provedores e configurações",
+    "responses": {
+     "200": {
+      "description": "Provedores e configs"
+     }
+    }
+   }
+  },
+  "/api/payment-providers/config": {
+   "put": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Salva configuração de provedor (credenciais/prioridade)",
+    "responses": {
+     "200": {
+      "description": "Ok",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/financeiro/pagar/lote": {
+   "post": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Cria contas a pagar parceladas (condição/manual/datas) ou recorrentes",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "fornecedor": {
+          "type": "string"
+         },
+         "descricao": {
+          "type": "string"
+         },
+         "documento": {
+          "type": "string"
+         },
+         "valor": {
+          "type": "number"
+         },
+         "data_emissao": {
+          "type": "string"
+         },
+         "modo": {
+          "type": "string",
+          "enum": [
+           "condicao",
+           "manual",
+           "datas"
+          ]
+         },
+         "condicao_pagamento_id": {
+          "type": "integer"
+         },
+         "n_parcelas": {
+          "type": "integer"
+         },
+         "intervalo_dias": {
+          "type": "integer"
+         },
+         "recorrencia": {
+          "type": "string"
+         },
+         "frequencia": {
+          "type": "string",
+          "enum": [
+           "mensal",
+           "semanal",
+           "anual"
+          ]
+         },
+         "n_ocorrencias": {
+          "type": "integer"
+         },
+         "dia": {
+          "type": "integer"
+         },
+         "origem_tipo": {
+          "type": "string"
+         },
+         "origem_id": {
+          "type": "integer"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Lote criado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LoteResultado"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/financeiro/receber/lote": {
+   "post": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Cria contas a receber parceladas ou recorrentes",
+    "responses": {
+     "201": {
+      "description": "Lote criado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LoteResultado"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/financeiro/lote/preview": {
+   "post": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Calcula as parcelas sem gravar (preview)",
+    "responses": {
+     "200": {
+      "description": "Parcelas calculadas"
+     }
+    }
+   }
+  },
+  "/api/financeiro/lote/{tabela}/{grupo_id}": {
+   "get": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Lista as parcelas do grupo",
+    "responses": {
+     "200": {
+      "description": "Parcelas do grupo"
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Exclui as parcelas EM ABERTO do grupo",
+    "responses": {
+     "200": {
+      "description": "Excluídas",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "excluidas": {
+           "type": "integer"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/financeiro/anexo/{tabela}/{conta_id}": {
+   "post": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Anexa documento/boleto/comprovante ao lançamento (multipart)",
+    "responses": {
+     "200": {
+      "description": "Anexo salvo"
+     }
+    }
+   },
+   "get": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Lista anexos do lançamento",
+    "responses": {
+     "200": {
+      "description": "Lista de anexos"
+     }
+    }
+   }
+  },
+  "/api/publico/produtos": {
+   "get": {
+    "tags": [
+     "publico"
+    ],
+    "summary": "Lista produtos do catálogo (público, sem token)",
+    "description": "Catálogo público para o site institucional. Expõe apenas campos seguros (nome, marca, preço, imagem, categoria, especificações) — sem custo/NCM/fornecedores.",
+    "security": [],
+    "parameters": [
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Busca por nome/descrição"
+     },
+     {
+      "name": "categoria",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "subcategoria",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "em_linha",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "1"
+      }
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 0
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 30,
+       "maximum": 100
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Lista de produtos públicos",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "items": {
+           "type": "array",
+           "items": {
+            "$ref": "#/components/schemas/ProdutoPublico"
+           }
+          },
+          "total": {
+           "type": "integer"
+          },
+          "offset": {
+           "type": "integer"
+          },
+          "limit": {
+           "type": "integer"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/publico/produtos/{produto_id}": {
+   "get": {
+    "tags": [
+     "publico"
+    ],
+    "summary": "Detalhe de um produto (público)",
+    "security": [],
+    "parameters": [
+     {
+      "name": "produto_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Produto com todas as imagens",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProdutoPublico"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Produto não encontrado"
+     }
+    }
+   }
+  },
+  "/api/publico/categorias": {
+   "get": {
+    "tags": [
+     "publico"
+    ],
+    "summary": "Árvore de categorias/subcategorias (público)",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "Categorias com subcategorias"
+     }
+    }
+   }
+  },
+  "/api/publico/marcas": {
+   "get": {
+    "tags": [
+     "publico"
+    ],
+    "summary": "Lista de marcas (público)",
+    "security": [],
+    "responses": {
+     "200": {
+      "description": "Lista de marcas",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "marcas": {
+           "type": "array",
+           "items": {
+            "type": "string"
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
   }
+ },
+ "components": {
+  "securitySchemes": {
+   "bearerAuth": {
+    "type": "http",
+    "scheme": "bearer",
+    "bearerFormat": "HMAC (base64.payload.signature), TTL 7 dias"
+   }
+  },
+  "responses": {
+   "NaoAutenticado": {
+    "description": "Token ausente, inválido ou expirado",
+    "content": {
+     "application/json": {
+      "schema": {
+       "$ref": "#/components/schemas/Erro"
+      }
+     }
+    }
+   }
+  },
+  "schemas": {
+   "Erro": {
+    "type": "object",
+    "properties": {
+     "error": {
+      "type": "string"
+     },
+     "code": {
+      "type": "string",
+      "example": "db_indisponivel"
+     }
+    }
+   },
+   "ProntoOK": {
+    "type": "object",
+    "properties": {
+     "pronto": {
+      "type": "boolean",
+      "example": true
+     }
+    }
+   },
+   "LoginIn": {
+    "type": "object",
+    "required": [
+     "login",
+     "senha"
+    ],
+    "properties": {
+     "login": {
+      "type": "string"
+     },
+     "senha": {
+      "type": "string",
+      "format": "password"
+     }
+    }
+   },
+   "LoginOut": {
+    "type": "object",
+    "properties": {
+     "autenticado": {
+      "type": "boolean",
+      "example": true
+     },
+     "token": {
+      "type": "string",
+      "description": "Bearer para as demais rotas"
+     },
+     "id": {
+      "type": "integer"
+     },
+     "nome": {
+      "type": "string"
+     },
+     "login": {
+      "type": "string"
+     },
+     "perfil": {
+      "type": "string",
+      "enum": [
+       "admin",
+       "vendedor"
+      ]
+     }
+    }
+   },
+   "ApplyIn": {
+    "type": "object",
+    "properties": {
+     "risco": {
+      "type": "string",
+      "enum": [
+       "critica",
+       "rotina",
+       "melhoria",
+       "todos"
+      ],
+      "default": "todos"
+     }
+    }
+   },
+   "MigracaoPendente": {
+    "type": "object",
+    "properties": {
+     "version": {
+      "type": "integer"
+     },
+     "name": {
+      "type": "string"
+     },
+     "risco": {
+      "type": "string",
+      "enum": [
+       "critica",
+       "melhoria",
+       "rotina",
+       "n/c"
+      ]
+     },
+     "mudanca": {
+      "type": "object",
+      "nullable": true,
+      "properties": {
+       "o_que": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "porque": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "novidades": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      }
+     }
+    }
+   },
+   "SistemaStatus": {
+    "type": "object",
+    "properties": {
+     "app_version": {
+      "type": "string"
+     },
+     "schema_version": {
+      "type": "integer"
+     },
+     "schema_max": {
+      "type": "integer"
+     },
+     "applied": {
+      "type": "integer"
+     },
+     "total_migrations": {
+      "type": "integer"
+     },
+     "pending": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/MigracaoPendente"
+      }
+     },
+     "pending_por_risco": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "integer"
+      }
+     },
+     "atualizado": {
+      "type": "boolean"
+     },
+     "ok": {
+      "type": "boolean",
+      "description": "presente em updates/apply"
+     },
+     "nivel": {
+      "type": "string",
+      "description": "presente em updates/apply"
+     }
+    }
+   },
+   "AtualizacaoLog": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer"
+     },
+     "executado_em": {
+      "type": "string"
+     },
+     "nivel": {
+      "type": "string"
+     },
+     "versao_app": {
+      "type": "string"
+     },
+     "schema_antes": {
+      "type": "integer"
+     },
+     "schema_depois": {
+      "type": "integer"
+     },
+     "total_aplicadas": {
+      "type": "integer"
+     },
+     "origem": {
+      "type": "string",
+      "enum": [
+       "deploy",
+       "painel",
+       "release"
+      ]
+     },
+     "usuario": {
+      "type": "string",
+      "nullable": true
+     },
+     "erro": {
+      "type": "string",
+      "nullable": true
+     },
+     "versao_release": {
+      "type": "string",
+      "nullable": true
+     },
+     "componentes": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "nullable": true
+     },
+     "correcoes": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "nullable": true
+     },
+     "melhorias": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "nullable": true
+     },
+     "recursos": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "nullable": true
+     }
+    }
+   },
+   "Manifesto": {
+    "type": "object",
+    "properties": {
+     "versao": {
+      "type": "string"
+     },
+     "componentes": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "correcoes": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "melhorias": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "recursos": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "FeatureFlag": {
+    "type": "object",
+    "properties": {
+     "nome": {
+      "type": "string"
+     },
+     "descricao": {
+      "type": "string"
+     },
+     "ativo": {
+      "type": "boolean"
+     }
+    }
+   },
+   "ParsePreview": {
+    "type": "object",
+    "properties": {
+     "url": {
+      "type": "string"
+     },
+     "nome": {
+      "type": "string"
+     },
+     "sku": {
+      "type": "string"
+     },
+     "ean": {
+      "type": "string"
+     },
+     "marca": {
+      "type": "string"
+     },
+     "cor": {
+      "type": "string"
+     },
+     "preco": {
+      "type": "number",
+      "nullable": true
+     },
+     "preco_de": {
+      "type": "number",
+      "nullable": true
+     },
+     "preco_pix": {
+      "type": "number",
+      "nullable": true
+     },
+     "parcelamento": {
+      "type": "string"
+     },
+     "fotos": {
+      "type": "integer"
+     },
+     "family_key": {
+      "type": "string",
+      "nullable": true
+     },
+     "familia_nome": {
+      "type": "string"
+     },
+     "base": {
+      "type": "string"
+     },
+     "atributos": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "label": {
+         "type": "string"
+        },
+        "valor": {
+         "type": "string"
+        }
+       }
+      }
+     }
+    }
+   },
+   "SaldoItem": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer"
+     },
+     "deposito_id": {
+      "type": "integer"
+     },
+     "variante_id": {
+      "type": "integer"
+     },
+     "quantidade": {
+      "type": "number"
+     },
+     "reserva": {
+      "type": "number"
+     },
+     "deposito_nome": {
+      "type": "string"
+     },
+     "sku": {
+      "type": "string"
+     },
+     "preco": {
+      "type": "number"
+     },
+     "estoque_minimo": {
+      "type": "number",
+      "nullable": true
+     },
+     "estoque_maximo": {
+      "type": "number",
+      "nullable": true
+     },
+     "situacao": {
+      "type": "string",
+      "enum": [
+       "ok",
+       "ruptura",
+       "excesso"
+      ]
+     }
+    }
+   },
+   "PerfilFiscal": {
+    "type": "object",
+    "properties": {
+     "variante_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "produto_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "ncm": {
+      "type": "string"
+     },
+     "cest": {
+      "type": "string"
+     },
+     "origem": {
+      "type": "integer"
+     },
+     "regime_st": {
+      "type": "string"
+     },
+     "fonte_url": {
+      "type": "string",
+      "nullable": true
+     },
+     "atualizado_em": {
+      "type": "string",
+      "nullable": true
+     }
+    }
+   },
+   "PerfilFiscalEfetivo": {
+    "type": "object",
+    "properties": {
+     "variante_id": {
+      "type": "integer"
+     },
+     "produto_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "produto": {
+      "$ref": "#/components/schemas/PerfilFiscal",
+      "nullable": true
+     },
+     "variante": {
+      "$ref": "#/components/schemas/PerfilFiscal",
+      "nullable": true
+     },
+     "efetivo": {
+      "$ref": "#/components/schemas/PerfilFiscal"
+     },
+     "override_campos": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "boolean"
+      }
+     }
+    }
+   },
+   "ContabilGatilho": {
+    "type": "object",
+    "properties": {
+     "evento_tipo": {
+      "type": "string"
+     },
+     "ativo": {
+      "type": "boolean"
+     },
+     "debito_conta_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "credito_conta_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "descricao": {
+      "type": "string"
+     },
+     "debito_codigo": {
+      "type": "string"
+     },
+     "debito_nome": {
+      "type": "string"
+     },
+     "credito_codigo": {
+      "type": "string"
+     },
+     "credito_nome": {
+      "type": "string"
+     }
+    }
+   },
+   "GatilhoIn": {
+    "type": "object",
+    "properties": {
+     "ativo": {
+      "type": "boolean",
+      "default": false
+     },
+     "debito_conta_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "credito_conta_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "descricao": {
+      "type": "string"
+     }
+    }
+   },
+   "GatilhosOut": {
+    "type": "object",
+    "properties": {
+     "gatilhos": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/ContabilGatilho"
+      }
+     },
+     "eventos": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "LancamentoContabil": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer"
+     },
+     "evento_tipo": {
+      "type": "string"
+     },
+     "evento_id": {
+      "type": "integer"
+     },
+     "idempotency_key": {
+      "type": "string"
+     },
+     "debito_conta_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "credito_conta_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "valor": {
+      "type": "string"
+     },
+     "historico": {
+      "type": "string"
+     },
+     "periodo_competencia": {
+      "type": "string"
+     },
+     "origem_tipo": {
+      "type": "string"
+     },
+     "criado_em": {
+      "type": "string"
+     }
+    }
+   },
+   "LancamentosOut": {
+    "type": "object",
+    "properties": {
+     "lancamentos": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/LancamentoContabil"
+      }
+     }
+    }
+   },
+   "PerfilAcesso": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer"
+     },
+     "nome": {
+      "type": "string"
+     },
+     "descricao": {
+      "type": "string"
+     },
+     "ativo": {
+      "type": "boolean"
+     },
+     "superuser": {
+      "type": "boolean"
+     },
+     "permissoes": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      }
+     }
+    }
+   },
+   "MatrizPermissoesIn": {
+    "type": "object",
+    "properties": {
+     "permissoes": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      }
+     }
+    }
+   },
+   "CatalogoPermissoes": {
+    "type": "object",
+    "properties": {
+     "recursos": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "codigo": {
+         "type": "string"
+        },
+        "nome": {
+         "type": "string"
+        },
+        "grupo": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     "acoes": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "PerfilCRUDIn": {
+    "type": "object",
+    "properties": {
+     "nome": {
+      "type": "string"
+     },
+     "descricao": {
+      "type": "string"
+     },
+     "permissoes": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      }
+     }
+    }
+   },
+   "Cliente": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer"
+     },
+     "nome": {
+      "type": "string"
+     },
+     "tipo_pessoa": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "string",
+      "nullable": true
+     },
+     "email": {
+      "type": "string",
+      "nullable": true
+     },
+     "telefone": {
+      "type": "string",
+      "nullable": true
+     },
+     "whatsapp": {
+      "type": "string",
+      "nullable": true
+     },
+     "cidade": {
+      "type": "string",
+      "nullable": true
+     },
+     "uf": {
+      "type": "string",
+      "nullable": true
+     },
+     "vendedor_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "vendedor_nome": {
+      "type": "string",
+      "nullable": true
+     },
+     "limite_credito": {
+      "type": "number"
+     },
+     "ativo": {
+      "type": "integer"
+     },
+     "segmento": {
+      "type": "string"
+     },
+     "categoria": {
+      "type": "string"
+     }
+    }
+   },
+   "ClienteIn": {
+    "type": "object",
+    "required": [
+     "nome"
+    ],
+    "properties": {
+     "nome": {
+      "type": "string"
+     },
+     "tipo_pessoa": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "string",
+      "nullable": true
+     },
+     "email": {
+      "type": "string",
+      "nullable": true
+     },
+     "telefone": {
+      "type": "string",
+      "nullable": true
+     },
+     "whatsapp": {
+      "type": "string",
+      "nullable": true
+     },
+     "cidade": {
+      "type": "string",
+      "nullable": true
+     },
+     "uf": {
+      "type": "string",
+      "nullable": true
+     },
+     "cep": {
+      "type": "string",
+      "nullable": true
+     },
+     "vendedor_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "limite_credito": {
+      "type": "number"
+     },
+     "observacoes": {
+      "type": "string",
+      "nullable": true
+     },
+     "contribuinte": {
+      "type": "string"
+     },
+     "ie": {
+      "type": "string"
+     },
+     "segmento": {
+      "type": "string"
+     },
+     "categoria": {
+      "type": "string"
+     }
+    }
+   },
+   "ClienteSituacao": {
+    "type": "object",
+    "properties": {
+     "nome": {
+      "type": "string"
+     },
+     "limite_credito": {
+      "type": "number"
+     },
+     "limite_utilizado": {
+      "type": "number"
+     },
+     "limite_disponivel": {
+      "type": "number"
+     },
+     "saldo_em_atraso": {
+      "type": "number"
+     },
+     "tem_atraso": {
+      "type": "boolean"
+     },
+     "excede_limite": {
+      "type": "boolean"
+     },
+     "excede_por_atraso": {
+      "type": "boolean"
+     }
+    }
+   },
+   "ClienteApoioComercial": {
+    "type": "object",
+    "properties": {
+     "condicao_pagamento_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "tabela_preco_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "limite_credito": {
+      "type": "number"
+     },
+     "transportadora": {
+      "type": "string"
+     }
+    }
+   },
+   "ClienteApoioFiscal": {
+    "type": "object",
+    "properties": {
+     "cfop_padrao": {
+      "type": "string"
+     },
+     "cfop_entrada": {
+      "type": "string"
+     },
+     "cfop_saida": {
+      "type": "string"
+     },
+     "cst_icms": {
+      "type": "string"
+     },
+     "cst_pis": {
+      "type": "string"
+     },
+     "cst_cofins": {
+      "type": "string"
+     },
+     "cst_csosn": {
+      "type": "string"
+     },
+     "cest": {
+      "type": "string"
+     },
+     "aliquota_icms": {
+      "type": "number"
+     },
+     "aliquota_icms_st": {
+      "type": "number"
+     },
+     "aliquota_pis": {
+      "type": "number"
+     },
+     "aliquota_cofins": {
+      "type": "number"
+     }
+    }
+   },
+   "ClienteEndereco": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer"
+     },
+     "tipo": {
+      "type": "string"
+     },
+     "cep": {
+      "type": "string"
+     },
+     "logradouro": {
+      "type": "string"
+     },
+     "numero": {
+      "type": "string"
+     },
+     "bairro": {
+      "type": "string"
+     },
+     "cidade": {
+      "type": "string"
+     },
+     "uf": {
+      "type": "string"
+     }
+    }
+   },
+   "ClienteEnderecoIn": {
+    "type": "object",
+    "required": [
+     "tipo"
+    ],
+    "properties": {
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "cobranca",
+       "entrega",
+       "faturamento"
+      ]
+     },
+     "cep": {
+      "type": "string"
+     },
+     "logradouro": {
+      "type": "string"
+     },
+     "numero": {
+      "type": "string"
+     },
+     "bairro": {
+      "type": "string"
+     },
+     "cidade": {
+      "type": "string"
+     },
+     "uf": {
+      "type": "string"
+     }
+    }
+   },
+   "ClienteContato": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer"
+     },
+     "nome": {
+      "type": "string"
+     },
+     "cargo": {
+      "type": "string"
+     },
+     "telefone": {
+      "type": "string"
+     },
+     "email": {
+      "type": "string"
+     }
+    }
+   },
+   "ClienteContatoIn": {
+    "type": "object",
+    "required": [
+     "nome"
+    ],
+    "properties": {
+     "nome": {
+      "type": "string"
+     },
+     "cargo": {
+      "type": "string"
+     },
+     "telefone": {
+      "type": "string"
+     },
+     "email": {
+      "type": "string"
+     }
+    }
+   },
+   "ClienteInteracao": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer"
+     },
+     "cliente_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "cliente_nome": {
+      "type": "string"
+     },
+     "tipo": {
+      "type": "string"
+     },
+     "descricao": {
+      "type": "string"
+     },
+     "data_contato": {
+      "type": "string"
+     },
+     "data_proximo_contato": {
+      "type": "string",
+      "nullable": true
+     },
+     "usuario_id": {
+      "type": "integer",
+      "nullable": true
+     }
+    }
+   },
+   "InteracaoIn": {
+    "type": "object",
+    "required": [
+     "tipo",
+     "data_contato"
+    ],
+    "properties": {
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "ligacao",
+       "visita",
+       "email",
+       "whatsapp",
+       "follow_up",
+       "outro"
+      ]
+     },
+     "descricao": {
+      "type": "string"
+     },
+     "data_contato": {
+      "type": "string"
+     },
+     "data_proximo_contato": {
+      "type": "string",
+      "nullable": true
+     }
+    }
+   },
+   "ContextoCliente": {
+    "type": "object",
+    "properties": {
+     "vendedores": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "condicoes_pagamento": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "tabelas_preco": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "cfop": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "cst_icms": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "cst_pis": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "cst_cofins": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "csosn": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "cest": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "segmentos": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "categorias": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     }
+    }
+   },
+   "Fornecedor": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer"
+     },
+     "nome": {
+      "type": "string"
+     },
+     "razao_social": {
+      "type": "string",
+      "nullable": true
+     },
+     "cnpj_cpf": {
+      "type": "string",
+      "nullable": true
+     },
+     "representante": {
+      "type": "string",
+      "nullable": true
+     },
+     "whatsapp": {
+      "type": "string",
+      "nullable": true
+     },
+     "email": {
+      "type": "string",
+      "nullable": true
+     },
+     "telefone": {
+      "type": "string",
+      "nullable": true
+     },
+     "cidade": {
+      "type": "string",
+      "nullable": true
+     },
+     "uf": {
+      "type": "string",
+      "nullable": true
+     },
+     "categoria": {
+      "type": "string"
+     },
+     "condicao_pagamento_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "prazo_entrega_dias": {
+      "type": "integer"
+     },
+     "nota": {
+      "type": "number"
+     },
+     "ativo": {
+      "type": "integer"
+     }
+    }
+   },
+   "FornecedorIn": {
+    "type": "object",
+    "required": [
+     "nome"
+    ],
+    "properties": {
+     "nome": {
+      "type": "string"
+     },
+     "razao_social": {
+      "type": "string",
+      "nullable": true
+     },
+     "cnpj_cpf": {
+      "type": "string",
+      "nullable": true
+     },
+     "representante": {
+      "type": "string",
+      "nullable": true
+     },
+     "whatsapp": {
+      "type": "string",
+      "nullable": true
+     },
+     "email": {
+      "type": "string",
+      "nullable": true
+     },
+     "telefone": {
+      "type": "string",
+      "nullable": true
+     },
+     "endereco": {
+      "type": "string",
+      "nullable": true
+     },
+     "numero": {
+      "type": "string",
+      "nullable": true
+     },
+     "bairro": {
+      "type": "string",
+      "nullable": true
+     },
+     "cidade": {
+      "type": "string",
+      "nullable": true
+     },
+     "uf": {
+      "type": "string",
+      "nullable": true
+     },
+     "cep": {
+      "type": "string",
+      "nullable": true
+     },
+     "categoria": {
+      "type": "string"
+     },
+     "condicao_pagamento_id": {
+      "type": "integer",
+      "nullable": true
+     },
+     "prazo_entrega_dias": {
+      "type": "integer"
+     },
+     "nota": {
+      "type": "number"
+     },
+     "observacoes": {
+      "type": "string",
+      "nullable": true
+     }
+    }
+   },
+   "FornecedorContato": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer"
+     },
+     "fornecedor_id": {
+      "type": "integer"
+     },
+     "nome": {
+      "type": "string"
+     },
+     "cargo": {
+      "type": "string"
+     },
+     "telefone": {
+      "type": "string"
+     },
+     "email": {
+      "type": "string"
+     }
+    }
+   },
+   "FornecedorContatoIn": {
+    "type": "object",
+    "required": [
+     "nome"
+    ],
+    "properties": {
+     "nome": {
+      "type": "string"
+     },
+     "cargo": {
+      "type": "string"
+     },
+     "telefone": {
+      "type": "string"
+     },
+     "email": {
+      "type": "string"
+     }
+    }
+   },
+   "ContextoFornecedor": {
+    "type": "object",
+    "properties": {
+     "categorias": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "condicoes_pagamento": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     }
+    }
+   },
+   "IdOut": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer"
+     }
+    }
+   },
+   "OkOut": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     }
+    }
+   },
+   "PrecoProposta": {
+    "type": "object",
+    "properties": {
+     "cotacao_item_id": {
+      "type": "integer"
+     },
+     "preco_unitario": {
+      "type": "number"
+     },
+     "desconto": {
+      "type": "number"
+     },
+     "prazo_entrega_dias": {
+      "type": "integer"
+     },
+     "disponibilidade_estoque": {
+      "type": "integer",
+      "enum": [
+       0,
+       1
+      ]
+     },
+     "unidade_compra": {
+      "type": "string"
+     },
+     "fator_conversao": {
+      "type": "number"
+     },
+     "marca_ofertada": {
+      "type": "string"
+     },
+     "motivo_indisponibilidade": {
+      "type": "string",
+      "enum": [
+       "em_falta_estoque",
+       "nao_trabalha_linha",
+       "descontinuado",
+       "fora_regiao",
+       "outro",
+       ""
+      ]
+     },
+     "observacao": {
+      "type": "string"
+     }
+    }
+   },
+   "Invite": {
+    "type": "object",
+    "properties": {
+     "fornecedor_id": {
+      "type": "integer"
+     },
+     "nome": {
+      "type": "string"
+     },
+     "representante": {
+      "type": "string",
+      "nullable": true
+     },
+     "status": {
+      "type": "string"
+     },
+     "link": {
+      "type": "string"
+     },
+     "whatsapp_url": {
+      "type": "string"
+     },
+     "mailto_url": {
+      "type": "string"
+     },
+     "data_limite_retorno": {
+      "type": "string",
+      "nullable": true
+     }
+    }
+   },
+   "CobrancaResultado": {
+    "type": "object",
+    "properties": {
+     "operacao": {
+      "type": "string"
+     },
+     "provider": {
+      "type": "string"
+     },
+     "payment_id": {
+      "type": "string"
+     },
+     "status_cobranca": {
+      "type": "string"
+     },
+     "linha_digitavel": {
+      "type": "string"
+     },
+     "codigo_barras": {
+      "type": "string"
+     },
+     "nosso_numero": {
+      "type": "string"
+     },
+     "url_boleto": {
+      "type": "string"
+     },
+     "payload_pix": {
+      "type": "string"
+     },
+     "qr_code_base64": {
+      "type": "string"
+     },
+     "txid": {
+      "type": "string"
+     },
+     "url_pix": {
+      "type": "string"
+     }
+    }
+   },
+   "LoteResultado": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     },
+     "grupo_id": {
+      "type": "string"
+     },
+     "ids": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     },
+     "n_parcelas": {
+      "type": "integer"
+     }
+    }
+   },
+   "ProdutoPublico": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "integer"
+     },
+     "sku": {
+      "type": "string"
+     },
+     "ean": {
+      "type": "string"
+     },
+     "nome": {
+      "type": "string"
+     },
+     "marca": {
+      "type": "string"
+     },
+     "categoria": {
+      "type": "string"
+     },
+     "subcategoria": {
+      "type": "string"
+     },
+     "preco": {
+      "type": "number"
+     },
+     "preco_promocional": {
+      "type": "number"
+     },
+     "pix_price": {
+      "type": "number"
+     },
+     "unidade_venda": {
+      "type": "string"
+     },
+     "embalagem_qtd": {
+      "type": "integer"
+     },
+     "especificacoes": {
+      "type": "string"
+     },
+     "descricao": {
+      "type": "string"
+     },
+     "atributos": {
+      "type": "object"
+     },
+     "imagem_url": {
+      "type": "string"
+     },
+     "imagens": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   }
+  }
+ }
 }

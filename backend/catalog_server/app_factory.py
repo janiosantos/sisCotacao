@@ -35,6 +35,7 @@ from catalog_server.blueprints import (
     api_suppliers_bp,
     api_usuarios_bp,
     api_vendedores_bp,
+    api_publico_bp,
     api_sistema_bp,
     pages_bp,
     portal_bp,
@@ -241,6 +242,7 @@ def create_app() -> Flask:
     app.register_blueprint(api_precos_bp)
     app.register_blueprint(api_relatorios_bp)
     app.register_blueprint(api_sistema_bp)
+    app.register_blueprint(api_publico_bp)
     app.register_blueprint(portal_bp)
     app.register_blueprint(pages_bp)
 
@@ -284,6 +286,15 @@ def create_app() -> Flask:
             resp.headers["Cache-Control"] = "no-cache"
         return resp
 
+    # CORS para a API pública (site institucional consome de outro domínio).
+    @app.after_request
+    def cors_publico(resp):
+        if request.path.startswith("/api/publico/"):
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            resp.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+            resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        return resp
+
     # Rotas /api abertas (sem token): health, login e o fluxo de primeiro
     # acesso (criação do admin inicial e checagem de "vazio").
     _WHITELIST = {
@@ -304,6 +315,9 @@ def create_app() -> Flask:
             return
         # Portal do fornecedor: usa token próprio na URL, fora da auth da API.
         if request.path.startswith("/api/fornecedor/"):
+            return
+        # API pública (site institucional): somente leitura, sem token.
+        if request.path.startswith("/api/publico/") and request.method in ("GET", "OPTIONS"):
             return
         metodos = _WHITELIST.get(request.path)
         if metodos and request.method in metodos:

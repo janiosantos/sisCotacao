@@ -231,6 +231,9 @@ def test_mapeamento_100pct_rotas_api(system_db):
             continue
         if path.startswith("/api/fornecedor/"):
             continue
+        # API pública (site institucional): leitura sem token, fora do RBAC.
+        if path.startswith("/api/publico/"):
+            continue
         if path in whitelist:
             continue
         if _recurso_da_rota(path) is None:

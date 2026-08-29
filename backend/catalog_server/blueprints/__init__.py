@@ -1,4 +1,5 @@
 from catalog_server.blueprints.api_catalog import api_catalog_bp
+from catalog_server.blueprints.api_publico import api_publico_bp
 from catalog_server.blueprints.api_diagnostico import api_diagnostico_bp
 from catalog_server.blueprints.api_clientes import api_clientes_bp
 from catalog_server.blueprints.api_compras import api_compras_bp
