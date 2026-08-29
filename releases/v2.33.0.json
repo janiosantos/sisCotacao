@@ -1,0 +1,32 @@
+{
+  "versao": "v2.33.0",
+  "componentes": [
+    "backend",
+    "frontend"
+  ],
+  "correcoes": [],
+  "melhorias": [],
+  "recursos": [
+    "Filtro por grupo em GET /api/publico/produtos e no catálogo (?grupo=ELE ou ?grupo=ELETRICO) + GET /api/publico/grupos (código/nome/total) + campos grupo/grupo_nome na listagem e detalhe",
+    "Página demo do catálogo público com seletor de Grupo",
+    "Infraestrutura TLS para produção: HTTPS com Let's Encrypt via DNS-01 (Cloudflare, funciona atrás de CGNAT) — serviço certbot com renovação automática a cada 12h, nginx com fallback HTTP enquanto o certificado não existe, smoke/health tolerantes a TLS",
+    "nginx passa X-Forwarded-Proto/Host ao backend (links de convite ao fornecedor viram https://)"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.33.0",
+    "frontend": "siscom-frontend:v2.33.0"
+  },
+  "database": {
+    "migration": 96
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "filtro_grupo_api_publica": true,
+    "tls_producao": true
+  }
+}
