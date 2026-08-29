@@ -1,5 +1,17 @@
 # AGENTS.md
 
+## ⛔ REGRA OBRIGATÓRIA: deploy só com confirmação explícita
+
+**NUNCA disparar deploy para STAGING ou PRODUÇÃO (nem rebuild/restart de containers, nem
+aplicação de migrações em ambientes não-dev) sem confirmação explícita do usuário.**
+
+- Após implementar/corrigir, apresentar o resumo e **AGUARDAR o usuário pedir a publicação**.
+- O usuário decide quando publicar — deploys automáticos travam o ciclo de desenvolvimento
+  (correções e novas implementações acontecem o tempo todo).
+- Manter as mudanças commitadas/pushadas (o que é seguro), mas **não** acionar workflows de
+  deploy por conta própria.
+- Exceção: nenhuma. Se houver urgência declarada, perguntar antes.
+
 ## Aplicação de patches
 
 Os patches (arquivos `.patch`, normalmente em `PATCH/`) são aplicados **em ordem sequencial**.
