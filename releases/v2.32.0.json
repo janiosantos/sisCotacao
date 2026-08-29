@@ -1,0 +1,34 @@
+{
+  "versao": "v2.32.0",
+  "componentes": [
+    "backend"
+  ],
+  "correcoes": [],
+  "melhorias": [
+    "Migração 0095 (limpeza de imagens órfãs) foi REMOVIDA da cadeia de migrações: era destrutiva e nunca foi commitada/deployada — só rodou no dev. O dano causado no dev foi reparado pela 0096 (reconstrução a partir do filesystem)"
+  ],
+  "recursos": [
+    "API pública /api/publico/* para o site institucional exibir o catálogo (somente leitura, sem token, CORS habilitado)",
+    "GET /api/publico/produtos (paginado, filtros q/categoria/subcategoria/em_linha)",
+    "GET /api/publico/produtos/{id} (detalhe com todas as imagens)",
+    "GET /api/publico/categorias e GET /api/publico/marcas",
+    "Contrato público sanitizado: nome, marca, preço, imagem, categoria, especificações — NUNCA custo/NCM/fornecedores/classe ABC",
+    "OpenAPI cresceu de 56 → 60 paths (tag publico)"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.32.0",
+    "frontend": "siscom-frontend:v2.32.0"
+  },
+  "database": {
+    "migration": 96
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "api_publica_catalogo": true
+  }
+}
