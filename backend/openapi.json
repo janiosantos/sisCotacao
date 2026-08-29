@@ -2240,10 +2240,16 @@
            "type": "integer"
           },
           "offset": {
-           "type": "integer"
+           "type": "integer",
+           "default": 0
           },
           "limit": {
-           "type": "integer"
+           "type": "integer",
+           "default": 30
+          },
+          "has_more": {
+           "type": "boolean",
+           "description": "true quando existem mais páginas após offset+limit"
           }
          }
         }
