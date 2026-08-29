@@ -67,7 +67,7 @@ services:
       - certbot-etc:/etc/letsencrypt:ro
       - certbot-www:/var/www/certbot:ro
     environment:
-      - DOMAIN=${DOMAIN:-siscom.casalm.com.br}
+      - DOMAIN=siscom.casalm.com.br
     depends_on:
       backend:
         condition: service_healthy
@@ -93,8 +93,11 @@ services:
       # "mount a directory onto a file" quando o arquivo ainda não existe.
       - /home/jpsantos/siscom/certbot:/etc/cloudflare:ro
     environment:
-      - DOMAIN=${DOMAIN:-siscom.casalm.com.br}
-      - CERTBOT_EMAIL=${CERTBOT_EMAIL:-contato@casalm.com.br}
+      # Domínio/email FIXOS no compose (não dependem de interpolação do shell
+      # do runner). No `command` abaixo as variáveis usam $$ para o shell do
+      # container expandir a partir desta env.
+      - DOMAIN=siscom.casalm.com.br
+      - CERTBOT_EMAIL=contato@casalm.com.br
     entrypoint: /bin/sh
     command: >
       -c '
@@ -102,9 +105,9 @@ services:
           echo "Aguardando credencial: crie /home/jpsantos/siscom/certbot/cloudflare.ini (token Cloudflare Zone:DNS:Edit; ver cloudflare.ini.example)..."
           sleep 30
         done
-        if [ ! -d "/etc/letsencrypt/live/${DOMAIN}" ]; then
+        if [ ! -d "/etc/letsencrypt/live/$$DOMAIN" ]; then
           certbot certonly --dns-cloudflare --dns-cloudflare-credentials /etc/cloudflare/cloudflare.ini \
-            -d "${DOMAIN}" --email "${CERTBOT_EMAIL}" --agree-tos --no-eff-email --non-interactive
+            -d "$$DOMAIN" --email "$$CERTBOT_EMAIL" --agree-tos --no-eff-email --non-interactive
         fi
         trap exit TERM
         while :; do
