@@ -1,0 +1,27 @@
+{
+  "versao": "v2.32.1",
+  "componentes": [
+    "frontend"
+  ],
+  "correcoes": [],
+  "melhorias": [],
+  "recursos": [
+    "Página de exemplo do catálogo público em /demo-publico.html (consome /api/publico/*): busca, filtros por categoria/subcategoria/marca, paginação, cards com imagem/preço e modal de detalhe com galeria — para validar a integração no site institucional"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.32.1",
+    "frontend": "siscom-frontend:v2.32.1"
+  },
+  "database": {
+    "migration": 96
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "pagina_demo_catalogo_publico": true
+  }
+}

@@ -67,6 +67,7 @@ services:
       - ./frontend/src:/app/src
       - ./frontend/index.html:/app/index.html
       - ./frontend/vite.config.ts:/app/vite.config.ts
+      - ./frontend/public:/app/public
     environment:
       - BACKEND_HOST=backend
       - BACKEND_PORT=8000
