@@ -1,0 +1,35 @@
+{
+  "versao": "v2.32.2",
+  "componentes": [
+    "backend",
+    "frontend"
+  ],
+  "correcoes": [
+    "Página de exemplo do catálogo público: erro claro quando a resposta não é JSON (evita JSON.parse genérico)"
+  ],
+  "melhorias": [
+    "Página de exemplo do catálogo público (/demo-publico.html) para validar a integração no site institucional: busca, filtros por categoria/subcategoria/marca, paginação e detalhe com galeria"
+  ],
+  "recursos": [
+    "Paginação explícita em GET /api/publico/produtos: offset/limit (máx. 100) + has_more na resposta para o consumidor saber quando parar de paginar",
+    "Pesquisa por texto no mesmo endpoint via ?q= (nome/descrição/especificações) + filtros categoria/subcategoria/marca/em_linha",
+    "Testes de paginação e busca na API pública"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.32.2",
+    "frontend": "siscom-frontend:v2.32.2"
+  },
+  "database": {
+    "migration": 96
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "api_publica_catalogo": true,
+    "pagina_demo_catalogo_publico": true
+  }
+}
