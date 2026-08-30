@@ -1,0 +1,42 @@
+{
+  "versao": "v2.34.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend"
+  ],
+  "correcoes": [
+    "RBAC deny-by-default: removido bypass legado por token; usuário sem perfil RBAC → 403; usuário inativo rejeitado",
+    "Segredos de provedores de pagamento não expostos na API (credencial_configurada)",
+    "Estoque rejeita saída acima do disponível; transações de venda/reabertura/estoque/caixa/contas com locks e idempotência",
+    "Proteção SSRF (safe_http) em downloads de imagem/HTML por URL; limite global de request (MAX_CONTENT_LENGTH)"
+  ],
+  "melhorias": [
+    "Rate limit de login distribuído (PostgreSQL): por IP e conta, 5 tentativas/300s, 429 + Retry-After (migração 0098)",
+    "Ambiente da cobrança persistido na conta a receber (sandbox/produção) — webhooks/consultas usam o mesmo ambiente (migração 0097)",
+    "Modal com acessibilidade (foco inicial, trap de Tab, Escape, aria-modal); segredos opcionais no contrato TS",
+    "Compose de produção: exige CATALOG_SECRET/POSTGRES_USER/POSTGRES_PASSWORD (secrets do GitHub); deploy.yml corrigido para injetá-los"
+  ],
+  "recursos": [
+    "Migração 0097 cobranca_ambiente (ambiente_cobranca + índice payment_id)",
+    "Migração 0098 login_rate_limit (tabela de janela de tentativas)"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.34.0",
+    "frontend": "siscom-frontend:v2.34.0"
+  },
+  "database": {
+    "migration": 98
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "hardening_seguranca": true,
+    "login_rate_limit": true,
+    "cobranca_ambiente": true
+  }
+}
