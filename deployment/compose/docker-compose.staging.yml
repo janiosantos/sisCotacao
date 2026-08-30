@@ -59,11 +59,19 @@ services:
       dockerfile: Dockerfile.prod
     ports:
       - "8081:80"
+      # HTTPS para testes de webhook fora do dev, com o MESMO certificado da
+      # produção (volume compartilhado). 443 do host é usado pela produção.
+      - "444:443"
+    volumes:
+      - siscom_certbot-etc:/etc/letsencrypt:ro
+    environment:
+      - DOMAIN=siscom.casalm.com.br
+      - NGINX_MODE=staging
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1/ || exit 1"]
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1/ -T 5 2>/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -71,3 +79,7 @@ services:
 
 volumes:
   postgres-data:
+  # Volume de certificados da PRODUÇÃO (projeto siscom) — staging reutiliza os
+  # certs Let's Encrypt (somente leitura) para servir HTTPS na porta 444.
+  siscom_certbot-etc:
+    external: true

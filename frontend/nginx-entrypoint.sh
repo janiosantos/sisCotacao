@@ -5,16 +5,19 @@ set -e
 
 DOMAIN="${DOMAIN:-siscom.casalm.com.br}"
 CERT="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+MODE="${NGINX_MODE:-auto}"   # auto | tls | http | staging
 TLS_CONF="/etc/nginx/tls.conf"
 HTTP_CONF="/etc/nginx/http.conf"
+STAGING_CONF="/etc/nginx/staging.conf"
 ACTIVE_CONF="/etc/nginx/conf.d/default.conf"
 
 select_config() {
-  if [ -f "$CERT" ]; then
-    cp "$TLS_CONF" "$ACTIVE_CONF"
-  else
-    cp "$HTTP_CONF" "$ACTIVE_CONF"
-  fi
+  case "$MODE" in
+    tls)     cp "$TLS_CONF" "$ACTIVE_CONF" ;;
+    http)    cp "$HTTP_CONF" "$ACTIVE_CONF" ;;
+    staging) cp "$STAGING_CONF" "$ACTIVE_CONF" ;;
+    *)       if [ -f "$CERT" ]; then cp "$TLS_CONF" "$ACTIVE_CONF"; else cp "$HTTP_CONF" "$ACTIVE_CONF"; fi ;;
+  esac
 }
 
 # Aguarda (curto) o certificado do certbot na 1ª subida — o certbot roda em
