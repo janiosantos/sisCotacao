@@ -13,6 +13,6 @@ COPY backend/tests/ tests/
 COPY app/ app/
 # Manifestos de release (lidos pelo versioning ao publicar)
 COPY releases/ releases/
-RUN pip install --no-cache-dir flask python-dotenv requests beautifulsoup4 lxml colorlog fake-useragent sqlalchemy "psycopg[binary]"
+RUN pip install --no-cache-dir flask python-dotenv requests beautifulsoup4 lxml colorlog fake-useragent sqlalchemy "psycopg[binary]" rq redis
 EXPOSE 8000
 CMD ["python", "-m", "catalog_server.run_server", "--port", "8000", "--host", "0.0.0.0"]

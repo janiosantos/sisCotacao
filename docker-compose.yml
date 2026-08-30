@@ -55,6 +55,50 @@ services:
       start_period: 60s
     restart: unless-stopped
 
+  # ─── Processamento assíncrono (P5): Redis + RQ ──────────────────────────
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "catalog_server.jobs.worker"]
+    volumes:
+      - ./backend/catalog_server:/app/catalog_server
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql+psycopg://catalog:catalog@db:5432/catalog
+      - IMAGES_DIR=/app/images
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "catalog_server.jobs.scheduler"]
+    volumes:
+      - ./backend/catalog_server:/app/catalog_server
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql+psycopg://catalog:catalog@db:5432/catalog
+      - RECHECAGEM_INTERVAL_MIN=15
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   # SPA em desenvolvimento (Vite/HMR). Fica SÓ na rede interna: quem fala
   # com o navegador é o nginx abaixo.
   vite:

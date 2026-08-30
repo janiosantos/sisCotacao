@@ -120,6 +120,47 @@ services:
       '
     restart: unless-stopped
 
+  # Processamento assíncrono (P5): Redis + RQ — worker processa a fila (rechecagem
+  # periódica, outbox futuro); scheduler agenda a rechecagem a cada intervalo.
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  worker:
+    image: siscom-backend:${APP_VERSION:?APP_VERSION obrigatório}
+    command: ["python", "-m", "catalog_server.jobs.worker"]
+    volumes:
+      - /home/jpsantos/siscom/img:/app/images
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CATALOG_ENV=production
+      - CATALOG_SECRET=${CATALOG_SECRET:?CATALOG_SECRET obrigatório}
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER obrigatório}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatório}@db:5432/${POSTGRES_DB:-catalog}
+      - IMAGES_DIR=/app/images
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  scheduler:
+    image: siscom-backend:${APP_VERSION:?APP_VERSION obrigatório}
+    command: ["python", "-m", "catalog_server.jobs.scheduler"]
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER obrigatório}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatório}@db:5432/${POSTGRES_DB:-catalog}
+      - RECHECAGEM_INTERVAL_MIN=${RECHECAGEM_INTERVAL_MIN:-15}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   certbot-etc:
