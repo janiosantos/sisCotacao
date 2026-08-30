@@ -49,12 +49,13 @@ exclusao de arquivos e disparado automaticamente.
 
 ## 5. Outbox e processamento assincrono
 
-- **Status:** planejamento tecnico pendente.
-- **Escopo:** criar outbox transacional para cobrancas, webhooks, imagens e
-  integracoes externas; adicionar worker, retry com backoff, dead-letter,
-  observabilidade e chaves de idempotencia.
-- **Pre-requisitos:** definir provedor do worker (Celery/RQ), Redis ou broker,
-  limites de retry e quais operacoes podem sair do request HTTP.
+- **Status:** fundação RQ + Redis implementada (worker + scheduler + redis nos
+  composes); rechecagem periódica ativa no staging; outbox transacional pendente.
+- **Escopo:** outbox transacional para cobrancas, webhooks, imagens e
+  integracoes externas; retry com backoff, dead-letter, observabilidade e
+  chaves de idempotencia.
+- **Pre-requisitos:** (decisao tomada) worker RQ + Redis; definir quais
+  operacoes saem do request HTTP e o contrato de reprocessamento.
 - **Aceite:** falha externa nao desfaz o fato de negocio, reprocessamento e
   seguro, duplicatas sao ignoradas e itens mortos aparecem para operador.
 
