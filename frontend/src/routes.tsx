@@ -19,6 +19,7 @@ const Categorias = lazy(() => import("./pages/categorias"));
 const PlanoContas = lazy(() => import("./pages/plano_contas"));
 const Solicitacoes = lazy(() => import("./pages/solicitacoes"));
 const Bancos = lazy(() => import("./pages/bancos"));
+const Webhooks = lazy(() => import("./pages/webhooks"));
 const PosVenda = lazy(() => import("./pages/posvenda"));
 const Historico = lazy(() => import("./pages/historico"));
 const Diagnostico = lazy(() => import("./pages/diagnostico_variacoes"));
@@ -67,6 +68,7 @@ export const ROUTES: RouteDef[] = [
   { pattern: /^#\/estoque$/, title: "Estoque", component: Estoque, recurso: "estoque" },
   { pattern: /^#\/posvenda$/, title: "Pós-venda", component: PosVenda, recurso: "posvenda" },
   { pattern: /^#\/bancos$/, title: "Bancos", component: Bancos, recurso: "bancos" },
+  { pattern: /^#\/webhooks$/, title: "Webhooks", component: Webhooks, recurso: "financeiro" },
   { pattern: /^#\/fiscal$/, title: "Fiscal", component: Fiscal, recurso: "fiscal" },
   { pattern: /^#\/financeiro$/, title: "Financeiro", component: Financeiro, recurso: "financeiro" },
   { pattern: /^#\/caixa$/, title: "Caixa", component: Caixa, recurso: "caixa" },

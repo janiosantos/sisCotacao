@@ -20,6 +20,7 @@ import {
   BookOpen,
   Banknote,
   Warehouse,
+  Webhook,
   Receipt,
   RotateCcw,
   RefreshCw,
@@ -86,6 +87,7 @@ const NAV: NavGroup[] = [
       { href: "#/precos", label: "Preços", icon: DollarSign, recurso: "precos" },
       { href: "#/bancos", label: "Bancos", icon: Landmark, recurso: "bancos" },
       { href: "#/plano-contas", label: "Plano de contas", icon: BookOpen, recurso: "plano_contas" },
+      { href: "#/webhooks", label: "Webhooks", icon: Webhook, recurso: "financeiro" },
     ],
   },
   {

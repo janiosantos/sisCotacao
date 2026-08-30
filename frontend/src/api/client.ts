@@ -1533,6 +1533,13 @@ export const api = {
     request<{ providers: PaymentProviderItem[]; configs: PaymentProviderConfig[] }>("GET", "/api/payment-providers"),
   salvarPaymentProviderConfig: (data: Record<string, unknown>) =>
     request<{ ok: boolean }>("PUT", "/api/payment-providers/config", data),
+  listarWebhookLogs: (params: Record<string, string>) =>
+    request<{ items: WebhookLogItem[]; total: number }>("GET", "/api/webhooks/logs" + qs(params)),
+  detalheWebhookLog: (id: number) =>
+    request<Record<string, unknown>>("GET", `/api/webhooks/logs/${id}`),
+  rechecagemWebhooks: (data: Record<string, unknown>) =>
+    request<{ verificadas: number; pagas: number; ja_pagas: number; erros: string[]; detalhes: { conta_id: number; payment_id: string; valor: number }[] }>(
+      "POST", "/api/webhooks/rechecagem", data),
   listarPagar: (params: Record<string, unknown> = {}) =>
     request<ContaPagar[]>("GET", "/api/financeiro/pagar" + qs(params)),
   criarPagar: (data: ContaPayload) => request<{ id: number }>("POST", "/api/financeiro/pagar", data),
@@ -2226,6 +2233,18 @@ export interface PaymentProviderItem {
   codigo: string;
   nome: string;
   ativo: number | boolean;
+}
+
+export interface WebhookLogItem {
+  id: number;
+  provider: string;
+  evento: string | null;
+  payment_id: string | null;
+  status: string;
+  http_status: number | null;
+  assinatura_ok: boolean | null;
+  ip: string | null;
+  criado_em: string;
 }
 
 export interface PaymentProviderConfig {
