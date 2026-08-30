@@ -1,9 +1,10 @@
-// pages/dashboard.tsx — painel de indicadores (React + Tailwind).
+﻿// pages/dashboard.tsx — painel de indicadores (React + Tailwind).
 
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { fmtMoney } from "../ui/format";
 import { Badge, Button, Cell, EmptyRow, Loading, PageHeader, StatCard, Table, TBody, THead } from "../ui/ui";
+import { Section } from "./dashboard/section";
 
 interface DashboardData {
   resumo: {
@@ -198,11 +199,3 @@ export default function Dashboard() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section>
-      <h3 className="mb-2 text-sm font-semibold text-gray-700">{title}</h3>
-      {children}
-    </section>
-  );
-}
