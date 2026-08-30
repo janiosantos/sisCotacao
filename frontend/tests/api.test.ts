@@ -1,0 +1,72 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { api, ApiError, mensagemErro } from "../src/api/client";
+
+// Contrato de erro da API (P6): toda falha lança ApiError com status/code.
+
+const fetchMock = vi.fn();
+globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+function res(status: number, body: unknown, extra?: Record<string, string>) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...(extra || {}) },
+  });
+}
+
+beforeEach(() => {
+  fetchMock.mockReset();
+});
+
+describe("request", () => {
+  it("retorna JSON em 200", async () => {
+    fetchMock.mockResolvedValue(res(200, [{ id: 1 }]));
+    const r = await api.listarPagar({});
+    expect(Array.isArray(r)).toBe(true);
+    expect(r).toHaveLength(1);
+  });
+
+  it("lança ApiError com status/code/details em 4xx", async () => {
+    fetchMock.mockResolvedValue(res(400, { error: "Limite excedido", code: "sem_credito" }));
+    try {
+      await api.listarPagar({});
+      expect.unreachable("deveria lançar");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      const err = e as ApiError;
+      expect(err.status).toBe(400);
+      expect(err.code).toBe("sem_credito");
+      expect(err.message).toBe("Limite excedido");
+      expect(err.details?.error).toBe("Limite excedido");
+    }
+  });
+
+  it("lança ApiError com status em 5xx", async () => {
+    fetchMock.mockResolvedValue(res(502, { error: "Backend indisponível" }));
+    try {
+      await api.listarPagar({});
+      expect.unreachable();
+    } catch (e) {
+      const err = e as ApiError;
+      expect(err.status).toBe(502);
+      expect(err.message).toBe("Backend indisponível");
+    }
+  });
+
+  it("lança 'Servidor indisponível' em falha de rede", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    await expect(api.listarPagar({})).rejects.toThrow("Servidor indisponível");
+  });
+});
+
+describe("mensagemErro", () => {
+  it("formata ApiError pela message", () => {
+    expect(mensagemErro(new ApiError(403, "Permissão negada", "sem_permissao"))).toBe("Permissão negada");
+  });
+  it("fallback para status quando sem message", () => {
+    expect(mensagemErro(new ApiError(500, ""))).toBe("Erro 500");
+  });
+  it("propaga Error e valores primitivos", () => {
+    expect(mensagemErro(new Error("boom"))).toBe("boom");
+    expect(mensagemErro("texto")).toBe("texto");
+  });
+});

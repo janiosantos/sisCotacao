@@ -3,7 +3,7 @@
 
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { Cell, Table, TBody, THead } from "../src/ui/ui";
+import { Badge, Cell, EmptyRow, Table, TBody, THead } from "../src/ui/ui";
 
 describe("Table (responsiva mobile)", () => {
   it("injeta data-label por coluna em cada célula", () => {
@@ -57,5 +57,33 @@ describe("Table (responsiva mobile)", () => {
     expect(html).toContain("mob-card");
     expect(html).toContain("lg:table-header-group");
     expect(html).toContain("lg:table-cell");
+  });
+
+  it("EmptyRow renderiza mensagem com colSpan", () => {
+    const html = renderToStaticMarkup(
+      <Table>
+        <THead cols={["A", "B"]} />
+        <TBody>
+          <EmptyRow colSpan={2} message="Nenhum registro" />
+        </TBody>
+      </Table>
+    );
+    expect(html).toContain("Nenhum registro");
+    expect(html).toContain('colSpan="2"');
+    expect(html).toContain('data-label=""');
+  });
+});
+
+describe("Badge", () => {
+  const tones = ["gray", "green", "red", "amber", "blue"] as const;
+  for (const tone of tones) {
+    it(`renderiza tom ${tone}`, () => {
+      const html = renderToStaticMarkup(<Badge tone={tone}>{tone}</Badge>);
+      expect(html).toContain(tone);
+    });
+  }
+  it("aceita conteúdo dinâmico", () => {
+    const html = renderToStaticMarkup(<Badge tone="green">✓ ok</Badge>);
+    expect(html).toContain("✓ ok");
   });
 });

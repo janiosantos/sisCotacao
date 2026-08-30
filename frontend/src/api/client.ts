@@ -31,6 +31,29 @@ export interface Atributo {
 
 export type Metodo = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+// Contrato de erro da API (P6): toda falha de requisição lança ApiError com
+// status HTTP, código de negócio (ex.: sem_credito, db_indisponivel) e corpo.
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  details?: Record<string, unknown>;
+
+  constructor(status: number, message: string, code?: string, details?: Record<string, unknown>) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+/** Formata o erro para toast/UI: mensagem amigável, sem expor detalhes internos. */
+export function mensagemErro(e: unknown): string {
+  if (e instanceof ApiError) return e.message || `Erro ${e.status}`;
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
+
 export interface Variante {
   id: number;
   name?: string;
@@ -966,9 +989,7 @@ async function request<T>(
     } catch {
       /* resposta não-JSON */
     }
-    const err = new Error(detail) as Error & { code?: string; details?: Record<string, unknown> };
-    if (code) err.code = code;
-    err.details = json;
+    const err = new ApiError(res.status, detail, code, json);
     throw err;
   }
   if (res.status === 204) return undefined as T;
@@ -1005,13 +1026,16 @@ async function enviarArquivo<T>(
   if (![502, 503, 504].includes(res.status)) sinalizarSucesso();
   if (!res.ok) {
     let detail = res.statusText;
+    let code: string | undefined;
+    let json: Record<string, unknown> = {};
     try {
-      const j = await res.json();
-      detail = j.error || detail;
+      json = await res.json();
+      detail = (json.error as string) || detail;
+      code = json.code as string | undefined;
     } catch {
       /* resposta não-JSON */
     }
-    throw new Error(detail);
+    throw new ApiError(res.status, detail, code, json);
   }
   return (await res.json()) as T;
 }
