@@ -1,21 +1,24 @@
-// pages/pre-venda.tsx — Pré-venda de orçamentos (React + Tailwind).
+﻿// pages/pre-venda.tsx â€” PrÃ©-venda de orÃ§amentos (React + Tailwind).
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   type Cliente,
-  type ClienteSituacao,
   type CondicaoPagamento,
   type OrcamentoDetalhe,
   type OrcamentoItemPayload,
-  type OrcamentoLista,
   type ProdutoResumo,
 } from "../api/client";
-import { fmtDate, fmtMoney } from "../ui/format";
+import { fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
 import { usuarioCorrente } from "./login";
-import { Button, Field, Input, Modal } from "../ui/ui";
-import { SearchModal } from "../ui/search-modal";
+import { Button } from "../ui/ui";
+import { DataBox } from "./pre-venda/data-box";
+import { ModalCadastroCliente } from "./pre-venda/modal-cadastro-cliente";
+import { ModalBuscaCliente } from "./pre-venda/modal-busca-cliente";
+import { ModalDadosCliente } from "./pre-venda/modal-dados-cliente";
+import { ModalAutorizar } from "./pre-venda/modal-autorizar";
+import { ModalLocalizarOrcamento } from "./pre-venda/modal-localizar-orcamento";
 
 interface LinhaPdv {
   produto_id: number | null;
@@ -58,24 +61,6 @@ function calculosPdv(linhas: LinhaPdv[], vDescModo: "pct" | "valor", vDesconto: 
   return { base, subtotal, descontoItens, descontoGeral, descontoTotal, pct, total: Math.max(0, subtotal - descontoGeral) };
 }
 
-function DataBox({
-  label,
-  value,
-  largeValue = false,
-  valueColor = "text-black",
-}: {
-  label: string;
-  value?: string;
-  largeValue?: boolean;
-  valueColor?: string;
-}) {
-  return (
-    <div className="flex h-full min-w-0 flex-col justify-between rounded-xl bg-white p-2 shadow-md sm:p-3">
-      <span className="truncate text-xs font-bold text-gray-800 sm:text-sm">{label}</span>
-      <div className={`mt-1 min-w-0 truncate text-right font-bold ${largeValue ? "text-2xl sm:text-4xl" : "text-lg sm:text-2xl"} ${valueColor}`}>{value ?? ""}</div>
-    </div>
-  );
-}
 
 export default function PreVenda() {
   const [linhas, setLinhas] = useState<LinhaPdv[]>([]);
@@ -107,10 +92,10 @@ export default function PreVenda() {
   >(null);
   const [modalDadosCliente, setModalDadosCliente] = useState(false);
   const [modalLocalizar, setModalLocalizar] = useState(false);
-  // Aviso de crédito do cliente (trava de crédito da loja).
+  // Aviso de crÃ©dito do cliente (trava de crÃ©dito da loja).
   const [avisoCredito, setAvisoCredito] = useState<{ texto: string; severidade: "warn" | "error" } | null>(null);
-  // Desconto acima da alçada já autorizado por um gerente (nesta composição).
-  // Qualquer alteração de itens/desconto expira essa autorização.
+  // Desconto acima da alÃ§ada jÃ¡ autorizado por um gerente (nesta composiÃ§Ã£o).
+  // Qualquer alteraÃ§Ã£o de itens/desconto expira essa autorizaÃ§Ã£o.
   const [descontoAutorizado, setDescontoAutorizado] = useState(false);
 
   const buscaRef = useRef<HTMLInputElement>(null);
@@ -131,20 +116,20 @@ export default function PreVenda() {
 
   const c = useMemo(() => calculosPdv(linhas, descModo, desconto), [linhas, descModo, desconto]);
 
-  // Reavalia o aviso de crédito quando o total da venda muda.
+  // Reavalia o aviso de crÃ©dito quando o total da venda muda.
   useEffect(() => {
     if (clienteId == null || clienteId === CLIENTE_PADRAO.id) return;
     const t = setTimeout(() => void carregarAvisoCredito(clienteId, cliente), 400);
     return () => clearTimeout(t);
   }, [c.total]);
 
-  // Limite de alçada do vendedor atual (temporariamente se aplica a todos,
-  // inclusive admin, até existirem grupos/permissões).
+  // Limite de alÃ§ada do vendedor atual (temporariamente se aplica a todos,
+  // inclusive admin, atÃ© existirem grupos/permissÃµes).
   const usuario = usuarioCorrente();
   const limiteAlcadaPct = usuario ? (usuario.desconto_limite_pct ?? 0) : 0;
 
-  // Qualquer alteração no pedido (itens/quantidade/cliente/desconto/condição…)
-  // expira a autorização de desconto anterior — reavalia do zero.
+  // Qualquer alteraÃ§Ã£o no pedido (itens/quantidade/cliente/desconto/condiÃ§Ã£oâ€¦)
+  // expira a autorizaÃ§Ã£o de desconto anterior â€” reavalia do zero.
   useEffect(() => {
     setDescontoAutorizado(false);
   }, [linhas, cliente, clienteId, obs, desconto, descModo, condicaoId]);
@@ -154,7 +139,7 @@ export default function PreVenda() {
       .listarCondicoes()
       .then((cds) => {
         setCondicoes(cds);
-        // Condição padrão: "À Vista" (ou a primeira disponível).
+        // CondiÃ§Ã£o padrÃ£o: "Ã€ Vista" (ou a primeira disponÃ­vel).
         setCondicaoId((cur) => {
           if (cur) return cur;
           const vista = cds.find((cd) => /vista/i.test(cd.nome)) ?? cds[0];
@@ -263,7 +248,7 @@ export default function PreVenda() {
       .then((s) => {
         if (s.excede_limite) {
           setAvisoCredito({
-            texto: `${nome}: venda de ${fmtMoney(c.total)} supera o limite disponível de ${fmtMoney(s.limite_disponivel)}.`,
+            texto: `${nome}: venda de ${fmtMoney(c.total)} supera o limite disponÃ­vel de ${fmtMoney(s.limite_disponivel)}.`,
             severidade: "warn",
           });
         } else if (s.excede_por_atraso) {
@@ -306,9 +291,9 @@ export default function PreVenda() {
       desconto_percentual: l.desconto_percentual,
     }));
 
-  // Persiste (cria/atualiza) o rascunho atual — sem limpar a tela nem avisar.
-  // Compartilha a chamada em voo para não criar orçamento duplicado quando o
-  // auto-save e uma ação manual (finalizar/salvar) disparam juntos.
+  // Persiste (cria/atualiza) o rascunho atual â€” sem limpar a tela nem avisar.
+  // Compartilha a chamada em voo para nÃ£o criar orÃ§amento duplicado quando o
+  // auto-save e uma aÃ§Ã£o manual (finalizar/salvar) disparam juntos.
   const persistirInFlightRef = useRef<Promise<{ id: number; numero: string } | null> | null>(null);
 
   const persistir = async (): Promise<{ id: number; numero: string } | null> => {
@@ -361,7 +346,7 @@ export default function PreVenda() {
     setDesconto("");
     setDescModo("valor");
     setObs("");
-    // Nova pré-venda começa no cliente padrão (CONSUMIDOR).
+    // Nova prÃ©-venda comeÃ§a no cliente padrÃ£o (CONSUMIDOR).
     setCliente(CLIENTE_PADRAO.nome);
     setClienteId(CLIENTE_PADRAO.id);
     sessionStorage.setItem("pdv_cliente", CLIENTE_PADRAO.nome);
@@ -370,8 +355,8 @@ export default function PreVenda() {
   };
 
   const finalizarOrcamento = async (id: number): Promise<boolean> => {
-    // Gate local: desconto acima da alçada e ainda não autorizado → abre o
-    // modal de autorização ANTES de chamar o backend (sem o 403 confuso).
+    // Gate local: desconto acima da alÃ§ada e ainda nÃ£o autorizado â†’ abre o
+    // modal de autorizaÃ§Ã£o ANTES de chamar o backend (sem o 403 confuso).
     if (c.descontoTotal > 0.01 && c.pct > limiteAlcadaPct + 1e-6 && !descontoAutorizado) {
       setModalAutorizar({ id, descontoPct: c.pct, limitePct: limiteAlcadaPct, modo: "finalizar" });
       return false;
@@ -382,7 +367,7 @@ export default function PreVenda() {
     } catch (e) {
       const err = e as Error & { code?: string; details?: Record<string, unknown> };
       if (err.code === "desconto_exige_autorizacao") {
-        // Fallback: o backend rejeitou (ex.: autorização expirada após edição).
+        // Fallback: o backend rejeitou (ex.: autorizaÃ§Ã£o expirada apÃ³s ediÃ§Ã£o).
         setModalAutorizar({
           id,
           descontoPct: err.details?.desconto_pct as number | undefined,
@@ -396,7 +381,7 @@ export default function PreVenda() {
     }
   };
 
-  // Finaliza (fatura → caixa). Ação principal (F1).
+  // Finaliza (fatura â†’ caixa). AÃ§Ã£o principal (F1).
   const finalizar = async (): Promise<void> => {
     if (!linhas.length) {
       toast("Adicione ao menos um item", "error");
@@ -408,8 +393,8 @@ export default function PreVenda() {
       if (!res) return;
       const ok = await finalizarOrcamento(res.id);
       if (!ok) {
-        // Finalização bloqueada: mantém os dados e passa a editar o rascunho
-        // criado (para não duplicar) enquanto o modal de autorização está aberto.
+        // FinalizaÃ§Ã£o bloqueada: mantÃ©m os dados e passa a editar o rascunho
+        // criado (para nÃ£o duplicar) enquanto o modal de autorizaÃ§Ã£o estÃ¡ aberto.
         setEditandoId(res.id);
         setEditandoNumero(res.numero);
         return;
@@ -429,8 +414,8 @@ export default function PreVenda() {
       toast("Adicione ao menos um item", "error");
       return;
     }
-    // Autorização por senha exigida apenas ao salvar/finalizar, se o desconto
-    // estiver acima da alçada do vendedor e ainda não tiver sido autorizado.
+    // AutorizaÃ§Ã£o por senha exigida apenas ao salvar/finalizar, se o desconto
+    // estiver acima da alÃ§ada do vendedor e ainda nÃ£o tiver sido autorizado.
     if (c.descontoTotal > 0.01 && c.pct > limiteAlcadaPct + 1e-6 && !descontoAutorizado) {
       setModalAutorizar({ id: null, descontoPct: c.pct, limitePct: limiteAlcadaPct, modo: "autorizar" });
       return;
@@ -466,7 +451,7 @@ export default function PreVenda() {
     try {
       const res = await persistir();
       if (!res) return;
-      void api.imprimirOrcamento(res.id).catch(() => toast("Orçamento salvo, mas a impressão falhou", "error"));
+      void api.imprimirOrcamento(res.id).catch(() => toast("OrÃ§amento salvo, mas a impressÃ£o falhou", "error"));
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
     } finally {
@@ -482,7 +467,7 @@ export default function PreVenda() {
     limparTela();
   };
 
-  // ── Auto-save: persistir o rascunho a cada mudança (debounce) ──
+  // â”€â”€ Auto-save: persistir o rascunho a cada mudanÃ§a (debounce) â”€â”€
   const persistirRef = useRef(persistir);
   persistirRef.current = persistir;
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -496,7 +481,7 @@ export default function PreVenda() {
     return () => clearTimeout(autoSaveTimer.current);
   }, [linhas, cliente, clienteId, obs, desconto, descModo, condicaoId]);
 
-  // ── Ao sair da tela: salvar (manter) ou descartar (excluir) o pedido ──
+  // â”€â”€ Ao sair da tela: salvar (manter) ou descartar (excluir) o pedido â”€â”€
   const editandoIdRef = useRef<number | null>(null);
   const linhasRef = useRef<LinhaPdv[]>([]);
   useEffect(() => {
@@ -509,7 +494,7 @@ export default function PreVenda() {
     const aoSair = () => {
       if (!temPedido()) return;
       const manter = window.confirm(
-        "Há um pedido em andamento.\n\nClique em OK para SALVAR (manter o rascunho) ou em Cancelar para DESCARTAR (excluir) o pedido."
+        "HÃ¡ um pedido em andamento.\n\nClique em OK para SALVAR (manter o rascunho) ou em Cancelar para DESCARTAR (excluir) o pedido."
       );
       if (!manter && editandoIdRef.current != null) {
         void api.excluirOrcamento(editandoIdRef.current).catch(() => {});
@@ -585,7 +570,7 @@ export default function PreVenda() {
     }
     setDescModo(modo);
     setDesconto(v);
-    // A autorização por senha NÃO é solicitada durante a digitação: ela é
+    // A autorizaÃ§Ã£o por senha NÃƒO Ã© solicitada durante a digitaÃ§Ã£o: ela Ã©
     // pedida apenas ao Salvar ou Finalizar (ver salvar/finalizarOrcamento).
   };
 
@@ -631,18 +616,18 @@ export default function PreVenda() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col">
-      {/* ── Cabeçalho do sistema ─────────────────────────── */}
+      {/* â”€â”€ CabeÃ§alho do sistema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <header className="flex flex-shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-gray-300 bg-[#e4e4e4] px-2 py-1.5 text-xs text-gray-800 sm:px-4 sm:text-sm">
         <div>
-          <strong>Operador:</strong> <span className="hidden sm:inline">{usuarioCorrente()?.nome ?? "—"}</span>
-          <span className="sm:hidden">{usuarioCorrente()?.nome?.split(" ")[0] ?? "—"}</span>
+          <strong>Operador:</strong> <span className="hidden sm:inline">{usuarioCorrente()?.nome ?? "â€”"}</span>
+          <span className="sm:hidden">{usuarioCorrente()?.nome?.split(" ")[0] ?? "â€”"}</span>
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
           <span>Cliente:</span>
           <button
             onClick={() => setModalBuscaCliente(true)}
             className="max-w-[40vw] truncate rounded border border-gray-400 bg-white px-2 py-0.5 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:max-w-md"
-            title="F6 — selecionar cliente"
+            title="F6 â€” selecionar cliente"
           >
             {cliente}
           </button>
@@ -650,13 +635,13 @@ export default function PreVenda() {
             onClick={() => setModalDadosCliente(true)}
             disabled={clienteId == null || clienteId === CLIENTE_PADRAO.id}
             className="rounded border border-gray-400 bg-white px-2 py-0.5 text-xs text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-            title="F9 — dados do cliente"
+            title="F9 â€” dados do cliente"
           >
             Dados
           </button>
         </div>
-        <div className="hidden md:block">Vendedor: {usuarioCorrente()?.nome ?? "—"}</div>
-        <div className="hidden md:block">Horário: {hora}</div>
+        <div className="hidden md:block">Vendedor: {usuarioCorrente()?.nome ?? "â€”"}</div>
+        <div className="hidden md:block">HorÃ¡rio: {hora}</div>
       </header>
 
       {avisoCredito && (
@@ -667,12 +652,12 @@ export default function PreVenda() {
         >
           <span>{avisoCredito.texto}</span>
           <button onClick={() => setAvisoCredito(null)} className="rounded px-1 hover:bg-black/10" aria-label="Fechar aviso">
-            ×
+            Ã—
           </button>
         </div>
       )}
 
-      {/* ── Área principal ────────────────────────────────── */}
+      {/* â”€â”€ Ãrea principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <main className="flex min-h-[480px] flex-1 flex-col gap-2 overflow-hidden bg-[#6a84a6] p-2 sm:gap-3 sm:p-4">
         {/* Painel de produto + busca */}
         <div className="relative flex-shrink-0 rounded-xl bg-white p-3 shadow-md">
@@ -682,7 +667,7 @@ export default function PreVenda() {
               ref={buscaRef}
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Código / nome (ex.: 3*Cabo) · ENTER adiciona"
+              placeholder="CÃ³digo / nome (ex.: 3*Cabo) Â· ENTER adiciona"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-center text-lg text-gray-900 placeholder-gray-400 focus:border-orange-400 focus:outline-none"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -712,7 +697,7 @@ export default function PreVenda() {
                     <span>
                       {qtdDigitada > 1 ? <span className={`mr-1 rounded px-1.5 text-xs font-semibold ${i === focoLista ? "bg-orange-600 text-white" : "bg-orange-100 text-orange-700"}`}>{qtdDigitada}x</span> : null}
                       <span className="font-medium">{p.name}</span>
-                      <span className={`block text-xs ${i === focoLista ? "text-orange-100" : "text-gray-400"}`}>{[p.sku, p.spec, p.brand, p.unidade_venda].filter(Boolean).join(" · ")}</span>
+                      <span className={`block text-xs ${i === focoLista ? "text-orange-100" : "text-gray-400"}`}>{[p.sku, p.spec, p.brand, p.unidade_venda].filter(Boolean).join(" Â· ")}</span>
                     </span>
                     <span className="font-semibold">{fmtMoney(p.price)}</span>
                   </button>
@@ -726,9 +711,9 @@ export default function PreVenda() {
           ) : null}
         </div>
 
-        {/* Grid responsivo: mobile empilha, desktop mantém 3 colunas */}
+        {/* Grid responsivo: mobile empilha, desktop mantÃ©m 3 colunas */}
         <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 md:grid-cols-12 md:gap-4">
-          {/* Imagem do produto — oculta em telas pequenas */}
+          {/* Imagem do produto â€” oculta em telas pequenas */}
           <div className="hidden items-center justify-center overflow-hidden rounded-[2rem] bg-white p-4 shadow-md md:flex md:col-span-2">
             {linhaAtual?.imagem_url ? (
               <img src={linhaAtual.imagem_url} alt="" className="max-h-full max-w-full object-contain" />
@@ -737,9 +722,9 @@ export default function PreVenda() {
             )}
           </div>
 
-          {/* Formulário de lançamento */}
+          {/* FormulÃ¡rio de lanÃ§amento */}
           <div className="flex flex-col gap-2 md:col-span-3 md:gap-3">
-            <DataBox label="Código" value={linhaAtual?.sku || "—"} />
+            <DataBox label="CÃ³digo" value={linhaAtual?.sku || "â€”"} />
             <div className="flex h-full flex-col justify-between rounded-xl bg-white p-3 shadow-md">
               <span className="text-sm font-bold text-gray-800">Quantidade</span>
               <input
@@ -761,15 +746,15 @@ export default function PreVenda() {
                 className="mt-2 w-full bg-transparent text-right text-2xl font-bold text-black outline-none"
               />
             </div>
-            <DataBox label="Valor Unitário" value={fmtMoney(linhaAtual?.preco_unitario ?? 0)} />
+            <DataBox label="Valor UnitÃ¡rio" value={fmtMoney(linhaAtual?.preco_unitario ?? 0)} />
             <DataBox label="Valor Total" value={fmtMoney(linhaAtual?.subtotal ?? 0)} />
           </div>
 
-          {/* Cupom fiscal (somente leitura) — ocupa o resto */}
+          {/* Cupom fiscal (somente leitura) â€” ocupa o resto */}
           <div className="col-span-2 flex min-h-0 flex-col overflow-hidden rounded-[2rem] bg-white p-2 font-mono text-sm shadow-md md:col-span-7 md:p-4">
             <div className="grid grid-cols-[64px_1fr_52px_72px_76px_20px] gap-1 text-[10px] uppercase text-gray-500 sm:grid-cols-[80px_1fr_60px_84px_84px_24px] sm:text-[11px]">
-              <span>Código</span>
-              <span>Descrição</span>
+              <span>CÃ³digo</span>
+              <span>DescriÃ§Ã£o</span>
               <span className="text-right">Qtde</span>
               <span className="text-right">Vl.Unit</span>
               <span className="text-right">Vl.Item</span>
@@ -787,7 +772,7 @@ export default function PreVenda() {
                     className={`grid cursor-pointer grid-cols-[64px_1fr_52px_72px_76px_20px] items-center gap-1 border-b border-gray-100 py-1.5 sm:grid-cols-[80px_1fr_60px_84px_84px_24px] ${linhaAtiva === i ? "bg-orange-100" : ""}`}
                   >
                     <span className="truncate text-xs">{l.sku || "#" + (i + 1)}</span>
-                    <span className="truncate">{[l.nome, l.especificacao].filter(Boolean).join(" · ")}</span>
+                    <span className="truncate">{[l.nome, l.especificacao].filter(Boolean).join(" Â· ")}</span>
                     <span className="text-right text-xs">{l.quantidade}</span>
                     <span className="hidden text-right text-xs sm:block">{fmtMoney(l.preco_unitario)}</span>
                     <span className="text-right font-semibold">{fmtMoney(l.subtotal)}</span>
@@ -798,7 +783,7 @@ export default function PreVenda() {
                         removerLinha(i);
                       }}
                     >
-                      ×
+                      Ã—
                     </button>
                   </div>
                 ))
@@ -807,7 +792,7 @@ export default function PreVenda() {
           </div>
         </div>
 
-        {/* Lançamento (desconto / condição / obs) */}
+        {/* LanÃ§amento (desconto / condiÃ§Ã£o / obs) */}
         <div className="flex flex-shrink-0 flex-wrap items-center gap-2 rounded-xl bg-white/90 px-3 py-2 text-xs">
           <span className="ml-2 font-semibold text-gray-600">Desconto {descModo === "pct" ? "%" : "R$"}</span>
           <input
@@ -831,7 +816,7 @@ export default function PreVenda() {
             }}
             className="w-20 rounded border border-gray-300 px-2 py-1 text-sm sm:w-24"
           />
-          <span className="font-semibold text-gray-600">Condição</span>
+          <span className="font-semibold text-gray-600">CondiÃ§Ã£o</span>
           <select
             ref={condRef}
             value={condicaoId}
@@ -869,7 +854,7 @@ export default function PreVenda() {
         {/* Totais */}
         <div className="grid flex-shrink-0 grid-cols-3 gap-2 sm:h-24 sm:gap-4">
           <div className="flex items-center justify-center rounded-xl bg-white p-1 shadow-md sm:p-4">
-            <span className="truncate text-lg font-bold tracking-widest text-black sm:text-5xl">{editandoId ? "ALTERAÇÃO" : "VENDA"}</span>
+            <span className="truncate text-lg font-bold tracking-widest text-black sm:text-5xl">{editandoId ? "ALTERAÃ‡ÃƒO" : "VENDA"}</span>
           </div>
           <div>
             <DataBox label="Volumes" value={String(linhas.reduce((s, l) => s + l.quantidade, 0))} />
@@ -880,7 +865,7 @@ export default function PreVenda() {
         </div>
       </main>
 
-      {/* ── Rodapé: atalhos + ações ───────────────────────── */}
+      {/* â”€â”€ RodapÃ©: atalhos + aÃ§Ãµes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <footer className="safe-bottom flex flex-shrink-0 flex-wrap items-center gap-1.5 border-t border-gray-400 bg-[#f0f0f0] px-2 py-2 sm:gap-2 sm:px-4">
         <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(5)}>
           Limpar
@@ -944,365 +929,3 @@ export default function PreVenda() {
   );
 }
 
-function ModalCadastroCliente({
-  prefill,
-  onClose,
-  onSaved,
-}: {
-  prefill: string;
-  onClose: () => void;
-  onSaved: (c: Cliente) => void;
-}) {
-  const [nome, setNome] = useState(prefill);
-  const [doc, setDoc] = useState("");
-  const [tel, setTel] = useState("");
-  const [wpp, setWpp] = useState("");
-  const [email, setEmail] = useState("");
-  const [end, setEnd] = useState("");
-  const [cid, setCid] = useState("");
-  const [uf, setUf] = useState("");
-  const [obs, setObs] = useState("");
-
-  const salvar = async () => {
-    if (!nome.trim()) {
-      toast("Informe o nome", "error");
-      return;
-    }
-    if (!doc.trim()) {
-      toast("CPF obrigatório", "error");
-      return;
-    }
-    try {
-      const res = await api.criarCliente({
-        nome: nome.trim(),
-        doc: doc.trim(),
-        tipo_pessoa: "f",
-        telefone: tel.trim() || undefined,
-        whatsapp: wpp.trim() || undefined,
-        email: email.trim() || undefined,
-        endereco: end.trim() || undefined,
-        cidade: cid.trim() || undefined,
-        uf: uf.trim().toUpperCase() || undefined,
-        observacoes: obs.trim() || undefined,
-      });
-      toast("Cliente cadastrado", "success");
-      onClose();
-      onSaved({ id: res.id, nome: nome.trim(), doc: doc.trim(), tipo_pessoa: "f", email: "", telefone: "", whatsapp: wpp.trim(), endereco: "", cidade: cid.trim(), uf: uf.trim().toUpperCase(), cep: "", vendedor_id: null, vendedor_nome: null, limite_credito: 0, observacoes: "", ativo: true } as Cliente);
-    } catch (e) {
-      toast("Erro: " + (e as Error).message, "error");
-    }
-  };
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title="Cadastrar cliente"
-      footer={
-        <>
-          <Button onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" onClick={() => void salvar()}>
-            Salvar
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <Field label="Nome *">
-          <Input value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
-        </Field>
-        <Field label="CPF *">
-          <Input placeholder="000.000.000-00" value={doc} onChange={(e) => setDoc(e.target.value)} />
-        </Field>
-        <Field label="Telefone">
-          <Input value={tel} onChange={(e) => setTel(e.target.value)} />
-        </Field>
-        <Field label="WhatsApp">
-          <Input value={wpp} onChange={(e) => setWpp(e.target.value)} />
-        </Field>
-        <Field label="E-mail">
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </Field>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Field label="Endereço" className="col-span-3">
-            <Input value={end} onChange={(e) => setEnd(e.target.value)} />
-          </Field>
-          <Field label="Cidade" className="col-span-2">
-            <Input value={cid} onChange={(e) => setCid(e.target.value)} />
-          </Field>
-          <Field label="UF">
-            <Input maxLength={2} value={uf} onChange={(e) => setUf(e.target.value)} />
-          </Field>
-        </div>
-        <Field label="Observações">
-          <Input value={obs} onChange={(e) => setObs(e.target.value)} />
-        </Field>
-      </div>
-    </Modal>
-  );
-}
-
-function ModalBuscaCliente({
-  onClose,
-  onSaved,
-  onNovoCliente,
-}: {
-  onClose: () => void;
-  onSaved: (c: Cliente) => void;
-  onNovoCliente: () => void;
-}) {
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-
-  useEffect(() => {
-    void api.listarClientes(true).then(setClientes).catch(() => setClientes([]));
-  }, []);
-
-  return (
-    <SearchModal
-      open
-      title="Buscar cliente"
-      columns={[
-        { key: "id", label: "Código", align: "right", render: (c) => String(c.id).padStart(6, "0") },
-        { key: "nome", label: "Nome", render: (c) => c.nome },
-        { key: "doc", label: "CPF/CNPJ", render: (c) => c.doc || "—" },
-        { key: "cidade", label: "Cidade", render: (c) => [c.cidade, c.uf].filter(Boolean).join(" - ") || "—" },
-      ]}
-      data={clientes}
-      searchText={(c) => [c.nome, c.doc, c.cidade, c.telefone, c.whatsapp, String(c.id)].join(" ")}
-      extra={
-        <div className="mt-3 flex justify-end">
-          <button onClick={onNovoCliente} className="rounded-md bg-[#6a84a6] px-3 py-1.5 text-sm font-bold text-white hover:bg-[#587291]">
-            + Novo cliente
-          </button>
-        </div>
-      }
-      onClose={onClose}
-      onSelect={(c) => {
-        onSaved(c);
-        onClose();
-      }}
-    />
-  );
-}
-
-function LinhaInfo({ label, valor }: { label: string; valor?: string | null }) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <span className="text-xs font-medium uppercase text-gray-500">{label}</span>
-      <span className="text-right font-medium text-gray-800">{valor || "—"}</span>
-    </div>
-  );
-}
-
-function ModalDadosCliente({ clienteId, onClose }: { clienteId: number; onClose: () => void }) {
-  const [cli, setCli] = useState<Cliente | null>(null);
-  const [situacao, setSituacao] = useState<ClienteSituacao | null>(null);
-  const [carregando, setCarregando] = useState(true);
-
-  useEffect(() => {
-    let alive = true;
-    setCarregando(true);
-    void Promise.all([api.detalharCliente(clienteId), api.situacaoCliente(clienteId)])
-      .then(([c, s]) => {
-        if (!alive) return;
-        setCli(c);
-        setSituacao(s);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (alive) setCarregando(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [clienteId]);
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={cli?.nome ?? "Dados do cliente"}
-      footer={<Button onClick={onClose}>Fechar</Button>}
-    >
-      {carregando ? (
-        <p className="py-6 text-center text-sm text-gray-400">Carregando…</p>
-      ) : (
-        <div className="space-y-3 text-sm">
-          <LinhaInfo label="Endereço" valor={[cli?.endereco, cli?.cidade, cli?.uf].filter(Boolean).join(" — ")} />
-          <LinhaInfo label="Telefone" valor={cli?.telefone || cli?.whatsapp} />
-          <LinhaInfo label="E-mail" valor={cli?.email} />
-          <div className="my-2 border-t border-gray-200" />
-          <LinhaInfo label="Limite" valor={fmtMoney(situacao?.limite_credito ?? 0)} />
-          <LinhaInfo label="Limite utilizado" valor={fmtMoney(situacao?.limite_utilizado ?? 0)} />
-          <LinhaInfo label="Limite disponível" valor={fmtMoney(situacao?.limite_disponivel ?? 0)} />
-          {situacao?.tem_atraso && (
-            <div className="rounded-md bg-red-50 px-3 py-2 text-red-700">
-              <strong>Conta em aberto (em atraso):</strong> {fmtMoney(situacao.saldo_em_atraso)}
-            </div>
-          )}
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-function ModalAutorizar({
-  id,
-  descontoPct,
-  limitePct,
-  finalizar,
-  onSalvarAntes,
-  onClose,
-  onAutorizado,
-}: {
-  id: number | null;
-  descontoPct?: number;
-  limitePct?: number;
-  finalizar: boolean;
-  onSalvarAntes?: () => Promise<{ id: number } | null>;
-  onClose: () => void;
-  onAutorizado: () => void;
-}) {
-  const [login, setLogin] = useState("");
-  const [senha, setSenha] = useState("");
-  const [autorizando, setAutorizando] = useState(false);
-
-  const tentar = async () => {
-    if (!login.trim() || !senha) {
-      toast("Informe login e senha do gerente", "error");
-      return;
-    }
-    setAutorizando(true);
-    try {
-      let alvoId = id;
-      if (alvoId == null && onSalvarAntes) {
-        const res = await onSalvarAntes();
-        if (!res) {
-          setAutorizando(false);
-          return;
-        }
-        alvoId = res.id;
-      }
-      if (alvoId != null) {
-        await api.autorizarDescontoOrcamento(alvoId, { login: login.trim(), senha });
-        if (finalizar) {
-          await api.atualizarOrcamento(alvoId, { status: "finalizado" });
-        }
-      }
-      toast(finalizar ? "Desconto autorizado e venda finalizada" : "Desconto autorizado", "success");
-      onClose();
-      onAutorizado();
-    } catch (e) {
-      toast("Falha na autorização: " + (e as Error).message, "error");
-      setAutorizando(false);
-    }
-  };
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title="Autorizar desconto"
-      footer={
-        <>
-          <Button onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" onClick={() => void tentar()} disabled={autorizando}>
-            {autorizando ? "Autorizando…" : finalizar ? "Autorizar e finalizar" : "Autorizar desconto"}
-          </Button>
-        </>
-      }
-    >
-      <p className="mb-4 text-sm text-gray-500">
-        {descontoPct != null && limitePct != null ? (
-          <>
-            O desconto aplicado (<b>{descontoPct.toFixed(1)}%</b>) está acima da alçada do
-            vendedor (<b>{limitePct.toFixed(1)}%</b>). Informe as credenciais de um gerente
-            para {finalizar ? "autorizar e finalizar" : "autorizar"}.
-          </>
-        ) : (
-          `O desconto aplicado está acima da alçada do vendedor. Informe as credenciais do gerente para ${finalizar ? "autorizar e finalizar" : "autorizar"}.`
-        )}
-      </p>
-      {id == null && (
-        <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          A pré-venda ainda não foi salva — ela será salva para registrar a autorização.
-        </p>
-      )}
-      <div className="space-y-4">
-        <Field label="Login do gerente">
-          <Input autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} autoFocus />
-        </Field>
-        <Field label="Senha">
-          <Input
-            type="password"
-            autoComplete="current-password"
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void tentar();
-            }}
-          />
-        </Field>
-      </div>
-    </Modal>
-  );
-}
-
-function ModalLocalizarOrcamento({ onClose, onSelecionar }: { onClose: () => void; onSelecionar: (id: number) => void }) {
-  const [dataInicio, setDataInicio] = useState("");
-  const [dataFim, setDataFim] = useState("");
-  const [rows, setRows] = useState<OrcamentoLista[]>([]);
-
-  const buscar = () => {
-    void api
-      .listarOrcamentosFiltro({
-        status: "rascunho",
-        somente_meus: true,
-        data_inicio: dataInicio || undefined,
-        data_fim: dataFim || undefined,
-      })
-      .then(setRows)
-      .catch(() => setRows([]));
-  };
-
-  useEffect(() => {
-    buscar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataInicio, dataFim]);
-
-  return (
-    <SearchModal
-      open
-      title="Localizar orçamento (rascunho)"
-      columns={[
-        { key: "numero", label: "Nº", render: (o) => o.numero },
-        { key: "cliente", label: "Cliente", render: (o) => o.cliente || "—" },
-        { key: "total", label: "Total", align: "right", render: (o) => fmtMoney(o.total) },
-        { key: "n_itens", label: "Itens", align: "center", render: (o) => o.n_itens },
-        { key: "criado_em", label: "Criado em", render: (o) => fmtDate(o.criado_em) },
-      ]}
-      data={rows}
-      searchText={(o) => [o.numero, o.cliente].join(" ")}
-      extra={
-        <div className="mt-3 flex items-center gap-2 text-sm">
-          <span className="font-bold text-gray-800">Filtrar por data:</span>
-          <input
-            type="date"
-            value={dataInicio}
-            onChange={(e) => setDataInicio(e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1"
-          />
-          <span>até</span>
-          <input
-            type="date"
-            value={dataFim}
-            onChange={(e) => setDataFim(e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1"
-          />
-        </div>
-      }
-      onClose={onClose}
-      onSelect={(o) => onSelecionar(o.id)}
-    />
-  );
-}
