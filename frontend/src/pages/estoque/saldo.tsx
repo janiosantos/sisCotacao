@@ -1,0 +1,104 @@
+﻿// pages/estoque/saldo.tsx - módulo Estoque (Saldo).
+
+import { useEffect, useState } from "react";
+import { api, type Deposito, type SaldoItem } from "../../api/client";
+import { fmtDate, fmtMoney } from "../../ui/format";
+import { toast } from "../../ui/dom";
+import { Button, Cell, EmptyRow, Field, Input, Loading, Select, Table, TBody, THead } from "../../ui/ui";
+
+export function Saldo({ depositos }: { depositos: Deposito[] }) {
+  const [rows, setRows] = useState<SaldoItem[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [dep, setDep] = useState("");
+  const [q, setQ] = useState("");
+  const [familia, setFamilia] = useState("");
+
+  const [familias, setFamilias] = useState<{ id: number; nome: string }[]>([]);
+  useEffect(() => {
+    void api.listarFamilias().then(setFamilias).catch(() => {});
+  }, []);
+
+  const buscar = async () => {
+    setCarregando(true);
+    try {
+      setRows(
+        await api.saldoEstoque({ deposito_id: dep || undefined, familia_id: familia || undefined, q: q || undefined })
+      );
+    } catch {
+      toast("Erro ao carregar saldo", "error");
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  useEffect(() => {
+    void buscar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <Field label="Depósito">
+          <Select value={dep} onChange={(e) => setDep(e.target.value)} className="w-48">
+            {depositos.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.nome}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Família">
+          <Select value={familia} onChange={(e) => setFamilia(e.target.value)} className="w-48">
+            <option value="">Todas</option>
+            {familias.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.nome}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Busca">
+          <Input placeholder="Produto, SKU, marca…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
+        </Field>
+        <Button variant="primary" onClick={() => void buscar()}>
+          Filtrar
+        </Button>
+      </div>
+
+      {carregando ? (
+        <Loading />
+      ) : (
+        <Table>
+          <THead cols={["Produto", "SKU", "Família", "Depósito", "Unid.", "Emb.", "Qtd.", "Preço", "NCM", "Localização", "Atualizado"]} />
+          <TBody>
+            {rows.length === 0 ? (
+              <EmptyRow colSpan={11} message="Nenhum saldo encontrado" />
+            ) : (
+              rows.map((s) => (
+                <tr key={s.id} className="hover:bg-gray-50">
+                  <Cell>
+                    <span className="font-medium">{s.produto_nome}</span>
+                    {s.marca ? <div className="text-xs text-gray-400">{s.marca}</div> : null}
+                  </Cell>
+                  <Cell className="font-mono text-xs">{s.sku}</Cell>
+                  <Cell className="text-xs text-gray-500">{s.familia_nome || "—"}</Cell>
+                  <Cell>{s.deposito_nome}</Cell>
+                  <Cell className="text-xs">{s.unidade_venda || "UN"}</Cell>
+                  <Cell className="text-xs">{s.embalagem ? `${s.embalagem}/cx` : "—"}</Cell>
+                  <Cell className="font-medium">{s.quantidade}</Cell>
+                  <Cell>{fmtMoney(s.preco)}</Cell>
+                  <Cell className="font-mono text-xs">{s.ncm || "—"}</Cell>
+                  <Cell className="text-xs text-gray-500">{s.localizacao || "—"}</Cell>
+                  <Cell className="text-xs text-gray-500">{fmtDate(s.atualizado_em)}</Cell>
+                </tr>
+              ))
+            )}
+          </TBody>
+        </Table>
+      )}
+    </div>
+  );
+}
+
+
