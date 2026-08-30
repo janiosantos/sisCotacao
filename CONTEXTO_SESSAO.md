@@ -123,3 +123,4 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
   - A integração do site institucional não foi implementada porque o diretório `CASA_LM/site` não existe neste checkout; requer disponibilizar o projeto correto antes de alterar seus consumidores.
   - TLS/Let's Encrypt, sincronização da VM, homologação Focus/SEFAZ, ativação de `FISCAL_ENGINE_V2`, limpeza de imagens e renomeação da pasta continuam bloqueados por operação, credenciais, dados reais ou autorização de publicação.
   - Outbox/Celery permanece pendente: o projeto não possui worker/dependência configurado e a implementação exige definir quais integrações serão assíncronas e seu contrato de reprocessamento antes de alterar o fluxo fiscal/financeiro.
+  - Plano sequencial das oito pendências registrado em `PLANO_EXECUCAO_8_PENDENCIAS.md`, com critérios de aceite, pré-requisitos e gates de rollback.
