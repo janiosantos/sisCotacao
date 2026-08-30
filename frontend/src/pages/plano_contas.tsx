@@ -1,4 +1,4 @@
-﻿// pages/plano_contas.tsx â€” plano de contas (React + Tailwind).
+﻿// pages/plano_contas.tsx — plano de contas (React + Tailwind).
 
 import { useEffect, useState } from "react";
 import { api, type ContaPlano } from "../api/client";
@@ -44,7 +44,7 @@ export default function PlanoContas() {
     <div>
       <PageHeader
         title="Plano de contas"
-        subtitle="Contas para classificar receitas e despesas do negÃ³cio."
+        subtitle="Contas para classificar receitas e despesas do negócio."
         actions={
           <Button variant="primary" onClick={() => abrir(null)}>
             + Nova conta
@@ -59,7 +59,7 @@ export default function PlanoContas() {
         </div>
       ) : (
         <Table>
-          <THead cols={["CÃ³digo", "Nome", "Tipo", "Status", ""]} />
+          <THead cols={["Código", "Nome", "Tipo", "Status", ""]} />
           <TBody>
             {contas.map((c) => (
               <tr key={c.id} className="hover:bg-gray-50">

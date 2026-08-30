@@ -1,4 +1,4 @@
-﻿// pages/diagnostico_variacoes.tsx â€” qualidade do catÃ¡logo (React + Tailwind).
+﻿// pages/diagnostico_variacoes.tsx — qualidade do catálogo (React + Tailwind).
 
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
@@ -34,7 +34,7 @@ export default function DiagnosticoVariacoes() {
     try {
       setRows(await api.listarDiagnosticoVariacoes({ classificacao: tipo || undefined, q: q.trim() || undefined, limit: 200 }));
     } catch {
-      toast("Erro ao carregar diagnÃ³stico", "error");
+      toast("Erro ao carregar diagnóstico", "error");
     }
   };
 
@@ -63,7 +63,7 @@ export default function DiagnosticoVariacoes() {
 
   return (
     <div>
-      <PageHeader title="Qualidade do CatÃ¡logo" subtitle="Revise variantes reais, ofertas duplicadas e cadastros incompletos." />
+      <PageHeader title="Qualidade do Catálogo" subtitle="Revise variantes reais, ofertas duplicadas e cadastros incompletos." />
 
       {resumo.length > 0 ? (
         <div className="mb-4 flex flex-wrap gap-2">
@@ -77,12 +77,12 @@ export default function DiagnosticoVariacoes() {
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Field label="Buscar produto, marca, SKU ou EAN">
-          <Input placeholder="Ex.: Cabo FlexÃ­velâ€¦" value={q} onChange={(e) => setQ(e.target.value)} className="w-72" />
+          <Input placeholder="Ex.: Cabo Flexível…" value={q} onChange={(e) => setQ(e.target.value)} className="w-72" />
         </Field>
         <Select value={tipo} onChange={(e) => setTipo(e.target.value)} className="w-48">
           <option value="">Todos</option>
           <option value="oferta_duplicada">Oferta duplicada</option>
-          <option value="variacao_real">VariaÃ§Ã£o real</option>
+          <option value="variacao_real">Variação real</option>
           <option value="cadastro_incompleto">Cadastro incompleto</option>
         </Select>
         <Button onClick={() => void carregar()}>Filtrar</Button>
@@ -92,7 +92,7 @@ export default function DiagnosticoVariacoes() {
         <Loading />
       ) : (
         <Table>
-          <THead cols={["Produto", "ClassificaÃ§Ã£o", "Variantes", "EANs", "ObservaÃ§Ã£o", ""]} />
+          <THead cols={["Produto", "Classificação", "Variantes", "EANs", "Observação", ""]} />
           <TBody>
             {rows.length === 0 ? (
               <EmptyRow colSpan={6} message="Nenhum caso" />

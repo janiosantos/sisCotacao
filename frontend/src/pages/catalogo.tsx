@@ -1,4 +1,4 @@
-﻿// pages/catalogo.tsx â€” catÃ¡logo (filtros + grid) em cards planos (um produto por card).
+﻿// pages/catalogo.tsx — catálogo (filtros + grid) em cards planos (um produto por card).
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -29,10 +29,10 @@ function detFromItem(p: ProdutoResumo): Partial<DetalheCartItem> {
 
 function titleCase(s: string): string {
   if (!s) return s;
-  return s.toLowerCase().replace(/(^|\s|\/|\()([a-zÃ -Ã¿])/g, (_m, sep: string, c: string) => sep + c.toUpperCase());
+  return s.toLowerCase().replace(/(^|\s|\/|\()([a-zà-ÿ])/g, (_m, sep: string, c: string) => sep + c.toUpperCase());
 }
 
-// ---------------- pÃ¡gina ----------------
+// ---------------- página ----------------
 
 export default function Catalogo() {
   const [categorias, setCategorias] = useState<CategoriaMap>({});
@@ -84,7 +84,7 @@ export default function Catalogo() {
         setItems(res.items as ProdutoResumo[]);
         setTotal(res.total);
       })
-      .catch((e) => toast("Erro ao carregar catÃ¡logo: " + (e as Error).message, "error"))
+      .catch((e) => toast("Erro ao carregar catálogo: " + (e as Error).message, "error"))
       .finally(() => {
         if (alive) setCarregando(false);
       });
@@ -142,13 +142,13 @@ export default function Catalogo() {
     <div className="flex gap-6">
       <div className="min-w-0 flex-1">
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-gray-900">CatÃ¡logo</h1>
-          <p className="mt-1 text-sm text-gray-500">Consulte produtos e selecione quantidades para montar uma cotaÃ§Ã£o.</p>
+          <h1 className="text-2xl font-semibold text-gray-900">Catálogo</h1>
+          <p className="mt-1 text-sm text-gray-500">Consulte produtos e selecione quantidades para montar uma cotação.</p>
         </div>
 
         <div className="mb-4 flex flex-wrap items-end gap-3">
           <Field label="Buscar" className="min-w-[240px] flex-1">
-            <Input placeholder="Nome, cÃ³digo, marcaâ€¦" value={busca} onChange={(e) => onSearch(e.target.value)} />
+            <Input placeholder="Nome, código, marca…" value={busca} onChange={(e) => onSearch(e.target.value)} />
           </Field>
           <Field label="Categoria">
             <Select
@@ -187,7 +187,7 @@ export default function Catalogo() {
           <Field label="Ordenar por">
             <Select value={filters.ordenar} onChange={(e) => setFilters((f) => ({ ...f, ordenar: e.target.value }))} className="w-44">
               <option value="">Nome</option>
-              <option value="abc">Curva ABC (A â†’ C)</option>
+              <option value="abc">Curva ABC (A → C)</option>
             </Select>
           </Field>
           <Button onClick={limpar}>Limpar filtros</Button>
@@ -251,11 +251,11 @@ export default function Catalogo() {
         {paginas > 1 && (
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-gray-500">
-              PÃ¡gina {page} de {paginas} Â· {total} produto(s)
+              Página {page} de {paginas} · {total} produto(s)
             </span>
             <div className="flex gap-1">
               <Button size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Â«
+                «
               </Button>
               {(() => {
                 const inicio = Math.max(1, page - 3);
@@ -267,7 +267,7 @@ export default function Catalogo() {
                       1
                     </Button>
                   );
-                  if (inicio > 2) botoes.push(<span key="e1">â€¦</span>);
+                  if (inicio > 2) botoes.push(<span key="e1">…</span>);
                 }
                 for (let p = inicio; p <= fim; p++)
                   botoes.push(
@@ -276,7 +276,7 @@ export default function Catalogo() {
                     </Button>
                   );
                 if (fim < paginas) {
-                  if (fim < paginas - 1) botoes.push(<span key="e2">â€¦</span>);
+                  if (fim < paginas - 1) botoes.push(<span key="e2">…</span>);
                   botoes.push(
                     <Button key={paginas} size="sm" onClick={() => setPage(paginas)}>
                       {paginas}
@@ -286,7 +286,7 @@ export default function Catalogo() {
                 return botoes;
               })()}
               <Button size="sm" disabled={page >= paginas} onClick={() => setPage((p) => p + 1)}>
-                Â»
+                »
               </Button>
             </div>
           </div>
