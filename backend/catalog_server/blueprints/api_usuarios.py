@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from catalog_server import auth_token
+from catalog_server import auth_token, config
 from catalog_server.db import system_conn
 from catalog_server.repositories import usuario_repo
 
@@ -146,9 +146,17 @@ def login():
     data = request.get_json(silent=True) or {}
     login_str = (data.get("login") or "").strip().lower()
     senha = data.get("senha") or ""
+    from catalog_server.services import login_rate_limit
+
+    ip = request.remote_addr or "unknown"
+    if not login_rate_limit.permitir(ip, login_str):
+        resposta = jsonify({"error": "Muitas tentativas. Tente novamente mais tarde."})
+        resposta.headers["Retry-After"] = str(config.LOGIN_RATE_WINDOW_SECONDS)
+        return resposta, 429
     user = usuario_repo.get_by_login(login_str)
     if not user or not check_password_hash(user["senha_hash"], senha) or not user.get("ativo"):
         return jsonify({"error": "Usuário ou senha inválidos"}), 401
+    login_rate_limit.limpar(ip, login_str)
     session[SESSION_KEY] = user["id"]
     token = auth_token.criar_token(user)
     atual = usuario_repo.get(user["id"]) or user

@@ -72,3 +72,20 @@ def test_usuario_inativo_nao_acessa_api(system_db):
         "/api/produtos", headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 401
+
+
+def test_login_tem_rate_limit_distribuido(system_db):
+    client = create_app().test_client()
+    login = f"brute-{uuid.uuid4().hex[:8]}"
+
+    for _ in range(5):
+        response = client.post(
+            "/api/login", json={"login": login, "senha": "incorreta"}
+        )
+        assert response.status_code == 401
+
+    response = client.post(
+        "/api/login", json={"login": login, "senha": "incorreta"}
+    )
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "300"

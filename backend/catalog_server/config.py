@@ -22,6 +22,8 @@ DEBUG = os.getenv("CATALOG_DEBUG", "0") == "1"
 OPEN_BROWSER = os.getenv("CATALOG_OPEN_BROWSER", "1") == "1"
 
 SECRET_KEY = os.getenv("CATALOG_SECRET", "catalog-server-local-dev")
+LOGIN_RATE_LIMIT = max(1, int(os.getenv("LOGIN_RATE_LIMIT", "5")))
+LOGIN_RATE_WINDOW_SECONDS = max(30, int(os.getenv("LOGIN_RATE_WINDOW_SECONDS", "300")))
 ENVIRONMENT = os.getenv("CATALOG_ENV", "development").strip().lower()
 
 if ENVIRONMENT == "production" and SECRET_KEY == "catalog-server-local-dev":
