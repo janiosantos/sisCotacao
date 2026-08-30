@@ -23,6 +23,7 @@ on:
 
 jobs:
   maintenance:
+    if: github.event.inputs.task != 'webhook-test'
     runs-on: [self-hosted, siscom-prod]
     env:
       COMPOSE_PROJECT_NAME: siscom   # mantém o volume siscom_postgres-data (dados intactos)
