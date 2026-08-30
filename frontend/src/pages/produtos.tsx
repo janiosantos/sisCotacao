@@ -1,4 +1,4 @@
-// pages/produtos.tsx � cadastro de produtos (fam�lias + produto pai + varia��es + imagens).
+﻿// pages/produtos.tsx — cadastro de produtos (famílias + produto pai + variações + imagens).
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -82,29 +82,29 @@ interface ProdutoEditorForm {
   termos_busca: string;
 }
 
-const CA_RE = /(^|[^a-z0-9])(n\s?[��]?\s?ca|ca|certificado|aprovacao)([^a-z0-9]|$)/i;
+const CA_RE = /(^|[^a-z0-9])(n\s?[º°]?\s?ca|ca|certificado|aprovacao)([^a-z0-9]|$)/i;
 
 function normalize(str: string): string {
   return String(str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-// Regras de valida��o de atributo "livre".
+// Regras de validação de atributo "livre".
 
 function validacaoLabel(v?: string): string {
-  return v === "numero" ? "Somente n�meros" : v === "alphanumerico" ? "Letras e n�meros" : "Texto livre";
+  return v === "numero" ? "Somente números" : v === "alphanumerico" ? "Letras e números" : "Texto livre";
 }
 
-// Valida um valor digitado conforme o tipo/valida��o do atributo.
-// Devolve "" se v�lido ou uma mensagem de erro.
+// Valida um valor digitado conforme o tipo/validação do atributo.
+// Devolve "" se válido ou uma mensagem de erro.
 function validarValorAtributo(tipo: string, validacao: string | undefined, valor: string): string {
   const v = valor.trim();
   if (!v) return "";
   if (tipo !== "livre") return "";
   if (validacao === "numero") {
-    return /^\d+(?:[.,]\d{1,3})?$/.test(v) ? "" : "Informe apenas n�meros (ex.: 2,5 ou 2500).";
+    return /^\d+(?:[.,]\d{1,3})?$/.test(v) ? "" : "Informe apenas números (ex.: 2,5 ou 2500).";
   }
   if (validacao === "alphanumerico") {
-    return /^[a-zA-Z0-9�-� ]+$/.test(v) ? "" : "Use apenas letras e n�meros (sem s�mbolos).";
+    return /^[a-zA-Z0-9À-ÿ ]+$/.test(v) ? "" : "Use apenas letras e números (sem símbolos).";
   }
   return "";
 }
@@ -191,12 +191,12 @@ export default function Produtos() {
     try {
       const res = await api.excluirProdutoCadastro(id);
       if (res.desativadas > 0) {
-        toast(`Produto desativado (n�o exclu�do): possui estoque/pre�o/fornecedor e foi preservado.`, "warn");
+        toast(`Produto desativado (não excluído): possui estoque/preço/fornecedor e foi preservado.`, "warn");
       } else {
-        toast("Produto exclu�do", "success");
+        toast("Produto excluído", "success");
       }
       setPage(1);
-      // for�a recarga
+      // força recarga
       setFilters((f) => ({ ...f }));
     } catch (e) {
       toast("Erro ao excluir: " + (e as Error).message, "error");
@@ -207,11 +207,11 @@ export default function Produtos() {
 
   return (
     <div>
-      <PageHeader title="Produtos" subtitle="Cadastre produtos por fam�lia e gera��o de varia��es (modelo TOTVS)." />
+      <PageHeader title="Produtos" subtitle="Cadastre produtos por família e geração de variações (modelo TOTVS)." />
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Field label="Buscar" className="min-w-[240px] flex-1">
-          <Input placeholder="Nome, marca, c�digo�" value={busca} onChange={(e) => onSearch(e.target.value)} />
+          <Input placeholder="Nome, marca, código…" value={busca} onChange={(e) => onSearch(e.target.value)} />
         </Field>
         <Field label="Categoria">
           <Select value={filters.categoria} onChange={(e) => setFilters((f) => ({ ...f, categoria: e.target.value, subcategoria: "" }))} className="w-44">
@@ -236,13 +236,13 @@ export default function Produtos() {
           </Select>
         </Field>
         <Button variant="outline" onClick={() => setModalFamilias(true)}>
-          Fam�lias
+          Famílias
         </Button>
         <Button variant="outline" onClick={() => setModalEtiquetas(true)}>
           Etiquetas
         </Button>
         <Button variant="outline" onClick={() => setModalImportar(true)}>
-          Importar cat�logo
+          Importar catálogo
         </Button>
         <Button variant="outline" onClick={() => setModalUrl(true)}>
           Novo via URL
@@ -267,7 +267,7 @@ export default function Produtos() {
           ) : (
             <>
               <p>Nenhum produto cadastrado</p>
-              <p>Clique em "Novo produto" para come�ar.</p>
+              <p>Clique em "Novo produto" para começar.</p>
             </>
           )}
         </div>
@@ -290,20 +290,20 @@ export default function Produtos() {
                 {(() => {
                   const detalhe =
                     p.descricao && p.nome && p.descricao.toLowerCase().startsWith(p.nome.toLowerCase())
-                      ? p.descricao.slice(p.nome.length).replace(/^[\s:�-]+/, "").trim()
+                      ? p.descricao.slice(p.nome.length).replace(/^[\s:·-]+/, "").trim()
                       : p.descricao || "";
                   return detalhe ? <p className="mt-0.5 line-clamp-2 text-xs text-gray-600">{detalhe}</p> : null;
                 })()}
                 {p.sku ? <p className="mt-0.5 font-mono text-[11px] text-gray-400">SKU: {p.sku}</p> : null}
                 {p.marca ? <p className="text-xs text-gray-400">{p.marca}</p> : null}
-                <p className="mt-2 text-sm font-semibold text-gray-900">{p.preco != null ? fmtMoney(p.preco) : p.price_min ? fmtMoney(p.price_min) : "sem pre�o"}</p>
+                <p className="mt-2 text-sm font-semibold text-gray-900">{p.preco != null ? fmtMoney(p.preco) : p.price_min ? fmtMoney(p.price_min) : "sem preço"}</p>
               </div>
               <div className="flex gap-2 border-t border-gray-100 p-3">
                 <Button variant="primary" size="sm" className="flex-1" onClick={() => (location.hash = `#/produtos/${p.id}`)}>
                   Editar
                 </Button>
-                <Button size="sm" variant="ghost" title="Baixar imagens em lote (irm�os)" onClick={() => setLoteProduto(p.id)}>
-                  ???
+                <Button size="sm" variant="ghost" title="Baixar imagens em lote (irmãos)" onClick={() => setLoteProduto(p.id)}>
+                  🖼️
                 </Button>
                 {temPermissao("produtos", "excluir") ? (
                   <Button variant="danger" size="sm" onClick={() => void excluir(p.id)}>
@@ -319,13 +319,13 @@ export default function Produtos() {
       {total > PAGE && (
         <div className="mt-6 flex items-center gap-1">
           <Button size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            �
+            «
           </Button>
           <span className="px-2 text-sm text-gray-500">
-            P�gina {page} de {Math.ceil(total / PAGE)}
+            Página {page} de {Math.ceil(total / PAGE)}
           </span>
           <Button size="sm" disabled={page >= Math.ceil(total / PAGE)} onClick={() => setPage((p) => p + 1)}>
-            �
+            »
           </Button>
         </div>
       )}
@@ -346,7 +346,7 @@ export default function Produtos() {
 }
 
 // ===================================================================
-// FAM�LIAS
+// FAMÍLIAS
 // ===================================================================
 
 function ModalFamilias({
@@ -367,18 +367,18 @@ function ModalFamilias({
       <Modal
         open={open && formDe === undefined}
         onClose={onClose}
-        title="Fam�lias"
+        title="Famílias"
         footer={
           <>
             <Button onClick={onClose}>Fechar</Button>
             <Button variant="primary" onClick={() => setFormDe(null)}>
-              Nova fam�lia
+              Nova família
             </Button>
           </>
         }
       >
         {familias.length === 0 ? (
-          <p className="py-6 text-center text-sm text-gray-400">Nenhuma fam�lia cadastrada ainda.</p>
+          <p className="py-6 text-center text-sm text-gray-400">Nenhuma família cadastrada ainda.</p>
         ) : (
           <div className="space-y-2">
             {familias.map((f) => (
@@ -409,10 +409,10 @@ function ModalFamilias({
                   size="sm"
                   variant="danger"
                   onClick={async () => {
-                    if (!window.confirm(`Excluir a fam�lia "${f.nome}"?`)) return;
+                    if (!window.confirm(`Excluir a família "${f.nome}"?`)) return;
                     try {
                       await api.excluirFamilia(f.id);
-                      toast("Fam�lia exclu�da", "success");
+                      toast("Família excluída", "success");
                       onChanged();
                     } catch (e) {
                       toast("Erro: " + (e as Error).message, "error");
@@ -457,14 +457,14 @@ function OpcoesEditor({ opcoes, onAdd, onRemove }: { opcoes: string[]; onAdd: (v
             <span key={o} className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs text-gray-700">
               {o}
               <button type="button" className="text-gray-400 hover:text-red-600" onClick={() => onRemove(o)}>
-                �
+                ×
               </button>
             </span>
           ))}
         </div>
       )}
       <div className="flex gap-2">
-        <Input className="flex-1" placeholder="Digite uma op��o e Enter (ex.: azul)" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); adicionar(); } }} />
+        <Input className="flex-1" placeholder="Digite uma opção e Enter (ex.: azul)" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); adicionar(); } }} />
         <Button size="sm" variant="ghost" onClick={adicionar}>
           Adicionar
         </Button>
@@ -486,7 +486,7 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
 
   const salvar = async () => {
     if (!nome.trim()) {
-      toast("Informe o nome da fam�lia", "error");
+      toast("Informe o nome da família", "error");
       return;
     }
     const payload: FamiliaPayload = {
@@ -502,7 +502,7 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
     try {
       if (familia) await api.atualizarFamilia(familia.id, payload);
       else await api.criarFamilia(payload);
-      toast("Fam�lia salva", "success");
+      toast("Família salva", "success");
       onSaved();
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
@@ -513,7 +513,7 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
     <Modal
       open
       onClose={onClose}
-      title={familia ? "Editar fam�lia" : "Nova fam�lia"}
+      title={familia ? "Editar família" : "Nova família"}
       wide
       footer={
         <>
@@ -525,31 +525,31 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
       }
     >
       <div className="space-y-4">
-        <Field label="Nome da fam�lia *">
-          <Input placeholder="Ex.: Cabo Flex�vel, Parafuso, Cola" value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
+        <Field label="Nome da família *">
+          <Input placeholder="Ex.: Cabo Flexível, Parafuso, Cola" value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
         </Field>
-        <Field label="Descri��o (opcional)">
+        <Field label="Descrição (opcional)">
           <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} />
         </Field>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="NCM padr�o">
+          <Field label="NCM padrão">
             <Input maxLength={8} placeholder="Ex.: 8536.69.90" value={ncm} onChange={(e) => setNcm(e.target.value)} />
           </Field>
-          <Field label="Unidade padr�o">
-            <Input placeholder="UN, PC, MT, RL�" value={unidade} onChange={(e) => setUnidade(e.target.value)} />
+          <Field label="Unidade padrão">
+            <Input placeholder="UN, PC, MT, RL…" value={unidade} onChange={(e) => setUnidade(e.target.value)} />
           </Field>
         </div>
-        <Field label="Atributos (caracter�sticas das varia��es)">
+        <Field label="Atributos (características das variações)">
           <div className="space-y-3">
             {atributos.map((a, i) => (
               <div key={i} className="rounded-md border border-gray-200 p-3">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className="text-sm font-semibold text-gray-800">{a.nome.trim() || `Atributo ${i + 1}`}</span>
-                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">{a.tipo === "lista" ? "Lista de op��es" : "Valor livre"}</span>
+                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">{a.tipo === "lista" ? "Lista de opções" : "Valor livre"}</span>
                   {a.tipo === "livre" && <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600">{validacaoLabel(a.validacao)}</span>}
                   <span className="flex-1" />
                   <button className="text-xs text-gray-400 hover:text-red-600" onClick={() => setAtributos((arr) => arr.filter((_, j) => j !== i))}>
-                    � remover
+                    × remover
                   </button>
                 </div>
                 <div className="space-y-2">
@@ -560,7 +560,7 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
                       value={a.tipo}
                       onChange={(e) => setAtributos((arr) => arr.map((x, j) => (j === i ? { ...x, tipo: e.target.value as "lista" | "livre" } : x)))}
                     >
-                      <option value="lista">Lista de op��es</option>
+                      <option value="lista">Lista de opções</option>
                       <option value="livre">Valor livre</option>
                     </Select>
                   </div>
@@ -568,12 +568,12 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
                     <Select
                       className="w-64"
                       value={a.validacao || "texto"}
-                      title="Valida��o do valor digitado no cadastro do produto"
+                      title="Validação do valor digitado no cadastro do produto"
                       onChange={(e) => setAtributos((arr) => arr.map((x, j) => (j === i ? { ...x, validacao: e.target.value } : x)))}
                     >
                       <option value="texto">Texto livre (qualquer valor)</option>
-                      <option value="numero">Somente n�meros (inteiro ou decimal)</option>
-                      <option value="alphanumerico">Letras e n�meros (sem s�mbolos)</option>
+                      <option value="numero">Somente números (inteiro ou decimal)</option>
+                      <option value="alphanumerico">Letras e números (sem símbolos)</option>
                     </Select>
                   ) : (
                     <OpcoesEditor
@@ -584,7 +584,7 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
                   )}
                   <label className="flex items-center gap-2 text-xs text-gray-600">
                     <input type="checkbox" checked={a.obrigatorio} onChange={(e) => setAtributos((arr) => arr.map((x, j) => (j === i ? { ...x, obrigatorio: e.target.checked } : x)))} />
-                    Atributo obrigat�rio
+                    Atributo obrigatório
                   </label>
                 </div>
               </div>
@@ -595,8 +595,8 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
           </Button>
         </Field>
         <Field
-          label="Atributos que comp�em o SKU"
-          hint="Marque, na ordem, os atributos que entram no SKU (ex.: Bitola, Cor ? ELE-CAB-SIL-25V-... ). Vazio = usa todos."
+          label="Atributos que compõem o SKU"
+          hint="Marque, na ordem, os atributos que entram no SKU (ex.: Bitola, Cor → ELE-CAB-SIL-25V-... ). Vazio = usa todos."
         >
           {atributos.filter((a) => a.nome.trim()).length === 0 ? (
             <p className="text-xs text-gray-400">Cadastre atributos acima para configurar o SKU.</p>
@@ -621,10 +621,10 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
                       {marcado && (
                         <span className="flex items-center gap-1">
                           <button type="button" className="text-gray-400 hover:text-gray-700" title="Mover para cima" onClick={() => setSkuAtributos((arr) => { const j = arr.indexOf(nome); if (j <= 0) return arr; const c = [...arr]; [c[j - 1], c[j]] = [c[j], c[j - 1]]; return c; })}>
-                            ?
+                            ↑
                           </button>
                           <button type="button" className="text-gray-400 hover:text-gray-700" title="Mover para baixo" onClick={() => setSkuAtributos((arr) => { const j = arr.indexOf(nome); if (j === -1 || j >= arr.length - 1) return arr; const c = [...arr]; [c[j], c[j + 1]] = [c[j + 1], c[j]]; return c; })}>
-                            ?
+                            ↓
                           </button>
                           <span className="text-xs text-gray-400">pos {skuAtributos.indexOf(nome) + 1}</span>
                         </span>
@@ -640,7 +640,6 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
   );
 }
 
-// ===================================================================
 // ===================================================================
 // EDITOR DE PRODUTO
 // ===================================================================
@@ -710,13 +709,13 @@ function ModalQuickAdd({
     >
       <div className="space-y-3">
         <p className="text-xs text-gray-500">
-          O <strong>c�digo</strong> entra no SKU estruturado (ex.: <code>ELE-CAB-SIL-25V</code>). Se vazio, usa o nome.
+          O <strong>código</strong> entra no SKU estruturado (ex.: <code>ELE-CAB-SIL-25V</code>). Se vazio, usa o nome.
         </p>
-        <Field label="C�digo (curto)">
+        <Field label="Código (curto)">
           <Input placeholder={tipo === "marca" ? "Ex.: VOT" : tipo === "grupo" ? "Ex.: ELE" : "Ex.: CAB"} value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} />
         </Field>
         <Field label="Nome *">
-          <Input placeholder={tipo === "marca" ? "Ex.: Voltini" : tipo === "grupo" ? "Ex.: El�trico" : "Ex.: Cabo Flex�vel"} value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
+          <Input placeholder={tipo === "marca" ? "Ex.: Voltini" : tipo === "grupo" ? "Ex.: Elétrico" : "Ex.: Cabo Flexível"} value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
         </Field>
       </div>
     </Modal>
@@ -732,11 +731,11 @@ function CompletudeDadosGerais({ form, dados }: { form: ProdutoEditorForm; dados
     { rotulo: "Nome base do produto", preenchido: !!form.nome.trim() },
     { rotulo: "Marca", preenchido: !!form.marca.trim() },
     { rotulo: "Categoria", preenchido: !!form.categoria.trim(), dica: "Ex.: Fios e Cabos" },
-    { rotulo: "Subcategoria", preenchido: !!form.subcategoria.trim(), dica: "Ex.: Cabo Flex�vel" },
-    { rotulo: "Grupo (SKU)", preenchido: !!form.grupo_id, dica: "1� segmento do SKU estruturado" },
-    { rotulo: "Subgrupo (SKU)", preenchido: !!form.subgrupo_id, dica: "2� segmento do SKU estruturado" },
-    { rotulo: "C�digo fabricante", preenchido: !!form.external_id.trim(), dica: "Refer�ncia do fornecedor" },
-    { rotulo: "Pre�o de venda > 0", preenchido: Number(dados.preco) > 0 },
+    { rotulo: "Subcategoria", preenchido: !!form.subcategoria.trim(), dica: "Ex.: Cabo Flexível" },
+    { rotulo: "Grupo (SKU)", preenchido: !!form.grupo_id, dica: "1º segmento do SKU estruturado" },
+    { rotulo: "Subgrupo (SKU)", preenchido: !!form.subgrupo_id, dica: "2º segmento do SKU estruturado" },
+    { rotulo: "Código fabricante", preenchido: !!form.external_id.trim(), dica: "Referência do fornecedor" },
+    { rotulo: "Preço de venda > 0", preenchido: Number(dados.preco) > 0 },
   ];
   const preenchidos = itens.filter((i) => i.preenchido).length;
   const pct = Math.round((preenchidos / itens.length) * 100);
@@ -754,15 +753,15 @@ function CompletudeDadosGerais({ form, dados }: { form: ProdutoEditorForm; dados
         <div className={`h-full rounded-full ${concluido ? "bg-green-500" : "bg-amber-500"}`} style={{ width: `${pct}%` }} />
       </div>
       {pendentes.length === 0 ? (
-        <p className="text-xs text-green-700">Cadastro completo � todos os dados gerais obrigat�rios preenchidos.</p>
+        <p className="text-xs text-green-700">Cadastro completo — todos os dados gerais obrigatórios preenchidos.</p>
       ) : (
         <ul className="space-y-1">
           {pendentes.map((p) => (
             <li key={p.rotulo} className="flex items-start gap-1.5 text-xs text-gray-600">
-              <span className="mt-0.5 text-amber-500">?</span>
+              <span className="mt-0.5 text-amber-500">●</span>
               <span>
                 <strong>{p.rotulo}</strong>
-                {p.dica ? <span className="text-gray-400"> � {p.dica}</span> : null}
+                {p.dica ? <span className="text-gray-400"> — {p.dica}</span> : null}
               </span>
             </li>
           ))}
@@ -773,7 +772,7 @@ function CompletudeDadosGerais({ form, dados }: { form: ProdutoEditorForm; dados
 }
 
 // ===================================================================
-// ESTOQUE POR DEP�SITO + SITUA��O (aba Varia��es)
+// ESTOQUE POR DEPÓSITO + SITUAÇÃO (aba Variações)
 // ===================================================================
 
 function EstoqueDeposito({ produtoId }: { produtoId: number }) {
@@ -810,7 +809,7 @@ function EstoqueDeposito({ produtoId }: { produtoId: number }) {
       <Badge tone="green">OK</Badge>
     );
 
-  if (carregando) return <p className="text-xs text-gray-400">Carregando estoque�</p>;
+  if (carregando) return <p className="text-xs text-gray-400">Carregando estoque…</p>;
   if (erro) return <p className="text-xs text-red-500">Erro ao carregar estoque: {erro}</p>;
   if (saldos.length === 0)
     return <p className="text-xs text-gray-400">Sem saldo registrado para este produto.</p>;
@@ -820,9 +819,9 @@ function EstoqueDeposito({ produtoId }: { produtoId: number }) {
       <table className="min-w-full divide-y divide-gray-200 text-sm">
         <thead className="bg-gray-50">
           <tr>
-            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Dep�sito</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Depósito</th>
             <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Saldo</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Situa��o</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Situação</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -877,7 +876,7 @@ export function ProdutoEditor() {
             sessionStorage.removeItem("dup_produto");
           }
         } catch {
-          /* rascunho inv�lido � ignora */
+          /* rascunho inválido — ignora */
         }
       }
       let fs: Familia[] = [];
@@ -1016,7 +1015,7 @@ export function ProdutoEditor() {
     const obr = atributos.filter((a) => a.obrigatorio);
     const faltando = obr.filter((a) => !(valores[a.nome] || "").trim());
     if (faltando.length) {
-      toast(`Preencha os atributos obrigat�rios: ${faltando.map((a) => a.nome).join(", ")}`, "error");
+      toast(`Preencha os atributos obrigatórios: ${faltando.map((a) => a.nome).join(", ")}`, "error");
       setTab("dados");
       return;
     }
@@ -1024,7 +1023,7 @@ export function ProdutoEditor() {
     for (const a of caAttrs) {
       const v = valores[a.nome];
       if (v && !/^[\d.\s]+$/.test(String(v).trim())) {
-        toast(`O atributo "${a.nome}" deve ser um n�mero de CA v�lido (ex.: 12345 ou 12.345).`, "error");
+        toast(`O atributo "${a.nome}" deve ser um número de CA válido (ex.: 12345 ou 12.345).`, "error");
         setTab("dados");
         return;
       }
@@ -1065,13 +1064,13 @@ export function ProdutoEditor() {
         const criadas = res.criadas || 0;
         const atributosFaltantes = res.atributos_faltantes || 0;
         if (atributosFaltantes) {
-          toast(`N�o foi poss�vel salvar: ${atributosFaltantes} produto(s) sem os atributos obrigat�rios da fam�lia.`, "error");
+          toast(`Não foi possível salvar: ${atributosFaltantes} produto(s) sem os atributos obrigatórios da família.`, "error");
           setTab("dados");
           return;
         }
         const avisos: string[] = [];
-        if (desativadas) avisos.push(`${desativadas} registro(s) desativado(s) por possuir estoque/pre�o/fornecedor (nenhum dado foi exclu�do)`);
-        if (bloqueadas) avisos.push(`n�o foi poss�vel remover ${bloqueadas} registro(s)`);
+        if (desativadas) avisos.push(`${desativadas} registro(s) desativado(s) por possuir estoque/preço/fornecedor (nenhum dado foi excluído)`);
+        if (bloqueadas) avisos.push(`não foi possível remover ${bloqueadas} registro(s)`);
         if (criadas) avisos.push(`${criadas} registro(s) criado(s) automaticamente`);
         toast(avisos.length ? "Produto salvo. " + avisos.join("; ") : "Produto salvo", avisos.length ? "warn" : "success");
       } else {
@@ -1117,14 +1116,14 @@ export function ProdutoEditor() {
       toast("Adicione ao menos uma linha e selecione o fornecedor.", "warn");
       return;
     }
-    if (sucesso.length) toast(`C�digos salvos: ${sucesso.join(", ")}`, "success");
+    if (sucesso.length) toast(`Códigos salvos: ${sucesso.join(", ")}`, "success");
     if (erros.length) toast("Erro: " + erros.join("; "), "error");
   };
 
-  // Categorias dispon�veis conforme Grupo/Subgrupo selecionados:
-// - subgrupo escolhido ? categorias daquele subgrupo;
-// - s� grupo escolhido ? categorias dos subgrupos do grupo;
-// - nada ? todas (mant�m a atual se for customizada).
+  // Categorias disponíveis conforme Grupo/Subgrupo selecionados:
+// - subgrupo escolhido → categorias daquele subgrupo;
+// - só grupo escolhido → categorias dos subgrupos do grupo;
+// - nada → todas (mantém a atual se for customizada).
   const subgrupoIdsDoGrupo = new Set(subgrupos.map((s) => s.id));
   const categoriasFiltradas = categoriasTree.filter((c) => {
     if (form.subgrupo_id) return c.subgrupo_id === Number(form.subgrupo_id);
@@ -1134,20 +1133,20 @@ export function ProdutoEditor() {
   const catAtual = categoriasTree.find((c) => c.nome === form.categoria);
   const subcategorias = catAtual ? catAtual.subcategorias.map((s) => s.nome) : [];
   const duplicar = () => {
-    // Copia o cadastro como novo rascunho (mant�m atributos/dados p/ edi��o)
+    // Copia o cadastro como novo rascunho (mantém atributos/dados p/ edição)
     const copia = { ...form, id: undefined };
     sessionStorage.setItem("dup_produto", JSON.stringify(copia));
     location.hash = "#/produtos/novo";
-    toast("Copiado como rascunho � revise antes de salvar", "success");
+    toast("Copiado como rascunho — revise antes de salvar", "success");
   };
   const padraoText = normalize(form.categoria).includes("epi")
-    ? "Padr�o EPI: Item + Material/Tamanho + N� CA + Marca."
+    ? "Padrão EPI: Item + Material/Tamanho + Nº CA + Marca."
     : normalize(form.categoria).includes("cabo") || normalize(form.categoria).includes("fio")
-      ? "Padr�o de cabos: Item + Bitola (mm�) + Tens�o + Norma/Marca."
-      : "Padr�o: Item + Caracter�sticas (bitola, tens�o, CA) + Marca.";
+      ? "Padrão de cabos: Item + Bitola (mm²) + Tensão + Norma/Marca."
+      : "Padrão: Item + Características (bitola, tensão, CA) + Marca.";
 
-  // Descri��o padronizada: Nome + [valores dos atributos na ordem da fam�lia] + " - Marca".
-  // � usada diretamente na busca (caracter�sticas embutidas) e como r�tulo no PDV.
+  // Descrição padronizada: Nome + [valores dos atributos na ordem da família] + " - Marca".
+  // É usada diretamente na busca (características embutidas) e como rótulo no PDV.
   const descricaoSugerida = [
     form.nome.trim(),
     ...atributos.map((a) => (valores[a.nome] || "").trim()).filter(Boolean),
@@ -1163,9 +1162,9 @@ export function ProdutoEditor() {
 
   const TABS: { key: typeof tab; label: string }[] = [
     { key: "gerais", label: "Dados Gerais" },
-    { key: "atributos", label: "Atributos da Fam�lia" },
-    { key: "dados", label: "Dados e Varia��o" },
-    { key: "imagens", label: "M�dia e Anexos" },
+    { key: "atributos", label: "Atributos da Família" },
+    { key: "dados", label: "Dados e Variação" },
+    { key: "imagens", label: "Mídia e Anexos" },
     ...(id ? [{ key: "fiscal" as const, label: "Perfil Fiscal" }] : []),
   ];
 
@@ -1173,14 +1172,14 @@ export function ProdutoEditor() {
     <div>
       <PageHeader
         title={produto ? "Editar produto" : "Novo produto"}
-        subtitle="Cadastre o produto uma vez; as varia��es s�o geradas pelas combina��es dos atributos."
+        subtitle="Cadastre o produto uma vez; as variações são geradas pelas combinações dos atributos."
         actions={
           <div className="flex gap-2">
             {produto && (
-              <Button variant="ghost" onClick={duplicar}>? Duplicar</Button>
+              <Button variant="ghost" onClick={duplicar}>⧉ Duplicar</Button>
             )}
             <Button variant="ghost" onClick={() => (location.hash = "#/produtos")}>
-              ? Voltar
+              ← Voltar
             </Button>
           </div>
         }
@@ -1204,12 +1203,12 @@ export function ProdutoEditor() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-4 lg:col-span-2">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Grupo (SKU)" hint="1� segmento do SKU estruturado">
+              <Field label="Grupo (SKU)" hint="1º segmento do SKU estruturado">
                 <div className="flex gap-2">
                   <Select value={form.grupo_id} onChange={(e) => trocarGrupo(e.target.value)} className="flex-1">
-                    <option value="">�</option>
+                    <option value="">—</option>
                     {grupos.map((g) => (
-                      <option key={g.id} value={String(g.id)}>{g.codigo} � {g.nome}</option>
+                      <option key={g.id} value={String(g.id)}>{g.codigo} · {g.nome}</option>
                     ))}
                   </Select>
                   <Button size="sm" variant="ghost" title="Cadastrar novo grupo" onClick={() => setQuickAdd("grupo")}>
@@ -1217,12 +1216,12 @@ export function ProdutoEditor() {
                   </Button>
                 </div>
               </Field>
-              <Field label="Subgrupo (SKU)" hint="2� segmento do SKU estruturado">
+              <Field label="Subgrupo (SKU)" hint="2º segmento do SKU estruturado">
                 <div className="flex gap-2">
                   <Select value={form.subgrupo_id} onChange={(e) => setForm({ ...form, subgrupo_id: e.target.value })} className="flex-1" disabled={!form.grupo_id}>
-                    <option value="">�</option>
+                    <option value="">—</option>
                     {subgrupos.map((s) => (
-                      <option key={s.id} value={String(s.id)}>{s.codigo} � {s.nome}</option>
+                      <option key={s.id} value={String(s.id)}>{s.codigo} · {s.nome}</option>
                     ))}
                   </Select>
                   <Button size="sm" variant="ghost" title="Cadastrar novo subgrupo" disabled={!form.grupo_id} onClick={() => setQuickAdd("subgrupo")}>
@@ -1233,7 +1232,7 @@ export function ProdutoEditor() {
             </div>
             <p className="text-xs text-gray-400">
               SKU estruturado: <code>[GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS]</code> (ex.: ELE-CAB-SIL-25V).
-              Grupo e subgrupo t�m c�digo pr�prio; a marca e os atributos completam o SKU.
+              Grupo e subgrupo têm código próprio; a marca e os atributos completam o SKU.
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Categoria" hint={form.grupo_id ? "Filtrada pelo grupo/subgrupo" : ""}>
@@ -1242,7 +1241,7 @@ export function ProdutoEditor() {
                   onChange={(e) => setForm({ ...form, categoria: e.target.value, subcategoria: "" })}
                   className="flex-1"
                 >
-                  <option value="">� selecione �</option>
+                  <option value="">— selecione —</option>
                   {categoriasFiltradas.map((c) => (
                     <option key={c.id} value={c.nome}>
                       {c.nome}
@@ -1260,7 +1259,7 @@ export function ProdutoEditor() {
                   className="flex-1"
                   disabled={!form.categoria}
                 >
-                  <option value="">� selecione �</option>
+                  <option value="">— selecione —</option>
                   {subcategorias.map((s) => (
                     <option key={s} value={s}>
                       {s}
@@ -1269,10 +1268,10 @@ export function ProdutoEditor() {
                 </Select>
               </Field>
             </div>
-            <Field label="Fam�lia (opcional)">
+            <Field label="Família (opcional)">
               <div className="flex gap-2">
                 <Select value={form.familia_id} onChange={(e) => trocarFamilia(Number(e.target.value) || null)} className="flex-1">
-                  <option value="">� sem fam�lia �</option>
+                  <option value="">— sem família —</option>
                   {familias.map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.nome}
@@ -1295,37 +1294,37 @@ export function ProdutoEditor() {
                   ))}
                 </datalist>
               </Field>
-              <Field label="C�digo Fabricante">
+              <Field label="Código Fabricante">
                 <Input placeholder="Ex.: B-66874" value={form.external_id} onChange={(e) => setForm({ ...form, external_id: e.target.value })} />
               </Field>
             </div>
             <Field label="Nome base do produto *">
-              <Input placeholder="Ex.: Cabo Flex�vel 750V Antichama" value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
-              <div className="mt-1 text-xs text-gray-400" title="Padr�o de nomenclatura de f�brica">
+              <Input placeholder="Ex.: Cabo Flexível 750V Antichama" value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
+              <div className="mt-1 text-xs text-gray-400" title="Padrão de nomenclatura de fábrica">
                 {padraoText}
               </div>
             </Field>
-            <Field label="Descri��o padr�o / PDV (opcional)">
-              <Input placeholder="Ex.: Cabo Flex�vel 2,5mm� Verde 750V - SIL" value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
+            <Field label="Descrição padrão / PDV (opcional)">
+              <Input placeholder="Ex.: Cabo Flexível 2,5mm² Verde 750V - SIL" value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
               <div className="mt-1 flex items-center gap-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600">
-                <span className="font-medium text-gray-700">Sugest�o:</span>
-                <span className="flex-1 truncate">{descricaoSugerida || "� preencha nome, atributos e marca �"}</span>
+                <span className="font-medium text-gray-700">Sugestão:</span>
+                <span className="flex-1 truncate">{descricaoSugerida || "— preencha nome, atributos e marca —"}</span>
                 <Button size="sm" variant="ghost" disabled={!descricaoSugerida} onClick={() => setForm({ ...form, descricao: descricaoSugerida })}>
-                  usar como descri��o
+                  usar como descrição
                 </Button>
               </div>
-              <p className="mt-1 text-xs text-gray-400">A descri��o padronizada (nome + caracter�sticas + marca) � usada diretamente na busca e como r�tulo no PDV.</p>
+              <p className="mt-1 text-xs text-gray-400">A descrição padronizada (nome + características + marca) é usada diretamente na busca e como rótulo no PDV.</p>
             </Field>
-            <Field label="Termos de busca / sin�nimos">
-              <Input placeholder="Ex.: cabo, fio, 750V, antichama, barramento�" value={form.termos_busca} onChange={(e) => setForm({ ...form, termos_busca: e.target.value })} />
-              <p className="mt-1 text-xs text-gray-400">Palavras-chave e varia��es do nome usado pelo mercado, para facilitar a busca (ex.: "fio" al�m de "cabo").</p>
+            <Field label="Termos de busca / sinônimos">
+              <Input placeholder="Ex.: cabo, fio, 750V, antichama, barramento…" value={form.termos_busca} onChange={(e) => setForm({ ...form, termos_busca: e.target.value })} />
+              <p className="mt-1 text-xs text-gray-400">Palavras-chave e variações do nome usado pelo mercado, para facilitar a busca (ex.: "fio" além de "cabo").</p>
             </Field>
           </div>
           <aside className="space-y-4">
             <CompletudeDadosGerais form={form} dados={dados} />
             <div className="rounded-lg border border-gray-200 bg-white p-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Curva ABC � Gest�o de Linha</div>
-              {produto ? <AbcRecap p={produto} /> : <p className="text-sm text-gray-400">Salve o produto para ver os indicadores de gest�o.</p>}
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Curva ABC · Gestão de Linha</div>
+              {produto ? <AbcRecap p={produto} /> : <p className="text-sm text-gray-400">Salve o produto para ver os indicadores de gestão.</p>}
             </div>
           </aside>
         </div>
@@ -1333,20 +1332,20 @@ export function ProdutoEditor() {
 
       {tab === "atributos" && (
         <div>
-          <p className="mb-3 text-sm text-gray-500">Atributos definidos pela fam�lia selecionada (refer�ncia). Os valores de cada atributo s�o informados na aba Dados e Varia��o.</p>
+          <p className="mb-3 text-sm text-gray-500">Atributos definidos pela família selecionada (referência). Os valores de cada atributo são informados na aba Dados e Variação.</p>
           {!form.familia_id ? (
-            <p className="py-8 text-center text-sm text-gray-400">Sem fam�lia � este produto n�o possui atributos.</p>
+            <p className="py-8 text-center text-sm text-gray-400">Sem família — este produto não possui atributos.</p>
           ) : atributos.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">Essa fam�lia n�o tem atributos. Edite a fam�lia para adicion�-los.</p>
+            <p className="py-8 text-center text-sm text-gray-400">Essa família não tem atributos. Edite a família para adicioná-los.</p>
           ) : (
             <div className="space-y-3">
               {atributos.map((a) => (
                 <div key={a.id} className="rounded-lg border border-gray-200 bg-white p-3">
                   <div className="mb-1 text-sm font-medium text-gray-900">
-                    {a.nome} {a.obrigatorio ? <span className="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-600">* obrigat�rio</span> : null}
+                    {a.nome} {a.obrigatorio ? <span className="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-600">* obrigatório</span> : null}
                   </div>
                   <div className="text-xs text-gray-500">
-                    {a.tipo === "lista" ? `Lista de op��es: ${(a.opcoes || []).join(", ") || "�"}` : `Valor livre (${validacaoLabel(a.validacao)})`}
+                    {a.tipo === "lista" ? `Lista de opções: ${(a.opcoes || []).join(", ") || "—"}` : `Valor livre (${validacaoLabel(a.validacao)})`}
                   </div>
                 </div>
               ))}
@@ -1360,10 +1359,10 @@ export function ProdutoEditor() {
           <div className="mb-3 flex items-center justify-between">
             <div>
               <h4 className="text-sm font-semibold text-gray-900">Dados operacionais do produto</h4>
-              <p className="text-xs text-gray-500">Este produto � uma unidade �nica (antiga varia��o). Preencha os campos operacionais e, se houver fam�lia, os valores dos atributos.</p>
+              <p className="text-xs text-gray-500">Este produto é uma unidade única (antiga variação). Preencha os campos operacionais e, se houver família, os valores dos atributos.</p>
             </div>
             <Button size="sm" variant="ghost" onClick={sugerirSku} title="Gera um SKU a partir de nome + atributos + marca">
-              ? Sugerir SKU
+              ✨ Sugerir SKU
             </Button>
           </div>
 
@@ -1373,14 +1372,14 @@ export function ProdutoEditor() {
                 <tr>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">SKU</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">EAN</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Pre�o</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Preço</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Promo.</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Peso</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Dimens�es</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Dimensões</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Unid.</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Emb.</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Fator</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Localiza��o</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Localização</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">NCM</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Unid. Trib.</th>
                 </tr>
@@ -1395,8 +1394,8 @@ export function ProdutoEditor() {
                   <td className="px-3 py-1.5"><CellInput value={dados.dimensoes} onChange={(x) => setDados((d) => ({ ...d, dimensoes: x }))} placeholder="CxLxA" /></td>
                   <td className="px-3 py-1.5"><CellInput value={dados.unidade_venda} onChange={(x) => setDados((d) => ({ ...d, unidade_venda: x }))} placeholder="UN" /></td>
                   <td className="px-3 py-1.5"><CellInput type="number" value={dados.embalagem} onChange={(x) => setDados((d) => ({ ...d, embalagem: x }))} placeholder="unid/cx" /></td>
-                  <td className="px-3 py-1.5"><CellInput type="number" value={dados.fator_conversao} onChange={(x) => setDados((d) => ({ ...d, fator_conversao: x }))} placeholder="cx ?" /></td>
-                  <td className="px-3 py-1.5"><CellInput value={dados.localizacao} onChange={(x) => setDados((d) => ({ ...d, localizacao: x }))} placeholder="Endere�o" /></td>
+                  <td className="px-3 py-1.5"><CellInput type="number" value={dados.fator_conversao} onChange={(x) => setDados((d) => ({ ...d, fator_conversao: x }))} placeholder="cx →" /></td>
+                  <td className="px-3 py-1.5"><CellInput value={dados.localizacao} onChange={(x) => setDados((d) => ({ ...d, localizacao: x }))} placeholder="Endereço" /></td>
                   <td className="px-3 py-1.5"><CellInput value={dados.ncm} onChange={(x) => setDados((d) => ({ ...d, ncm: x }))} placeholder="NCM" /></td>
                   <td className="px-3 py-1.5"><CellInput value={dados.unidade_tributavel} onChange={(x) => setDados((d) => ({ ...d, unidade_tributavel: x }))} placeholder="UN" /></td>
                 </tr>
@@ -1406,8 +1405,8 @@ export function ProdutoEditor() {
 
           {atributos.length > 0 && (
             <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
-              <h4 className="mb-1 text-sm font-semibold text-gray-900">Valores dos atributos da fam�lia</h4>
-              <p className="mb-3 text-xs text-gray-500">Preencha o valor de cada atributo do produto. Obrigat�rios s�o marcados com *.</p>
+              <h4 className="mb-1 text-sm font-semibold text-gray-900">Valores dos atributos da família</h4>
+              <p className="mb-3 text-xs text-gray-500">Preencha o valor de cada atributo do produto. Obrigatórios são marcados com *.</p>
               <div className="flex flex-wrap gap-3">
                 {atributos.map((a) => {
                   const val = valores[a.nome] || "";
@@ -1423,7 +1422,7 @@ export function ProdutoEditor() {
                           value={val}
                           onChange={(e) => setValores((v) => ({ ...v, [a.nome]: e.target.value }))}
                         >
-                          <option value="">�</option>
+                          <option value="">—</option>
                           {(a.opcoes || []).map((o) => (
                             <option key={o} value={o}>{o}</option>
                           ))}
@@ -1434,7 +1433,7 @@ export function ProdutoEditor() {
                             className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
                             inputMode={a.validacao === "numero" ? "decimal" : "text"}
                             value={val}
-                            placeholder={a.validacao === "numero" ? "n�mero" : a.validacao === "alphanumerico" ? "letras e n�meros" : "texto"}
+                            placeholder={a.validacao === "numero" ? "número" : a.validacao === "alphanumerico" ? "letras e números" : "texto"}
                             onChange={(e) => setValores((v) => ({ ...v, [a.nome]: e.target.value }))}
                           />
                           {err && <p className="mt-0.5 text-[10px] text-red-500">{err}</p>}
@@ -1449,9 +1448,9 @@ export function ProdutoEditor() {
 
           {produto ? (
             <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
-              <h4 className="mb-2 text-sm font-semibold text-gray-900">Estoque por dep�sito</h4>
+              <h4 className="mb-2 text-sm font-semibold text-gray-900">Estoque por depósito</h4>
               <p className="mb-3 text-xs text-gray-400">
-                Saldo e situa��o por dep�sito (ok/ruptura/excesso) calculados a partir dos estoque m�nimo e m�ximo.
+                Saldo e situação por depósito (ok/ruptura/excesso) calculados a partir dos estoque mínimo e máximo.
               </p>
               <EstoqueDeposito produtoId={produto.id} />
             </div>
@@ -1459,9 +1458,9 @@ export function ProdutoEditor() {
 
           {produto ? (
             <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
-              <h4 className="mb-2 text-sm font-semibold text-gray-900">C�digos por fornecedor</h4>
+              <h4 className="mb-2 text-sm font-semibold text-gray-900">Códigos por fornecedor</h4>
               <p className="mb-3 text-xs text-gray-400">
-                Informe para este produto o fornecedor, o c�digo usado por ele, a unidade de compra e o fator de convers�o (ex.: embalagem com 10 unidades ? fator 10).
+                Informe para este produto o fornecedor, o código usado por ele, a unidade de compra e o fator de conversão (ex.: embalagem com 10 unidades → fator 10).
               </p>
               <FornecedorGrid
                 fornecedores={fornecedores}
@@ -1472,12 +1471,12 @@ export function ProdutoEditor() {
               />
               <div className="mt-3 flex justify-end">
                 <Button variant="primary" size="sm" onClick={() => void salvarFornecedor()}>
-                  Salvar c�digos
+                  Salvar códigos
                 </Button>
               </div>
             </div>
           ) : (
-            <p className="mt-4 text-sm text-gray-400">Salve o produto para cadastrar os c�digos dos fornecedores.</p>
+            <p className="mt-4 text-sm text-gray-400">Salve o produto para cadastrar os códigos dos fornecedores.</p>
           )}
         </div>
       )}
@@ -1529,7 +1528,7 @@ function CellInput({ value, onChange, placeholder, type, error, title }: { value
 }
 
 function AbcRecap({ p }: { p: ProdutoCadastro }) {
-  const classe = p.classe_abc || "�";
+  const classe = p.classe_abc || "—";
   return (
     <div className="flex flex-wrap gap-2">
       <Badge tone={classe === "A" ? "blue" : classe === "B" ? "amber" : "gray"}>Classe: {classe}</Badge>
@@ -1568,7 +1567,7 @@ function FornecedorGrid({
         <thead className="bg-gray-50">
           <tr>
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Fornecedor</th>
-            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">C�digo do fornecedor</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Código do fornecedor</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Unid. compra</th>
             <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Fator conv.</th>
             <th className="w-9" />
@@ -1579,7 +1578,7 @@ function FornecedorGrid({
             <tr key={r.uid}>
               <td className="px-3 py-1.5">
                 <Select value={r.fornecedor_id} onChange={(e) => atualizar(r.uid, { fornecedor_id: e.target.value })} className="py-1 text-xs">
-                  <option value="">�</option>
+                  <option value="">—</option>
                   {fornecedores.map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.nome}
@@ -1588,19 +1587,19 @@ function FornecedorGrid({
                 </Select>
               </td>
               <td className="px-3 py-1.5">
-                <Input className="py-1 text-xs" placeholder="C�digo do fornecedor" value={r.codigo} onChange={(e) => atualizar(r.uid, { codigo: e.target.value })} />
+                <Input className="py-1 text-xs" placeholder="Código do fornecedor" value={r.codigo} onChange={(e) => atualizar(r.uid, { codigo: e.target.value })} />
               </td>
               <td className="px-3 py-1.5">
                 <Select value={r.unidade} onChange={(e) => atualizar(r.uid, { unidade: e.target.value })} className="py-1 text-xs">
-                  <option value="">�</option>
+                  <option value="">—</option>
                   {unidadesCompra.map((u) => (
                     <option key={u.sigla} value={u.sigla}>
                       {u.sigla}
-                      {u.descricao ? " � " + u.descricao : ""}
+                      {u.descricao ? " — " + u.descricao : ""}
                     </option>
                   ))}
                   {r.unidade && !unidadesCompra.some((u) => u.sigla === r.unidade) ? (
-                    <option value={r.unidade}>{r.unidade} (n�o cadastrada)</option>
+                    <option value={r.unidade}>{r.unidade} (não cadastrada)</option>
                   ) : null}
                 </Select>
               </td>
@@ -1609,7 +1608,7 @@ function FornecedorGrid({
               </td>
               <td className="px-3 py-1.5">
                 <button className="text-gray-400 hover:text-red-600" onClick={() => setRows(rows.filter((x) => x.uid !== r.uid))}>
-                  ?
+                  ✕
                 </button>
               </td>
             </tr>
@@ -1668,8 +1667,6 @@ function seedFornecedorRows(produto: ProdutoCadastro, seq: React.MutableRefObjec
   return rows;
 }
 
-// --- Perfil fiscal (classifica��o do produto) -------------------------
-
 // ===================================================================
 // Imagens em lote (fornecedor)
 // ===================================================================
@@ -1716,7 +1713,7 @@ function ModalImagensLote({ produtoId, onClose, onAplicado }: { produtoId: numbe
         const fabricante = ir[0]?.marca || "";
         setTermo([base.split(" ").slice(0, 2).join(" "), cor, fabricante].filter(Boolean).join(" ").replace(/\s+/g, "+"));
       } catch {
-        setErro("N�o foi poss�vel carregar os irm�os.");
+        setErro("Não foi possível carregar os irmãos.");
       } finally {
         setCarregandoIrmaos(false);
       }
@@ -1768,9 +1765,9 @@ function ModalImagensLote({ produtoId, onClose, onAplicado }: { produtoId: numbe
       const res = await api.aplicarImagensLote(ids, urls, favUrl || undefined);
       const dedup = (res as { deduplicadas?: number }).deduplicadas || 0;
       if (res.aplicadas === 0 && res.erros.length === 0) {
-        toast(dedup ? `Nenhuma imagem nova aplicada � ${dedup} j� existiam nos produtos (dedup).` : "Nenhuma imagem foi aplicada.", "warn");
+        toast(dedup ? `Nenhuma imagem nova aplicada — ${dedup} já existiam nos produtos (dedup).` : "Nenhuma imagem foi aplicada.", "warn");
       } else {
-        const extra = dedup ? ` (${dedup} j� existiam)` : "";
+        const extra = dedup ? ` (${dedup} já existiam)` : "";
         toast(`${res.aplicadas} imagem(ns) aplicada(s) a ${ids.length} produto(s)${extra}`, res.erros.length ? "warn" : "success");
       }
       if (res.erros.length) setErro(res.erros.slice(0, 3).join(" | "));
@@ -1787,18 +1784,18 @@ function ModalImagensLote({ produtoId, onClose, onAplicado }: { produtoId: numbe
       <>
         <Button onClick={onClose}>Fechar</Button>
         <Button variant="primary" onClick={() => void aplicar()} disabled={aplicando}>
-          {aplicando ? "Aplicando�" : `Aplicar imagens aos ${sel.size} produto(s)`}
+          {aplicando ? "Aplicando…" : `Aplicar imagens aos ${sel.size} produto(s)`}
         </Button>
       </>
     }>
       {erro ? <p className="mb-2 rounded bg-red-50 p-2 text-xs text-red-700">{erro}</p> : null}
 
       <div className="mb-3">
-        <h4 className="mb-1 text-sm font-semibold text-gray-900">Lote (irm�os)</h4>
+        <h4 className="mb-1 text-sm font-semibold text-gray-900">Lote (irmãos)</h4>
         {carregandoIrmaos ? (
           <Loading />
         ) : irmaos.length === 0 ? (
-          <p className="text-sm text-gray-400">Nenhum irm�o encontrado (mesmo nome + marca + cor).</p>
+          <p className="text-sm text-gray-400">Nenhum irmão encontrado (mesmo nome + marca + cor).</p>
         ) : (
           <div className="max-h-40 overflow-y-auto rounded border border-gray-200">
             {irmaos.map((x) => {
@@ -1841,7 +1838,7 @@ function ModalImagensLote({ produtoId, onClose, onAplicado }: { produtoId: numbe
       <div className="mb-3 flex gap-2">
         <Input className="flex-1" readOnly value={urlBusca()} />
         <Button variant="primary" onClick={() => void buscar()} disabled={buscando || !termo.trim()}>
-          {buscando ? "Buscando�" : "Buscar"}
+          {buscando ? "Buscando…" : "Buscar"}
         </Button>
       </div>
 
@@ -1888,13 +1885,13 @@ function ModalImagensLote({ produtoId, onClose, onAplicado }: { produtoId: numbe
                     setFavUrl(favUrl === p.url ? "" : p.url);
                   }}
                 >
-                  ?
+                  ★
                 </button>
                 <img src={p.url} loading="lazy" alt="" className="h-20 w-full object-contain" />
               </label>
             ))}
           </div>
-          <p className="mt-1 text-xs text-gray-400">Marque as fotos que quer usar e clique na ? da foto favorita (ser� a capa).</p>
+          <p className="mt-1 text-xs text-gray-400">Marque as fotos que quer usar e clique na ★ da foto favorita (será a capa).</p>
         </div>
       ) : null}
     </Modal>

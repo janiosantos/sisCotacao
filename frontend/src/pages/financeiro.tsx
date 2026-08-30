@@ -1,4 +1,4 @@
-// pages/financeiro.tsx � financeiro (React + Tailwind).
+﻿// pages/financeiro.tsx — financeiro (React + Tailwind).
 
 import { useEffect, useState } from "react";
 import {
@@ -22,7 +22,7 @@ const ABAS: { key: Aba; label: string }[] = [
   { key: "caixa", label: "Caixa" },
   { key: "receber", label: "Receber" },
   { key: "pagar", label: "Pagar" },
-  { key: "condicoes", label: "Condi��es" },
+  { key: "condicoes", label: "Condições" },
   { key: "centros", label: "Centros Custo" },
   { key: "adiantamentos", label: "Adiantamentos" },
 ];
@@ -97,7 +97,7 @@ function Caixa() {
   const salvar = async () => {
     const valor = parseFloat(form.valor.replace(",", "."));
     if (!form.desc.trim() || valor <= 0) {
-      toast("Preencha descri��o e valor", "error");
+      toast("Preencha descrição e valor", "error");
       return;
     }
     try {
@@ -110,7 +110,7 @@ function Caixa() {
     }
   };
 
-  const label = { entrada: "Entrada", saida: "Sa�da", suprimento: "Suprimento", sangria: "Sangria" }[tipo] || tipo;
+  const label = { entrada: "Entrada", saida: "Saída", suprimento: "Suprimento", sangria: "Sangria" }[tipo] || tipo;
 
   return (
     <div>
@@ -123,14 +123,14 @@ function Caixa() {
           + Entrada
         </Button>
         <Button variant="danger" onClick={() => abrir("saida")}>
-          - Sa�da
+          - Saída
         </Button>
         <Button onClick={() => abrir("suprimento")}>Suprimento</Button>
         <Button onClick={() => abrir("sangria")}>Sangria</Button>
       </div>
 
       <Table>
-        <THead cols={["Data", "Tipo", "Descri��o", "Valor", "Saldo", "Forma", "Doc"]} />
+        <THead cols={["Data", "Tipo", "Descrição", "Valor", "Saldo", "Forma", "Doc"]} />
         <TBody>
           {rows.length === 0 ? (
             <EmptyRow colSpan={7} message="Nenhum movimento" />
@@ -166,7 +166,7 @@ function Caixa() {
         }
       >
         <div className="space-y-4">
-          <Field label="Descri��o">
+          <Field label="Descrição">
             <Input value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} autoFocus />
           </Field>
           <Field label="Valor">
@@ -225,12 +225,12 @@ function Receber() {
     if (!modalReceber) return;
     const valor = parseFloat(rec.valor.replace(",", "."));
     if (valor <= 0) {
-      toast("Valor inv�lido", "error");
+      toast("Valor inválido", "error");
       return;
     }
     const precisaComprovante = rec.forma === "deposito_bancario" || rec.forma === "ted";
     if (precisaComprovante && !comprovante) {
-      toast("Anexe o comprovante para dep�sito/TED", "error");
+      toast("Anexe o comprovante para depósito/TED", "error");
       return;
     }
     try {
@@ -288,7 +288,7 @@ function Receber() {
         <Loading />
       ) : (
         <Table>
-          <THead cols={["Cliente", "Descri��o", "Parcela", "Valor", "Saldo", "Vencimento", "Status", "Cobran�a", ""]} />
+          <THead cols={["Cliente", "Descrição", "Parcela", "Valor", "Saldo", "Vencimento", "Status", "Cobrança", ""]} />
           <TBody>
             {rows.length === 0 ? (
               <EmptyRow colSpan={9} message="Nenhuma conta" />
@@ -298,7 +298,7 @@ function Receber() {
                   <Cell className="font-medium">{c.cliente}</Cell>
                   <Cell>{c.descricao}</Cell>
                   <Cell className="text-xs">
-                    {c.total_parcelas && c.total_parcelas > 1 ? `${c.parcela}/${c.total_parcelas}` : "�"}
+                    {c.total_parcelas && c.total_parcelas > 1 ? `${c.parcela}/${c.total_parcelas}` : "—"}
                     {c.recorrencia ? <Badge tone="blue">{c.recorrencia}</Badge> : null}
                   </Cell>
                   <Cell>{fmtMoney(c.valor)}</Cell>
@@ -314,10 +314,10 @@ function Receber() {
                       ) : c.status_cobranca === "pendente" ? (
                         <Badge tone="blue">Pendente</Badge>
                       ) : (
-                        <span className="text-xs text-gray-400">�</span>
+                        <span className="text-xs text-gray-400">—</span>
                       )
                     ) : (
-                      <span className="text-xs text-gray-400">�</span>
+                      <span className="text-xs text-gray-400">—</span>
                     )}
                   </Cell>
                   <Cell>
@@ -328,7 +328,7 @@ function Receber() {
                           Boleto / PIX
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => void atualizarStatus(c)} title="Consultar status">
-                          ?
+                          ↻
                         </Button>
                         <Button size="sm" variant="primary" onClick={() => abrirReceber(c)}>
                           Receber
@@ -351,11 +351,11 @@ function Receber() {
         onSalvo={() => { setModalConta(false); void carregar(); }}
       />
 
-      {/* Modal de emiss�o de cobran�a (boleto/PIX) */}
+      {/* Modal de emissão de cobrança (boleto/PIX) */}
       <Modal
         open={modalCobranca != null}
         onClose={() => setModalCobranca(null)}
-        title={modalCobranca ? `Cobran�a � ${modalCobranca.cliente}` : ""}
+        title={modalCobranca ? `Cobrança — ${modalCobranca.cliente}` : ""}
         wide
         footer={
           <>
@@ -363,10 +363,10 @@ function Receber() {
             {modalCobranca && modalCobranca.status !== "pago" && (
               <>
                 <Button variant="secondary" onClick={() => void emitir("boleto")} disabled={emitindo}>
-                  {emitindo ? "�" : "Emitir boleto"}
+                  {emitindo ? "…" : "Emitir boleto"}
                 </Button>
                 <Button variant="primary" onClick={() => void emitir("pix")} disabled={emitindo}>
-                  {emitindo ? "�" : "Emitir PIX"}
+                  {emitindo ? "…" : "Emitir PIX"}
                 </Button>
               </>
             )}
@@ -376,7 +376,7 @@ function Receber() {
         {modalCobranca ? (
           <div className="space-y-4">
             <p className="text-sm text-gray-500">
-              {modalCobranca.cliente} � Saldo: {fmtMoney(modalCobranca.saldo)} � Vencimento {fmtDate(modalCobranca.data_vencimento)}
+              {modalCobranca.cliente} · Saldo: {fmtMoney(modalCobranca.saldo)} · Vencimento {fmtDate(modalCobranca.data_vencimento)}
             </p>
             {cobranca ? (
               <div className="rounded-md border border-gray-200 p-4">
@@ -390,7 +390,7 @@ function Receber() {
                     {cobranca.linha_digitavel ? (
                       <div className="rounded bg-gray-50 p-2 font-mono text-xs">{cobranca.linha_digitavel}</div>
                     ) : null}
-                    {cobranca.nosso_numero ? <div className="text-xs text-gray-500">Nosso n�mero: {cobranca.nosso_numero}</div> : null}
+                    {cobranca.nosso_numero ? <div className="text-xs text-gray-500">Nosso número: {cobranca.nosso_numero}</div> : null}
                     <div className="text-xs text-gray-400">Provider: {cobranca.provider}</div>
                   </div>
                 ) : (
@@ -402,7 +402,7 @@ function Receber() {
                       <div>
                         <div className="mb-1 text-xs font-medium text-gray-500">PIX Copia e Cola</div>
                         <div className="rounded bg-gray-50 p-2 font-mono text-xs break-all">{cobranca.payload_pix}</div>
-                        <Button size="sm" className="mt-2" onClick={() => void copiarTexto(cobranca.payload_pix || "").then((ok) => toast(ok ? "Copia e cola copiado!" : "N�o foi poss�vel copiar", ok ? "" : "error"))}>
+                        <Button size="sm" className="mt-2" onClick={() => void copiarTexto(cobranca.payload_pix || "").then((ok) => toast(ok ? "Copia e cola copiado!" : "Não foi possível copiar", ok ? "" : "error"))}>
                           Copiar
                         </Button>
                       </div>
@@ -413,7 +413,7 @@ function Receber() {
               </div>
             ) : (
               <p className="text-sm text-gray-400">
-                Escolha <b>Emitir boleto</b> ou <b>Emitir PIX</b> para gerar a cobran�a na plataforma (Asaas / Mercado Pago).
+                Escolha <b>Emitir boleto</b> ou <b>Emitir PIX</b> para gerar a cobrança na plataforma (Asaas / Mercado Pago).
               </p>
             )}
           </div>
@@ -424,7 +424,7 @@ function Receber() {
       <Modal
         open={modalReceber != null}
         onClose={() => setModalReceber(null)}
-        title={modalReceber ? `Receber � ${modalReceber.cliente}` : ""}
+        title={modalReceber ? `Receber — ${modalReceber.cliente}` : ""}
         footer={
           <>
             <Button onClick={() => setModalReceber(null)}>Cancelar</Button>
@@ -437,18 +437,18 @@ function Receber() {
         {modalReceber ? (
           <div className="space-y-4">
             <p className="text-sm text-gray-500">
-              Valor original: {fmtMoney(modalReceber.valor)} � Saldo: {fmtMoney(modalReceber.saldo)}
+              Valor original: {fmtMoney(modalReceber.valor)} · Saldo: {fmtMoney(modalReceber.saldo)}
             </p>
             <Field label="Forma de pagamento">
               <Select value={rec.forma} onChange={(e) => setRec({ ...rec, forma: e.target.value })}>
                 <option value="dinheiro">Dinheiro</option>
                 <option value="pix">PIX</option>
                 <option value="cheque">Cheque</option>
-                <option value="deposito_bancario">Dep�sito banc�rio</option>
-                <option value="ted">TED / transfer�ncia</option>
-                <option value="transferencia">Transfer�ncia</option>
-                <option value="cartao_debito">Cart�o d�bito</option>
-                <option value="cartao_credito">Cart�o cr�dito</option>
+                <option value="deposito_bancario">Depósito bancário</option>
+                <option value="ted">TED / transferência</option>
+                <option value="transferencia">Transferência</option>
+                <option value="cartao_debito">Cartão débito</option>
+                <option value="cartao_credito">Cartão crédito</option>
                 <option value="boleto">Boleto</option>
               </Select>
             </Field>
@@ -462,7 +462,7 @@ function Receber() {
             </div>
             {(rec.forma === "deposito_bancario" || rec.forma === "ted") && (
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
-                <Field label="Comprovante (obrigat�rio)">
+                <Field label="Comprovante (obrigatório)">
                   <input
                     type="file"
                     accept="image/*,.pdf"
@@ -471,7 +471,7 @@ function Receber() {
                   />
                 </Field>
                 <p className="mt-1 text-xs text-amber-700">
-                  Anexe o comprovante para confirmar o dep�sito/TED. A baixa � manual.
+                  Anexe o comprovante para confirmar o depósito/TED. A baixa é manual.
                 </p>
               </div>
             )}
@@ -507,7 +507,7 @@ function Pagar() {
     if (!modalPagar) return;
     const valor = parseFloat(pag.valor.replace(",", "."));
     if (valor <= 0) {
-      toast("Valor inv�lido", "error");
+      toast("Valor inválido", "error");
       return;
     }
     try {
@@ -522,10 +522,10 @@ function Pagar() {
 
   const excluirGrupo = async (c: ContaPagar) => {
     if (!c.grupo_id) return;
-    if (!window.confirm("Excluir todas as parcelas EM ABERTO deste lan�amento?")) return;
+    if (!window.confirm("Excluir todas as parcelas EM ABERTO deste lançamento?")) return;
     try {
       const r = await api.excluirLote("pagar", c.grupo_id);
-      toast(`${r.excluidas} parcela(s) exclu�da(s)`, "success");
+      toast(`${r.excluidas} parcela(s) excluída(s)`, "success");
       await carregar();
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
@@ -543,7 +543,7 @@ function Pagar() {
         <Loading />
       ) : (
         <Table>
-          <THead cols={["Fornecedor", "Descri��o", "Parcela", "Valor", "Saldo", "Vencimento", "Status", "Origem", ""]} />
+          <THead cols={["Fornecedor", "Descrição", "Parcela", "Valor", "Saldo", "Vencimento", "Status", "Origem", ""]} />
           <TBody>
             {rows.length === 0 ? (
               <EmptyRow colSpan={9} message="Nenhuma conta" />
@@ -553,7 +553,7 @@ function Pagar() {
                   <Cell className="font-medium">{c.fornecedor}</Cell>
                   <Cell>{c.descricao}</Cell>
                   <Cell className="text-xs">
-                    {c.total_parcelas && c.total_parcelas > 1 ? `${c.parcela}/${c.total_parcelas}` : "�"}
+                    {c.total_parcelas && c.total_parcelas > 1 ? `${c.parcela}/${c.total_parcelas}` : "—"}
                     {c.recorrencia ? <Badge tone="blue">{c.recorrencia}</Badge> : null}
                   </Cell>
                   <Cell>{fmtMoney(c.valor)}</Cell>
@@ -568,7 +568,7 @@ function Pagar() {
                         Pedido {c.documento || c.origem_id}
                       </a>
                     ) : (
-                      <span className="text-gray-400">�</span>
+                      <span className="text-gray-400">—</span>
                     )}
                   </Cell>
                   <Cell>
@@ -580,7 +580,7 @@ function Pagar() {
                         </Button>
                         {c.grupo_id && (c.total_parcelas ?? 1) > 1 && c.status !== "pago" ? (
                           <Button size="sm" variant="ghost" onClick={() => void excluirGrupo(c)} title="Excluir parcelas em aberto do grupo">
-                            ??
+                            🗑
                           </Button>
                         ) : null}
                       </div>
@@ -604,7 +604,7 @@ function Pagar() {
       <Modal
         open={modalPagar != null}
         onClose={() => setModalPagar(null)}
-        title={modalPagar ? `Pagar � ${modalPagar.fornecedor}` : ""}
+        title={modalPagar ? `Pagar — ${modalPagar.fornecedor}` : ""}
         footer={
           <>
             <Button onClick={() => setModalPagar(null)}>Cancelar</Button>
@@ -617,8 +617,8 @@ function Pagar() {
         {modalPagar ? (
           <div className="space-y-4">
             <p className="text-sm text-gray-500">
-              Valor original: {fmtMoney(modalPagar.valor)} � Saldo: {fmtMoney(modalPagar.saldo)}
-              {modalPagar.total_parcelas && modalPagar.total_parcelas > 1 ? ` � Parcela ${modalPagar.parcela}/${modalPagar.total_parcelas}` : ""}
+              Valor original: {fmtMoney(modalPagar.valor)} · Saldo: {fmtMoney(modalPagar.saldo)}
+              {modalPagar.total_parcelas && modalPagar.total_parcelas > 1 ? ` · Parcela ${modalPagar.parcela}/${modalPagar.total_parcelas}` : ""}
             </p>
             <Field label="Valor a pagar">
               <Input type="number" step="0.01" value={pag.valor} onChange={(e) => setPag({ ...pag, valor: e.target.value })} />
@@ -632,3 +632,4 @@ function Pagar() {
     </div>
   );
 }
+
