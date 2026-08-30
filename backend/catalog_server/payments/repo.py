@@ -22,6 +22,7 @@ class PaymentProviderRepo:
                            NULLIF(c.access_token, '') IS NOT NULL OR
                            NULLIF(c.api_key, '') IS NOT NULL OR
                            NULLIF(c.certificado, '') IS NOT NULL) AS credencial_configurada,
+                          (NULLIF(c.webhook_secret, '') IS NOT NULL) AS webhook_configurado,
                           p.codigo AS provider_codigo, p.nome AS provider_nome
                    FROM payment_provider_config c
                    JOIN payment_provider p ON p.id=c.provider_id

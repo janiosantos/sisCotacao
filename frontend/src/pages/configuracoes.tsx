@@ -491,6 +491,12 @@ function IntegracoesPagamento() {
                 <span className="text-xs text-gray-400">
                   {c.operacao} · {c.ambiente} · prioridade {c.prioridade}
                 </span>
+                <Badge tone={c.credencial_configurada ? "green" : "red"}>
+                  {c.credencial_configurada ? "credenciais ✓" : "credenciais ✗"}
+                </Badge>
+                <Badge tone={c.webhook_configurado ? "green" : "red"}>
+                  {c.webhook_configurado ? "webhook ✓" : "webhook ✗"}
+                </Badge>
               </div>
               <Button size="sm" variant="ghost" onClick={() => abrir(c)}>
                 Editar
@@ -529,13 +535,13 @@ function IntegracoesPagamento() {
             <Field label="API Key / Access Token">
               <Input value={form.api_key || form.access_token} onChange={(e) => {
                 setForm({ ...form, api_key: e.target.value, access_token: e.target.value });
-              }} placeholder="Asaas: API Key · Mercado Pago: Access Token" />
+              }} placeholder={editando?.credencial_configurada ? "•••••••• (já configurado — deixe vazio p/ manter)" : "Asaas: API Key · Mercado Pago: Access Token"} />
             </Field>
             <Field label="Chave PIX">
               <Input value={form.chave_pix} onChange={(e) => setForm({ ...form, chave_pix: e.target.value })} placeholder="Chave PIX (e-mail, CPF, CNPJ, telefone, aleatória)" />
             </Field>
             <Field label="Segredo do Webhook (token/assinatura)">
-              <Input value={form.webhook_secret} onChange={(e) => setForm({ ...form, webhook_secret: e.target.value })} placeholder="Asaas authToken · MP secret · EfiPay token" />
+              <Input value={form.webhook_secret} onChange={(e) => setForm({ ...form, webhook_secret: e.target.value })} placeholder={editando?.webhook_configurado ? "•••••••• (já configurado — deixe vazio p/ manter)" : "Asaas authToken · MP secret · EfiPay token"} />
               <p className="mt-1 text-xs text-gray-400">
                 Valida a autenticidade das notificações. Asaas: header asaas-access-token · Mercado Pago: x-signature · EfiPay: ?token=
               </p>
