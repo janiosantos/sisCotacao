@@ -69,7 +69,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: ["python", "-m", "catalog_server.jobs.worker"]
+    command: ["python", "-u", "-m", "catalog_server.jobs.worker"]
     volumes:
       - ./backend/catalog_server:/app/catalog_server
     environment:
@@ -87,7 +87,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: ["python", "-m", "catalog_server.jobs.scheduler"]
+    command: ["python", "-u", "-m", "catalog_server.jobs.scheduler"]
     volumes:
       - ./backend/catalog_server:/app/catalog_server
     environment:
