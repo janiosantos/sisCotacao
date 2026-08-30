@@ -42,7 +42,8 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 ## 4. Estado atual
 
 - **Versão publicada**: `v2.32.2` (produção e staging — produção antes do staging por exceção pedida).
-- **Schema**: migrações `0052..0096` aplicadas (schema_version 96). Cadeia atual: 92 → 93 → 94 → 96 (a **0095 foi removida** — nunca commitada; era limpeza destrutiva indevida).
+- **Schema**: migrações `0052..0098` aplicadas no dev (schema_version 98). Cadeia: 92 → 93 → 94 → 96 → 97 (`cobranca_ambiente`) → 98 (`login_rate_limit`). A **0095 foi removida** (nunca commitada).
+- **Hardening (Codex)**: RBAC deny-by-default (sem perfil → 403), `MAX_CONTENT_LENGTH`, `safe_http` (SSRF), rate limit de login (PostgreSQL, 5/300s), segredos de pagamento não vazam, `deploy.yml` passa `CATALOG_SECRET`/`POSTGRES_USER`/`POSTGRES_PASSWORD` (secrets do GitHub — obrigatório configurar). **215 testes** backend + 13 frontend verdes.
 - **Imagens**: 189.094 linhas em `imagens_produto`, 0 sem arquivo físico; arquivos em `images/cadastro/`.
 - **Produtos**: ~62.731 em `produtos_cadastro`; **~3.215 sem imagem** (fios desmembrados e afins).
 - **API pública**: `GET /api/publico/produtos` (paginado: `offset`/`limit` máx 100 + `has_more`; busca `?q=`; filtros `categoria`, `subcategoria`, `marca`, `em_linha`), `GET /api/publico/produtos/{id}`, `GET /api/publico/categorias`, `GET /api/publico/marcas`. Sem token, CORS `*`, sem vazamento interno.
@@ -124,3 +125,4 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
   - TLS/Let's Encrypt, sincronização da VM, homologação Focus/SEFAZ, ativação de `FISCAL_ENGINE_V2`, limpeza de imagens e renomeação da pasta continuam bloqueados por operação, credenciais, dados reais ou autorização de publicação.
   - Outbox/Celery permanece pendente: o projeto não possui worker/dependência configurado e a implementação exige definir quais integrações serão assíncronas e seu contrato de reprocessamento antes de alterar o fluxo fiscal/financeiro.
   - Plano sequencial das oito pendências registrado em `PLANO_EXECUCAO_8_PENDENCIAS.md`, com critérios de aceite, pré-requisitos e gates de rollback.
+- **2026-08-30 (Fase 0 do plano)**: migrações `0097`+`0098` **aplicadas no DEV** (schema 98); suíte backend **215 passed** + typecheck/build frontend OK; `deploy.yml` corrigido para injetar `CATALOG_SECRET`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (secrets — sem isso o próximo deploy falharia). Regressões do hardening validadas ao vivo: Vendedor lê `/api/sistema/status` (200) e é negado em cadastrar produto (403); login com rate limit ok; API pública ok. Pendente de autorização: deploy de staging (P1), sincronizar VM (P7), integração do site `../CASA_LM/site` (P4).
