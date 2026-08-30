@@ -16,6 +16,14 @@ on:
         required: true
         default: 'v1.6.5-rc'
         type: string
+      modo:
+        description: 'rápido pula as suítes de teste (iteração); completo roda o CI'
+        required: true
+        default: 'rapido'
+        type: choice
+        options:
+          - rapido
+          - completo
 
 jobs:
   staging:
@@ -30,13 +38,17 @@ jobs:
           ref: ${{ inputs.branch }}
 
       # GATE de CI: a branch não builda nem sobe se os testes falharem.
+      # (modo=rapido pula as suítes — iteração rápida; smoke continua como gate).
       - name: Testes (CI) - migrações
+        if: github.event.inputs.modo != 'rapido'
         run: bash deployment/scripts/test-migrations.sh
 
       - name: Testes (CI) - backend
+        if: github.event.inputs.modo != 'rapido'
         run: bash deployment/scripts/test-backend.sh
 
       - name: Testes (CI) - frontend
+        if: github.event.inputs.modo != 'rapido'
         run: bash deployment/scripts/test-frontend.sh
 
       - name: Build das imagens de staging
