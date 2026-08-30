@@ -1,0 +1,30 @@
+{
+  "versao": "v2.33.1",
+  "componentes": [
+    "frontend"
+  ],
+  "correcoes": [
+    "nginx não falha mais no startup com 'host not found in upstream backend' — resolve o backend via Docker DNS em tempo de requisição (resolver 127.0.0.11 + variável)",
+    "Imagem própria do certbot com o plugin certbot-dns-cloudflare (a imagem oficial não inclui — erro 'unrecognized arguments: --dns-cloudflare-credentials')",
+    "Domínio/email fixos no compose e variáveis do comando do certbot escapadas ($$) — o compose interpolava ${DOMAIN} como vazio ('Requested domain is not a FQDN')",
+    "Credencial do Cloudflare montada como DIRETÓRIO do servidor (/home/jpsantos/siscom/certbot) — evita erro de mount (diretório sobre arquivo) e sobrevive ao checkout do runner"
+  ],
+  "melhorias": [],
+  "recursos": [],
+  "imagens": {
+    "backend": "siscom-backend:v2.33.1",
+    "frontend": "siscom-frontend:v2.33.1"
+  },
+  "database": {
+    "migration": 96
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "tls_producao": true
+  }
+}
