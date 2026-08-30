@@ -97,7 +97,7 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 - **Começar**: ler `AGENTS.md` + `CONTEXTO_SESSAO.md` + `DESENVOLVIMENTO.md` (histórico técnico) + `git log --oneline -15`.
 - **Análise de bugs (Codex)**: usar o checklist `TODO.md` — registrar o resultado na seção final.
 - **Terminar**: atualizar `CONTEXTO_SESSAO.md` (log + pendências + próximos passos) e commit/push.
-- **Backend**: após alterar, `python -m py_compile <arquivo>`; testes `pytest` (env `TEST_PG_URL` apontando para `catalog_test`). 207 testes verdes hoje.
+- **Backend**: após alterar, `python -m py_compile <arquivo>`; testes `pytest` (env `TEST_PG_URL` apontando para `catalog_test`). 215 testes verdes hoje.
 - **Frontend**: `npm run typecheck` e `npm run build` (a partir de `frontend/`); testes `npm test`.
 - **Migração nova**: arquivo `NNNN_*.py` em `backend/migrations/versions/` com `VERSION`, `RISCO`, `NAME`, `MUDANCA`, `guard`, `forward`, `backward`. Aplicar no dev com `python -m catalog_server.versioning apply --origem local`. Testar banco vazio→head (o CI do staging faz isso).
 - **Deploy**: NUNCA sem confirmação explícita do usuário (ver AGENTS.md). Apresentar resumo e aguardar.
@@ -109,7 +109,7 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
   - Backend: identificados riscos críticos de atomicidade no fechamento/reabertura de vendas, concorrência no saldo de estoque/caixa/contas, baixa automática de pagamentos, exposição de credenciais e SSRF/uploads sem limites.
   - Fiscal: emissão ainda deve ser tratada como não pronta para produção até XSD, assinatura, idempotência, autenticação de webhooks e homologação SEFAZ/Focus; há código estrutural com `aamm=0000` e campos tributários simplificados.
   - Frontend: build e typecheck passam, porém há módulos monolíticos, cliente HTTP sem cache/schema runtime, mistura React + DOM imperativo, modal sem ciclo completo de acessibilidade e cobertura funcional baixa.
-  - Infra/testes: `python -m compileall` passou; `npm run typecheck`, `npm run build` e 13 testes Vitest passaram. `pytest -q` na raiz não executa: exige `TEST_PG_URL` e ainda coleta o subprojeto `cotacoes-ia-importer`, causando colisão de imports.
+  - Infra/testes: `python -m compileall` passou; `npm run typecheck`, `npm run build` e 13 testes Vitest passaram. Sem `TEST_PG_URL`, a suíte backend encerra por segurança; o `testpaths` do `pyproject.toml` evita a colisão com o subprojeto `cotacoes-ia-importer`.
   - Prioridade sugerida: (1) transação única/UoW com locks e idempotência para vendas/estoque/financeiro; (2) bloquear segredos/defaults e validar webhooks; (3) endurecer fetch/upload; (4) completar pipeline fiscal; (5) modularizar frontend e ampliar testes E2E.
 - **2026-08-30**: pacote de hardening e consistência implementado localmente, sem deploy, restart ou migração aplicada em ambiente não-dev.
   - Vendas, reabertura, estoque, caixa, contas a receber e contabilidade passaram a compartilhar transação quando necessário, com `FOR UPDATE`, locks/advisory locks, validação de saldo e idempotência nas movimentações.
@@ -117,9 +117,9 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
   - RBAC deixou de aceitar bypass legado por token e usuários inativos são rejeitados; bootstrap administrativo não usa mais senha fixa em desenvolvimento e é bloqueado em produção sem configuração explícita.
   - Webhooks de pagamento/fiscal exigem segredo configurado, uploads têm limite global/extensões permitidas e downloads de imagens/HTML rejeitam SSRF, redirecionamentos inseguros e respostas acima do limite.
   - Modal principal recebeu foco inicial, trap de Tab, Escape, `aria-modal`/label e restauração de foco; contrato TypeScript de credenciais foi ajustado para segredos opcionais.
-  - Validação: backend completo `214 passed`, pagamentos `7 passed`, frontend `13 passed`, `npm run typecheck`, `npm run build` e `py_compile` passaram. A configuração de produção agora exige `APP_VERSION`, credenciais PostgreSQL, `CATALOG_SECRET` e `CATALOG_ENV=production`.
+  - Validação: backend completo `215 passed`, pagamentos `7 passed`, frontend `13 passed`, `npm run typecheck`, `npm run build` e `py_compile` passaram. A configuração de produção agora exige `APP_VERSION`, credenciais PostgreSQL, `CATALOG_SECRET` e `CATALOG_ENV=production`.
   - Pendências intencionais: assinatura nativa por provedor nos webhooks, homologação real Focus/SEFAZ e validação fiscal XSD/assinatura, outbox/jobs assíncronos, rate limit distribuído e modularização ampla das telas React. Não ligar `FISCAL_ENGINE_V2` nem publicar sem confirmação explícita.
-- **2026-08-30 (continuação)**: rate limit de login implementado com estado persistido no PostgreSQL e migração versionada `0098_login_rate_limit`; limita por IP e conta, retorna `429`/`Retry-After` e remove a janela após login válido. Teste de hardening: `4 passed`.
+- **2026-08-30 (continuação)**: rate limit de login implementado com estado persistido no PostgreSQL e migração versionada `0098_login_rate_limit`; limita por IP e conta, retorna `429`/`Retry-After` e remove a janela após login válido. A suíte completa banco vazio → head terminou com `215 passed`.
   - A integração do site institucional não foi implementada porque o diretório `CASA_LM/site` não existe neste checkout; requer disponibilizar o projeto correto antes de alterar seus consumidores.
   - TLS/Let's Encrypt, sincronização da VM, homologação Focus/SEFAZ, ativação de `FISCAL_ENGINE_V2`, limpeza de imagens e renomeação da pasta continuam bloqueados por operação, credenciais, dados reais ou autorização de publicação.
   - Outbox/Celery permanece pendente: o projeto não possui worker/dependência configurado e a implementação exige definir quais integrações serão assíncronas e seu contrato de reprocessamento antes de alterar o fluxo fiscal/financeiro.
