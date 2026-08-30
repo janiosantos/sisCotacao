@@ -3,15 +3,14 @@
 import { useEffect, useState } from "react";
 import { api, type UnidadeCompra } from "../api/client";
 import { toast } from "../ui/dom";
-import { Badge, Button, Cell, Field, Input, Loading, Modal, PageHeader, Table, TBody, THead } from "../ui/ui";
+import { Badge, Button, Cell, Loading, PageHeader, Table, TBody, THead } from "../ui/ui";
+import { ModalUnidadeForm } from "./unidades/modal-form";
 
 export default function Unidades() {
   const [unidades, setUnidades] = useState<UnidadeCompra[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState<UnidadeCompra | null>(null);
-  const [sigla, setSigla] = useState("");
-  const [descricao, setDescricao] = useState("");
 
   const carregar = async () => {
     try {
@@ -29,25 +28,7 @@ export default function Unidades() {
 
   const abrir = (u: UnidadeCompra | null) => {
     setEditando(u);
-    setSigla(u?.sigla ?? "");
-    setDescricao(u?.descricao ?? "");
     setModalOpen(true);
-  };
-
-  const salvar = async () => {
-    if (!sigla.trim()) {
-      toast("Informe a sigla", "error");
-      return;
-    }
-    try {
-      if (editando) await api.atualizarUnidadeCompra(editando.id, sigla.trim().toUpperCase(), descricao.trim(), editando.ativo);
-      else await api.criarUnidadeCompra(sigla.trim().toUpperCase(), descricao.trim());
-      setModalOpen(false);
-      toast(editando ? "Unidade atualizada" : "Unidade criada", "success");
-      await carregar();
-    } catch (e) {
-      toast("Erro: " + (e as Error).message, "error");
-    }
   };
 
   const alternar = async (u: UnidadeCompra) => {
@@ -119,28 +100,13 @@ export default function Unidades() {
         </Table>
       )}
 
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editando ? "Editar unidade" : "Nova unidade"}
-        footer={
-          <>
-            <Button onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button variant="primary" onClick={() => void salvar()}>
-              Salvar
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Field label="Sigla *">
-            <Input placeholder="Ex.: CX, PCT, RL" maxLength={10} value={sigla} onChange={(e) => setSigla(e.target.value)} autoFocus />
-          </Field>
-          <Field label="Descrição">
-            <Input placeholder="Ex.: Caixa, Pacote, Rolo" value={descricao} onChange={(e) => setDescricao(e.target.value)} />
-          </Field>
-        </div>
-      </Modal>
+      {modalOpen && (
+        <ModalUnidadeForm
+          unidade={editando}
+          onClose={() => setModalOpen(false)}
+          onSaved={carregar}
+        />
+      )}
     </div>
   );
 }

@@ -1,10 +1,11 @@
-// pages/diagnostico_variacoes.tsx — qualidade do catálogo (React + Tailwind).
+﻿// pages/diagnostico_variacoes.tsx â€” qualidade do catÃ¡logo (React + Tailwind).
 
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import { fmtMoney } from "../ui/format";
+
 import { toast } from "../ui/dom";
-import { Badge, Button, Cell, EmptyRow, Field, Input, Loading, Modal, PageHeader, Select, Table, TBody, THead } from "../ui/ui";
+import { Badge, Button, Cell, EmptyRow, Field, Input, Loading, PageHeader, Select, Table, TBody, THead } from "../ui/ui";
+import { ModalDetalheVariacao, type Detalhe } from "./diagnostico_variacoes/modal-detalhe";
 
 interface Resumo {
   classificacao: string;
@@ -20,13 +21,6 @@ interface Row {
   n_eans: number;
   observacao: string;
 }
-interface Detalhe {
-  produto: { id: number; nome: string; marca: string; familia_id: number | null } | null;
-  sku?: string;
-  ean?: string;
-  preco?: number;
-  atributos?: string | null;
-}
 
 export default function DiagnosticoVariacoes() {
   const [resumo, setResumo] = useState<Resumo[]>([]);
@@ -40,7 +34,7 @@ export default function DiagnosticoVariacoes() {
     try {
       setRows(await api.listarDiagnosticoVariacoes({ classificacao: tipo || undefined, q: q.trim() || undefined, limit: 200 }));
     } catch {
-      toast("Erro ao carregar diagnóstico", "error");
+      toast("Erro ao carregar diagnÃ³stico", "error");
     }
   };
 
@@ -69,7 +63,7 @@ export default function DiagnosticoVariacoes() {
 
   return (
     <div>
-      <PageHeader title="Qualidade do Catálogo" subtitle="Revise variantes reais, ofertas duplicadas e cadastros incompletos." />
+      <PageHeader title="Qualidade do CatÃ¡logo" subtitle="Revise variantes reais, ofertas duplicadas e cadastros incompletos." />
 
       {resumo.length > 0 ? (
         <div className="mb-4 flex flex-wrap gap-2">
@@ -83,12 +77,12 @@ export default function DiagnosticoVariacoes() {
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Field label="Buscar produto, marca, SKU ou EAN">
-          <Input placeholder="Ex.: Cabo Flexível…" value={q} onChange={(e) => setQ(e.target.value)} className="w-72" />
+          <Input placeholder="Ex.: Cabo FlexÃ­velâ€¦" value={q} onChange={(e) => setQ(e.target.value)} className="w-72" />
         </Field>
         <Select value={tipo} onChange={(e) => setTipo(e.target.value)} className="w-48">
           <option value="">Todos</option>
           <option value="oferta_duplicada">Oferta duplicada</option>
-          <option value="variacao_real">Variação real</option>
+          <option value="variacao_real">VariaÃ§Ã£o real</option>
           <option value="cadastro_incompleto">Cadastro incompleto</option>
         </Select>
         <Button onClick={() => void carregar()}>Filtrar</Button>
@@ -98,7 +92,7 @@ export default function DiagnosticoVariacoes() {
         <Loading />
       ) : (
         <Table>
-          <THead cols={["Produto", "Classificação", "Variantes", "EANs", "Observação", ""]} />
+          <THead cols={["Produto", "ClassificaÃ§Ã£o", "Variantes", "EANs", "ObservaÃ§Ã£o", ""]} />
           <TBody>
             {rows.length === 0 ? (
               <EmptyRow colSpan={6} message="Nenhum caso" />
@@ -127,30 +121,10 @@ export default function DiagnosticoVariacoes() {
         </Table>
       )}
 
-      <Modal
-        open={detalhe != null}
+      <ModalDetalheVariacao
+        detalhe={detalhe}
         onClose={() => setDetalhe(null)}
-        title={detalhe?.produto?.nome || "Produto"}
-        footer={<Button onClick={() => setDetalhe(null)}>Fechar</Button>}
-      >
-        <p className="mb-3 text-sm text-gray-500">
-          Dados do produto (cada antiga variante é agora um produto independente).
-        </p>
-        <Table>
-          <THead cols={["ID", "SKU", "EAN", "Preço", "Atributos"]} />
-          <TBody>
-            {detalhe ? (
-              <tr className="hover:bg-gray-50">
-                <Cell>{detalhe.produto?.id ?? "—"}</Cell>
-                <Cell className="font-mono text-xs">{detalhe.sku || "—"}</Cell>
-                <Cell className="font-mono text-xs">{detalhe.ean || "—"}</Cell>
-                <Cell>{detalhe.preco != null ? fmtMoney(detalhe.preco) : "—"}</Cell>
-                <Cell className="text-xs">{detalhe.atributos || "—"}</Cell>
-              </tr>
-            ) : null}
-          </TBody>
-        </Table>
-      </Modal>
+      />
     </div>
   );
 }

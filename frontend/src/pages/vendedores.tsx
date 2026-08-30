@@ -1,17 +1,16 @@
 ﻿// pages/vendedores.tsx — cadastro de vendedores (React + Tailwind).
 
 import { useEffect, useState } from "react";
-import { api, type Vendedor, type VendedorPayload } from "../api/client";
+import { api, type Vendedor } from "../api/client";
 import { toast } from "../ui/dom";
-import { Badge, Button, Cell, Field, Input, Loading, Modal, PageHeader, Table, TBody, THead } from "../ui/ui";
+import { Badge, Button, Cell, Loading, PageHeader, Table, TBody, THead } from "../ui/ui";
+import { ModalVendedorForm } from "./vendedores/modal-form";
 
 export default function Vendedores() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState<Vendedor | null>(null);
-  const [nome, setNome] = useState("");
-  const [comissao, setComissao] = useState("");
 
   const carregar = async () => {
     try {
@@ -29,26 +28,7 @@ export default function Vendedores() {
 
   const abrir = (v: Vendedor | null) => {
     setEditando(v);
-    setNome(v?.nome ?? "");
-    setComissao(v ? String(v.comissao_pct) : "");
     setModalOpen(true);
-  };
-
-  const salvar = async () => {
-    if (!nome.trim()) {
-      toast("Informe o nome do vendedor", "error");
-      return;
-    }
-    const payload: VendedorPayload = { nome: nome.trim(), comissao_pct: Number(comissao) || 0 };
-    try {
-      if (editando) await api.atualizarVendedor(editando.id, payload);
-      else await api.criarVendedor(payload);
-      setModalOpen(false);
-      toast("Vendedor salvo", "success");
-      await carregar();
-    } catch (e) {
-      toast("Erro: " + (e as Error).message, "error");
-    }
   };
 
   const alternar = async (v: Vendedor) => {
@@ -104,28 +84,13 @@ export default function Vendedores() {
         </Table>
       )}
 
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editando ? "Editar vendedor" : "Novo vendedor"}
-        footer={
-          <>
-            <Button onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button variant="primary" onClick={() => void salvar()}>
-              Salvar
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Field label="Nome *">
-            <Input value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
-          </Field>
-          <Field label="Comissão (%)">
-            <Input type="number" min={0} step="0.01" value={comissao} onChange={(e) => setComissao(e.target.value)} />
-          </Field>
-        </div>
-      </Modal>
+      {modalOpen && (
+        <ModalVendedorForm
+          vendedor={editando}
+          onClose={() => setModalOpen(false)}
+          onSaved={carregar}
+        />
+      )}
     </div>
   );
 }

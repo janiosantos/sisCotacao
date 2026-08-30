@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { fmtDate } from "../ui/format";
 import { toast } from "../ui/dom";
-import { Badge, Button, Cell, Field, Input, Loading, Modal, PageHeader, Table, TBody, THead, Textarea } from "../ui/ui";
+import { Badge, Button, Cell, Loading, PageHeader, Table, TBody, THead } from "../ui/ui";
+import { ModalSolicitacaoForm } from "./solicitacoes/modal-form";
 
 interface Solicitacao {
   id: number;
@@ -19,7 +20,6 @@ export default function Solicitacoes() {
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState({ codigo: "", descricao: "", observacao: "" });
 
   const carregar = async () => {
     try {
@@ -34,21 +34,6 @@ export default function Solicitacoes() {
   useEffect(() => {
     void carregar();
   }, []);
-
-  const salvar = async () => {
-    try {
-      await api.criarSolicitacaoCompra({
-        codigo: form.codigo.trim(),
-        descricao: form.descricao.trim() || undefined,
-        observacao: form.observacao.trim() || undefined,
-      });
-      setModalOpen(false);
-      toast("Solicitação criada", "success");
-      await carregar();
-    } catch (e) {
-      toast("Erro: " + (e as Error).message, "error");
-    }
-  };
 
   const statusTone = (s: string) =>
     s === "aprovada" ? "green" : s === "rejeitada" ? "red" : "amber";
@@ -89,31 +74,12 @@ export default function Solicitacoes() {
         </Table>
       )}
 
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="Nova solicitação"
-        footer={
-          <>
-            <Button onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button variant="primary" onClick={() => void salvar()}>
-              Salvar
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Field label="Código">
-            <Input placeholder="SOL-001" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} autoFocus />
-          </Field>
-          <Field label="Descrição">
-            <Textarea value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
-          </Field>
-          <Field label="Observação">
-            <Textarea value={form.observacao} onChange={(e) => setForm({ ...form, observacao: e.target.value })} />
-          </Field>
-        </div>
-      </Modal>
+      {modalOpen && (
+        <ModalSolicitacaoForm
+          onClose={() => setModalOpen(false)}
+          onSaved={carregar}
+        />
+      )}
     </div>
   );
 }
