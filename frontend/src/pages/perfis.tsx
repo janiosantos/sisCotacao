@@ -4,8 +4,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type CatalogoPermissoes, type PerfilAcesso } from "../api/client";
 import { toast } from "../ui/dom";
-import { Badge, Button, Field, Input, Loading, Modal, PageHeader } from "../ui/ui";
+import { Badge, Button, Loading, PageHeader } from "../ui/ui";
 import { ACOES_PERMISSAO, ROTULO_ACAO } from "../perm";
+import { ModalPerfilForm } from "./perfis/modal-form";
 
 export default function Perfis() {
   const [perfis, setPerfis] = useState<PerfilAcesso[] | null>(null);
@@ -15,7 +16,6 @@ export default function Perfis() {
   const [salvando, setSalvando] = useState(false);
   const [modalPerfil, setModalPerfil] = useState(false);
   const [editandoPerfil, setEditandoPerfil] = useState<PerfilAcesso | null>(null);
-  const [formPerfil, setFormPerfil] = useState({ nome: "", descricao: "" });
 
   const carregar = async () => {
     const p = await api.listarPerfis();
@@ -84,34 +84,12 @@ export default function Perfis() {
 
   const abrirNovo = () => {
     setEditandoPerfil(null);
-    setFormPerfil({ nome: "", descricao: "" });
     setModalPerfil(true);
   };
 
   const abrirEditar = (p: PerfilAcesso) => {
     setEditandoPerfil(p);
-    setFormPerfil({ nome: p.nome, descricao: p.descricao });
     setModalPerfil(true);
-  };
-
-  const salvarPerfil = async () => {
-    if (!formPerfil.nome.trim()) {
-      toast("Informe o nome do perfil", "error");
-      return;
-    }
-    try {
-      if (editandoPerfil) {
-        await api.atualizarPerfil(editandoPerfil.id, { nome: formPerfil.nome.trim(), descricao: formPerfil.descricao.trim() });
-        toast("Perfil atualizado", "success");
-      } else {
-        await api.criarPerfil({ nome: formPerfil.nome.trim(), descricao: formPerfil.descricao.trim() });
-        toast("Perfil criado", "success");
-      }
-      setModalPerfil(false);
-      await carregar();
-    } catch (e) {
-      toast("Erro: " + (e as Error).message, "error");
-    }
   };
 
   const alternarAtivo = async (p: PerfilAcesso) => {
@@ -258,28 +236,13 @@ export default function Perfis() {
         </div>
       )}
 
-      <Modal
-        open={modalPerfil}
-        onClose={() => setModalPerfil(false)}
-        title={editandoPerfil ? "Editar perfil" : "Novo perfil"}
-        footer={
-          <>
-            <Button onClick={() => setModalPerfil(false)}>Cancelar</Button>
-            <Button variant="primary" onClick={() => void salvarPerfil()}>
-              Salvar
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Field label="Nome *">
-            <Input value={formPerfil.nome} onChange={(e) => setFormPerfil({ ...formPerfil, nome: e.target.value })} autoFocus />
-          </Field>
-          <Field label="Descrição">
-            <Input value={formPerfil.descricao} onChange={(e) => setFormPerfil({ ...formPerfil, descricao: e.target.value })} />
-          </Field>
-        </div>
-      </Modal>
+      {modalPerfil && (
+        <ModalPerfilForm
+          perfil={editandoPerfil}
+          onClose={() => setModalPerfil(false)}
+          onSaved={carregar}
+        />
+      )}
     </div>
   );
 }
