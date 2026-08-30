@@ -95,6 +95,7 @@ def disparar(
     historico: str = "",
     periodo_competencia: str = "",
     origem_tipo: str = "",
+    _conn=None,
 ) -> bool:
     """Dispara o gatilho de um evento (se configurado e ativo).
 
@@ -116,6 +117,7 @@ def disparar(
         historico=historico,
         periodo_competencia=periodo_competencia,
         origem_tipo=origem_tipo,
+        _conn=_conn,
     )
 
 

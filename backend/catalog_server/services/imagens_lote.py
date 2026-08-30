@@ -22,6 +22,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from catalog_server.services import imagens_service
+from catalog_server.services.safe_http import get_public
 
 _UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -53,7 +54,7 @@ def _fetch_html(url: str) -> tuple[str, str]:
     session.headers.update(_HEADERS)
     for tentativa in range(2):
         try:
-            resp = session.get(url, timeout=30)
+            resp = get_public(url, timeout=30, headers=_HEADERS, max_bytes=5 * 1024 * 1024)
             if resp.status_code >= 500:
                 if tentativa == 0:
                     continue
@@ -190,7 +191,12 @@ def _baixar(session, url: str, referer: str = "", tentativas: int = 1) -> reques
     ultimo: Exception | None = None
     for i in range(tentativas + 1):
         try:
-            r = session.get(url, timeout=30, headers=headers)
+            r = get_public(
+                url,
+                timeout=30,
+                headers={**_HEADERS, **headers},
+                max_bytes=10 * 1024 * 1024,
+            )
             if r.status_code >= 500 and i < tentativas:
                 continue
             r.raise_for_status()

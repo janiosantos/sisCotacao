@@ -10,9 +10,10 @@
 from __future__ import annotations
 
 import os
+import hmac
 import uuid
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from catalog_server.db import system_conn
 from catalog_server.payments import service as payment_service
@@ -35,8 +36,11 @@ def emitir_cobranca(conta_id: int):
         return jsonify({"error": "operacao deve ser boleto ou pix"}), 400
     try:
         resultado = payment_service.emitir(conta_id, operacao, _ambiente())
-    except Exception as exc:
+    except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    except Exception:
+        current_app.logger.exception("Falha inesperada ao emitir cobrança")
+        return jsonify({"error": "Não foi possível emitir a cobrança"}), 502
     return jsonify(resultado)
 
 
@@ -44,8 +48,11 @@ def emitir_cobranca(conta_id: int):
 def consultar_cobranca(conta_id: int):
     try:
         return jsonify(payment_service.consultar(conta_id))
-    except Exception as exc:
+    except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    except Exception:
+        current_app.logger.exception("Falha inesperada ao consultar cobrança")
+        return jsonify({"error": "Não foi possível consultar a cobrança"}), 502
 
 
 # ─── Comprovante (depósito/TED) ─────────────────────────────
@@ -61,7 +68,9 @@ def anexar_comprovante(conta_id: int):
     if not arquivo or not arquivo.filename:
         return jsonify({"error": "Informe o comprovante (arquivo)"}), 400
 
-    ext = os.path.splitext(arquivo.filename)[1] or ".png"
+    ext = os.path.splitext(arquivo.filename)[1].lower() or ".png"
+    if ext not in {".pdf", ".png", ".jpg", ".jpeg"}:
+        return jsonify({"error": "Formato de comprovante não permitido"}), 400
     filename = f"comprovante_{conta_id}_{uuid.uuid4().hex[:12]}{ext}"
     # salva em diretório dedicado de comprovantes
     base = os.environ.get("COMPROVANTES_DIR", "/app/images/comprovantes")
@@ -82,11 +91,23 @@ def anexar_comprovante(conta_id: int):
 
 @api_payments_bp.post("/api/webhooks/payments/<provider>")
 def webhook_payment(provider: str):
+    expected = os.getenv("PAYMENT_WEBHOOK_SECRET", "")
+    received = request.headers.get("X-Webhook-Secret", "")
+    if expected:
+        if not hmac.compare_digest(received, expected):
+            return jsonify({"error": "Webhook não autorizado"}), 401
+    elif os.getenv("CATALOG_ENV", "development").lower() == "production":
+        return jsonify({"error": "Webhook não configurado"}), 503
     payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict) or not payload:
+        return jsonify({"error": "Payload de webhook inválido"}), 400
     try:
         resultado = payment_service.processar_webhook(provider, payload, dict(request.headers))
-    except Exception as exc:
+    except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    except Exception:
+        current_app.logger.exception("Falha inesperada ao processar webhook de pagamento")
+        return jsonify({"error": "Webhook não processado"}), 502
     return jsonify(resultado)
 
 
@@ -105,5 +126,12 @@ def upsert_config():
     data = request.get_json(silent=True) or {}
     if not data.get("provider_id"):
         return jsonify({"error": "provider_id obrigatório"}), 400
+    if data.get("operacao") not in ("boleto", "pix"):
+        return jsonify({"error": "operacao deve ser boleto ou pix"}), 400
+    if data.get("ambiente") not in ("sandbox", "producao"):
+        return jsonify({"error": "ambiente deve ser sandbox ou producao"}), 400
+    for field in ("client_id", "client_secret", "access_token", "api_key", "certificado", "conta", "chave_pix"):
+        if field in data and not isinstance(data[field], str):
+            return jsonify({"error": f"{field} deve ser texto"}), 400
     payment_provider_repo.upsert_config(data)
     return jsonify({"ok": True})

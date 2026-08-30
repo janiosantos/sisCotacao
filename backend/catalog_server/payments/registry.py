@@ -57,7 +57,7 @@ def instanciar_por_conta(conta: dict):
     cfg = payment_provider_repo.get_config(
         _codigo_por_id(conta["provider_id"]),
         conta.get("tipo_cobranca") or "boleto",
-        "sandbox",
+        conta.get("ambiente_cobranca") or "sandbox",
     )
     if cfg is None:
         raise ProviderIndisponivel("Configuração do provedor não encontrada")

@@ -69,9 +69,11 @@ class EstoqueRepository:
         produto_id = variante_id
         ctx = system_conn() if _conn is None else None
         conn = _conn or ctx.__enter__()
+        closed = False
         try:
+            conn.execute("SELECT pg_advisory_xact_lock(804273)")
             saldo_row = conn.execute(
-                "SELECT id, quantidade FROM estoque_saldo WHERE deposito_id=? AND produto_id=?",
+                "SELECT id, quantidade FROM estoque_saldo WHERE deposito_id=? AND produto_id=? FOR UPDATE",
                 (deposito_id, produto_id),
             ).fetchone()
             if saldo_row:
@@ -81,7 +83,7 @@ class EstoqueRepository:
                 saldo_atual = 0.0
                 conn.execute(
                     "INSERT INTO estoque_saldo (deposito_id, produto_id, quantidade, reserva)"
-                    " VALUES (?,?,0,0)",
+                    " VALUES (?,?,0,0) ON CONFLICT (deposito_id, produto_id) DO NOTHING",
                     (deposito_id, produto_id),
                 )
                 saldo_id = conn.execute(
@@ -128,8 +130,13 @@ class EstoqueRepository:
                 "saldo_anterior": saldo_atual,
                 "saldo_posterior": novo_saldo,
             }
-        finally:
+        except BaseException as exc:
             if ctx:
+                ctx.__exit__(type(exc), exc, exc.__traceback__)
+                closed = True
+            raise
+        finally:
+            if ctx and not closed:
                 ctx.__exit__(None, None, None)
 
     def movimentar_fato(
@@ -146,6 +153,7 @@ class EstoqueRepository:
         observacao: str | None = None,
         lote_id: int | None = None,
         usuario_id: int | None = None,
+        _conn=None,
     ) -> dict:
         """Fato de estoque idempotente (ADR 0003): retrida com a mesma
         `idempotency_key` devolve o movimento original sem reprocessar.
@@ -154,8 +162,15 @@ class EstoqueRepository:
         if not idempotency_key:
             idempotency_key = f"auto-{uuid.uuid4().hex}"
 
-        ctx = system_conn()
-        conn = ctx.__enter__()
+        tipos_positivos = {"entrada", "saida", "reserva", "liberacao", "ajuste", "transferencia"}
+        if tipo in tipos_positivos and float(quantidade) <= 0:
+            raise ValueError("Quantidade deve ser positiva")
+        if tipo not in tipos_positivos and tipo != "inventario":
+            raise ValueError(f"tipo desconhecido: {tipo}")
+
+        ctx = system_conn() if _conn is None else None
+        conn = _conn or ctx.__enter__()
+        closed = False
         try:
             existente = conn.execute(
                 "SELECT id, quantidade, saldo_anterior, saldo_posterior"
@@ -170,9 +185,12 @@ class EstoqueRepository:
                     "saldo_posterior": float(existente["saldo_posterior"] or 0),
                 }
 
+            # A linha do saldo é o recurso serializado. O INSERT concorrente é
+            # benigno graças à chave única (deposito_id, produto_id); depois
+            # dele sempre relê com lock para evitar lost update.
             row = conn.execute(
                 "SELECT id, quantidade, reserva FROM estoque_saldo"
-                " WHERE deposito_id=? AND produto_id=?",
+                " WHERE deposito_id=? AND produto_id=? FOR UPDATE",
                 (deposito_id, produto_id),
             ).fetchone()
             if row:
@@ -182,26 +200,56 @@ class EstoqueRepository:
             else:
                 conn.execute(
                     "INSERT INTO estoque_saldo (deposito_id, produto_id, quantidade, reserva)"
-                    " VALUES (?,?,0,0)",
+                    " VALUES (?,?,0,0) ON CONFLICT (deposito_id, produto_id) DO NOTHING",
                     (deposito_id, produto_id),
                 )
                 saldo_atual, reserva_atual = 0.0, 0.0
                 saldo_id = conn.execute(
-                    "SELECT id FROM estoque_saldo WHERE deposito_id=? AND produto_id=?",
+                    "SELECT id, quantidade, reserva FROM estoque_saldo"
+                    " WHERE deposito_id=? AND produto_id=? FOR UPDATE",
                     (deposito_id, produto_id),
                 ).fetchone()["id"]
+                row = conn.execute(
+                    "SELECT id, quantidade, reserva FROM estoque_saldo"
+                    " WHERE deposito_id=? AND produto_id=? FOR UPDATE",
+                    (deposito_id, produto_id),
+                ).fetchone()
+                saldo_atual = float(row["quantidade"] or 0)
+                reserva_atual = float(row["reserva"] or 0)
+
+            # O primeiro check é apenas um fast-path. O segundo ocorre depois
+            # do lock e fecha a corrida entre duas requisições idempotentes.
+            existente = conn.execute(
+                "SELECT id, quantidade, saldo_anterior, saldo_posterior"
+                " FROM estoque_movimento WHERE idempotency_key=?",
+                (idempotency_key,),
+            ).fetchone()
+            if existente:
+                return {
+                    "movimento_id": existente["id"],
+                    "duplicado": True,
+                    "saldo_anterior": float(existente["saldo_anterior"] or 0),
+                    "saldo_posterior": float(existente["saldo_posterior"] or 0),
+                }
 
             q = float(quantidade)
 
             if tipo == "reserva":
-                novo_reserva = min(reserva_atual + q, saldo_atual)
+                disponivel = saldo_atual - reserva_atual
+                if q > disponivel:
+                    raise ValueError(
+                        f"Estoque disponível insuficiente para reserva: {disponivel:g}"
+                    )
+                novo_reserva = reserva_atual + q
                 conn.execute(
                     "UPDATE estoque_saldo SET reserva=? WHERE id=?",
                     (novo_reserva, saldo_id),
                 )
                 novo_saldo = saldo_atual
             elif tipo == "liberacao":
-                novo_reserva = max(0, reserva_atual - q)
+                if q > reserva_atual:
+                    raise ValueError("Quantidade de liberação excede a reserva atual")
+                novo_reserva = reserva_atual - q
                 conn.execute(
                     "UPDATE estoque_saldo SET reserva=? WHERE id=?",
                     (novo_reserva, saldo_id),
@@ -211,13 +259,21 @@ class EstoqueRepository:
                 if tipo in ("entrada", "inventario"):
                     novo_saldo = saldo_atual + q
                 elif tipo == "saida":
-                    novo_saldo = max(0, saldo_atual - q)
+                    disponivel = saldo_atual - reserva_atual
+                    if q > disponivel:
+                        raise ValueError(
+                            f"Estoque disponível insuficiente: {disponivel:g}"
+                        )
+                    novo_saldo = saldo_atual - q
                 elif tipo == "ajuste":
-                    novo_saldo = max(0, q)
+                    novo_saldo = q
                 elif tipo == "transferencia":
-                    novo_saldo = max(0, saldo_atual - q)
-                else:
-                    raise ValueError(f"tipo desconhecido: {tipo}")
+                    disponivel = saldo_atual - reserva_atual
+                    if q > disponivel:
+                        raise ValueError(
+                            f"Estoque disponível insuficiente: {disponivel:g}"
+                        )
+                    novo_saldo = saldo_atual - q
                 conn.execute(
                     "UPDATE estoque_saldo SET quantidade=?, atualizado_em=datetime('now')"
                     " WHERE id=?",
@@ -237,7 +293,9 @@ class EstoqueRepository:
                     origem_tipo, origem_id,
                 ),
             )
-            conn.commit()
+            if ctx is None:
+                # A transação pertence ao caso de uso chamador.
+                pass
             return {
                 "movimento_id": cur.lastrowid,
                 "duplicado": False,
@@ -245,8 +303,14 @@ class EstoqueRepository:
                 "saldo_posterior": novo_saldo,
                 "tipo": tipo,
             }
+        except BaseException as exc:
+            if ctx is not None:
+                ctx.__exit__(type(exc), exc, exc.__traceback__)
+                closed = True
+            raise
         finally:
-            ctx.__exit__(None, None, None)
+            if ctx is not None and not closed:
+                ctx.__exit__(None, None, None)
 
     def reconciliar(self, deposito_id: int, variante_id: int) -> dict:
         produto_id = variante_id

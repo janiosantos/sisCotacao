@@ -6,6 +6,8 @@ import {
   forwardRef,
   isValidElement,
   useEffect,
+  useId,
+  useRef,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -292,13 +294,44 @@ export function Modal({
   children?: ReactNode;
   wide?: boolean;
 }) {
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
   useEffect(() => {
     if (!open) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab" || !dialogRef.current) return;
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute("disabled"));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -306,13 +339,18 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className={`flex max-h-[94dvh] w-full flex-col rounded-t-lg bg-white shadow-xl sm:rounded-lg sm:max-h-[92vh] ${
           wide ? "sm:max-w-3xl" : "sm:max-w-lg"
         }`}
       >
         <div className="flex items-center justify-between border-b border-gray-200 px-3 py-3 sm:px-5">
-          <h2 className="min-w-0 truncate text-base font-semibold text-gray-900">{title}</h2>
+          <h2 id={titleId} className="min-w-0 truncate text-base font-semibold text-gray-900">{title}</h2>
           <button
+            ref={closeRef}
             onClick={onClose}
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
             aria-label="Fechar"

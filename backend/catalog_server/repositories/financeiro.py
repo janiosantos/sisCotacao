@@ -38,28 +38,41 @@ class CaixaRepository:
         usuario_id: int | None = None,
         bandeira: str | None = None,
         codigo_autorizacao: str | None = None,
+        _conn=None,
     ) -> dict:
         if valor <= 0:
             raise ValueError("Valor deve ser positivo")
-        with system_conn() as conn:
-            saldo_ant = self._ultimo_saldo(conn)
-            if tipo in ("abertura", "entrada", "suprimento"):
-                saldo_novo = saldo_ant + valor
-            elif tipo in ("saida", "sangria"):
-                saldo_novo = saldo_ant - valor
-            else:
-                saldo_novo = saldo_ant
+        if _conn is None:
+            with system_conn() as conn:
+                return self.movimentar(
+                    tipo, descricao, valor, forma_pagamento, plano_conta_id,
+                    documento, orcamento_id, usuario_id, bandeira,
+                    codigo_autorizacao, _conn=conn,
+                )
 
-            cur = conn.execute(
-                "INSERT INTO caixa_movimento (tipo, descricao, valor, saldo_anterior, saldo_posterior,"
-                " forma_pagamento, plano_conta_id, documento, orcamento_id, usuario_id,"
-                " bandeira, codigo_autorizacao)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                (tipo, descricao, valor, saldo_ant, saldo_novo,
-                 forma_pagamento, plano_conta_id, documento, orcamento_id, usuario_id,
-                 bandeira, codigo_autorizacao),
-            )
-            return {"id": cur.lastrowid, "saldo_anterior": saldo_ant, "saldo_posterior": saldo_novo}
+        # Serializa o ledger mesmo quando ainda não existe uma linha para
+        # bloquear. O lock transacional termina automaticamente no commit.
+        _conn.execute("SELECT pg_advisory_xact_lock(804271)")
+        saldo_ant = self._ultimo_saldo(_conn)
+        if tipo in ("abertura", "entrada", "suprimento"):
+            saldo_novo = saldo_ant + valor
+        elif tipo in ("saida", "sangria"):
+            if valor > saldo_ant:
+                raise ValueError("Saldo de caixa insuficiente")
+            saldo_novo = saldo_ant - valor
+        else:
+            raise ValueError(f"Tipo de movimento de caixa inválido: {tipo}")
+
+        cur = _conn.execute(
+            "INSERT INTO caixa_movimento (tipo, descricao, valor, saldo_anterior, saldo_posterior,"
+            " forma_pagamento, plano_conta_id, documento, orcamento_id, usuario_id,"
+            " bandeira, codigo_autorizacao)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (tipo, descricao, valor, saldo_ant, saldo_novo,
+             forma_pagamento, plano_conta_id, documento, orcamento_id, usuario_id,
+             bandeira, codigo_autorizacao),
+        )
+        return {"id": cur.lastrowid, "saldo_anterior": saldo_ant, "saldo_posterior": saldo_novo}
 
 
 class ContasRepository:
@@ -100,30 +113,49 @@ class ContasRepository:
         cliente_id: int | None = None, descricao: str = "",
         documento: str | None = None, plano_conta_id: int | None = None,
         observacao: str | None = None,
+        _conn=None,
     ) -> int:
-        with system_conn() as conn:
-            cur = conn.execute(
-                "INSERT INTO contas_receber (cliente, cliente_id, descricao, valor, saldo,"
-                " data_vencimento, documento, plano_conta_id, observacao)"
-                " VALUES (?,?,?,?,?,?,?,?,?)",
-                (cliente.strip(), cliente_id, descricao.strip(), valor, valor,
-                 data_vencimento, documento, plano_conta_id, observacao),
-            )
-            return cur.lastrowid
+        if float(valor) <= 0:
+            raise ValueError("Valor deve ser positivo")
+        if _conn is None:
+            with system_conn() as conn:
+                return self.criar_receber(
+                    cliente, valor, data_vencimento, cliente_id, descricao,
+                    documento, plano_conta_id, observacao, _conn=conn,
+                )
+        cur = _conn.execute(
+            "INSERT INTO contas_receber (cliente, cliente_id, descricao, valor, saldo,"
+            " data_vencimento, documento, plano_conta_id, observacao)"
+            " VALUES (?,?,?,?,?,?,?,?,?)",
+            (cliente.strip(), cliente_id, descricao.strip(), valor, valor,
+             data_vencimento, documento, plano_conta_id, observacao),
+        )
+        return cur.lastrowid
 
-    def receber(self, conta_id: int, valor_recebido: float, data_recebimento: str | None = None) -> dict:
-        with system_conn() as conn:
-            conta = conn.execute("SELECT * FROM contas_receber WHERE id=?", (conta_id,)).fetchone()
-            if not conta:
-                raise ValueError("Conta não encontrada")
-            saldo_atual = float(conta["saldo"] or 0)
-            novo_saldo = max(0, saldo_atual - valor_recebido)
-            novo_status = "pago" if novo_saldo <= 0 else "parcial"
-            conn.execute(
-                "UPDATE contas_receber SET saldo=?, status=?, data_recebimento=COALESCE(?, data_recebimento) WHERE id=?",
-                (novo_saldo, novo_status, data_recebimento or "", conta_id),
-            )
-            return {"saldo_anterior": saldo_atual, "saldo_posterior": novo_saldo, "status": novo_status}
+    def receber(
+        self, conta_id: int, valor_recebido: float,
+        data_recebimento: str | None = None, _conn=None,
+    ) -> dict:
+        if valor_recebido <= 0:
+            raise ValueError("Valor recebido deve ser positivo")
+        if _conn is None:
+            with system_conn() as conn:
+                return self.receber(conta_id, valor_recebido, data_recebimento, _conn=conn)
+        conta = _conn.execute(
+            "SELECT * FROM contas_receber WHERE id=? FOR UPDATE", (conta_id,)
+        ).fetchone()
+        if not conta:
+            raise ValueError("Conta não encontrada")
+        saldo_atual = float(conta["saldo"] or 0)
+        if valor_recebido > saldo_atual:
+            raise ValueError("Valor recebido excede o saldo da conta")
+        novo_saldo = saldo_atual - valor_recebido
+        novo_status = "pago" if novo_saldo <= 0 else "parcial"
+        _conn.execute(
+            "UPDATE contas_receber SET saldo=?, status=?, data_recebimento=COALESCE(?, data_recebimento) WHERE id=?",
+            (novo_saldo, novo_status, data_recebimento or "", conta_id),
+        )
+        return {"saldo_anterior": saldo_atual, "saldo_posterior": novo_saldo, "status": novo_status}
 
     def receber_por_documento(self, documento: str, valor_recebido: float, data_recebimento: str | None = None) -> dict:
         """Baixa as contas a receber associadas a um documento (nº do orçamento).
@@ -131,9 +163,12 @@ class ContasRepository:
         Aplica o valor recebido nas contas em aberto/parcial na ordem, retornando
         o valor excedente (troco) que sobrou após quitar todas.
         """
+        if valor_recebido <= 0:
+            raise ValueError("Valor recebido deve ser positivo")
         with system_conn() as conn:
             contas = conn.execute(
-                "SELECT * FROM contas_receber WHERE documento=? AND status IN ('aberto','parcial') ORDER BY id",
+                "SELECT * FROM contas_receber WHERE documento=? AND status IN ('aberto','parcial')"
+                " ORDER BY id FOR UPDATE",
                 (documento,),
             ).fetchall()
             restante = valor_recebido
@@ -205,12 +240,18 @@ class ContasRepository:
                 ctx.__exit__(None, None, None)
 
     def pagar(self, conta_id: int, valor_pago: float, data_pagamento: str | None = None) -> dict:
+        if valor_pago <= 0:
+            raise ValueError("Valor pago deve ser positivo")
         with system_conn() as conn:
-            conta = conn.execute("SELECT * FROM contas_pagar WHERE id=?", (conta_id,)).fetchone()
+            conta = conn.execute(
+                "SELECT * FROM contas_pagar WHERE id=? FOR UPDATE", (conta_id,)
+            ).fetchone()
             if not conta:
                 raise ValueError("Conta não encontrada")
             saldo_atual = float(conta["saldo"] or 0)
-            novo_saldo = max(0, saldo_atual - valor_pago)
+            if valor_pago > saldo_atual:
+                raise ValueError("Valor pago excede o saldo da conta")
+            novo_saldo = saldo_atual - valor_pago
             novo_status = "pago" if novo_saldo <= 0 else "parcial"
             conn.execute(
                 "UPDATE contas_pagar SET saldo=?, status=?, data_pagamento=COALESCE(?, data_pagamento) WHERE id=?",

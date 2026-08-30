@@ -39,6 +39,28 @@ def criar():
     senha = data.get("senha") or ""
     if not nome or not login or len(senha) < 4:
         return jsonify({"error": "Informe nome, login e senha (mín. 4 caracteres)"}), 400
+    primeiro_acesso = not usuario_repo.count()
+    if primeiro_acesso:
+        # O lock e a rechecagem precisam ocorrer na mesma conexão do INSERT;
+        # duas requisições simultâneas não podem criar dois administradores.
+        with system_conn() as conn:
+            conn.execute("SELECT pg_advisory_xact_lock(804272)")
+            if conn.execute("SELECT 1 FROM usuarios LIMIT 1").fetchone():
+                return jsonify({"error": "Primeiro usuário já foi criado"}), 409
+            cur = conn.execute(
+                "INSERT INTO usuarios (nome, login, senha_hash, desconto_limite_pct, autoriza_desconto)"
+                " VALUES (?,?,?,?,?)",
+                (
+                    nome,
+                    login,
+                    generate_password_hash(senha),
+                    float(data.get("desconto_limite_pct") or 0),
+                    bool(data.get("autoriza_desconto")),
+                ),
+            )
+            usuario_id = int(cur.lastrowid)
+        _sincronizar_rbac(usuario_id, {**data, "perfil": "admin"})
+        return jsonify({"id": usuario_id}), 201
     if usuario_repo.get_by_login(login):
         return jsonify({"error": "Login já em uso"}), 409
     usuario_id = usuario_repo.create(

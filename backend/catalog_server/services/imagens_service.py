@@ -17,6 +17,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from catalog_server.config import IMAGES_DIR
+from catalog_server.services.safe_http import get_public
 
 _UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -265,7 +266,7 @@ def baixar_de_url(produto_id: int, url: str, repo) -> tuple[list[dict], list[str
         if _is_direct_image(url):
             candidates = [url]
         else:
-            resp = session.get(url, timeout=30)
+            resp = get_public(url, timeout=30, headers=dict(session.headers), max_bytes=5 * 1024 * 1024)
             resp.raise_for_status()
             ctype = resp.headers.get("Content-Type", "")
             if ctype.startswith("image/"):
@@ -280,7 +281,12 @@ def baixar_de_url(produto_id: int, url: str, repo) -> tuple[list[dict], list[str
     ignoradas = 0
     for u in candidates:
         try:
-            r = session.get(u, timeout=30, headers={"Referer": url})
+            r = get_public(
+                u,
+                timeout=30,
+                headers={"Referer": url, **dict(session.headers)},
+                max_bytes=10 * 1024 * 1024,
+            )
             r.raise_for_status()
             ctype = r.headers.get("Content-Type", "")
             if not (ctype.startswith("image/") or _is_direct_image(u)):

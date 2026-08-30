@@ -20,6 +20,7 @@ from catalog_server.repositories.estoque import estoque_repo
 from catalog_server.services import venda_fiscal
 from catalog_server.repositories import loja
 from catalog_server import contabil_gatilhos
+from catalog_server.db import system_conn
 
 api_orcamentos_bp = Blueprint("api_orcamentos", __name__)
 
@@ -208,10 +209,6 @@ def atualizar(orcamento_id: int):
                 "detalhes": snap.get("erros", []),
             }), 403
 
-        # Só agora aplica a conversão, já validada.
-        if not aplicar_transicao(orcamento_id, "finalizado"):
-            return jsonify({"error": "Transição finalizado inválida"}), 400
-
     # Demais transições de status (rascunho/ativo/em_analise/liberado,
     # cancelado; e reabrir finalizado→liberado exige permissão).
     elif status is not None and status != status_atual:
@@ -226,19 +223,29 @@ def atualizar(orcamento_id: int):
         if not aplicar_transicao(orcamento_id, status):
             return jsonify({"error": "Não foi possível aplicar a transição"}), 400
 
-    # Gatilho: finalizar (conversão) → gerar contas a receber + baixar estoque
+    # Finalização e seus efeitos financeiros/estoque precisam compartilhar a
+    # mesma transação. Nenhum efeito parcial pode deixar o pedido finalizado.
     if status == "finalizado":
         from datetime import datetime, timedelta
         from catalog_server.services.parcelas_venda import gerar_contas_receber
 
-        orc = orcamento_repo.buscar(orcamento_id)
-        if orc:
-            # Contas a receber: a prazo (cliente identificado + condição ativa)
-            # gera parcelas; à vista/balcão mantém a conta única de 0 dias.
-            parcelas = gerar_contas_receber(orc)
-            if not parcelas:
-                venc = (datetime.now() + timedelta(days=0)).strftime("%Y-%m-%d")
-                try:
+        try:
+            with system_conn() as conn:
+                estado = conn.execute(
+                    "SELECT status FROM orcamentos WHERE id=? FOR UPDATE",
+                    (orcamento_id,),
+                ).fetchone()
+                if not estado or not transicao_valida(estado["status"], "finalizado"):
+                    return jsonify({"error": "Transição finalizado inválida"}), 409
+
+                orc = orcamento_repo.buscar(orcamento_id, _conn=conn)
+                if not orc:
+                    return jsonify({"error": "Orçamento não encontrado"}), 404
+
+                # A prazo gera parcelas; à vista/balcão mantém uma conta única.
+                parcelas = gerar_contas_receber(orc, _conn=conn)
+                if not parcelas:
+                    venc = (datetime.now() + timedelta(days=0)).strftime("%Y-%m-%d")
                     contas_repo.criar_receber(
                         cliente=orc.get("cliente", "") or "",
                         cliente_id=orc.get("cliente_id"),
@@ -246,41 +253,53 @@ def atualizar(orcamento_id: int):
                         data_vencimento=venc,
                         descricao=f"Venda {orc.get('numero', '')}",
                         documento=orc.get("numero", ""),
+                        _conn=conn,
                     )
-                except Exception:
-                    pass
 
-            for item in orc.get("itens", []):
-                qtd = float(item.get("quantidade") or 0)
-                if qtd <= 0:
-                    continue
-                vid = item.get("produto_id") or item.get("variante_id")
-                if not vid:
-                    return jsonify({"error": "item sem produto"}), 400
-                try:
-                    estoque_repo.movimentar(
-                        deposito_id=1, variante_id=vid,
-                        tipo="saida", quantidade=qtd,
-                        documento=orc.get("numero", ""),
-                    )
-                except Exception:
-                    pass
-
-            # Gatilho contábil (v2.15.0): venda autorizada → lançamento quando
-            # configurado (default inativo — não altera o comportamento atual).
-            try:
-                from datetime import datetime as _dt
+                for item in orc.get("itens", []):
+                    qtd = float(item.get("quantidade") or 0)
+                    if qtd <= 0:
+                        continue
+                    vid = item.get("produto_id") or item.get("variante_id")
+                    if not vid:
+                        raise ValueError("item sem produto")
+                    if loja.bloquear_sem_estoque():
+                        estoque_repo.movimentar_fato(
+                            deposito_id=1,
+                            variante_id=vid,
+                            tipo="saida",
+                            quantidade=qtd,
+                            idempotency_key=f"venda:{orcamento_id}:item:{item.get('id') or vid}",
+                            origem_tipo="venda",
+                            origem_id=orcamento_id,
+                            documento=orc.get("numero", ""),
+                            _conn=conn,
+                        )
+                    else:
+                        # Compatibilidade com a configuração legada que permite
+                        # venda sem saldo: ainda registra a baixa na transação.
+                        estoque_repo.movimentar(
+                            deposito_id=1,
+                            variante_id=vid,
+                            tipo="saida",
+                            quantidade=qtd,
+                            documento=orc.get("numero", ""),
+                            _conn=conn,
+                        )
 
                 contabil_gatilhos.disparar(
                     "venda_autorizada",
                     evento_id=orcamento_id,
                     valor=float(orc.get("total") or 0),
                     historico=f"Venda {orc.get('numero', '')} — {orc.get('cliente', '') or 'cliente'}",
-                    periodo_competencia=_dt.now().strftime("%Y-%m"),
+                    periodo_competencia=datetime.now().strftime("%Y-%m"),
                     origem_tipo="orcamento",
+                    _conn=conn,
                 )
-            except Exception:
-                pass
+                if not aplicar_transicao(orcamento_id, "finalizado", _conn=conn):
+                    return jsonify({"error": "Transição finalizado inválida"}), 409
+        except ValueError as exc:
+            return jsonify({"error": str(exc), "code": "operacao_invalida"}), 409
 
     return jsonify({"ok": True})
 
@@ -317,17 +336,46 @@ def reabrir(orcamento_id: int):
     if not aprova:
         return jsonify({"error": "Reabrir pedido exige permissão de aprovação"}), 403
 
-    if not aplicar_transicao(orcamento_id, "liberado"):
-        return jsonify({"error": "Não foi possível reabrir o pedido"}), 400
-    # Revoga a autorização de desconto (se houver) — correção exige reavaliação.
-    # Estorna as contas a receber geradas na finalização (serão regeneradas).
-    from catalog_server.db import system_conn as _sc
+    # Reabertura, estorno financeiro e reversão do estoque formam uma única
+    # transação. Só reversões originadas pelo novo fluxo são automatizadas;
+    # movimentos legados exigem conciliação explícita.
     from catalog_server.services.parcelas_venda import estornar_contas_receber
 
-    estornar_contas_receber(orc)
-    with _sc() as conn:
-        orcamento_repo._revogar_aprovacao(conn, orcamento_id, "pedido reaberto para correção")
-        conn.commit()
+    try:
+        with system_conn() as conn:
+            estado = conn.execute(
+                "SELECT status FROM orcamentos WHERE id=? FOR UPDATE",
+                (orcamento_id,),
+            ).fetchone()
+            if not estado or estado["status"] != "finalizado":
+                return jsonify({"error": "Pedido já foi alterado por outra operação"}), 409
+
+            movimentos = conn.execute(
+                "SELECT deposito_id, produto_id, quantidade, id FROM estoque_movimento"
+                " WHERE origem_tipo='venda' AND origem_id=? AND tipo='saida' FOR UPDATE",
+                (orcamento_id,),
+            ).fetchall()
+            for movimento in movimentos:
+                estoque_repo.movimentar_fato(
+                    deposito_id=movimento["deposito_id"],
+                    variante_id=movimento["produto_id"],
+                    tipo="entrada",
+                    quantidade=float(movimento["quantidade"] or 0),
+                    idempotency_key=f"reabertura:{orcamento_id}:movimento:{movimento['id']}",
+                    origem_tipo="reabertura",
+                    origem_id=orcamento_id,
+                    documento=orc.get("numero", ""),
+                    observacao=f"Estorno da movimentação {movimento['id']}",
+                    _conn=conn,
+                )
+
+            estornar_contas_receber(orc, _conn=conn)
+            if not aplicar_transicao(orcamento_id, "liberado", _conn=conn):
+                return jsonify({"error": "Não foi possível reabrir o pedido"}), 409
+            # Revoga a autorização de desconto: correção exige reavaliação.
+            orcamento_repo._revogar_aprovacao(conn, orcamento_id, "pedido reaberto para correção")
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "operacao_invalida"}), 409
     return jsonify({"ok": True})
 
 

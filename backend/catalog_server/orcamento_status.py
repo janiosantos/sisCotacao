@@ -46,33 +46,35 @@ def pode_editar_conteudo(status: str) -> bool:
     return status in EDITAVEIS
 
 
-def aplicar_transicao(orcamento_id: int, destino: str) -> bool:
+def aplicar_transicao(orcamento_id: int, destino: str, _conn=None) -> bool:
     """Aplica a transição de status se válida; marca virou_pedido na conversão.
 
     `finalizado` é a conversão orçamento→pedido; `reabrir` (finalizado→liberado)
     desfaz a marcação de pedido.
     """
-    with system_conn() as conn:
-        row = conn.execute(
-            "SELECT status, virou_pedido FROM orcamentos WHERE id=?", (orcamento_id,)
-        ).fetchone()
-        if row is None:
-            return False
-        origem = row["status"]
-        if not transicao_valida(origem, destino):
-            return False
-        virou_pedido = row["virou_pedido"] or 0
-        if destino == "finalizado":
-            virou_pedido = 1
-        elif destino in ORCAMENTO_STATUS and origem == "finalizado":
-            virou_pedido = 0  # reabrir desfaz a conversão
-        conn.execute(
-            "UPDATE orcamentos SET status=?, virou_pedido=?, atualizado_em=datetime('now')"
-            " WHERE id=?",
-            (destino, virou_pedido, orcamento_id),
-        )
-        conn.commit()
-        return True
+    if _conn is None:
+        with system_conn() as conn:
+            return aplicar_transicao(orcamento_id, destino, _conn=conn)
+
+    row = _conn.execute(
+        "SELECT status, virou_pedido FROM orcamentos WHERE id=? FOR UPDATE", (orcamento_id,)
+    ).fetchone()
+    if row is None:
+        return False
+    origem = row["status"]
+    if not transicao_valida(origem, destino):
+        return False
+    virou_pedido = row["virou_pedido"] or 0
+    if destino == "finalizado":
+        virou_pedido = 1
+    elif destino in ORCAMENTO_STATUS and origem == "finalizado":
+        virou_pedido = 0  # reabrir desfaz a conversão
+    _conn.execute(
+        "UPDATE orcamentos SET status=?, virou_pedido=?, atualizado_em=datetime('now')"
+        " WHERE id=?",
+        (destino, virou_pedido, orcamento_id),
+    )
+    return True
 
 
 def obter_transicoes(status: str) -> list[str]:

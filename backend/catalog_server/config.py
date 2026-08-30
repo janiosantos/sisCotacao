@@ -22,6 +22,12 @@ DEBUG = os.getenv("CATALOG_DEBUG", "0") == "1"
 OPEN_BROWSER = os.getenv("CATALOG_OPEN_BROWSER", "1") == "1"
 
 SECRET_KEY = os.getenv("CATALOG_SECRET", "catalog-server-local-dev")
+ENVIRONMENT = os.getenv("CATALOG_ENV", "development").strip().lower()
+
+if ENVIRONMENT == "production" and SECRET_KEY == "catalog-server-local-dev":
+    raise RuntimeError(
+        "CATALOG_SECRET deve ser configurada com um valor forte em produção"
+    )
 
 PAGE_SIZE = 60
 

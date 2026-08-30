@@ -42,7 +42,7 @@ def eh_a_prazo(condicao_id: int | None) -> bool:
     return int(parcelas[0].get("dias") or 0) > 0
 
 
-def gerar_contas_receber(orcamento: dict) -> list[dict]:
+def gerar_contas_receber(orcamento: dict, _conn=None) -> list[dict]:
     """Gera contas a receber por parcela quando aplicável.
 
     Retorna as parcelas criadas; lista vazia quando é à vista/sem condição.
@@ -83,14 +83,21 @@ def gerar_contas_receber(orcamento: dict) -> list[dict]:
             descricao=f"Venda {numero} — parcela {i}/{n}",
             documento=numero,
             observacao=f"Parcela {i}/{n} · condição de pagamento",
+            _conn=_conn,
         )
-        with system_conn() as conn:
-            conn.execute(
+        if _conn is None:
+            with system_conn() as conn:
+                conn.execute(
+                    "UPDATE contas_receber SET origem_tipo='venda', origem_id=?,"
+                    " parcela=?, total_parcelas=?, grupo_id=? WHERE id=?",
+                    (orcamento.get("id"), i, n, grupo, conta_id),
+                )
+        else:
+            _conn.execute(
                 "UPDATE contas_receber SET origem_tipo='venda', origem_id=?,"
                 " parcela=?, total_parcelas=?, grupo_id=? WHERE id=?",
                 (orcamento.get("id"), i, n, grupo, conta_id),
             )
-            conn.commit()
         criadas.append({
             "conta_id": conta_id,
             "parcela": i,
@@ -104,8 +111,14 @@ def gerar_contas_receber(orcamento: dict) -> list[dict]:
     if criadas and abs(soma_pct - 100.0) > 0.005:
         dif = round(total - sum(c["valor"] for c in criadas), 2)
         if abs(dif) > 0.005:
-            with system_conn() as conn:
-                conn.execute(
+            if _conn is None:
+                with system_conn() as conn:
+                    conn.execute(
+                        "UPDATE contas_receber SET valor=?, saldo=? WHERE id=?",
+                        (criadas[-1]["valor"] + dif, criadas[-1]["valor"] + dif, criadas[-1]["conta_id"]),
+                    )
+            else:
+                _conn.execute(
                     "UPDATE contas_receber SET valor=?, saldo=? WHERE id=?",
                     (criadas[-1]["valor"] + dif, criadas[-1]["valor"] + dif, criadas[-1]["conta_id"]),
                 )
@@ -114,7 +127,7 @@ def gerar_contas_receber(orcamento: dict) -> list[dict]:
     return criadas
 
 
-def estornar_contas_receber(orcamento: dict) -> int:
+def estornar_contas_receber(orcamento: dict, _conn=None) -> int:
     """Estorna (cancela) as contas a receber do documento do orçamento.
 
     Retorna quantas contas foram estornadas.
@@ -122,14 +135,17 @@ def estornar_contas_receber(orcamento: dict) -> int:
     numero = str(orcamento.get("numero") or "")
     if not numero:
         return 0
-    with system_conn() as conn:
-        rows = conn.execute(
+    if _conn is None:
+        with system_conn() as conn:
+            return estornar_contas_receber(orcamento, _conn=conn)
+
+    rows = _conn.execute(
             "SELECT id FROM contas_receber WHERE documento=? AND status IN ('aberto','parcial')",
             (numero,),
         ).fetchall()
-        for r in rows:
-            conn.execute(
-                "UPDATE contas_receber SET status='cancelado' WHERE id=?",
-                (r["id"],),
-            )
-        return len(rows)
+    for r in rows:
+        _conn.execute(
+            "UPDATE contas_receber SET status='cancelado' WHERE id=?",
+            (r["id"],),
+        )
+    return len(rows)

@@ -102,3 +102,20 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 - **Migração nova**: arquivo `NNNN_*.py` em `backend/migrations/versions/` com `VERSION`, `RISCO`, `NAME`, `MUDANCA`, `guard`, `forward`, `backward`. Aplicar no dev com `python -m catalog_server.versioning apply --origem local`. Testar banco vazio→head (o CI do staging faz isso).
 - **Deploy**: NUNCA sem confirmação explícita do usuário (ver AGENTS.md). Apresentar resumo e aguardar.
 - **Manter os dois ambientes em sincronia** (notebook ↔ VM) via git pull/push.
+
+## 9. Registro da sessão atual
+
+- **2026-08-29**: auditoria técnica/UX de todo o workspace concluída em modo somente leitura; nenhum deploy, restart, rebuild de ambiente ou migração foi disparado.
+  - Backend: identificados riscos críticos de atomicidade no fechamento/reabertura de vendas, concorrência no saldo de estoque/caixa/contas, baixa automática de pagamentos, exposição de credenciais e SSRF/uploads sem limites.
+  - Fiscal: emissão ainda deve ser tratada como não pronta para produção até XSD, assinatura, idempotência, autenticação de webhooks e homologação SEFAZ/Focus; há código estrutural com `aamm=0000` e campos tributários simplificados.
+  - Frontend: build e typecheck passam, porém há módulos monolíticos, cliente HTTP sem cache/schema runtime, mistura React + DOM imperativo, modal sem ciclo completo de acessibilidade e cobertura funcional baixa.
+  - Infra/testes: `python -m compileall` passou; `npm run typecheck`, `npm run build` e 13 testes Vitest passaram. `pytest -q` na raiz não executa: exige `TEST_PG_URL` e ainda coleta o subprojeto `cotacoes-ia-importer`, causando colisão de imports.
+  - Prioridade sugerida: (1) transação única/UoW com locks e idempotência para vendas/estoque/financeiro; (2) bloquear segredos/defaults e validar webhooks; (3) endurecer fetch/upload; (4) completar pipeline fiscal; (5) modularizar frontend e ampliar testes E2E.
+- **2026-08-30**: pacote de hardening e consistência implementado localmente, sem deploy, restart ou migração aplicada em ambiente não-dev.
+  - Vendas, reabertura, estoque, caixa, contas a receber e contabilidade passaram a compartilhar transação quando necessário, com `FOR UPDATE`, locks/advisory locks, validação de saldo e idempotência nas movimentações.
+  - Segredos de provedores de pagamento não são mais expostos na API; credenciais vazias preservam o valor existente; ambiente de cobrança passou a ser persistido pela migração versionada `0097_cobranca_ambiente`.
+  - RBAC deixou de aceitar bypass legado por token e usuários inativos são rejeitados; bootstrap administrativo não usa mais senha fixa em desenvolvimento e é bloqueado em produção sem configuração explícita.
+  - Webhooks de pagamento/fiscal exigem segredo configurado, uploads têm limite global/extensões permitidas e downloads de imagens/HTML rejeitam SSRF, redirecionamentos inseguros e respostas acima do limite.
+  - Modal principal recebeu foco inicial, trap de Tab, Escape, `aria-modal`/label e restauração de foco; contrato TypeScript de credenciais foi ajustado para segredos opcionais.
+  - Validação: backend completo `214 passed`, pagamentos `7 passed`, frontend `13 passed`, `npm run typecheck`, `npm run build` e `py_compile` passaram. A configuração de produção agora exige `APP_VERSION`, credenciais PostgreSQL, `CATALOG_SECRET` e `CATALOG_ENV=production`.
+  - Pendências intencionais: assinatura nativa por provedor nos webhooks, homologação real Focus/SEFAZ e validação fiscal XSD/assinatura, outbox/jobs assíncronos, rate limit distribuído e modularização ampla das telas React. Não ligar `FISCAL_ENGINE_V2` nem publicar sem confirmação explícita.

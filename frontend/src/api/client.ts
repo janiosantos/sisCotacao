@@ -2236,12 +2236,13 @@ export interface PaymentProviderConfig {
   operacao: string;
   ambiente: string;
   client_id: string;
-  client_secret: string;
-  access_token: string;
-  api_key: string;
-  certificado: string;
-  conta: string;
-  chave_pix: string;
+  client_secret?: string;
+  access_token?: string;
+  api_key?: string;
+  certificado?: string;
+  conta?: string;
+  chave_pix?: string;
+  credencial_configurada?: boolean;
   prioridade: number;
   ativo: number | boolean;
 }

@@ -27,6 +27,8 @@ from urllib.parse import quote, urljoin, urlparse
 
 import requests
 
+from catalog_server.services.safe_http import get_public
+
 from app.parsers.product_parser import ProductParser
 from app.parsers.product_parser_anhangueraferramentas import ProductParserAnhangueraFerramentas
 from app.parsers.product_parser_casadosparafusos import ProductParserCasadosParafusos
@@ -89,7 +91,7 @@ def _quote_url(url: str) -> str:
 
 def _fetch_html(url: str) -> tuple[str, str]:
     """Baixa a página e devolve (html, url_final)."""
-    resp = requests.get(_quote_url(url), timeout=40, headers=_HEADERS)
+    resp = get_public(_quote_url(url), timeout=40, headers=_HEADERS, max_bytes=5 * 1024 * 1024)
     resp.raise_for_status()
     if not resp.text or not resp.text.strip():
         raise ParseError("A página não retornou conteúdo.")
@@ -229,10 +231,11 @@ def _absolute_images(imagens: list[str], base_url: str) -> list[str]:
 def _baixar_imagem(produto_id: int, img_url: str, page_url: str) -> Path | None:
     """Baixa e valida a imagem, devolvendo o caminho salvo (ou None)."""
     try:
-        r = requests.get(
+        r = get_public(
             _quote_url(img_url),
             timeout=30,
             headers={"User-Agent": _UA, "Referer": _quote_url(page_url)},
+            max_bytes=10 * 1024 * 1024,
         )
         r.raise_for_status()
     except requests.RequestException:

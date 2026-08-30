@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import os
+import secrets
+
 import psycopg
 from flask import Flask, abort, request, send_from_directory
 from sqlalchemy.exc import OperationalError as SAOperationalError
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from catalog_server import auth_token, config
 from catalog_server.blueprints import (
@@ -47,7 +51,7 @@ from catalog_server.db import system_conn
 
 # ─── Controle de acesso (RBAC) ────────────────────────────────────────
 # Mapeia prefixo de rota /api -> recurso do catálogo de permissões.
-# Rotas sem mapeamento passam (compatibilidade para endpoints novos/leitura).
+# Rotas sem mapeamento são negadas (deny-by-default).
 
 _RECURSO_POR_PREFIXO: list[tuple[str, str]] = [
     # Admin / sistema
@@ -176,8 +180,8 @@ def _autorizar_acesso() -> None:
     desligada, mantém o comportamento anterior (autenticado acessa tudo).
 
     Regras:
-    - token com `perfil=admin` (legado) ⇒ superuser, passa sempre;
-    - usuário sem relação RBAC (nenhum perfil vinculado) ⇒ passa (transição);
+    - superuser é determinado exclusivamente pelo vínculo RBAC;
+    - usuário sem relação RBAC ⇒ 403;
     - rota /api não mapeada ⇒ 403 (deny-by-default);
     - demais usuários seguem a matriz de permissões.
     """
@@ -187,13 +191,10 @@ def _autorizar_acesso() -> None:
         return
     payload = getattr(request, "usuario", None)
     usuario_id = payload.get("sub") if payload else None
-    # Admin legado (token) e usuários sem RBAC configurado seguem liberados.
-    if payload and payload.get("perfil") == "admin":
-        return
     if request.path in _ROTAS_SEM_RBAC:
         return
-    if usuario_id and not permissao.usuario_tem_rbac(usuario_id):
-        return
+    if not usuario_id or not permissao.usuario_tem_rbac(usuario_id):
+        abort(403, description="Usuário sem perfil RBAC ativo")
     recurso = _recurso_da_rota(request.path)
     if recurso is None:
         abort(403, description=f"Permissão negada: recurso não mapeado ({request.path})")
@@ -206,6 +207,8 @@ def _autorizar_acesso() -> None:
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    # Limite global de request evita uploads e payloads JSON sem teto.
+    app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MAX_CONTENT_LENGTH", str(25 * 1024 * 1024)))
 
     app.secret_key = config.SECRET_KEY
 
@@ -246,16 +249,17 @@ def create_app() -> Flask:
     app.register_blueprint(portal_bp)
     app.register_blueprint(pages_bp)
 
-    # Primeiro acesso: garante um usuário admin inicial quando ainda não existe
-    # nenhum (senha padrão "admin123" — troque logo após o primeiro login).
+    # Bootstrap explícito apenas em desenvolvimento/testes. Produção usa o
+    # fluxo de primeiro acesso com senha definida pelo operador.
     from catalog_server.repositories import usuario_repo
 
     try:
-        if usuario_repo.count() == 0:
+        bootstrap_password = os.getenv("CATALOG_BOOTSTRAP_ADMIN_PASSWORD") or secrets.token_urlsafe(32)
+        if config.ENVIRONMENT != "production" and usuario_repo.count() == 0:
             from werkzeug.security import generate_password_hash
 
             admin_id = usuario_repo.create(
-                "Administrador", "admin", generate_password_hash("admin123")
+                "Administrador", "admin", generate_password_hash(bootstrap_password)
             )
             # Vincula ao perfil RBAC Administrador (superuser) — Contract 0077.
             from catalog_server import permissao as _permissao
@@ -266,6 +270,10 @@ def create_app() -> Flask:
                 ).fetchone()
             if row:
                 _permissao.definir_perfis(admin_id, [row["id"]])
+            app.logger.warning(
+                "Admin inicial criado. Defina CATALOG_BOOTSTRAP_ADMIN_PASSWORD "
+                "antes de iniciar o ambiente para controlar a senha."
+            )
     except Exception:
         app.logger.warning("Falha ao criar usuário admin inicial.", exc_info=True)
 
@@ -304,7 +312,6 @@ def create_app() -> Flask:
         "/api/login": {"POST"},
         "/api/logout": {"POST"},
         "/api/primeiro-usuario": {"GET"},
-        "/api/usuarios": {"POST"},  # criação do primeiro administrador
         "/api/webhooks/tecnospeed": {"POST"},  # callback público da SEFAZ/Tecnospeed
         "/api/webhooks/payments": {"POST"},  # webhooks de pagamento (Asaas/Mercado Pago)
     }
@@ -319,6 +326,13 @@ def create_app() -> Flask:
         # API pública (site institucional): somente leitura, sem token.
         if request.path.startswith("/api/publico/") and request.method in ("GET", "OPTIONS"):
             return
+        # Criação anônima só existe enquanto o banco estiver sem usuários.
+        # Depois do bootstrap, a rota passa pelo Bearer/RBAC normal.
+        if request.path == "/api/usuarios" and request.method == "POST":
+            with system_conn() as conn:
+                vazio = not conn.execute("SELECT 1 FROM usuarios LIMIT 1").fetchone()
+            if vazio:
+                return
         metodos = _WHITELIST.get(request.path)
         if metodos and request.method in metodos:
             return
@@ -333,6 +347,12 @@ def create_app() -> Flask:
             payload = auth_token.validar_token(auth[7:])
             if not payload:
                 abort(401, description="Token de API inválido ou expirado")
+            with system_conn() as conn:
+                ativo = conn.execute(
+                    "SELECT ativo FROM usuarios WHERE id=?", (payload.get("sub"),)
+                ).fetchone()
+            if not ativo or not ativo["ativo"]:
+                abort(401, description="Usuário inativo ou inexistente")
             request.usuario = payload
             return
         auth = request.headers.get("Authorization", "")
@@ -341,6 +361,12 @@ def create_app() -> Flask:
         payload = auth_token.validar_token(auth[7:])
         if not payload:
             abort(401, description="Token de API inválido ou expirado")
+        with system_conn() as conn:
+            ativo = conn.execute(
+                "SELECT ativo FROM usuarios WHERE id=?", (payload.get("sub"),)
+            ).fetchone()
+        if not ativo or not ativo["ativo"]:
+            abort(401, description="Usuário inativo ou inexistente")
         request.usuario = payload
         _autorizar_acesso()
 
@@ -379,7 +405,11 @@ def create_app() -> Flask:
         return (
             {"error": "Banco de dados indisponível", "code": "db_indisponivel"},
             503,
-        )
+            )
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def payload_grande_demais(e):
+        return {"error": "Payload ou arquivo excede o limite permitido", "code": "payload_too_large"}, 413
 
     # Retaguarda de impressão: passa a drenar a fila de cupons assim que o
     # sistema estiver de pé.

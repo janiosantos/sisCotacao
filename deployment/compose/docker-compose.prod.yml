@@ -1,12 +1,10 @@
 services:
   db:
     image: postgres:16-alpine
-    ports:
-      - "5432:5432"
     environment:
-      - POSTGRES_USER=catalog
-      - POSTGRES_PASSWORD=catalog
-      - POSTGRES_DB=catalog
+      - POSTGRES_USER=${POSTGRES_USER:?POSTGRES_USER obrigatório}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatório}
+      - POSTGRES_DB=${POSTGRES_DB:-catalog}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -17,7 +15,7 @@ services:
     restart: unless-stopped
 
   backend:
-    image: siscom-backend:latest
+    image: siscom-backend:${APP_VERSION:?APP_VERSION obrigatório}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -34,6 +32,8 @@ services:
       - IMAGES_DIR=/app/images
       - CATALOG_HOST=0.0.0.0
       - APP_VERSION=${APP_VERSION:-dev}
+      - CATALOG_ENV=production
+      - CATALOG_SECRET=${CATALOG_SECRET:?CATALOG_SECRET obrigatório}
       # Links de convite ao fornecedor usam DETECÇÃO DINÂMICA da URL externa
       # acessada (Host header / X-Forwarded-*). PUBLIC_BASE_URL é override
       # explícito, opcional — use apenas se o comprador acessa pela LAN e os
@@ -42,7 +42,7 @@ services:
       # Migrações são aplicadas em passo explícito do pipeline (deploy.yml),
       # fora do processo web — evita crash-loop se uma migração falhar.
       - AUTO_MIGRATE=0
-      - DATABASE_URL=postgresql+psycopg://catalog:catalog@db:5432/catalog
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER obrigatório}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatório}@db:5432/${POSTGRES_DB:-catalog}
     depends_on:
       db:
         condition: service_healthy
@@ -55,7 +55,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: siscom-frontend:latest
+    image: siscom-frontend:${APP_VERSION:?APP_VERSION obrigatório}
     build:
       context: ../../frontend
       dockerfile: Dockerfile.prod

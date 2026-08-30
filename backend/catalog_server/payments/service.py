@@ -18,20 +18,24 @@ def _emitente() -> dict | None:
     return emitente_repo.get()
 
 
-def _salvar_cobranca(conta_id: int, dados: dict, operacao: str, provider_id: int) -> None:
+def _salvar_cobranca(
+    conta_id: int, dados: dict, operacao: str, ambiente: str, provider_id: int
+) -> None:
     with system_conn() as conn:
         conn.execute(
             """UPDATE contas_receber SET
                  provider_id=?, payment_id=?, tipo_cobranca=?, status_cobranca=?,
+                 ambiente_cobranca=?,
                  payload_pix=?, qr_code_base64=?, txid=?,
                  url_boleto=?, nosso_numero=?, linha_digitavel=?, codigo_barras=?,
                  webhook_id=COALESCE(webhook_id, '')
                WHERE id=?""",
             (
                 provider_id,
-                dados.get("payment_id") or "",
-                operacao,
-                dados.get("status_cobranca") or "pendente",
+                 dados.get("payment_id") or "",
+                 operacao,
+                 dados.get("status_cobranca") or "pendente",
+                 ambiente,
                 dados.get("payload_pix") or "",
                 dados.get("qr_code_base64") or "",
                 dados.get("txid") or "",
@@ -52,14 +56,29 @@ def emitir(conta_id: int, operacao: str, ambiente: str = "sandbox") -> dict:
         raise ValueError("Conta não encontrada")
     if conta["status"] == "pago":
         raise ValueError("Conta já paga")
+    if conta.get("payment_id"):
+        if conta.get("tipo_cobranca") == operacao:
+            return {
+                "payment_id": conta["payment_id"],
+                "status_cobranca": conta.get("status_cobranca") or "pendente",
+                "operacao": operacao,
+                "provider": conta.get("provider_id"),
+                "duplicado": True,
+            }
+        raise ValueError("Conta já possui cobrança em outra operação")
 
     provider = registry.escolher(operacao, ambiente)
+    # Provedores que suportam idempotência usam esta chave estável para que
+    # retries HTTP não criem uma segunda cobrança externa.
+    provider.cfg["payment_id"] = f"siscom-conta-{conta_id}-{operacao}"
     emitente = _emitente()
     if operacao == "pix":
         dados = provider.emitir_pix(conta)
     else:
         dados = provider.emitir_boleto(conta, emitente or {})
-    _salvar_cobranca(conta_id, dados, operacao, int(provider.cfg["provider_id"]))
+    _salvar_cobranca(
+        conta_id, dados, operacao, ambiente, int(provider.cfg["provider_id"])
+    )
     return {**dados, "operacao": operacao, "provider": provider.codigo}
 
 
@@ -111,9 +130,11 @@ def processar_webhook(provider_codigo: str, payload: dict, headers: dict) -> dic
             "SELECT * FROM contas_receber WHERE payment_id=? LIMIT 1",
             (pre_payment_id or "",),
         ).fetchone()
+        conta = dict(conta) if conta else None
 
     operacao = (conta["tipo_cobranca"] or "pix") if conta else "pix"
-    provider = registry.instanciar(provider_codigo, operacao, "sandbox")
+    ambiente = (conta.get("ambiente_cobranca") if conta else None) or "sandbox"
+    provider = registry.instanciar(provider_codigo, operacao, ambiente)
     evento = provider.webhook(payload, headers)
     if not evento:
         return {"ok": True, "ignorado": True}
@@ -125,7 +146,7 @@ def processar_webhook(provider_codigo: str, payload: dict, headers: dict) -> dic
 
     with system_conn() as conn:
         conta = conn.execute(
-            "SELECT * FROM contas_receber WHERE payment_id=? LIMIT 1",
+            "SELECT * FROM contas_receber WHERE payment_id=? FOR UPDATE",
             (payment_id,),
         ).fetchone()
         if conta is None:
@@ -154,9 +175,15 @@ def processar_webhook(provider_codigo: str, payload: dict, headers: dict) -> dic
             "entrada",
             f"Recebimento {conta['documento'] or ''} — {conta['cliente'] or ''} (webhook {provider_codigo})",
             valor,
-            forma_pagamento="pix" if provider.codigo == "mercadopago" else "boleto",
+            forma_pagamento="pix" if operacao == "pix" else "boleto",
             documento=conta.get("documento") or "",
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        return {
+            "ok": True,
+            "conta_id": conta_id,
+            "valor": valor,
+            "caixa_pendente": True,
+            "caixa_erro": str(exc),
+        }
     return {"ok": True, "conta_id": conta_id, "valor": valor}

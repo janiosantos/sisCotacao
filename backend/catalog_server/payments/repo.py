@@ -15,7 +15,14 @@ class PaymentProviderRepo:
     def list_configs(self) -> list[dict]:
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(
-                """SELECT c.*, p.codigo AS provider_codigo, p.nome AS provider_nome
+                """SELECT c.id, c.provider_id, c.operacao, c.ambiente,
+                          c.client_id, c.conta, c.chave_pix,
+                          c.prioridade, c.ativo,
+                          (NULLIF(c.client_secret, '') IS NOT NULL OR
+                           NULLIF(c.access_token, '') IS NOT NULL OR
+                           NULLIF(c.api_key, '') IS NOT NULL OR
+                           NULLIF(c.certificado, '') IS NOT NULL) AS credencial_configurada,
+                          p.codigo AS provider_codigo, p.nome AS provider_nome
                    FROM payment_provider_config c
                    JOIN payment_provider p ON p.id=c.provider_id
                    ORDER BY p.nome, c.operacao, c.prioridade"""
@@ -57,9 +64,12 @@ class PaymentProviderRepo:
                       prioridade, ativo)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT (provider_id, operacao, ambiente) DO UPDATE SET
-                     client_id=excluded.client_id, client_secret=excluded.client_secret,
-                     access_token=excluded.access_token, api_key=excluded.api_key,
-                     certificado=excluded.certificado, conta=excluded.conta,
+                      client_id=excluded.client_id,
+                      client_secret=COALESCE(NULLIF(excluded.client_secret, ''), payment_provider_config.client_secret),
+                      access_token=COALESCE(NULLIF(excluded.access_token, ''), payment_provider_config.access_token),
+                      api_key=COALESCE(NULLIF(excluded.api_key, ''), payment_provider_config.api_key),
+                      certificado=COALESCE(NULLIF(excluded.certificado, ''), payment_provider_config.certificado),
+                      conta=excluded.conta,
                      chave_pix=excluded.chave_pix, prioridade=excluded.prioridade,
                      ativo=excluded.ativo""",
                 (

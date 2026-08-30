@@ -42,7 +42,7 @@ def emitir(
     try:
         r = requests.post(
             _url(ambiente, modelo),
-            params={"token": token},
+            auth=_auth(token),
             json=payload,
             timeout=_TIMEOUT,
         )
@@ -56,7 +56,8 @@ def consultar(*, ambiente: str, token: str, modelo: str, referencia_externa: str
     try:
         r = requests.get(
             _url(ambiente, modelo),
-            params={"token": token, "ref": referencia_externa},
+            auth=_auth(token),
+            params={"ref": referencia_externa},
             timeout=_TIMEOUT,
         )
         r.raise_for_status()
@@ -73,7 +74,7 @@ def cancelar(
     try:
         r = requests.post(
             _url(ambiente, modelo, "cancel"),
-            params={"token": token},
+            auth=_auth(token),
             data={**body, "ref": referencia_externa},
             timeout=_TIMEOUT,
         )

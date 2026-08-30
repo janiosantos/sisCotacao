@@ -202,27 +202,31 @@ class OrcamentoRepository:
 
     # ------------------------------------------------------------------
 
-    def buscar(self, orcamento_id: int) -> dict | None:
-        with system_conn() as conn:
-            cab = conn.execute(
-                "SELECT * FROM orcamentos WHERE id=?", (orcamento_id,)
+    def buscar(self, orcamento_id: int, _conn=None) -> dict | None:
+        if _conn is None:
+            with system_conn() as conn:
+                return self.buscar(orcamento_id, _conn=conn)
+
+        conn = _conn
+        cab = conn.execute(
+            "SELECT * FROM orcamentos WHERE id=?", (orcamento_id,)
+        ).fetchone()
+        if cab is None:
+            return None
+        itens = conn.execute(
+            "SELECT * FROM orcamento_itens WHERE orcamento_id=? ORDER BY id",
+            (orcamento_id,),
+        ).fetchall()
+        d = {**dict(cab), "itens": [dict(r) for r in itens]}
+        if d.get("desconto_autorizado_por"):
+            u = conn.execute(
+                "SELECT nome FROM usuarios WHERE id=?",
+                (d["desconto_autorizado_por"],),
             ).fetchone()
-            if cab is None:
-                return None
-            itens = conn.execute(
-                "SELECT * FROM orcamento_itens WHERE orcamento_id=? ORDER BY id",
-                (orcamento_id,),
-            ).fetchall()
-            d = {**dict(cab), "itens": [dict(r) for r in itens]}
-            if d.get("desconto_autorizado_por"):
-                u = conn.execute(
-                    "SELECT nome FROM usuarios WHERE id=?",
-                    (d["desconto_autorizado_por"],),
-                ).fetchone()
-                d["desconto_autorizado_nome"] = (u["nome"] if u else None)
-            else:
-                d["desconto_autorizado_nome"] = None
-            return d
+            d["desconto_autorizado_nome"] = (u["nome"] if u else None)
+        else:
+            d["desconto_autorizado_nome"] = None
+        return d
 
     # ------------------------------------------------------------------
 

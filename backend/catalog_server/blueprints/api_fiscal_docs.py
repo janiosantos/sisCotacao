@@ -1,6 +1,9 @@
 """API de emissão de documentos fiscais (NFC-e/NF-e) via Tecnospeed."""
 from __future__ import annotations
 
+import hmac
+import os
+
 from flask import Blueprint, jsonify, request
 
 from catalog_server.repositories.fiscal_documentos import (
@@ -108,7 +111,17 @@ def set_config():
 def webhook_tecnospeed():
     """Endpoint público que a Tecnospeed chama quando o status de uma nota
     emitida assincronamente muda (autorizada/rejeitada pela SEFAZ)."""
+    expected = os.getenv("TECNOSPEED_WEBHOOK_SECRET", "")
+    received = request.headers.get("X-Webhook-Secret", "")
+    if expected:
+        if not hmac.compare_digest(received, expected):
+            return jsonify({"error": "Webhook não autorizado"}), 401
+    elif os.getenv("CATALOG_ENV", "development").lower() == "production":
+        return jsonify({"error": "Webhook não configurado"}), 503
+
     payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict) or not payload:
+        return jsonify({"error": "Payload de webhook inválido"}), 400
     tecnospeed.processar_webhook(payload)
     return jsonify({"ok": True})
 
