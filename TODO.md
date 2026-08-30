@@ -6,7 +6,7 @@
 
 ## Instruções gerais
 - Contexto: ERP Casa LM (`ecommerce_scraper`), Flask + PostgreSQL 16 + React/Vite.
-- Testes: `pytest` (env `TEST_PG_URL=postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test`), 211 verdes hoje.
+- Testes: `pytest` (env `TEST_PG_URL=postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test`), 234 verdes hoje.
 - Ao corrigir: rodar `py_compile`, os testes do módulo tocado e a suíte completa.
 - Registrar o resultado ao final deste arquivo (seção "Resultado da análise").
 

@@ -41,20 +41,25 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 4. Estado atual
 
-- **Versão publicada**: `v2.32.2` (produção e staging — produção antes do staging por exceção pedida).
-- **Schema**: migrações `0052..0098` aplicadas no dev (schema_version 98). Cadeia: 92 → 93 → 94 → 96 → 97 (`cobranca_ambiente`) → 98 (`login_rate_limit`). A **0095 foi removida** (nunca commitada).
-- **Hardening (Codex)**: RBAC deny-by-default (sem perfil → 403), `MAX_CONTENT_LENGTH`, `safe_http` (SSRF), rate limit de login (PostgreSQL, 5/300s), segredos de pagamento não vazam, `deploy.yml` passa `CATALOG_SECRET`/`POSTGRES_USER`/`POSTGRES_PASSWORD` (secrets do GitHub — obrigatório configurar). **215 testes** backend + 13 frontend verdes.
-- **Imagens**: 189.094 linhas em `imagens_produto`, 0 sem arquivo físico; arquivos em `images/cadastro/`.
-- **Produtos**: ~62.731 em `produtos_cadastro`; **~3.215 sem imagem** (fios desmembrados e afins).
-- **API pública**: `GET /api/publico/produtos` (paginado: `offset`/`limit` máx 100 + `has_more`; busca `?q=`; filtros `categoria`, `subcategoria`, `marca`, `em_linha`), `GET /api/publico/produtos/{id}`, `GET /api/publico/categorias`, `GET /api/publico/marcas`. Sem token, CORS `*`, sem vazamento interno.
-- **Página demo**: `GET /demo-publico.html` (busca, filtros, paginação, detalhe).
-- **OpenAPI**: `backend/openapi.json` (60 paths) servido em `/api/openapi.json`.
+- **Versão publicada (produção)**: `v2.32.2` — sem deploy das mudanças recentes (por decisão do usuário, produção só recebe release aprovada). **Staging** roda o pacote de hardening + P2/P5/P6.
+- **Schema**: dev/staging em **101** (migrações `0052..0101`): 0097 `cobranca_ambiente`, 0098 `login_rate_limit`, 0099 `webhook_secret`, 0100 `webhook_log`, 0101 `outbox`. Produção ainda na cadeia anterior (aguarda release). A **0095 foi removida** (nunca commitada).
+- **Hardening (Codex)**: RBAC deny-by-default (sem perfil → 403), `MAX_CONTENT_LENGTH`, `safe_http` (SSRF), rate limit de login (PostgreSQL, 5/300s), segredos de pagamento não vazam, `deploy.yml` passa `CATALOG_SECRET`/`POSTGRES_USER`/`POSTGRES_PASSWORD` (secrets do GitHub configurados). **234 testes** backend + **27 testes** frontend verdes.
+- **Webhooks (P2)**: assinatura/token nativo por provedor (MP x-signature+anti-replay, Asaas access-token, EfiPay token), `webhook_log`, rechecagem (manual + periódica), baixa por notificação validada no staging (Asaas sandbox pix/boleto).
+- **Outbox (P5)**: Redis + worker RQ + scheduler; tabela `outbox` com retry/backoff/dead-letter/idempotência; webhook 503 enfileira rechecagem. Validado em staging.
+- **TLS**: staging em **HTTPS :444** (cert de produção via `siscom_certbot-etc`, NAT pública 6174→444). **VM 10.189.14.9 sincronizada** (schema 101).
+- **Frontend (P6)**: **29 telas modularizadas, 93 módulos**; `ApiError`/`mensagemErro`; 27 testes; mojibake 0 em todo o frontend.
+- **Imagens**: 189.094 linhas em `imagens_produto`, 0 sem arquivo físico; arquivos em `images/cadastro/`. Dry-run P8: 3.188 sem imagem, 5.648 arquivos órfãos (435 MB), 2.742 pastas órfãs (1.060 MB) — aguarda aprovação.
+- **Produtos**: ~62.731 em `produtos_cadastro`.
+- **API pública**: `/api/publico/*` (produtos/categorias/marcas; paginação `offset/limit` + `has_more`; busca `?q=`; filtros). Sem token, CORS `*`.
+- **OpenAPI**: `backend/openapi.json` (**66 paths**) servido em `/api/openapi.json`.
 
 ## 5. Log de implementações (recentes)
 
 | Versão | O que foi feito |
 |---|---|
 | **v2.32.2** | Paginação explícita em `/api/publico/produtos` (`has_more`), busca `?q=`; correção da página demo (erro claro de JSON); AGENTS.md com regra de deploy. Deploy prod→staging (exceção). |
+| **v2.34.0 (hardening)** | Manifesto criado/pushado; **validado em staging** (não em produção): RBAC deny-by-default, `MAX_CONTENT_LENGTH`, `safe_http` (SSRF), login rate limit (0098), segredos de pagamento ocultos. |
+| **sem release (staging via SSH)** | **P2** — webhooks com assinatura nativa por provedor (0099 `webhook_secret`, 0100 `webhook_log`), rechecagem manual/periódica, baixa por notificação validada (Asaas sandbox); **P5** — RQ+Redis (worker/scheduler) + outbox transacional (0101) com retry/backoff/dead-letter, 503 enfileira rechecagem; **P6** — frontend modularizado (29 telas, 93 módulos) + `ApiError` + 27 testes. Tudo commitado/pushado; aguarda release aprovada. |
 | **v2.32.1** | Página demo `/demo-publico.html` (consome a API pública). |
 | **v2.32.0** | API pública `/api/publico/*` (produtos/detalhe/categorias/marcas) + CORS + OpenAPI (56→60 paths). |
 | **v2.31.0** | Imagens: `filename` relativo ao `IMAGES_DIR` (0093), padronização física em `cadastro/` (0094), **remoção da 0095** (nunca commitada), reconstrução de vínculos a partir do filesystem (0096, +81.305 linhas). 189.094 linhas, 0 quebradas. |
@@ -67,31 +72,29 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 ## 6. Tarefas pendentes (priorizadas)
 
 **Alta**
-- [ ] **Ativar TLS/Let's Encrypt em produção** (`siscom.casalm.com.br`, DNS-01 via Cloudflare):
-  criar `deployment/certbot/cloudflare.ini` (token Zone:DNS:Edit, chmod 600), ajustar o
-  redirecionamento de porta para a 443 interna e `docker compose up -d --build` — ver
-  `deployment/certbot/LEIA.md`. Renovação automática (certbot a cada 12h + nginx reload).
-- [ ] Integrar o **site institucional** (`CASA_LM/site`) à API pública — apontar `siteConfig.ts` para `/api/publico/*` e consumir paginação (`has_more`).
-- [ ] **Sincronizar a VM** (10.189.14.9) com os commits recentes: `git pull` + `docker compose up -d --build` + `versioning apply` (schema 96).
+- [ ] **Ativar TLS/Let's Encrypt em PRODUÇÃO** (`siscom.casalm.com.br`): o staging já está em HTTPS :444 (cert emitido via DNS-01 Cloudflare); produção requer ajustar o redirecionamento de porta para a 443 interna + `docker compose up -d --build` + confirmação do usuário — ver `deployment/certbot/LEIA.md`.
+- [ ] **Integrar o site institucional** (`C:\Users\jpsantos\Documents\Projetos\CASA_LM\site` — repo `janiosantos/casa-lm-site`, Astro) à API pública: apontar `siteConfig.ts` para `/api/publico/*`, consumir `has_more` e **restringir CORS** aos domínios aprovados. `api.ts` já consome `/api/publico/*` (fallback SSR).
+- [ ] **Publicar em produção** o pacote hardening + P2/P5/P6 (deploy autorizado; produção segue em v2.32.2).
 
 **Média**
-- [ ] ~**3.215 produtos sem imagem** — aplicar "imagens em lote" por fornecedor (fios desmembrados, etc.).
+- [ ] **P8 — saneamento de imagens**: dry-run commitado em `reports/*` (3.188 sem imagem; 5.648 arquivos órfãos/435 MB; 2.742 pastas órfãs/1.060 MB). **Aguardando aprovação do usuário** para lote por fornecedor + remoção de órfãos (com backup).
 - [ ] Homologação **Focus NFe** com credenciais reais (NF-e/NFC-e) — adapters prontos em staging.
 - [ ] Ligar **`FISCAL_ENGINE_V2` em PRODUÇÃO** (após deploy autorizado das releases 1.11→2.14).
+- [ ] **P6 residual**: query client/cache, schemas runtime, virtualizar tabelas extensas e testes E2E de fluxos críticos (PDV/estoque/financeiro/compras/fiscal).
 - [ ] Renomear pasta raiz para `casa-lm` (manual, fechar editores; o site já está em `CASA_LM/site`).
 
 **Baixa / infra**
 - [ ] Remover arquivos soltos `2.5mm²` sem linha em `images/cadastro/62455` e `62461` (restos de teste).
-- [ ] Limpeza opcional: ~2.742 pastas `images/cadastro/<id>/` de produtos que não existem mais.
-- [ ] Ampliar cobertura de testes frontend (vitest — esqueleto pronto).
-- [ ] OpenAPI fase 2 (crescer por blueprint tocado).
+- [ ] Reativar a fila do webhook no Asaas sandbox (após 15 falhas) e revalidar entrega real (P2).
+- [ ] Ampliar cobertura de testes frontend (vitest — hoje 27) e E2E de fluxos críticos.
 
 ## 7. Próximos passos sugeridos
 
-1. Validar produção: `/api/health`, `/api/pronto`, `/api/publico/produtos?limit=5` (has_more), `/demo-publico.html`.
-2. Sincronizar a VM.
-3. Confirmar a integração do site institucional (buscar/filtrar/paginar pelo `has_more`).
-4. Rodar "imagens em lote" para os produtos sem imagem (grupo ELE / fios).
+1. **P8**: aprovar o lote de imagens por fornecedor + remoção de órfãos (dry-run pronto em `reports/*`).
+2. **P6 residual**: query client/cache, schemas runtime, virtualização de tabelas e testes E2E.
+3. **P4**: apontar `siteConfig.ts` do `CASA_LM/site` para `/api/publico/*` + restringir CORS.
+4. **Publicação autorizada**: release hardening + P2/P5/P6 em produção (produção segue em v2.32.2).
+5. **P3 fiscal**: desbloquear com certificado A1/A3 + contador (homologação Focus/SEFAZ).
 
 ## 8. Convenções de trabalho para agentes
 

@@ -144,6 +144,38 @@ abertas) → desafio **DNS-01 via Cloudflare** (sem abrir porta).
 - `X-Forwarded-Proto/Host` ao backend → links de fornecedor viram `https://`.
 - `smoke.sh`/`deploy.yml` tolerantes a TLS (https com `-k`, fallback http).
 
+### 3.8 Hardening + Webhooks + Outbox (2026-08-30)
+
+- **Hardening (Codex)**: RBAC deny-by-default, `MAX_CONTENT_LENGTH`, `safe_http`
+  (SSRF em downloads/urls), login rate limit no PostgreSQL (0098), segredos de
+  pagamento nunca retornados pela API. Manifesto v2.34.0.
+- **P2 — Webhooks**: validação de assinatura/token **nativo por provedor**
+  (MP x-signature HMAC-SHA256 + anti-replay por `ts`; Asaas `asaas-access-token`;
+  EfiPay `?token=`; Sicoob/TecnoSpeed `X-Webhook-Secret`) — migração 0099
+  (`webhook_secret`); **`webhook_log`** (0100) com logs/detalhe/rechecagem e tela
+  Webhooks; `POST /api/webhooks/rechecagem` consulta os provedores das pendentes.
+  Validado em staging (baixa por notificação Asaas sandbox pix/boleto).
+- **P5 — Outbox**: Redis + worker RQ + scheduler (3 composes); rechecagem
+  periódica + `rodar_outbox`; tabela **`outbox`** (0101) com retry/backoff
+  exponencial (60s·2ⁿ), dead-letter (5 tentativas) e idempotência
+  (`idempotencia_key`). **Webhook 503 enfileira a rechecagem da conta** — quando
+  o provedor é configurado, o worker baixa sem nova notificação.
+
+### 3.9 P6 — Frontend modularizado (2026-08-30)
+
+- **29 telas → 93 módulos** em 26 pastas `src/pages/<tela>/` (extração verbatim,
+  sem mudança de comportamento). Fases: (1) componentes top-level (compras,
+  fiscal, pre-venda, precos, cotacoes, catalogo, posvenda, bancos, atualizacoes,
+  historico, dashboard); (2) modal-forms autocontidos (clientes, fornecedores,
+  usuarios, perfis); (3) modais CRUD (unidades, vendedores, plano_contas,
+  solicitacoes, diagnostico_variacoes); mantidas sem extração viável: categorias,
+  webhooks, recebimento.
+- Contrato de erro `ApiError` (`status/code/details`) + `mensagemErro` no client.
+- **Correção de encoding**: arquivos com acentos corrompidos por `Set-Content`
+  ANSI (double-encoding UTF-8→cp1252→UTF-8) foram restaurados e um fixer
+  cp1252 por bytes eliminou o mojibake em todo o frontend (dry-run = 0).
+- **27 testes frontend** (era 13) + typecheck/build verdes.
+
 ## 4. Modelo de dados relevante
 
 | Tabela | Papel |
@@ -152,13 +184,13 @@ abertas) → desafio **DNS-01 via Cloudflare** (sem abrir porta).
 | `imagens_produto` | `produto_id`, `filename` (relativo), `ordem` (0 = capa) |
 | `grupos` / `subgrupos` / `categorias` | Taxonomia (código/nome) |
 | `variantes` / `variante_atributos` / `variante_produto_map` | **Dropadas** (0090) |
-| `schema_migrations` | Controle de versões (52..96) |
+| `schema_migrations` | Controle de versões (52..101) |
 
 ## 5. Como rodar e testar
 
 - **Dev (docker):** `docker compose up -d`; frontend `http://localhost:8080`;
   migrações: `docker compose exec -T backend python -m catalog_server.versioning apply --origem local`.
-- **Backend tests:** `$env:TEST_PG_URL="postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test"; python -m pytest` (211 verdes).
+- **Backend tests:** `$env:TEST_PG_URL="postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test"; python -m pytest` (234 verdes).
 - **Frontend:** `npm run typecheck` e `npm run build` (em `frontend/`).
 - **Compilar:** `python -m py_compile <arquivo>`.
 - **IMPORTANTE:** rodar o backend fora do docker grava imagens em
@@ -184,7 +216,7 @@ abertas) → desafio **DNS-01 via Cloudflare** (sem abrir porta).
 | Imagens (service) | `backend/catalog_server/services/imagens_service.py` |
 | Imagens em lote | `backend/catalog_server/services/imagens_lote.py` |
 | Produtos (repo) | `backend/catalog_server/repositories/produtos.py` |
-| Migrações | `backend/migrations/versions/0085..0096` |
+| Migrações | `backend/migrations/versions/0085..0101` |
 | Página demo | `frontend/public/demo-publico.html` |
 | nginx TLS/HTTP | `frontend/nginx.conf` · `frontend/nginx.http.conf` · `frontend/nginx-entrypoint.sh` |
 | Compose produção | `deployment/compose/docker-compose.prod.yml` |

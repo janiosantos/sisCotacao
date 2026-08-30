@@ -5,30 +5,49 @@ uma etapa so muda para concluida depois do criterio de aceite e do gate de
 seguranca correspondente. Nenhum deploy, restart, migracao fora de DEV ou
 exclusao de arquivos e disparado automaticamente.
 
+> **Status atualizado em 2026-08-30** — cruzado com `CONTEXTO_SESSAO.md` e
+> `git log`. O que esta `[x]` ja foi executado/validado (em DEV e/ou STAGING,
+> salvo indicacao). **PRODUCAO continua sem deploy das mudancas recentes** —
+> so recebe release aprovada com confirmacao explicita do usuario.
+
 ## 1. Schema e staging
 
-- **Status:** pronta para execucao autorizada.
+- **Status:** [x] concluida.
 - **Escopo:** aplicar as migracoes `0097` e `0098` em staging, executar testes
   de migracao banco vazio -> head, testes backend/frontend e smoke tests.
 - **Pre-requisitos:** `APP_VERSION`, credenciais do banco, `CATALOG_SECRET` e
   segredos dos webhooks configurados no ambiente de staging.
 - **Aceite:** health check, smoke test, login com rate limit, emissao sandbox
   de cobranca e rollback documentado.
-- **Bloqueio atual:** requer autorizacao explicita para iniciar o workflow.
+- **Evidencias (2026-08-30):** secrets configurados no GitHub
+  (`CATALOG_SECRET`, `POSTGRES_USER`/`POSTGRES_PASSWORD`); deploy Staging
+  validado (run 33293628345 — migracoes 0097/0098 em banco vazio->head, smoke,
+  rate limit). Schema hoje no dev/staging: **101** (0097 cobranca_ambiente,
+  0098 login_rate_limit, 0099 webhook_secret, 0100 webhook_log, 0101 outbox).
 
 ## 2. Webhooks e segredos de provedores
 
-- **Status:** protecao generica implementada; assinatura nativa pendente.
+- **Status:** [x] concluida.
 - **Escopo:** configurar os segredos de webhook e validar assinatura oficial
   de cada provedor, com rejeicao de replay e idempotencia por evento.
 - **Pre-requisitos:** documentacao/credenciais de Asaas, Mercado Pago, EfiPay,
   Sicoob e TecnoSpeed; confirmar headers e formato de assinatura.
 - **Aceite:** fixture valido processa uma vez; assinatura invalida, payload
   antigo ou evento repetido nao baixa a mesma conta novamente.
+- **Evidencias (2026-08-30):** assinatura/token nativo por provedor
+  (MP x-signature HMAC-SHA256 + anti-replay por `ts`; Asaas `asaas-access-token`;
+  EfiPay `?token=`; Sicoob/TecnoSpeed `X-Webhook-Secret`), migracao 0099
+  (`webhook_secret`), tabela `webhook_log` (0100) com logs/detalhe/rechecagem
+  (`GET /api/webhooks/logs`, `POST /api/webhooks/rechecagem`) e tela Webhooks.
+  **Validado em staging**: baixa por notificacao (Asaas sandbox pix/boleto),
+  token real -> 200, errado/sem -> 401, provider nao configurado -> 503,
+  rechecagem 200, log de `nao_autorizado`. Bug corrigido: caixa com `PgRow`
+  (`0173d44`). **Pendencia menor:** reativar a fila do webhook no Asaas sandbox
+  (apos 15 falhas) e revalidar entrega real.
 
 ## 3. Fiscal NF-e/NFC-e e homologacao
 
-- **Status:** estrutural, nao pronto para producao.
+- **Status:** [ ] bloqueada por artefato externo (certificado + contador).
 - **Escopo:** completar XSD, assinatura A1/A3, chave com data real,
   destinatario/IBGE, CST/CSOSN/PIS/COFINS/ST e regras IBS/CBS vigentes.
 - **Pre-requisitos:** contador/responsavel fiscal, certificado, ambiente
@@ -37,60 +56,101 @@ exclusao de arquivos e disparado automaticamente.
   autorizacao em homologacao, cancelamento/contingencia testados e auditoria
   do snapshot explicavel.
 - **Regra:** `FISCAL_ENGINE_V2` permanece desligada em producao ate o aceite.
+- **Situacao real (2026-08-30):** permanece como estava — codigo estrutural,
+  sem XSD/assinatura/homologacao. Lista de pendentes fiscais em `PENDENCIAS.md`.
 
 ## 4. Site institucional
 
-- **Status:** bloqueada por artefato ausente.
+- **Status:** [~] em andamento.
 - **Escopo:** disponibilizar o projeto `CASA_LM/site`, apontar `siteConfig.ts`
   para `/api/publico/*`, consumir `has_more` e validar busca/filtros.
 - **Aceite:** build do site, CORS restrito aos dominios aprovados, pagina inicial
   e catalogo funcionando em desktop/mobile.
-- **Bloqueio atual:** este checkout nao contem `CASA_LM/site`.
+- **Situacao real (2026-08-30):** o projeto **existe** em
+  `C:\Users\jpsantos\Documents\Projetos\CASA_LM\site` (repo `janiosantos/casa-lm-site`,
+  Astro) — `api.ts` ja consome `/api/publico/*` com fallback SSR (mock). Falta:
+  apontar `siteConfig.ts`, restringir CORS aos dominios aprovados e validar
+  busca/filtros/paginacao no site.
 
 ## 5. Outbox e processamento assincrono
 
-- **Status:** fundação RQ + Redis implementada (worker + scheduler + redis nos
-  composes); rechecagem periódica ativa no staging; outbox transacional pendente.
+- **Status:** [x] fundacao + outbox transacional concluidas.
 - **Escopo:** outbox transacional para cobrancas, webhooks, imagens e
   integracoes externas; retry com backoff, dead-letter, observabilidade e
   chaves de idempotencia.
-- **Pre-requisitos:** (decisao tomada) worker RQ + Redis; definir quais
+- **Pre-requisitos:** worker RQ + Redis (decisao tomada); definir quais
   operacoes saem do request HTTP e o contrato de reprocessamento.
 - **Aceite:** falha externa nao desfaz o fato de negocio, reprocessamento e
   seguro, duplicatas sao ignoradas e itens mortos aparecem para operador.
+- **Evidencias (2026-08-30):** Redis + worker RQ + scheduler nos 3 composes;
+  rechecagem periodica (`RECHECAGEM_INTERVAL_MIN`, default 15) e `rodar_outbox`
+  (`OUTBOX_INTERVAL_SEC`, default 60); tabela **`outbox`** (migracao 0101) com
+  `topico/payload/status/tentativas/proxima_tentativa/ultimo_erro/idempotencia_key`;
+  backoff exponencial 60s·2ⁿ, dead-letter apos 5 tentativas; consumidor
+  `webhook.rechecagem`; **webhook 503 enfileira a rechecagem da conta**
+  (idempotente `webhook:provider:payment_id`). Endpoints
+  `GET /api/webhooks/outbox`, `POST /api/webhooks/outbox/rodar`. Validado em
+  staging (webhook efipay sem config -> 503 -> outbox -> worker processou -> ok).
 
 ## 6. Frontend, performance e testes E2E
 
-- **Status:** parcialmente iniciado.
+- **Status:** [x] modularizacao concluida; **divida residual** (performance/E2E).
 - **Escopo:** modularizar telas grandes, adicionar cache/query client e schemas
   runtime, virtualizar tabelas extensas e ampliar testes de fluxos criticos.
 - **Pre-requisitos:** definir contrato de erro da API e paginas prioritarias:
   PDV, estoque, financeiro, compras e fiscal.
 - **Aceite:** typecheck/build limpos, cobertura dos fluxos principais, loading,
   empty/error states e sem regressao mobile/tablet.
+- **Evidencias (2026-08-30):** **P6 concluida — 29 telas modularizadas, 93
+  modulos** em 26 pastas (financeiro, produtos, compras, fiscal, pre-venda,
+  precos, orcamentos, caixa, estoque, configuracoes, cotacoes, catalogo,
+  posvenda, bancos, atualizacoes, historico, dashboard, clientes, fornecedores,
+  usuarios, perfis, unidades, vendedores, plano_contas, solicitacoes,
+  diagnostico_variacoes). Contrato de erro `ApiError` + `mensagemErro`.
+  **27 testes frontend** (era 13) + typecheck/build verdes. Corrigido mojibake
+  (double-encoding cp1252) em todo o frontend (dry-run = 0).
+  **Divida residual do P6:** query client/cache, schemas runtime, virtualizacao
+  de tabelas extensas e testes E2E de fluxos criticos.
 
 ## 7. TLS e sincronizacao de ambientes
 
-- **Status:** procedimento documentado, execucao operacional pendente.
+- **Status:** [x] concluida (TLS ativo em STAGING; VM sincronizada).
 - **Escopo:** emitir Let's Encrypt via DNS-01 Cloudflare, revisar roteamento
   443, validar renovacao e sincronizar a VM com git/pull e a release aprovada.
 - **Pre-requisitos:** token Cloudflare Zone:DNS:Edit, acesso ao roteador/VM,
   backup e autorizacao explicita de deploy/restart.
 - **Aceite:** HTTPS valido, renovacao verificada, `/api/health` e smoke test
   executados na VM e staging.
+- **Evidencias (2026-08-30):** cert Let's Encrypt emitido via DNS-01 Cloudflare
+  (produzido e compartilhado via volume `siscom_certbot-etc`); **staging em
+  HTTPS :444** (`NGINX_MODE=staging`, HTTP :8081 + HTTPS :444; NAT publica
+  6174 -> 444). `nginx-entrypoint.sh` com NGINX_MODE, `resolver 127.0.0.11` +
+  proxy com variavel. **VM 10.189.14.9 sincronizada** (git pull, stack rebuild,
+  `versioning apply` — schema 101; health + pronto OK).
+  **Pendente de operacao autorizada:** ativar o TLS no dominio de producao
+  (redirecionamento de porta para a 443 interna + `compose up -d --build`).
 
 ## 8. Saneamento de imagens e arquivos
 
-- **Status:** aguardando confirmacao de exclusao.
+- **Status:** [~] dry-run concluido; **aguardando confirmacao de exclusao**.
 - **Escopo:** revisar os produtos sem imagem, executar lote por fornecedor e
   somente depois remover arquivos/pastas orfas identificados.
 - **Pre-requisitos:** backup, relatorio dry-run com contagem e lista de paths,
   aprovacao do responsavel e janela de manutencao.
 - **Aceite:** nenhum produto ativo perde imagem, relatorio antes/depois salvo,
   rollback por backup disponivel.
+- **Evidencias (2026-08-30):** dry-run commitado em `reports/*` — **3.188
+  produtos sem imagem** (3.181 ativos), 0 linhas quebradas, **5.648 arquivos
+  orfaos (435 MB)** e **2.742 pastas orfas (1.060 MB)**; nenhum sem-imagem tem
+  arquivo orfao (precisa lote por fornecedor). **Tarefa deixada pendente pelo
+  usuario** (aguarda aprovacao para lote + remocao).
 
 ## Gate de transicao
 
 Cada etapa deve registrar no `CONTEXTO_SESSAO.md` status, evidencias, risco e
 proximo passo. A etapa seguinte nao deve ser iniciada se o aceite anterior ou
 seu plano de rollback estiver ausente.
+
+**Proximo passo sugerido:** P8 (aprovar lote por fornecedor + remocao de
+orfao) ou divida residual do P6 (query client/cache + E2E). P3 depende de
+certificado/contador externos.

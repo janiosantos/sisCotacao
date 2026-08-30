@@ -1,41 +1,26 @@
-# Retomada — Migração para Tailwind (próxima sessão)
+# Retomada — próxima sessão
 
-## Estado atual
-- Branch: `feature/layout-legacy-react` (commit `1d90b3b` já empurrado).
-- Shell Tailwind (sidebar + topbar) + componentes em `frontend/src/ui/ui.tsx` + Tailwind v4 + `lucide-react`.
+> ⚠️ **Este arquivo está obsoleto** (era o plano da migração para Tailwind, concluída
+> há várias releases — todas as telas estão em React + Tailwind e a P6 modularizou
+> as 29 telas). **Use `CONTEXTO_SESSAO.md` (estado/pendências) e
+> `PLANO_EXECUCAO_8_PENDENCIAS.md` (status das 8 pendências)** como referência atual.
 
-## Telas JÁ convertidas (React + Tailwind)
-dashboard, clientes, fornecedores, vendedores, usuarios, unidades, categorias,
-plano_contas, solicitacoes, bancos, posvenda, historico, diagnostico_variacoes,
-estoque, financeiro.
+## Estado atual (resumo 2026-08-30)
 
-## Telas RESTANTES (ainda `.ts`, rodam no shell via adaptador)
-`precos`, `fiscal`, `orcamentos`, `cotacoes`, `catalogo`, `compras`, `produtos`, `pdv`
+- **Schema dev/staging**: 101 (0097..0101). Produção em v2.32.2 (sem deploy recente).
+- **8 pendências**: P1/P2/P5/P7 concluídas; P6 modularização concluída (93 módulos,
+  27 testes frontend; residual: cache/E2E); P4 em andamento (`CASA_LM/site`);
+  P8 dry-run pronto (aguarda aprovação para remoção); P3 bloqueada (certificado/contador).
+- **Hardening** (RBAC deny-default, SSRF, rate limit, segredos) validado em staging.
+- **Acesso ao servidor (staging)**: SSH `root@10.189.14.8` (chave `id_rsa`), repo
+  persistente `/home/jpsantos/siscom/repo`. Deploy direto: `git pull && docker compose
+  -p siscom-staging -f deployment/compose/docker-compose.staging.yml up -d --build <svc>
+  && versioning apply`. Login staging: `admin/admin123`.
 
-Ordem recomendada:
-`precos` → `fiscal` → `orcamentos` → `cotacoes` → `catalogo` → `compras` → `produtos` → `pdv`
+## Próximos passos (ordem sugerida)
 
-## Padrão de conversão (uma página por vez)
-1. Ler `frontend/src/pages/X.ts`.
-2. Criar `frontend/src/pages/X.tsx` com `export default function X()` usando os
-   componentes de `../ui/ui` (Button, Table/THead/TBody/Cell, Modal, Field, Input,
-   Select, Textarea, Badge, PageHeader, Loading, EmptyRow, StatCard, Card).
-3. Deletar `frontend/src/pages/X.ts`.
-4. Em `frontend/src/routes.tsx`:
-   - adicionar `const X = lazy(() => import("./pages/X"));`
-   - trocar `loader: () => import("./pages/X").then((m) => m.render)` por `component: X`.
-5. Rodar `npm run typecheck` e `npm run build` (na pasta `frontend`).
-
-## Comandos úteis
-```powershell
-cd frontend
-npm run dev          # dev server (:5173, proxy /api -> :8000)
-npm run typecheck
-npm run build
-```
-
-## Observações
-- `login.ts` e `importia.ts` ficam como `.ts` de propósito (util/modal, não são rotas).
-- O container de dev do Docker (`:5173`) precisa ser reconstruído para instalar as
-  dependências novas (React, Tailwind, lucide-react) — `docker compose up -d --build frontend`.
-- Cada página usa `api.*` de `../api/client`; `toast` de `../ui/dom`; formatação de `../ui/format`.
+1. P8 — aprovar lote de imagens por fornecedor + remoção de órfãos (dry-run em `reports/*`).
+2. P6 residual — query client/cache, schemas runtime, virtualização de tabelas, testes E2E.
+3. P4 — apontar `siteConfig.ts` do `CASA_LM/site` + CORS restrito.
+4. Publicação autorizada — release hardening + P2/P5/P6 em produção.
+5. P3 fiscal — desbloquear com certificado A1/A3 + contador.

@@ -226,8 +226,9 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 8. Renomear pasta raiz para `casa-lm` (manual: fechar editores, renomear, reabrir — ambas máquinas).
 
 ### Ambiente / infra
-9. `frontend/tests/` — ✅ **esqueleto entregue (v2.15.0)**: vitest + `vitest.config.ts` + `tests/format.test.ts`; script `npm test`. Dívida residual: ampliar cobertura.
-10. OpenAPI fase 2: ✅ **cresceu nos blueprints tocados (v2.15.0)** — estoque (`/api/estoque/saldo`), fiscal (`perfil-efetivo`) e contábil (gatilhos/lançamentos) documentados em `backend/openapi.json`; segue regra de crescer por blueprint tocado.
+9. `frontend/tests/` — ✅ **esqueleto entregue (v2.15.0)**: vitest + `vitest.config.ts` + `tests/format.test.ts`; script `npm test`. **Hoje: 27 testes** (ApiError/`mensagemErro`, client com mock fetch, Table/Badge). Dívida residual: testes E2E de fluxos críticos.
+10. OpenAPI fase 2: ✅ **cresceu nos blueprints tocados (v2.15.0)** — estoque (`/api/estoque/saldo`), fiscal (`perfil-efetivo`) e contábil (gatilhos/lançamentos) documentados em `backend/openapi.json` (**66 paths**); segue regra de crescer por blueprint tocado.
+11. **P6 — Frontend modularizado (v2.35.0/2026-08-30, validado em staging)**: **29 telas → 93 módulos** em 26 pastas (`src/pages/<tela>/`), extração verbatim sem mudança de comportamento; telas restantes sem extração viável: `categorias` (árvore de componente único), `webhooks` (componente único), `recebimento` (`ModalRecebimento` já exportado). Corrigido **mojibake** (double-encoding cp1252) em todo o frontend (dry-run = 0). Dívida residual: query client/cache, schemas runtime, virtualização de tabelas extensas e E2E.
 
 ## 11. Controle de acesso por perfil (RBAC)
 
