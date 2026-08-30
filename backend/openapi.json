@@ -2384,6 +2384,117 @@
      }
     }
    }
+  },
+  "/api/webhooks/logs": {
+   "get": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Logs de webhooks de pagamento (auditoria)",
+    "parameters": [
+     {
+      "name": "provider",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "status",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "processado|duplicado|ignorado|nao_autorizado|erro|payload_invalido|caixa_pendente"
+     },
+     {
+      "name": "desde",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "default": 50,
+       "maximum": 200
+      }
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "default": 0
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Lista de logs"
+     }
+    }
+   }
+  },
+  "/api/webhooks/logs/{log_id}": {
+   "get": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Detalhe de um log de webhook (inclui payload)",
+    "parameters": [
+     {
+      "name": "log_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Log completo"
+     },
+     "404": {
+      "description": "Não encontrado"
+     }
+    }
+   }
+  },
+  "/api/webhooks/rechecagem": {
+   "post": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Rechecagem em lotes: consulta o provedor das cobranças pendentes e baixa as pagas",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "provider": {
+          "type": "string"
+         },
+         "limite": {
+          "type": "integer",
+          "default": 50
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Resumo da rechecagem (verificadas, pagas, erros)"
+     }
+    }
+   }
   }
  },
  "components": {

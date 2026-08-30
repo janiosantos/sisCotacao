@@ -19,6 +19,7 @@ from catalog_server.payments import service as payment_service
 from catalog_server.payments.base import WebhookNaoAutorizado
 from catalog_server.payments.registry import ProviderIndisponivel
 from catalog_server.payments.repo import payment_provider_repo
+from catalog_server.services import webhook_log
 
 api_payments_bp = Blueprint("api_payments", __name__)
 
@@ -90,24 +91,104 @@ def anexar_comprovante(conta_id: int):
 
 # ─── Webhook (baixa automática) ─────────────────────────────
 
+def _evento_do_payload(provider: str, payload: dict) -> tuple[str | None, str | None]:
+    """Extrai (evento, payment_id) do payload de forma genérica por provedor."""
+    if provider == "asaas":
+        pay = payload.get("payment") or {}
+        return payload.get("event"), str(pay.get("id") or "")
+    if provider == "mercadopago":
+        data = payload.get("data") or {}
+        return payload.get("type"), str(data.get("id") or "")
+    if provider == "efipay":
+        pix = payload.get("pix") or {}
+        charge = payload.get("charge") or {}
+        return payload.get("type"), str(pix.get("txid") or charge.get("id") or "")
+    if provider == "sicoob":
+        pixs = payload.get("pix") or []
+        return "pix", str((pixs[0] or {}).get("txid") or "") if pixs else None
+    return None, str((payload.get("payment") or {}).get("id") or "")
+
+
+def _status_do_resultado(r: dict) -> str:
+    if r.get("duplicado"):
+        return "duplicado"
+    if r.get("ignorado"):
+        return "ignorado"
+    if r.get("caixa_pendente"):
+        return "caixa_pendente"
+    return "processado"
+
+
 @api_payments_bp.post("/api/webhooks/payments/<provider>")
 def webhook_payment(provider: str):
+    ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or request.remote_addr
     payload = request.get_json(silent=True) or {}
+    evento, payment_id = _evento_do_payload(provider, payload)
     if not isinstance(payload, dict) or not payload:
+        webhook_log.registrar(provider, "payload_invalido", http_status=400, ip=ip,
+                              payload=payload, evento=evento, payment_id=payment_id)
         return jsonify({"error": "Payload de webhook inválido"}), 400
     try:
         resultado = payment_service.processar_webhook(
             provider, payload, dict(request.headers), request.args.to_dict()
         )
+        status = _status_do_resultado(resultado)
+        webhook_log.registrar(provider, status, http_status=200, assinatura_ok=True,
+                              ip=ip, payload=payload, evento=evento, payment_id=payment_id)
+        return jsonify(resultado)
     except WebhookNaoAutorizado as exc:
+        webhook_log.registrar(provider, "nao_autorizado", http_status=401, ip=ip,
+                              payload=payload, erro=str(exc), evento=evento, payment_id=payment_id)
         return jsonify({"error": str(exc)}), 401
     except ProviderIndisponivel as exc:
+        webhook_log.registrar(provider, "nao_configurado", http_status=503, ip=ip,
+                              payload=payload, erro=str(exc), evento=evento, payment_id=payment_id)
         return jsonify({"error": str(exc)}), 503
     except ValueError as exc:
+        webhook_log.registrar(provider, "erro", http_status=400, ip=ip,
+                              payload=payload, erro=str(exc), evento=evento, payment_id=payment_id)
         return jsonify({"error": str(exc)}), 400
     except Exception:
         current_app.logger.exception("Falha inesperada ao processar webhook de pagamento")
+        webhook_log.registrar(provider, "erro", http_status=502, ip=ip,
+                              payload=payload, erro="exceção inesperada", evento=evento,
+                              payment_id=payment_id)
         return jsonify({"error": "Webhook não processado"}), 502
+
+
+# ─── Logs de webhook e rechecagem ───────────────────────────
+
+@api_payments_bp.get("/api/webhooks/logs")
+def listar_webhook_logs():
+    rows, total = webhook_log.listar(
+        provider=(request.args.get("provider") or "").strip(),
+        status=(request.args.get("status") or "").strip(),
+        desde=(request.args.get("desde") or "").strip(),
+        limite=min(200, max(1, request.args.get("limit", 50, type=int))),
+        offset=max(0, request.args.get("offset", 0, type=int)),
+    )
+    return jsonify({"items": rows, "total": total})
+
+
+@api_payments_bp.get("/api/webhooks/logs/<int:log_id>")
+def detalhe_webhook_log(log_id: int):
+    log = webhook_log.detalhe(log_id)
+    if not log:
+        return jsonify({"error": "Log não encontrado"}), 404
+    return jsonify(log)
+
+
+@api_payments_bp.post("/api/webhooks/rechecagem")
+def rechecagem_webhooks():
+    data = request.get_json(silent=True) or {}
+    try:
+        resultado = webhook_log.rechecagem(
+            provider=(data.get("provider") or "").strip(),
+            limite=max(1, min(200, int(data.get("limite") or 50))),
+        )
+    except Exception as exc:
+        current_app.logger.exception("Falha na rechecagem de webhooks")
+        return jsonify({"error": f"Rechecagem falhou: {exc}"}), 400
     return jsonify(resultado)
 
 

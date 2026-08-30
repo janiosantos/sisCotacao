@@ -118,6 +118,8 @@ _RECURSO_POR_PREFIXO: list[tuple[str, str]] = [
     ("/api/adiantamentos", "financeiro"),
     ("/api/payment-providers", "financeiro"),
     ("/api/webhooks/payments", "financeiro"),
+    ("/api/webhooks/logs", "financeiro"),
+    ("/api/webhooks/rechecagem", "financeiro"),
     ("/api/caixa", "caixa"),
     ("/api/bancos", "bancos"),
     ("/api/plano-contas", "plano_contas"),
