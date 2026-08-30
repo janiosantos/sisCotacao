@@ -1,4 +1,4 @@
-// pages/catalogo.tsx — catálogo (filtros + grid) em cards planos (um produto por card).
+﻿// pages/catalogo.tsx â€” catÃ¡logo (filtros + grid) em cards planos (um produto por card).
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -10,9 +10,10 @@ import {
   type DetalheCartItem,
 } from "../api/client";
 import * as Cart from "../cart";
-import { fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
-import { Badge, Button, Field, Input, Loading, Modal, Select } from "../ui/ui";
+import { Button, Field, Input, Loading, Select } from "../ui/ui";
+import { ProductCard } from "./catalogo/product-card";
+import { ModalProduto } from "./catalogo/modal-produto";
 
 const PAGE = 60;
 
@@ -28,10 +29,10 @@ function detFromItem(p: ProdutoResumo): Partial<DetalheCartItem> {
 
 function titleCase(s: string): string {
   if (!s) return s;
-  return s.toLowerCase().replace(/(^|\s|\/|\()([a-zà-ÿ])/g, (_m, sep: string, c: string) => sep + c.toUpperCase());
+  return s.toLowerCase().replace(/(^|\s|\/|\()([a-zÃ -Ã¿])/g, (_m, sep: string, c: string) => sep + c.toUpperCase());
 }
 
-// ---------------- página ----------------
+// ---------------- pÃ¡gina ----------------
 
 export default function Catalogo() {
   const [categorias, setCategorias] = useState<CategoriaMap>({});
@@ -83,7 +84,7 @@ export default function Catalogo() {
         setItems(res.items as ProdutoResumo[]);
         setTotal(res.total);
       })
-      .catch((e) => toast("Erro ao carregar catálogo: " + (e as Error).message, "error"))
+      .catch((e) => toast("Erro ao carregar catÃ¡logo: " + (e as Error).message, "error"))
       .finally(() => {
         if (alive) setCarregando(false);
       });
@@ -141,13 +142,13 @@ export default function Catalogo() {
     <div className="flex gap-6">
       <div className="min-w-0 flex-1">
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-gray-900">Catálogo</h1>
-          <p className="mt-1 text-sm text-gray-500">Consulte produtos e selecione quantidades para montar uma cotação.</p>
+          <h1 className="text-2xl font-semibold text-gray-900">CatÃ¡logo</h1>
+          <p className="mt-1 text-sm text-gray-500">Consulte produtos e selecione quantidades para montar uma cotaÃ§Ã£o.</p>
         </div>
 
         <div className="mb-4 flex flex-wrap items-end gap-3">
           <Field label="Buscar" className="min-w-[240px] flex-1">
-            <Input placeholder="Nome, código, marca…" value={busca} onChange={(e) => onSearch(e.target.value)} />
+            <Input placeholder="Nome, cÃ³digo, marcaâ€¦" value={busca} onChange={(e) => onSearch(e.target.value)} />
           </Field>
           <Field label="Categoria">
             <Select
@@ -186,7 +187,7 @@ export default function Catalogo() {
           <Field label="Ordenar por">
             <Select value={filters.ordenar} onChange={(e) => setFilters((f) => ({ ...f, ordenar: e.target.value }))} className="w-44">
               <option value="">Nome</option>
-              <option value="abc">Curva ABC (A → C)</option>
+              <option value="abc">Curva ABC (A â†’ C)</option>
             </Select>
           </Field>
           <Button onClick={limpar}>Limpar filtros</Button>
@@ -250,11 +251,11 @@ export default function Catalogo() {
         {paginas > 1 && (
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-gray-500">
-              Página {page} de {paginas} · {total} produto(s)
+              PÃ¡gina {page} de {paginas} Â· {total} produto(s)
             </span>
             <div className="flex gap-1">
               <Button size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                «
+                Â«
               </Button>
               {(() => {
                 const inicio = Math.max(1, page - 3);
@@ -266,7 +267,7 @@ export default function Catalogo() {
                       1
                     </Button>
                   );
-                  if (inicio > 2) botoes.push(<span key="e1">…</span>);
+                  if (inicio > 2) botoes.push(<span key="e1">â€¦</span>);
                 }
                 for (let p = inicio; p <= fim; p++)
                   botoes.push(
@@ -275,7 +276,7 @@ export default function Catalogo() {
                     </Button>
                   );
                 if (fim < paginas) {
-                  if (fim < paginas - 1) botoes.push(<span key="e2">…</span>);
+                  if (fim < paginas - 1) botoes.push(<span key="e2">â€¦</span>);
                   botoes.push(
                     <Button key={paginas} size="sm" onClick={() => setPage(paginas)}>
                       {paginas}
@@ -285,7 +286,7 @@ export default function Catalogo() {
                 return botoes;
               })()}
               <Button size="sm" disabled={page >= paginas} onClick={() => setPage((p) => p + 1)}>
-                »
+                Â»
               </Button>
             </div>
           </div>
@@ -296,136 +297,6 @@ export default function Catalogo() {
 
       {modalProduto != null && <ModalProduto produtoId={modalProduto} onClose={() => setModalProduto(null)} />}
     </div>
-  );
-}
-
-function ProductCard({
-  prod,
-  qty,
-  onSetQty,
-  onOpen,
-}: {
-  prod: ProdutoResumo;
-  qty: number;
-  onSetQty: (q: number) => void;
-  onOpen: () => void;
-}) {
-  return (
-    <article className={`overflow-hidden rounded-lg border bg-white shadow-sm ${qty > 0 ? "border-brand-500 ring-1 ring-brand-500" : "border-gray-200"}`}>
-      <div className="flex h-40 cursor-pointer items-center justify-center bg-gray-50 p-3" onClick={onOpen}>
-        {prod.imagem_url ? (
-          <img src={prod.imagem_url} loading="lazy" alt="" className="max-h-full max-w-full object-contain" />
-        ) : (
-          <span className="font-mono text-xs text-gray-400">sem imagem</span>
-        )}
-      </div>
-      <div className="p-3">
-        <p className="font-mono text-xs text-gray-500">
-          {prod.classe_abc ? <Badge tone="blue">{prod.classe_abc}</Badge> : null} {prod.sku || "#" + prod.id}
-        </p>
-        <p className="mt-1 line-clamp-2 text-sm font-medium text-gray-900">{prod.name}</p>
-        {prod.spec ? <p className="mt-0.5 line-clamp-1 text-xs text-gray-500">{prod.spec}</p> : null}
-        {prod.brand ? <p className="text-xs text-gray-400">{prod.brand}</p> : null}
-        <div className="mt-2 flex items-center justify-between">
-          <p className="text-base font-semibold text-gray-900">{fmtMoney(prod.price)}</p>
-          {prod.package_label ? <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{prod.package_label}</span> : null}
-        </div>
-        {qty > 0 ? <p className="mt-1 text-xs text-brand-700">{qty} no carrinho</p> : null}
-      </div>
-      <div className="flex items-center justify-between border-t border-gray-100 px-3 py-2">
-        <Button size="sm" variant="ghost" onClick={() => onSetQty(Math.max(0, qty - 1))}>
-          –
-        </Button>
-        <input
-          type="number"
-          min={0}
-          className="w-16 rounded-md border border-gray-300 px-2 py-1 text-center text-sm focus:border-brand-500 focus:outline-none"
-          value={qty}
-          onChange={(e) => onSetQty(Math.max(0, parseInt(e.target.value, 10) || 0))}
-        />
-        <Button size="sm" variant="ghost" onClick={() => onSetQty(qty + 1)}>
-          +
-        </Button>
-      </div>
-    </article>
-  );
-}
-
-function ModalProduto({ produtoId, onClose }: { produtoId: number; onClose: () => void }) {
-  const [p, setP] = useState<ProdutoResumo | null>(null);
-  const [qty, setQty] = useState(1);
-  const [imgs, setImgs] = useState<string[]>([]);
-  const [main, setMain] = useState("");
-
-  useEffect(() => {
-    void api
-      .detalharProduto(produtoId)
-      .then((prod) => {
-        setP(prod);
-        const arr = (prod as ProdutoResumo & { image_urls?: string[] }).image_urls || [];
-        setImgs(arr);
-        setMain(arr.length ? arr[0] : "");
-      })
-      .catch(() => toast("Erro ao carregar produto", "error"));
-  }, [produtoId]);
-
-  const adicionar = () => {
-    if (!p) return;
-    const q = Math.max(1, qty || 1);
-    Cart.addItem(p.id, q, {
-      name: p.name || "",
-      spec: [(p as ProdutoResumo & { color?: string }).color].filter(Boolean).join(", "),
-      brand: p.brand || "",
-      price: p.price || 0,
-      imagem_url: main || "",
-    });
-    onClose();
-    toast(`${q} item(ns) adicionado(s) à sua cotação`, "success");
-  };
-
-  return (
-    <Modal open onClose={onClose} title="Produto" footer={
-      <>
-        <Button onClick={onClose}>Fechar</Button>
-        <Button variant="primary" onClick={adicionar}>
-          Adicionar à cotação
-        </Button>
-      </>
-    }>
-      {!p ? (
-        <Loading />
-      ) : (
-        <div>
-          {main ? <img src={main} alt="" className="mx-auto max-h-56 object-contain" /> : null}
-          {imgs.length > 1 && (
-            <div className="mt-2 flex gap-2">
-              {imgs.map((u, i) => (
-                <img
-                  key={i}
-                  src={u}
-                  onClick={() => setMain(u)}
-                  className={`h-12 w-12 cursor-pointer rounded border object-contain ${main === u ? "border-brand-500" : "border-gray-200"}`}
-                  alt=""
-                />
-              ))}
-            </div>
-          )}
-          <p className="mt-3 font-mono text-xs text-gray-500">{p.sku || "#" + p.id}</p>
-          <h3 className="text-base font-semibold text-gray-900">{p.name}</h3>
-          {p.brand ? <div className="text-sm text-gray-500">Marca: {p.brand}</div> : null}
-          {(p as ProdutoResumo & { color?: string }).color ? (
-            <div className="text-sm text-gray-500">Cor: {(p as ProdutoResumo & { color?: string }).color}</div>
-          ) : null}
-          <div className="mt-2 text-lg font-semibold text-gray-900">{fmtMoney(p.price)}</div>
-          {p.pix_price ? <div className="text-sm font-semibold text-emerald-600">PIX: {fmtMoney(p.pix_price)}</div> : null}
-          {p.installment ? <div className="text-sm text-gray-500">{p.installment}</div> : null}
-          <div className="mt-4 flex items-center gap-2">
-            <Input type="number" min={1} step={1} value={qty} onChange={(e) => setQty(parseInt(e.target.value, 10) || 1)} className="w-24" />
-            <span className="text-sm text-gray-500">unidade(s)</span>
-          </div>
-        </div>
-      )}
-    </Modal>
   );
 }
 
