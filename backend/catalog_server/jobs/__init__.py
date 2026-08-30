@@ -13,7 +13,8 @@ from redis import Redis
 
 
 def _redis() -> Redis:
-    return Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"), decode_responses=True)
+    # decode_responses=False (padrão): RQ espera bytes no broker.
+    return Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
 
 
 def enfileirar(func: str, *args, timeout: int = 120, **kwargs) -> None:
