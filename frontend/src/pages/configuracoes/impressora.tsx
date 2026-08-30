@@ -1,0 +1,106 @@
+﻿// pages/configuracoes/impressora.tsx - módulo Configurações (Impressora).
+
+import { useEffect, useState } from "react";
+import { api, type ConfigImpressao } from "../../api/client";
+import { toast } from "../../ui/dom";
+import { Button, Field, Input, Select } from "../../ui/ui";
+
+export function Impressora() {
+  const [cfg, setCfg] = useState<ConfigImpressao | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [testando, setTestando] = useState(false);
+
+  useEffect(() => {
+    void api
+      .getConfigImpressao()
+      .then(setCfg)
+      .catch(() => toast("Não foi possível ler a config da impressora", "error"));
+  }, []);
+
+  const salvar = async () => {
+    if (!cfg) return;
+    setSalvando(true);
+    try {
+      await api.setConfigImpressao({
+        driver: cfg.driver || "escpos_tcp",
+        host: cfg.host.trim(),
+        porta: cfg.porta,
+        papel_mm: cfg.papel_mm,
+        auto_impressao: cfg.auto_impressao,
+      });
+      toast("Config salva", "success");
+    } catch (e) {
+      toast("Erro: " + (e as Error).message, "error");
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const testar = async () => {
+    setTestando(true);
+    try {
+      await api.imprimirTeste();
+      toast("Teste enviado para a impressora", "success");
+    } catch (e) {
+      toast("Teste falhou: " + (e as Error).message, "error");
+    } finally {
+      setTestando(false);
+    }
+  };
+
+  return (
+    <section className="rounded-lg border border-gray-200 bg-white p-5">
+      <h2 className="mb-1 text-base font-semibold text-gray-900">Retaguarda de impressão</h2>
+      <p className="mb-4 text-sm text-gray-500">O cupom é entregue ao driver escolhido abaixo, sem diálogo de impressora.</p>
+
+      {!cfg ? (
+        <p className="py-6 text-center text-sm text-gray-400">Carregando…</p>
+      ) : (
+        <div className="space-y-4">
+          <Field label="Tipo de impressora (driver)">
+            <Select value={cfg.driver || "escpos_tcp"} onChange={(e) => setCfg({ ...cfg, driver: e.target.value })}>
+              <option value="escpos_tcp">ESC/POS via rede (TCP) — porta 9100</option>
+              <option value="arquivo">Arquivo (grava o cupom em binário, para teste)</option>
+            </Select>
+          </Field>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Field label="Host">
+              <Input value={cfg.host} onChange={(e) => setCfg({ ...cfg, host: e.target.value })} disabled={(cfg.driver || "escpos_tcp") !== "escpos_tcp"} />
+            </Field>
+            <Field label="Porta">
+              <Input type="number" min={1} max={65535} value={cfg.porta} onChange={(e) => setCfg({ ...cfg, porta: parseInt(e.target.value, 10) || 0 })} disabled={(cfg.driver || "escpos_tcp") !== "escpos_tcp"} />
+            </Field>
+            <Field label="Papel (mm)">
+              <Select value={String(cfg.papel_mm)} onChange={(e) => setCfg({ ...cfg, papel_mm: parseInt(e.target.value, 10) })}>
+                <option value="80">80 mm</option>
+                <option value="58">58 mm</option>
+              </Select>
+            </Field>
+          </div>
+          <p className="text-xs text-gray-400">
+            Em Docker, o host <code>127.0.0.1</code> é enviado automaticamente para a máquina do emulador
+            (<code>host.docker.internal</code>) — a impressora/emulador deve estar rodando no computador hospedeiro.
+          </p>
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={!!cfg.auto_impressao}
+              onChange={(e) => setCfg({ ...cfg, auto_impressao: e.target.checked ? 1 : 0 })}
+            />
+            Imprimir automaticamente ao salvar
+          </label>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => void testar()} disabled={testando}>
+              {testando ? "Enviando…" : "Testar"}
+            </Button>
+            <Button variant="primary" onClick={() => void salvar()} disabled={salvando}>
+              {salvando ? "Salvando…" : "Salvar"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+

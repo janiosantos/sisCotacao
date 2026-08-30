@@ -1,5 +1,5 @@
-﻿// pages/orcamentos.tsx â€” lista de orÃ§amentos de venda salvos (PDV).
-// Lifecycle orÃ§amentoâ†’pedido (v2.18.0): transiÃ§Ãµes controladas + alÃ§ada de desconto.
+﻿// pages/orcamentos.tsx — lista de orçamentos de venda salvos (PDV).
+// Lifecycle orçamento→pedido (v2.18.0): transições controladas + alçada de desconto.
 
 import { useEffect, useState } from "react";
 import { api, type OrcamentoDetalhe, type OrcamentoLista } from "../api/client";
@@ -28,7 +28,7 @@ export default function Orcamentos() {
     try {
       setLista(await api.listarOrcamentos(filtro));
     } catch (e) {
-      toast("Erro ao carregar orÃ§amentos: " + (e as Error).message, "error");
+      toast("Erro ao carregar orçamentos: " + (e as Error).message, "error");
     } finally {
       setCarregando(false);
     }
@@ -48,11 +48,11 @@ export default function Orcamentos() {
   };
 
   const excluir = async (id: number) => {
-    if (!window.confirm("Excluir este orÃ§amento?")) return;
+    if (!window.confirm("Excluir este orçamento?")) return;
     try {
       await api.excluirOrcamento(id);
       setDetalhe(null);
-      toast("OrÃ§amento excluÃ­do", "success");
+      toast("Orçamento excluído", "success");
       await carregar();
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
@@ -62,7 +62,7 @@ export default function Orcamentos() {
   const reabrir = async (id: number) => {
     try {
       await api.reabrirOrcamento(id);
-      toast("Pedido reaberto para correÃ§Ã£o â€” desconto reavaliado", "success");
+      toast("Pedido reaberto para correção — desconto reavaliado", "success");
       setDetalhe(null);
       await carregar();
     } catch (e) {
@@ -82,18 +82,18 @@ export default function Orcamentos() {
   return (
     <div>
       <PageHeader
-        title="OrÃ§amentos Â· Pedidos"
-        subtitle="OrÃ§amentos de venda montados no PDV (orÃ§amento = proposta; finalizado = pedido)."
+        title="Orçamentos · Pedidos"
+        subtitle="Orçamentos de venda montados no PDV (orçamento = proposta; finalizado = pedido)."
         actions={
           <>
             <Button variant="outline" onClick={() => void carregarFila()}>
-              Fila de aprovaÃ§Ã£o
+              Fila de aprovação
             </Button>
             <a
               href="#/pre-venda"
               className="inline-flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700"
             >
-              + Nova prÃ©-venda
+              + Nova pré-venda
             </a>
           </>
         }
@@ -117,19 +117,19 @@ export default function Orcamentos() {
         <Loading />
       ) : lista.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 bg-white py-16 text-center text-sm text-gray-400">
-          <p>Nenhum orÃ§amento ainda</p>
+          <p>Nenhum orçamento ainda</p>
           <p>
-            Monte uma prÃ©-venda no <a className="text-brand-600 hover:underline" href="#/pre-venda">PDV</a>.
+            Monte uma pré-venda no <a className="text-brand-600 hover:underline" href="#/pre-venda">PDV</a>.
           </p>
         </div>
       ) : (
         <Table>
-          <THead cols={["NÂº", "Cliente", "Status", "Desconto", "Itens", "Total", "Criada em", ""]} />
+          <THead cols={["Nº", "Cliente", "Status", "Desconto", "Itens", "Total", "Criada em", ""]} />
           <TBody>
             {lista.map((o) => (
               <tr key={o.id} className="cursor-pointer hover:bg-gray-50" onClick={() => void abrirDetalhe(o.id)}>
                 <Cell className="font-mono">{o.numero}</Cell>
-                <Cell>{o.cliente || "â€”"}</Cell>
+                <Cell>{o.cliente || "—"}</Cell>
                 <Cell>
                   <Badge tone={statusTone(o.status)}>{STATUS_LABELS[o.status] || o.status}</Badge>
                 </Cell>
@@ -139,7 +139,7 @@ export default function Orcamentos() {
                   ) : o.desconto_autorizado ? (
                     <Badge tone="green">Autorizado</Badge>
                   ) : (
-                    "â€”"
+                    "—"
                   )}
                 </Cell>
                 <Cell>{o.n_itens}</Cell>
@@ -182,7 +182,7 @@ export default function Orcamentos() {
                       PDF
                     </a>
                     <Button size="sm" variant="ghost" onClick={() => void abrirDetalhe(o.id)} title="Detalhes">
-                      âš™
+                      ⚙
                     </Button>
                   </div>
                 </Cell>
@@ -242,22 +242,22 @@ export default function Orcamentos() {
         <Modal
           open
           onClose={() => setShowFila(false)}
-          title="Fila de aprovaÃ§Ã£o (desconto)"
+          title="Fila de aprovação (desconto)"
           wide
           footer={<Button onClick={() => setShowFila(false)}>Fechar</Button>}
         >
           {pendentes.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">Nenhum desconto pendente para sua alÃ§ada.</p>
+            <p className="py-8 text-center text-sm text-gray-400">Nenhum desconto pendente para sua alçada.</p>
           ) : (
             <Table>
-              <THead cols={["NÂº", "Cliente", "Desconto", "Sua alÃ§ada", "Total", ""]} />
+              <THead cols={["Nº", "Cliente", "Desconto", "Sua alçada", "Total", ""]} />
               <TBody>
                 {pendentes.map((p) => (
                   <tr key={p.id}>
                     <Cell className="font-mono">{p.numero}</Cell>
-                    <Cell>{p.cliente || "â€”"}</Cell>
-                    <Cell>{p.desconto_pct != null ? `${p.desconto_pct.toFixed(1)}%` : "â€”"}</Cell>
-                    <Cell>{p.limite_aprovador != null ? `${p.limite_aprovador.toFixed(1)}%` : "â€”"}</Cell>
+                    <Cell>{p.cliente || "—"}</Cell>
+                    <Cell>{p.desconto_pct != null ? `${p.desconto_pct.toFixed(1)}%` : "—"}</Cell>
+                    <Cell>{p.limite_aprovador != null ? `${p.limite_aprovador.toFixed(1)}%` : "—"}</Cell>
                     <Cell className="font-medium">{fmtMoney(p.total)}</Cell>
                     <Cell>
                       <div className="flex justify-end gap-2">

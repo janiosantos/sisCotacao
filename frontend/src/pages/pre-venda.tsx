@@ -1,4 +1,4 @@
-﻿// pages/pre-venda.tsx â€” PrÃ©-venda de orÃ§amentos (React + Tailwind).
+﻿// pages/pre-venda.tsx — Pré-venda de orçamentos (React + Tailwind).
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -92,10 +92,10 @@ export default function PreVenda() {
   >(null);
   const [modalDadosCliente, setModalDadosCliente] = useState(false);
   const [modalLocalizar, setModalLocalizar] = useState(false);
-  // Aviso de crÃ©dito do cliente (trava de crÃ©dito da loja).
+  // Aviso de crédito do cliente (trava de crédito da loja).
   const [avisoCredito, setAvisoCredito] = useState<{ texto: string; severidade: "warn" | "error" } | null>(null);
-  // Desconto acima da alÃ§ada jÃ¡ autorizado por um gerente (nesta composiÃ§Ã£o).
-  // Qualquer alteraÃ§Ã£o de itens/desconto expira essa autorizaÃ§Ã£o.
+  // Desconto acima da alçada já autorizado por um gerente (nesta composição).
+  // Qualquer alteração de itens/desconto expira essa autorização.
   const [descontoAutorizado, setDescontoAutorizado] = useState(false);
 
   const buscaRef = useRef<HTMLInputElement>(null);
@@ -116,20 +116,20 @@ export default function PreVenda() {
 
   const c = useMemo(() => calculosPdv(linhas, descModo, desconto), [linhas, descModo, desconto]);
 
-  // Reavalia o aviso de crÃ©dito quando o total da venda muda.
+  // Reavalia o aviso de crédito quando o total da venda muda.
   useEffect(() => {
     if (clienteId == null || clienteId === CLIENTE_PADRAO.id) return;
     const t = setTimeout(() => void carregarAvisoCredito(clienteId, cliente), 400);
     return () => clearTimeout(t);
   }, [c.total]);
 
-  // Limite de alÃ§ada do vendedor atual (temporariamente se aplica a todos,
-  // inclusive admin, atÃ© existirem grupos/permissÃµes).
+  // Limite de alçada do vendedor atual (temporariamente se aplica a todos,
+  // inclusive admin, até existirem grupos/permissões).
   const usuario = usuarioCorrente();
   const limiteAlcadaPct = usuario ? (usuario.desconto_limite_pct ?? 0) : 0;
 
-  // Qualquer alteraÃ§Ã£o no pedido (itens/quantidade/cliente/desconto/condiÃ§Ã£oâ€¦)
-  // expira a autorizaÃ§Ã£o de desconto anterior â€” reavalia do zero.
+  // Qualquer alteração no pedido (itens/quantidade/cliente/desconto/condição…)
+  // expira a autorização de desconto anterior — reavalia do zero.
   useEffect(() => {
     setDescontoAutorizado(false);
   }, [linhas, cliente, clienteId, obs, desconto, descModo, condicaoId]);
@@ -139,7 +139,7 @@ export default function PreVenda() {
       .listarCondicoes()
       .then((cds) => {
         setCondicoes(cds);
-        // CondiÃ§Ã£o padrÃ£o: "Ã€ Vista" (ou a primeira disponÃ­vel).
+        // Condição padrão: "À Vista" (ou a primeira disponível).
         setCondicaoId((cur) => {
           if (cur) return cur;
           const vista = cds.find((cd) => /vista/i.test(cd.nome)) ?? cds[0];
@@ -248,7 +248,7 @@ export default function PreVenda() {
       .then((s) => {
         if (s.excede_limite) {
           setAvisoCredito({
-            texto: `${nome}: venda de ${fmtMoney(c.total)} supera o limite disponÃ­vel de ${fmtMoney(s.limite_disponivel)}.`,
+            texto: `${nome}: venda de ${fmtMoney(c.total)} supera o limite disponível de ${fmtMoney(s.limite_disponivel)}.`,
             severidade: "warn",
           });
         } else if (s.excede_por_atraso) {
@@ -291,9 +291,9 @@ export default function PreVenda() {
       desconto_percentual: l.desconto_percentual,
     }));
 
-  // Persiste (cria/atualiza) o rascunho atual â€” sem limpar a tela nem avisar.
-  // Compartilha a chamada em voo para nÃ£o criar orÃ§amento duplicado quando o
-  // auto-save e uma aÃ§Ã£o manual (finalizar/salvar) disparam juntos.
+  // Persiste (cria/atualiza) o rascunho atual — sem limpar a tela nem avisar.
+  // Compartilha a chamada em voo para não criar orçamento duplicado quando o
+  // auto-save e uma ação manual (finalizar/salvar) disparam juntos.
   const persistirInFlightRef = useRef<Promise<{ id: number; numero: string } | null> | null>(null);
 
   const persistir = async (): Promise<{ id: number; numero: string } | null> => {
@@ -346,7 +346,7 @@ export default function PreVenda() {
     setDesconto("");
     setDescModo("valor");
     setObs("");
-    // Nova prÃ©-venda comeÃ§a no cliente padrÃ£o (CONSUMIDOR).
+    // Nova pré-venda começa no cliente padrão (CONSUMIDOR).
     setCliente(CLIENTE_PADRAO.nome);
     setClienteId(CLIENTE_PADRAO.id);
     sessionStorage.setItem("pdv_cliente", CLIENTE_PADRAO.nome);
@@ -355,8 +355,8 @@ export default function PreVenda() {
   };
 
   const finalizarOrcamento = async (id: number): Promise<boolean> => {
-    // Gate local: desconto acima da alÃ§ada e ainda nÃ£o autorizado â†’ abre o
-    // modal de autorizaÃ§Ã£o ANTES de chamar o backend (sem o 403 confuso).
+    // Gate local: desconto acima da alçada e ainda não autorizado → abre o
+    // modal de autorização ANTES de chamar o backend (sem o 403 confuso).
     if (c.descontoTotal > 0.01 && c.pct > limiteAlcadaPct + 1e-6 && !descontoAutorizado) {
       setModalAutorizar({ id, descontoPct: c.pct, limitePct: limiteAlcadaPct, modo: "finalizar" });
       return false;
@@ -367,7 +367,7 @@ export default function PreVenda() {
     } catch (e) {
       const err = e as Error & { code?: string; details?: Record<string, unknown> };
       if (err.code === "desconto_exige_autorizacao") {
-        // Fallback: o backend rejeitou (ex.: autorizaÃ§Ã£o expirada apÃ³s ediÃ§Ã£o).
+        // Fallback: o backend rejeitou (ex.: autorização expirada após edição).
         setModalAutorizar({
           id,
           descontoPct: err.details?.desconto_pct as number | undefined,
@@ -381,7 +381,7 @@ export default function PreVenda() {
     }
   };
 
-  // Finaliza (fatura â†’ caixa). AÃ§Ã£o principal (F1).
+  // Finaliza (fatura → caixa). Ação principal (F1).
   const finalizar = async (): Promise<void> => {
     if (!linhas.length) {
       toast("Adicione ao menos um item", "error");
@@ -393,8 +393,8 @@ export default function PreVenda() {
       if (!res) return;
       const ok = await finalizarOrcamento(res.id);
       if (!ok) {
-        // FinalizaÃ§Ã£o bloqueada: mantÃ©m os dados e passa a editar o rascunho
-        // criado (para nÃ£o duplicar) enquanto o modal de autorizaÃ§Ã£o estÃ¡ aberto.
+        // Finalização bloqueada: mantém os dados e passa a editar o rascunho
+        // criado (para não duplicar) enquanto o modal de autorização está aberto.
         setEditandoId(res.id);
         setEditandoNumero(res.numero);
         return;
@@ -414,8 +414,8 @@ export default function PreVenda() {
       toast("Adicione ao menos um item", "error");
       return;
     }
-    // AutorizaÃ§Ã£o por senha exigida apenas ao salvar/finalizar, se o desconto
-    // estiver acima da alÃ§ada do vendedor e ainda nÃ£o tiver sido autorizado.
+    // Autorização por senha exigida apenas ao salvar/finalizar, se o desconto
+    // estiver acima da alçada do vendedor e ainda não tiver sido autorizado.
     if (c.descontoTotal > 0.01 && c.pct > limiteAlcadaPct + 1e-6 && !descontoAutorizado) {
       setModalAutorizar({ id: null, descontoPct: c.pct, limitePct: limiteAlcadaPct, modo: "autorizar" });
       return;
@@ -451,7 +451,7 @@ export default function PreVenda() {
     try {
       const res = await persistir();
       if (!res) return;
-      void api.imprimirOrcamento(res.id).catch(() => toast("OrÃ§amento salvo, mas a impressÃ£o falhou", "error"));
+      void api.imprimirOrcamento(res.id).catch(() => toast("Orçamento salvo, mas a impressão falhou", "error"));
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
     } finally {
@@ -467,7 +467,7 @@ export default function PreVenda() {
     limparTela();
   };
 
-  // â”€â”€ Auto-save: persistir o rascunho a cada mudanÃ§a (debounce) â”€â”€
+  // ── Auto-save: persistir o rascunho a cada mudança (debounce) ──
   const persistirRef = useRef(persistir);
   persistirRef.current = persistir;
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -481,7 +481,7 @@ export default function PreVenda() {
     return () => clearTimeout(autoSaveTimer.current);
   }, [linhas, cliente, clienteId, obs, desconto, descModo, condicaoId]);
 
-  // â”€â”€ Ao sair da tela: salvar (manter) ou descartar (excluir) o pedido â”€â”€
+  // ── Ao sair da tela: salvar (manter) ou descartar (excluir) o pedido ──
   const editandoIdRef = useRef<number | null>(null);
   const linhasRef = useRef<LinhaPdv[]>([]);
   useEffect(() => {
@@ -494,7 +494,7 @@ export default function PreVenda() {
     const aoSair = () => {
       if (!temPedido()) return;
       const manter = window.confirm(
-        "HÃ¡ um pedido em andamento.\n\nClique em OK para SALVAR (manter o rascunho) ou em Cancelar para DESCARTAR (excluir) o pedido."
+        "Há um pedido em andamento.\n\nClique em OK para SALVAR (manter o rascunho) ou em Cancelar para DESCARTAR (excluir) o pedido."
       );
       if (!manter && editandoIdRef.current != null) {
         void api.excluirOrcamento(editandoIdRef.current).catch(() => {});
@@ -570,7 +570,7 @@ export default function PreVenda() {
     }
     setDescModo(modo);
     setDesconto(v);
-    // A autorizaÃ§Ã£o por senha NÃƒO Ã© solicitada durante a digitaÃ§Ã£o: ela Ã©
+    // A autorização por senha NÃO é solicitada durante a digitação: ela é
     // pedida apenas ao Salvar ou Finalizar (ver salvar/finalizarOrcamento).
   };
 
@@ -616,18 +616,18 @@ export default function PreVenda() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col">
-      {/* â”€â”€ CabeÃ§alho do sistema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Cabeçalho do sistema ─────────────────────────── */}
       <header className="flex flex-shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-gray-300 bg-[#e4e4e4] px-2 py-1.5 text-xs text-gray-800 sm:px-4 sm:text-sm">
         <div>
-          <strong>Operador:</strong> <span className="hidden sm:inline">{usuarioCorrente()?.nome ?? "â€”"}</span>
-          <span className="sm:hidden">{usuarioCorrente()?.nome?.split(" ")[0] ?? "â€”"}</span>
+          <strong>Operador:</strong> <span className="hidden sm:inline">{usuarioCorrente()?.nome ?? "—"}</span>
+          <span className="sm:hidden">{usuarioCorrente()?.nome?.split(" ")[0] ?? "—"}</span>
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
           <span>Cliente:</span>
           <button
             onClick={() => setModalBuscaCliente(true)}
             className="max-w-[40vw] truncate rounded border border-gray-400 bg-white px-2 py-0.5 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:max-w-md"
-            title="F6 â€” selecionar cliente"
+            title="F6 — selecionar cliente"
           >
             {cliente}
           </button>
@@ -635,13 +635,13 @@ export default function PreVenda() {
             onClick={() => setModalDadosCliente(true)}
             disabled={clienteId == null || clienteId === CLIENTE_PADRAO.id}
             className="rounded border border-gray-400 bg-white px-2 py-0.5 text-xs text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-            title="F9 â€” dados do cliente"
+            title="F9 — dados do cliente"
           >
             Dados
           </button>
         </div>
-        <div className="hidden md:block">Vendedor: {usuarioCorrente()?.nome ?? "â€”"}</div>
-        <div className="hidden md:block">HorÃ¡rio: {hora}</div>
+        <div className="hidden md:block">Vendedor: {usuarioCorrente()?.nome ?? "—"}</div>
+        <div className="hidden md:block">Horário: {hora}</div>
       </header>
 
       {avisoCredito && (
@@ -652,12 +652,12 @@ export default function PreVenda() {
         >
           <span>{avisoCredito.texto}</span>
           <button onClick={() => setAvisoCredito(null)} className="rounded px-1 hover:bg-black/10" aria-label="Fechar aviso">
-            Ã—
+            ×
           </button>
         </div>
       )}
 
-      {/* â”€â”€ Ãrea principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Área principal ────────────────────────────────── */}
       <main className="flex min-h-[480px] flex-1 flex-col gap-2 overflow-hidden bg-[#6a84a6] p-2 sm:gap-3 sm:p-4">
         {/* Painel de produto + busca */}
         <div className="relative flex-shrink-0 rounded-xl bg-white p-3 shadow-md">
@@ -667,7 +667,7 @@ export default function PreVenda() {
               ref={buscaRef}
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="CÃ³digo / nome (ex.: 3*Cabo) Â· ENTER adiciona"
+              placeholder="Código / nome (ex.: 3*Cabo) · ENTER adiciona"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-center text-lg text-gray-900 placeholder-gray-400 focus:border-orange-400 focus:outline-none"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -697,7 +697,7 @@ export default function PreVenda() {
                     <span>
                       {qtdDigitada > 1 ? <span className={`mr-1 rounded px-1.5 text-xs font-semibold ${i === focoLista ? "bg-orange-600 text-white" : "bg-orange-100 text-orange-700"}`}>{qtdDigitada}x</span> : null}
                       <span className="font-medium">{p.name}</span>
-                      <span className={`block text-xs ${i === focoLista ? "text-orange-100" : "text-gray-400"}`}>{[p.sku, p.spec, p.brand, p.unidade_venda].filter(Boolean).join(" Â· ")}</span>
+                      <span className={`block text-xs ${i === focoLista ? "text-orange-100" : "text-gray-400"}`}>{[p.sku, p.spec, p.brand, p.unidade_venda].filter(Boolean).join(" · ")}</span>
                     </span>
                     <span className="font-semibold">{fmtMoney(p.price)}</span>
                   </button>
@@ -711,9 +711,9 @@ export default function PreVenda() {
           ) : null}
         </div>
 
-        {/* Grid responsivo: mobile empilha, desktop mantÃ©m 3 colunas */}
+        {/* Grid responsivo: mobile empilha, desktop mantém 3 colunas */}
         <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 md:grid-cols-12 md:gap-4">
-          {/* Imagem do produto â€” oculta em telas pequenas */}
+          {/* Imagem do produto — oculta em telas pequenas */}
           <div className="hidden items-center justify-center overflow-hidden rounded-[2rem] bg-white p-4 shadow-md md:flex md:col-span-2">
             {linhaAtual?.imagem_url ? (
               <img src={linhaAtual.imagem_url} alt="" className="max-h-full max-w-full object-contain" />
@@ -722,9 +722,9 @@ export default function PreVenda() {
             )}
           </div>
 
-          {/* FormulÃ¡rio de lanÃ§amento */}
+          {/* Formulário de lançamento */}
           <div className="flex flex-col gap-2 md:col-span-3 md:gap-3">
-            <DataBox label="CÃ³digo" value={linhaAtual?.sku || "â€”"} />
+            <DataBox label="Código" value={linhaAtual?.sku || "—"} />
             <div className="flex h-full flex-col justify-between rounded-xl bg-white p-3 shadow-md">
               <span className="text-sm font-bold text-gray-800">Quantidade</span>
               <input
@@ -746,15 +746,15 @@ export default function PreVenda() {
                 className="mt-2 w-full bg-transparent text-right text-2xl font-bold text-black outline-none"
               />
             </div>
-            <DataBox label="Valor UnitÃ¡rio" value={fmtMoney(linhaAtual?.preco_unitario ?? 0)} />
+            <DataBox label="Valor Unitário" value={fmtMoney(linhaAtual?.preco_unitario ?? 0)} />
             <DataBox label="Valor Total" value={fmtMoney(linhaAtual?.subtotal ?? 0)} />
           </div>
 
-          {/* Cupom fiscal (somente leitura) â€” ocupa o resto */}
+          {/* Cupom fiscal (somente leitura) — ocupa o resto */}
           <div className="col-span-2 flex min-h-0 flex-col overflow-hidden rounded-[2rem] bg-white p-2 font-mono text-sm shadow-md md:col-span-7 md:p-4">
             <div className="grid grid-cols-[64px_1fr_52px_72px_76px_20px] gap-1 text-[10px] uppercase text-gray-500 sm:grid-cols-[80px_1fr_60px_84px_84px_24px] sm:text-[11px]">
-              <span>CÃ³digo</span>
-              <span>DescriÃ§Ã£o</span>
+              <span>Código</span>
+              <span>Descrição</span>
               <span className="text-right">Qtde</span>
               <span className="text-right">Vl.Unit</span>
               <span className="text-right">Vl.Item</span>
@@ -772,7 +772,7 @@ export default function PreVenda() {
                     className={`grid cursor-pointer grid-cols-[64px_1fr_52px_72px_76px_20px] items-center gap-1 border-b border-gray-100 py-1.5 sm:grid-cols-[80px_1fr_60px_84px_84px_24px] ${linhaAtiva === i ? "bg-orange-100" : ""}`}
                   >
                     <span className="truncate text-xs">{l.sku || "#" + (i + 1)}</span>
-                    <span className="truncate">{[l.nome, l.especificacao].filter(Boolean).join(" Â· ")}</span>
+                    <span className="truncate">{[l.nome, l.especificacao].filter(Boolean).join(" · ")}</span>
                     <span className="text-right text-xs">{l.quantidade}</span>
                     <span className="hidden text-right text-xs sm:block">{fmtMoney(l.preco_unitario)}</span>
                     <span className="text-right font-semibold">{fmtMoney(l.subtotal)}</span>
@@ -783,7 +783,7 @@ export default function PreVenda() {
                         removerLinha(i);
                       }}
                     >
-                      Ã—
+                      ×
                     </button>
                   </div>
                 ))
@@ -792,7 +792,7 @@ export default function PreVenda() {
           </div>
         </div>
 
-        {/* LanÃ§amento (desconto / condiÃ§Ã£o / obs) */}
+        {/* Lançamento (desconto / condição / obs) */}
         <div className="flex flex-shrink-0 flex-wrap items-center gap-2 rounded-xl bg-white/90 px-3 py-2 text-xs">
           <span className="ml-2 font-semibold text-gray-600">Desconto {descModo === "pct" ? "%" : "R$"}</span>
           <input
@@ -816,7 +816,7 @@ export default function PreVenda() {
             }}
             className="w-20 rounded border border-gray-300 px-2 py-1 text-sm sm:w-24"
           />
-          <span className="font-semibold text-gray-600">CondiÃ§Ã£o</span>
+          <span className="font-semibold text-gray-600">Condição</span>
           <select
             ref={condRef}
             value={condicaoId}
@@ -854,7 +854,7 @@ export default function PreVenda() {
         {/* Totais */}
         <div className="grid flex-shrink-0 grid-cols-3 gap-2 sm:h-24 sm:gap-4">
           <div className="flex items-center justify-center rounded-xl bg-white p-1 shadow-md sm:p-4">
-            <span className="truncate text-lg font-bold tracking-widest text-black sm:text-5xl">{editandoId ? "ALTERAÃ‡ÃƒO" : "VENDA"}</span>
+            <span className="truncate text-lg font-bold tracking-widest text-black sm:text-5xl">{editandoId ? "ALTERAÇÃO" : "VENDA"}</span>
           </div>
           <div>
             <DataBox label="Volumes" value={String(linhas.reduce((s, l) => s + l.quantidade, 0))} />
@@ -865,7 +865,7 @@ export default function PreVenda() {
         </div>
       </main>
 
-      {/* â”€â”€ RodapÃ©: atalhos + aÃ§Ãµes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Rodapé: atalhos + ações ───────────────────────── */}
       <footer className="safe-bottom flex flex-shrink-0 flex-wrap items-center gap-1.5 border-t border-gray-400 bg-[#f0f0f0] px-2 py-2 sm:gap-2 sm:px-4">
         <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(5)}>
           Limpar
