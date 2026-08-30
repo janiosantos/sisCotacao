@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import requests
 
-from catalog_server.payments.base import PaymentProvider
+from catalog_server.payments.base import PaymentProvider, WebhookNaoAutorizado, const_time_equal, get_header
 
 
 class EfiPayProvider(PaymentProvider):
@@ -31,6 +31,17 @@ class EfiPayProvider(PaymentProvider):
         else:
             self.base_pix = "https://pix.api.efipay.com.br"
             self.base_cob = "https://cobrancas.api.efipay.com.br"
+
+    def validar_assinatura(self, payload: dict, headers: dict, query: dict | None = None) -> None:
+        """Webhook EfiPay — token na query (`?token=`) ou header `x-efi-webhook-token`."""
+        secret = self.webhook_secret()
+        if not secret:
+            if self._em_producao():
+                raise WebhookNaoAutorizado("Webhook sem segredo configurado em produção")
+            return
+        received = str((query or {}).get("token") or get_header(headers, "x-efi-webhook-token")).strip()
+        if not const_time_equal(received, secret):
+            raise WebhookNaoAutorizado("Token do webhook EfiPay inválido")
 
     # -- helpers -----------------------------------------------------------
 

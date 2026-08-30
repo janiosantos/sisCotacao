@@ -9,9 +9,14 @@ Webhook: evento `payment` com data.id -> GET /v1/payments/{id} -> status approve
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
+import os
+import time
+
 import requests
 
-from catalog_server.payments.base import PaymentProvider
+from catalog_server.payments.base import PaymentProvider, WebhookNaoAutorizado, const_time_equal, get_header
 
 
 class MercadoPagoProvider(PaymentProvider):
@@ -22,6 +27,55 @@ class MercadoPagoProvider(PaymentProvider):
         super().__init__(cfg)
         self.base = "https://api.mercadopago.com"
         self.access_token = cfg.get("access_token") or ""
+
+    def validar_assinatura(self, payload: dict, headers: dict, query: dict | None = None) -> None:
+        """Webhook Mercado Pago — `x-signature: ts=<ms>,v1=<hmac-sha256 hex>`.
+
+        Manifest: `id:<data.id>;request-id:<x-request-id>;ts:<ts>;` (pares ausentes
+        omitidos; data.id em minúsculas). HMAC-SHA256 com o segredo configurado.
+        Anti-replay: `ts` dentro da janela `WEBHOOK_TS_WINDOW_MS` (default 5 min).
+        """
+        secret = self.webhook_secret()
+        if not secret:
+            if self._em_producao():
+                raise WebhookNaoAutorizado("Webhook sem segredo configurado em produção")
+            return  # sandbox sem segredo: aceita
+        x_sig = get_header(headers, "x-signature").strip()
+        if not x_sig:
+            raise WebhookNaoAutorizado("Header x-signature ausente")
+        partes: dict[str, str] = {}
+        for peca in x_sig.split(","):
+            if "=" in peca:
+                k, v = peca.split("=", 1)
+                partes[k.strip()] = v.strip()
+        ts = partes.get("ts")
+        v1 = partes.get("v1")
+        if not ts or not v1:
+            raise WebhookNaoAutorizado("x-signature sem ts/v1")
+
+        # anti-replay: janela de tolerância
+        try:
+            ts_ms = int(ts)
+        except ValueError:
+            raise WebhookNaoAutorizado("ts inválido em x-signature")
+        janela = int(os.getenv("WEBHOOK_TS_WINDOW_MS", str(5 * 60 * 1000)))
+        if abs(int(time.time() * 1000) - ts_ms) > janela:
+            raise WebhookNaoAutorizado("Webhook expirado (ts fora da janela)")
+
+        # manifest oficial do Mercado Pago
+        data_id = str((query or {}).get("data.id") or ((payload.get("data") or {}).get("id") or "")).lower()
+        x_req = get_header(headers, "x-request-id").strip()
+        manifest_parts: list[str] = []
+        if data_id:
+            manifest_parts.append(f"id:{data_id}")
+        if x_req:
+            manifest_parts.append(f"request-id:{x_req}")
+        manifest_parts.append(f"ts:{ts}")
+        manifest = ";".join(manifest_parts) + ";"
+
+        calc = hmac.new(secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
+        if not const_time_equal(calc, v1.lower()):
+            raise WebhookNaoAutorizado("Assinatura inválida (x-signature)")
 
     def _headers(self) -> dict:
         return {

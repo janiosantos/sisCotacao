@@ -2242,6 +2242,7 @@ export interface PaymentProviderConfig {
   certificado?: string;
   conta?: string;
   chave_pix?: string;
+  webhook_secret?: string;
   credencial_configurada?: boolean;
   prioridade: number;
   ativo: number | boolean;

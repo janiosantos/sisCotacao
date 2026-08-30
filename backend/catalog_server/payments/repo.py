@@ -61,8 +61,8 @@ class PaymentProviderRepo:
                 """INSERT INTO payment_provider_config
                      (provider_id, operacao, ambiente, client_id, client_secret,
                       access_token, api_key, certificado, conta, chave_pix,
-                      prioridade, ativo)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                      webhook_secret, prioridade, ativo)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT (provider_id, operacao, ambiente) DO UPDATE SET
                       client_id=excluded.client_id,
                       client_secret=COALESCE(NULLIF(excluded.client_secret, ''), payment_provider_config.client_secret),
@@ -70,14 +70,17 @@ class PaymentProviderRepo:
                       api_key=COALESCE(NULLIF(excluded.api_key, ''), payment_provider_config.api_key),
                       certificado=COALESCE(NULLIF(excluded.certificado, ''), payment_provider_config.certificado),
                       conta=excluded.conta,
-                     chave_pix=excluded.chave_pix, prioridade=excluded.prioridade,
-                     ativo=excluded.ativo""",
+                      chave_pix=excluded.chave_pix,
+                      webhook_secret=COALESCE(NULLIF(excluded.webhook_secret, ''), payment_provider_config.webhook_secret),
+                      prioridade=excluded.prioridade,
+                      ativo=excluded.ativo""",
                 (
                     provider_id, operacao, ambiente,
                     dados.get("client_id") or "", dados.get("client_secret") or "",
                     dados.get("access_token") or "", dados.get("api_key") or "",
                     dados.get("certificado") or "", dados.get("conta") or "",
-                    dados.get("chave_pix") or "", int(dados.get("prioridade") or 10),
+                    dados.get("chave_pix") or "", dados.get("webhook_secret") or "",
+                    int(dados.get("prioridade") or 10),
                     int(dados.get("ativo", 1)),
                 ),
             )

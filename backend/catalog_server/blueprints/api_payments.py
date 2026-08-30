@@ -10,13 +10,13 @@
 from __future__ import annotations
 
 import os
-import hmac
 import uuid
 
 from flask import Blueprint, current_app, jsonify, request
 
 from catalog_server.db import system_conn
 from catalog_server.payments import service as payment_service
+from catalog_server.payments.base import WebhookNaoAutorizado
 from catalog_server.payments.repo import payment_provider_repo
 
 api_payments_bp = Blueprint("api_payments", __name__)
@@ -91,18 +91,15 @@ def anexar_comprovante(conta_id: int):
 
 @api_payments_bp.post("/api/webhooks/payments/<provider>")
 def webhook_payment(provider: str):
-    expected = os.getenv("PAYMENT_WEBHOOK_SECRET", "")
-    received = request.headers.get("X-Webhook-Secret", "")
-    if expected:
-        if not hmac.compare_digest(received, expected):
-            return jsonify({"error": "Webhook não autorizado"}), 401
-    elif os.getenv("CATALOG_ENV", "development").lower() == "production":
-        return jsonify({"error": "Webhook não configurado"}), 503
     payload = request.get_json(silent=True) or {}
     if not isinstance(payload, dict) or not payload:
         return jsonify({"error": "Payload de webhook inválido"}), 400
     try:
-        resultado = payment_service.processar_webhook(provider, payload, dict(request.headers))
+        resultado = payment_service.processar_webhook(
+            provider, payload, dict(request.headers), request.args.to_dict()
+        )
+    except WebhookNaoAutorizado as exc:
+        return jsonify({"error": str(exc)}), 401
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception:
@@ -130,7 +127,7 @@ def upsert_config():
         return jsonify({"error": "operacao deve ser boleto ou pix"}), 400
     if data.get("ambiente") not in ("sandbox", "producao"):
         return jsonify({"error": "ambiente deve ser sandbox ou producao"}), 400
-    for field in ("client_id", "client_secret", "access_token", "api_key", "certificado", "conta", "chave_pix"):
+    for field in ("client_id", "client_secret", "access_token", "api_key", "certificado", "conta", "chave_pix", "webhook_secret"):
         if field in data and not isinstance(data[field], str):
             return jsonify({"error": f"{field} deve ser texto"}), 400
     payment_provider_repo.upsert_config(data)

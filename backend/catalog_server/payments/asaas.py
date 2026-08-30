@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import requests
 
-from catalog_server.payments.base import PaymentProvider
+from catalog_server.payments.base import PaymentProvider, WebhookNaoAutorizado, const_time_equal, get_header
 
 
 def _is_pago(status: str) -> bool:
@@ -29,6 +29,17 @@ class AsaasProvider(PaymentProvider):
         base = "https://sandbox.asaas.com/api/v3" if cfg.get("ambiente") != "producao" else "https://www.asaas.com/api/v3"
         self.base = base
         self.api_key = cfg.get("api_key") or cfg.get("access_token") or ""
+
+    def validar_assinatura(self, payload: dict, headers: dict, query: dict | None = None) -> None:
+        """Webhook Asaas — header `asaas-access-token` igual ao authToken configurado."""
+        secret = self.webhook_secret()
+        if not secret:
+            if self._em_producao():
+                raise WebhookNaoAutorizado("Webhook sem segredo configurado em produção")
+            return
+        received = get_header(headers, "asaas-access-token").strip()
+        if not const_time_equal(received, secret):
+            raise WebhookNaoAutorizado("asaas-access-token inválido")
 
     # -- helpers -----------------------------------------------------------
 

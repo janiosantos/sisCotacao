@@ -387,6 +387,7 @@ function IntegracoesPagamento() {
     api_key: "",
     chave_pix: "",
     conta: "",
+    webhook_secret: "",
     prioridade: "10",
     ativo: true,
   });
@@ -418,6 +419,7 @@ function IntegracoesPagamento() {
       api_key: "",
       chave_pix: "",
       conta: "",
+      webhook_secret: "",
       prioridade: "10",
       ativo: true,
     });
@@ -435,6 +437,7 @@ function IntegracoesPagamento() {
       api_key: c.api_key || "",
       chave_pix: c.chave_pix || "",
       conta: c.conta || "",
+      webhook_secret: c.webhook_secret || "",
       prioridade: String(c.prioridade ?? 10),
       ativo: !!c.ativo,
     });
@@ -530,6 +533,12 @@ function IntegracoesPagamento() {
             </Field>
             <Field label="Chave PIX">
               <Input value={form.chave_pix} onChange={(e) => setForm({ ...form, chave_pix: e.target.value })} placeholder="Chave PIX (e-mail, CPF, CNPJ, telefone, aleatória)" />
+            </Field>
+            <Field label="Segredo do Webhook (token/assinatura)">
+              <Input value={form.webhook_secret} onChange={(e) => setForm({ ...form, webhook_secret: e.target.value })} placeholder="Asaas authToken · MP secret · EfiPay token" />
+              <p className="mt-1 text-xs text-gray-400">
+                Valida a autenticidade das notificações. Asaas: header asaas-access-token · Mercado Pago: x-signature · EfiPay: ?token=
+              </p>
             </Field>
             <Field label="Conta / identificador">
               <Input value={form.conta} onChange={(e) => setForm({ ...form, conta: e.target.value })} placeholder="Conta no provedor (opcional)" />

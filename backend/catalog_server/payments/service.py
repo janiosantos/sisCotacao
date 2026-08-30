@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from catalog_server.db import system_conn
 from catalog_server.payments import registry
+from catalog_server.payments.base import WebhookNaoAutorizado
 from catalog_server.repositories import condicao_repo, contas_repo
 
 
@@ -110,11 +111,12 @@ def consultar(conta_id: int) -> dict:
     return st
 
 
-def processar_webhook(provider_codigo: str, payload: dict, headers: dict) -> dict:
+def processar_webhook(provider_codigo: str, payload: dict, headers: dict, query: dict | None = None) -> dict:
     """Processa o webhook da plataforma e baixa a conta automaticamente.
 
-    Instancia o provedor pela operação da conta (boleto/pix). O ambiente é
-    sandbox nesta fase; produção será resolvido pela config quando ativada.
+    Instancia o provedor pela operação da conta (boleto/pix) e valida a
+    assinatura/token nativo ANTES de processar (WebhookNaoAutorizado em caso
+    de falha). O ambiente é o mesmo da emissão (migração 0097).
     """
     # pré-localiza a conta pelo payment_id para saber a operação
     pre_payment_id = None
@@ -135,6 +137,10 @@ def processar_webhook(provider_codigo: str, payload: dict, headers: dict) -> dic
     operacao = (conta["tipo_cobranca"] or "pix") if conta else "pix"
     ambiente = (conta.get("ambiente_cobranca") if conta else None) or "sandbox"
     provider = registry.instanciar(provider_codigo, operacao, ambiente)
+
+    # Validação de autenticidade ANTES de qualquer processamento.
+    provider.validar_assinatura(payload, headers, query)
+
     evento = provider.webhook(payload, headers)
     if not evento:
         return {"ok": True, "ignorado": True}
