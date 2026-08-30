@@ -21,4 +21,5 @@ def enfileirar(func: str, *args, timeout: int = 120, **kwargs) -> None:
     """Enfileira uma tarefa RQ pelo caminho de import (ex.: catalog_server.jobs.tasks.rechecagem)."""
     from rq import Queue
 
-    Queue("default", connection=_redis()).enqueue(func, *args, timeout=timeout, **kwargs)
+    # RQ 2.12 usa job_timeout (timeout não-consumido vazaria para a função).
+    Queue("default", connection=_redis()).enqueue(func, *args, job_timeout=timeout, **kwargs)
