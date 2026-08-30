@@ -1,4 +1,4 @@
-// pages/atualizacoes.tsx — painel de controle de atualização e versionamento.
+﻿// pages/atualizacoes.tsx — painel de controle de atualização e versionamento.
 
 import { Fragment, useEffect, useState } from "react";
 import {
@@ -10,6 +10,7 @@ import {
 } from "../api/client";
 import { toast } from "../ui/dom";
 import { Button, PageHeader } from "../ui/ui";
+import { ListaNotas } from "./atualizacoes/lista-notas";
 
 const RISCOS: { nivel: NivelRisco; label: string }[] = [
   { nivel: "critica", label: "Críticas" },
@@ -46,27 +47,6 @@ function componenteCor(nome: string): string {
   }
 }
 
-function ListaNotas({
-  titulo,
-  cor,
-  itens,
-}: {
-  titulo: string;
-  cor: string;
-  itens?: string[] | null;
-}) {
-  if (!itens || itens.length === 0) return null;
-  return (
-    <div>
-      <span className={`font-semibold ${cor}`}>{titulo}:</span>
-      <ul className="ml-4 list-disc">
-        {itens.map((i, idx) => (
-          <li key={idx}>{i}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 export default function Atualizacoes() {
   const [st, setSt] = useState<SistemaStatus | null>(null);
