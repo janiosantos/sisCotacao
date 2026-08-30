@@ -1,44 +1,16 @@
-// pages/orcamentos.tsx — lista de orçamentos de venda salvos (PDV).
-// Lifecycle orçamento→pedido (v2.18.0): transições controladas + alçada de desconto.
+﻿// pages/orcamentos.tsx â€” lista de orÃ§amentos de venda salvos (PDV).
+// Lifecycle orÃ§amentoâ†’pedido (v2.18.0): transiÃ§Ãµes controladas + alÃ§ada de desconto.
 
 import { useEffect, useState } from "react";
 import { api, type OrcamentoDetalhe, type OrcamentoLista } from "../api/client";
 import { fmtDate, fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
-import { Badge, Button, Cell, Field, Input, Loading, Modal, PageHeader, Select, Table, TBody, THead } from "../ui/ui";
+import { Badge, Button, Cell, Field, Loading, Modal, PageHeader, Select, Table, TBody, THead } from "../ui/ui";
 import { ModalRecebimento } from "./recebimento";
-
-const STATUS_LABELS: Record<string, string> = {
-  rascunho: "Rascunho",
-  ativo: "Ativo",
-  em_analise: "Em análise",
-  liberado: "Liberado",
-  finalizado: "Finalizado",
-  recebido: "Recebido",
-  cancelado: "Cancelado",
-  devolvido: "Devolvido",
-};
-
-const DESCONTO_LABELS: Record<string, string> = {
-  ok: "Dentro da alçada",
-  pendente: "Pendente",
-  aprovado: "Aprovado",
-  rejeitado: "Rejeitado",
-};
-
-function statusTone(status: string): "green" | "red" | "amber" | "gray" {
-  if (status === "recebido") return "green";
-  if (status === "finalizado") return "amber";
-  if (status === "cancelado" || status === "devolvido") return "red";
-  return "gray";
-}
-
-function descontoTone(s: string | undefined): "green" | "red" | "amber" | "gray" {
-  if (s === "aprovado" || s === "ok") return "green";
-  if (s === "rejeitado") return "red";
-  if (s === "pendente") return "amber";
-  return "gray";
-}
+import { STATUS_LABELS, DESCONTO_LABELS, statusTone, descontoTone } from "./orcamentos/tones";
+import { ModalDetalhe } from "./orcamentos/modal-detalhe";
+import { ModalAutorizar } from "./orcamentos/modal-autorizar";
+import { ModalRejeitar } from "./orcamentos/modal-rejeitar";
 
 export default function Orcamentos() {
   const [filtro, setFiltro] = useState("");
@@ -56,7 +28,7 @@ export default function Orcamentos() {
     try {
       setLista(await api.listarOrcamentos(filtro));
     } catch (e) {
-      toast("Erro ao carregar orçamentos: " + (e as Error).message, "error");
+      toast("Erro ao carregar orÃ§amentos: " + (e as Error).message, "error");
     } finally {
       setCarregando(false);
     }
@@ -76,11 +48,11 @@ export default function Orcamentos() {
   };
 
   const excluir = async (id: number) => {
-    if (!window.confirm("Excluir este orçamento?")) return;
+    if (!window.confirm("Excluir este orÃ§amento?")) return;
     try {
       await api.excluirOrcamento(id);
       setDetalhe(null);
-      toast("Orçamento excluído", "success");
+      toast("OrÃ§amento excluÃ­do", "success");
       await carregar();
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
@@ -90,7 +62,7 @@ export default function Orcamentos() {
   const reabrir = async (id: number) => {
     try {
       await api.reabrirOrcamento(id);
-      toast("Pedido reaberto para correção — desconto reavaliado", "success");
+      toast("Pedido reaberto para correÃ§Ã£o â€” desconto reavaliado", "success");
       setDetalhe(null);
       await carregar();
     } catch (e) {
@@ -110,18 +82,18 @@ export default function Orcamentos() {
   return (
     <div>
       <PageHeader
-        title="Orçamentos · Pedidos"
-        subtitle="Orçamentos de venda montados no PDV (orçamento = proposta; finalizado = pedido)."
+        title="OrÃ§amentos Â· Pedidos"
+        subtitle="OrÃ§amentos de venda montados no PDV (orÃ§amento = proposta; finalizado = pedido)."
         actions={
           <>
             <Button variant="outline" onClick={() => void carregarFila()}>
-              Fila de aprovação
+              Fila de aprovaÃ§Ã£o
             </Button>
             <a
               href="#/pre-venda"
               className="inline-flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700"
             >
-              + Nova pré-venda
+              + Nova prÃ©-venda
             </a>
           </>
         }
@@ -145,19 +117,19 @@ export default function Orcamentos() {
         <Loading />
       ) : lista.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 bg-white py-16 text-center text-sm text-gray-400">
-          <p>Nenhum orçamento ainda</p>
+          <p>Nenhum orÃ§amento ainda</p>
           <p>
-            Monte uma pré-venda no <a className="text-brand-600 hover:underline" href="#/pre-venda">PDV</a>.
+            Monte uma prÃ©-venda no <a className="text-brand-600 hover:underline" href="#/pre-venda">PDV</a>.
           </p>
         </div>
       ) : (
         <Table>
-          <THead cols={["Nº", "Cliente", "Status", "Desconto", "Itens", "Total", "Criada em", ""]} />
+          <THead cols={["NÂº", "Cliente", "Status", "Desconto", "Itens", "Total", "Criada em", ""]} />
           <TBody>
             {lista.map((o) => (
               <tr key={o.id} className="cursor-pointer hover:bg-gray-50" onClick={() => void abrirDetalhe(o.id)}>
                 <Cell className="font-mono">{o.numero}</Cell>
-                <Cell>{o.cliente || "—"}</Cell>
+                <Cell>{o.cliente || "â€”"}</Cell>
                 <Cell>
                   <Badge tone={statusTone(o.status)}>{STATUS_LABELS[o.status] || o.status}</Badge>
                 </Cell>
@@ -167,7 +139,7 @@ export default function Orcamentos() {
                   ) : o.desconto_autorizado ? (
                     <Badge tone="green">Autorizado</Badge>
                   ) : (
-                    "—"
+                    "â€”"
                   )}
                 </Cell>
                 <Cell>{o.n_itens}</Cell>
@@ -210,7 +182,7 @@ export default function Orcamentos() {
                       PDF
                     </a>
                     <Button size="sm" variant="ghost" onClick={() => void abrirDetalhe(o.id)} title="Detalhes">
-                      ⚙
+                      âš™
                     </Button>
                   </div>
                 </Cell>
@@ -270,22 +242,22 @@ export default function Orcamentos() {
         <Modal
           open
           onClose={() => setShowFila(false)}
-          title="Fila de aprovação (desconto)"
+          title="Fila de aprovaÃ§Ã£o (desconto)"
           wide
           footer={<Button onClick={() => setShowFila(false)}>Fechar</Button>}
         >
           {pendentes.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">Nenhum desconto pendente para sua alçada.</p>
+            <p className="py-8 text-center text-sm text-gray-400">Nenhum desconto pendente para sua alÃ§ada.</p>
           ) : (
             <Table>
-              <THead cols={["Nº", "Cliente", "Desconto", "Sua alçada", "Total", ""]} />
+              <THead cols={["NÂº", "Cliente", "Desconto", "Sua alÃ§ada", "Total", ""]} />
               <TBody>
                 {pendentes.map((p) => (
                   <tr key={p.id}>
                     <Cell className="font-mono">{p.numero}</Cell>
-                    <Cell>{p.cliente || "—"}</Cell>
-                    <Cell>{p.desconto_pct != null ? `${p.desconto_pct.toFixed(1)}%` : "—"}</Cell>
-                    <Cell>{p.limite_aprovador != null ? `${p.limite_aprovador.toFixed(1)}%` : "—"}</Cell>
+                    <Cell>{p.cliente || "â€”"}</Cell>
+                    <Cell>{p.desconto_pct != null ? `${p.desconto_pct.toFixed(1)}%` : "â€”"}</Cell>
+                    <Cell>{p.limite_aprovador != null ? `${p.limite_aprovador.toFixed(1)}%` : "â€”"}</Cell>
                     <Cell className="font-medium">{fmtMoney(p.total)}</Cell>
                     <Cell>
                       <div className="flex justify-end gap-2">
@@ -308,238 +280,3 @@ export default function Orcamentos() {
   );
 }
 
-function ModalDetalhe({
-  d,
-  onClose,
-  onAutorizar,
-  onRejeitar,
-  onReabrir,
-  onExcluir,
-  onReceber,
-}: {
-  d: OrcamentoDetalhe;
-  onClose: () => void;
-  onAutorizar: () => void;
-  onRejeitar: () => void;
-  onReabrir: () => void;
-  onExcluir: (id: number) => void;
-  onReceber: () => void;
-}) {
-  const pendenteDesconto = d.desconto_status === "pendente";
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={`${d.numero} · ${STATUS_LABELS[d.status] || d.status}`}
-      wide
-      footer={
-        <>
-          <Button onClick={onClose}>Fechar</Button>
-          {d.status === "finalizado" && (
-            <Button variant="ghost" onClick={onReabrir}>
-              Reabrir p/ correção
-            </Button>
-          )}
-          {d.status === "finalizado" &&
-            (d.n_parcelas && d.n_parcelas > 1 ? (
-              <>
-                <a
-                  className="inline-flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700"
-                  target="_blank"
-                  rel="noreferrer"
-                  href={`/orcamentos/${d.id}/boleto`}
-                >
-                  Boleto
-                </a>
-                <a
-                  className="inline-flex items-center justify-center gap-1.5 rounded-md border border-gray-300 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  href="#/financeiro"
-                >
-                  Contas a receber
-                </a>
-              </>
-            ) : (
-              <Button variant="primary" onClick={onReceber}>
-                Receber
-              </Button>
-            ))}
-          {pendenteDesconto && (
-            <>
-              <Button variant="ghost" onClick={onRejeitar}>
-                Rejeitar
-              </Button>
-              <Button variant="primary" onClick={onAutorizar}>
-                Autorizar desconto
-              </Button>
-            </>
-          )}
-          <Button variant="danger" onClick={() => onExcluir(d.id)}>
-            Excluir
-          </Button>
-        </>
-      }
-    >
-      <p className="mb-3 text-sm text-gray-500">
-        {d.cliente || "Sem cliente"}
-        {d.contato ? " · " + d.contato : ""} · criado em {fmtDate(d.criado_em)}
-        {d.virou_pedido ? " · virou pedido" : ""}
-        {d.condicao_nome ? " · condição: " + d.condicao_nome : ""}
-        {d.n_parcelas && d.n_parcelas > 1 ? ` · ${d.n_parcelas} parcela(s) a receber` : ""}
-      </p>
-
-      {d.desconto_status ? (
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
-          <Badge tone={descontoTone(d.desconto_status)}>{DESCONTO_LABELS[d.desconto_status] || d.desconto_status}</Badge>
-          {d.desconto_status === "rejeitado" && d.desconto_rejeitado_motivo ? (
-            <span className="text-xs text-red-600">Motivo: {d.desconto_rejeitado_motivo}</span>
-          ) : null}
-          {d.desconto_autorizado_nome ? (
-            <span className="text-xs text-emerald-600">
-              Autorizado por {d.desconto_autorizado_nome}
-              {d.desconto_autorizado_em ? ` em ${fmtDate(d.desconto_autorizado_em)}` : ""}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-
-      <Table>
-        <THead cols={["Produto", "Qtd.", "Preço", "Desc. %", "Subtotal"]} />
-        <TBody>
-          {d.itens.map((i, idx) => (
-            <tr key={idx} className="hover:bg-gray-50">
-              <Cell>
-                {i.nome}
-                {i.sku ? <div className="font-mono text-xs text-gray-400">{i.sku}</div> : null}
-              </Cell>
-              <Cell>{i.quantidade}</Cell>
-              <Cell>{fmtMoney(i.preco_unitario)}</Cell>
-              <Cell>{i.desconto_percentual || 0}%</Cell>
-              <Cell className="font-medium">{fmtMoney(i.subtotal || 0)}</Cell>
-            </tr>
-          ))}
-        </TBody>
-      </Table>
-
-      <div className="mt-4 flex flex-wrap justify-end gap-4 text-sm">
-        <div>
-          Subtotal: <span className="font-medium">{fmtMoney(d.subtotal)}</span>
-        </div>
-        <div>
-          Desconto: <span className="font-medium">{fmtMoney(d.desconto)}</span>
-        </div>
-        <div>
-          Total: <span className="font-medium">{fmtMoney(d.total)}</span>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function ModalAutorizar({ id, onClose, onOk }: { id: number | null; onClose: () => void; onOk: () => void }) {
-  const [login, setLogin] = useState("");
-  const [senha, setSenha] = useState("");
-  const [autorizando, setAutorizando] = useState(false);
-
-  useEffect(() => {
-    if (id) {
-      setLogin("");
-      setSenha("");
-      setAutorizando(false);
-    }
-  }, [id]);
-
-  const tentar = async () => {
-    if (!id) return;
-    if (!login.trim() || !senha) {
-      toast("Informe login e senha do aprovador", "error");
-      return;
-    }
-    setAutorizando(true);
-    try {
-      await api.autorizarDescontoOrcamento(id, { login: login.trim(), senha });
-      toast("Desconto autorizado", "success");
-      onOk();
-    } catch (e) {
-      toast("Falha na autorização: " + (e as Error).message, "error");
-      setAutorizando(false);
-    }
-  };
-
-  return (
-    <Modal
-      open={id !== null}
-      onClose={onClose}
-      title="Autorizar desconto"
-      footer={
-        <>
-          <Button onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" onClick={() => void tentar()} disabled={autorizando}>
-            {autorizando ? "Autorizando…" : "Autorizar"}
-          </Button>
-        </>
-      }
-    >
-      <p className="mb-4 text-sm text-gray-500">
-        Informe as credenciais de um aprovador (com permissão e alçada suficiente — diferente do vendedor).
-      </p>
-      <div className="space-y-4">
-        <Field label="Login do aprovador">
-          <Input autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} autoFocus />
-        </Field>
-        <Field label="Senha">
-          <Input
-            type="password"
-            autoComplete="current-password"
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void tentar();
-            }}
-          />
-        </Field>
-      </div>
-    </Modal>
-  );
-}
-
-function ModalRejeitar({ id, onClose, onOk }: { id: number; onClose: () => void; onOk: () => void }) {
-  const [motivo, setMotivo] = useState("");
-  const [enviando, setEnviando] = useState(false);
-
-  const tentar = async () => {
-    if (!motivo.trim()) {
-      toast("Informe o motivo da rejeição", "error");
-      return;
-    }
-    setEnviando(true);
-    try {
-      await api.rejeitarDescontoOrcamento(id, motivo.trim());
-      toast("Desconto rejeitado", "success");
-      onOk();
-    } catch (e) {
-      toast("Erro: " + (e as Error).message, "error");
-      setEnviando(false);
-    }
-  };
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title="Rejeitar desconto"
-      footer={
-        <>
-          <Button onClick={onClose}>Cancelar</Button>
-          <Button variant="danger" onClick={() => void tentar()} disabled={enviando}>
-            {enviando ? "Rejeitando…" : "Rejeitar"}
-          </Button>
-        </>
-      }
-    >
-      <p className="mb-4 text-sm text-gray-500">Informe o motivo da rejeição do desconto.</p>
-      <Field label="Motivo *">
-        <Input value={motivo} onChange={(e) => setMotivo(e.target.value)} autoFocus />
-      </Field>
-    </Modal>
-  );
-}
