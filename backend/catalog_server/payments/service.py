@@ -157,6 +157,7 @@ def processar_webhook(provider_codigo: str, payload: dict, headers: dict, query:
         ).fetchone()
         if conta is None:
             return {"ok": True, "ignorado": True}
+        conta = dict(conta)  # PgRow não tem .get — normaliza antes de usar
         # idempotência: mesmo evento já processado
         if conta["webhook_id"] == webhook_id:
             return {"ok": True, "duplicado": True}
