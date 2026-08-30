@@ -26,6 +26,12 @@ jobs:
     runs-on: [self-hosted, siscom-prod]
     env:
       COMPOSE_PROJECT_NAME: siscom   # mantém o volume siscom_postgres-data (dados intactos)
+      # Credenciais exigidas pelo docker-compose.prod.yml (senha do volume atual = catalog).
+      # Configure em Settings → Secrets: POSTGRES_USER=catalog, POSTGRES_PASSWORD=catalog,
+      # CATALOG_SECRET=<segredo aleatório>. Sem CATALOG_SECRET o deploy falha (fail-safe).
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      CATALOG_SECRET: ${{ secrets.CATALOG_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
