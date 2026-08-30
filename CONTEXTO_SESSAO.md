@@ -94,7 +94,8 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 8. Convenções de trabalho para agentes
 
-- **Começar**: ler `AGENTS.md` + `CONTEXTO_SESSAO.md` + `git log --oneline -15`.
+- **Começar**: ler `AGENTS.md` + `CONTEXTO_SESSAO.md` + `DESENVOLVIMENTO.md` (histórico técnico) + `git log --oneline -15`.
+- **Análise de bugs (Codex)**: usar o checklist `TODO.md` — registrar o resultado na seção final.
 - **Terminar**: atualizar `CONTEXTO_SESSAO.md` (log + pendências + próximos passos) e commit/push.
 - **Backend**: após alterar, `python -m py_compile <arquivo>`; testes `pytest` (env `TEST_PG_URL` apontando para `catalog_test`). 207 testes verdes hoje.
 - **Frontend**: `npm run typecheck` e `npm run build` (a partir de `frontend/`); testes `npm test`.
