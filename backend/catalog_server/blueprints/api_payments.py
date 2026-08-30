@@ -143,6 +143,16 @@ def webhook_payment(provider: str):
     except ProviderIndisponivel as exc:
         webhook_log.registrar(provider, "nao_configurado", http_status=503, ip=ip,
                               payload=payload, erro=str(exc), evento=evento, payment_id=payment_id)
+        # enfileira rechecagem da conta no outbox — quando o provedor for configurado,
+        # o worker baixa a conta automaticamente (sem depender de nova notificação).
+        if payment_id:
+            from catalog_server.services import outbox
+
+            outbox.enfileirar(
+                "webhook.rechecagem",
+                {"payment_id": payment_id, "provider": provider},
+                chave_idempotencia=f"webhook:{provider}:{payment_id}",
+            )
         return jsonify({"error": str(exc)}), 503
     except ValueError as exc:
         webhook_log.registrar(provider, "erro", http_status=400, ip=ip,
@@ -190,6 +200,30 @@ def rechecagem_webhooks():
         current_app.logger.exception("Falha na rechecagem de webhooks")
         return jsonify({"error": f"Rechecagem falhou: {exc}"}), 400
     return jsonify(resultado)
+
+
+# ─── Outbox (operações assíncronas) ─────────────────────────
+
+@api_payments_bp.get("/api/webhooks/outbox")
+def listar_outbox():
+    from catalog_server.services import outbox
+
+    rows = outbox.listar(status=(request.args.get("status") or "").strip(),
+                         limite=min(200, max(1, request.args.get("limit", 50, type=int))))
+    return jsonify({"items": rows, "pendentes": outbox.pendentes_contagem()})
+
+
+@api_payments_bp.post("/api/webhooks/outbox/rodar")
+def rodar_outbox():
+    from catalog_server.services import outbox
+    from catalog_server.jobs import tasks
+
+    try:
+        resultado = tasks.rodar_outbox(limite=50)
+        return jsonify(resultado)
+    except Exception as exc:
+        current_app.logger.exception("Falha ao processar outbox")
+        return jsonify({"error": f"Outbox falhou: {exc}"}), 400
 
 
 # ─── Configuração (Integrações de pagamento) ────────────────

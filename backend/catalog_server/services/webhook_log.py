@@ -48,8 +48,9 @@ def registrar(
                 (provider, evento, payment_id, status, http_status,
                  assinatura_ok, ip, texto, (erro or "")[:500]),
             )
+            row = cur.fetchone()
             conn.commit()
-            return int(cur.lastrowid)
+            return int(row[0])
     except Exception:
         return 0
 
@@ -99,10 +100,11 @@ def _baixar(conn, conta: dict, payment_id: str, valor: float) -> None:
     )
 
 
-def rechecagem(provider: str = "", limite: int = 50) -> dict:
+def rechecagem(provider: str = "", limite: int = 50, payment_id: str = "") -> dict:
     """Consulta o provedor das cobranças pendentes e baixa as pagas.
 
-    Filtros opcionais: `provider` (asaas/mercadopago/...) e `limite`.
+    Filtros opcionais: `provider` (asaas/mercadopago/...), `limite` e
+    `payment_id` (rechecagem de uma conta específica).
     Retorna {verificadas, pagas, ja_pagas, erros, detalhes}.
     """
     from catalog_server.repositories import caixa_repo
@@ -113,6 +115,9 @@ def rechecagem(provider: str = "", limite: int = 50) -> dict:
         if provider:
             where.append("provider_id IN (SELECT id FROM payment_provider WHERE codigo=?)")
             params.append(provider)
+        if payment_id:
+            where.append("c.payment_id=?")
+            params.append(payment_id)
         where_sql = " AND ".join(where)
         contas = [
             dict(r) for r in conn.execute(

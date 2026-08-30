@@ -2495,6 +2495,49 @@
      }
     }
    }
+  },
+  "/api/webhooks/outbox": {
+   "get": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Outbox — operações assíncronas (pendentes/ok/erro/mortas)",
+    "parameters": [
+     {
+      "name": "status",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "default": 50
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Itens do outbox"
+     }
+    }
+   }
+  },
+  "/api/webhooks/outbox/rodar": {
+   "post": {
+    "tags": [
+     "financeiro"
+    ],
+    "summary": "Processa agora as linhas do outbox prontas (retry/backoff/dead-letter)",
+    "responses": {
+     "200": {
+      "description": "Resumo (processados, ok, erros, pendentes)"
+     }
+    }
+   }
   }
  },
  "components": {
