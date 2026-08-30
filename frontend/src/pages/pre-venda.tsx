@@ -13,7 +13,7 @@ import { fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
 import { usuarioCorrente } from "./login";
 import { Button } from "../ui/ui";
-import { DataBox } from "./pre-venda/data-box";
+import { DataBox } from "../ui/data-box";
 import { ModalCadastroCliente } from "./pre-venda/modal-cadastro-cliente";
 import { ModalBuscaCliente } from "./pre-venda/modal-busca-cliente";
 import { ModalDadosCliente } from "./pre-venda/modal-dados-cliente";

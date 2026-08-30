@@ -1,4 +1,4 @@
-// pages/pre-venda/data-box.tsx — card de métrica do PDV.
+// ui/data-box.tsx — card de métrica (PDV/caixa/pre-venda).
 export function DataBox({
   label,
   value,
