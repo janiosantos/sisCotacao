@@ -17,6 +17,7 @@ from flask import Blueprint, current_app, jsonify, request
 from catalog_server.db import system_conn
 from catalog_server.payments import service as payment_service
 from catalog_server.payments.base import WebhookNaoAutorizado
+from catalog_server.payments.registry import ProviderIndisponivel
 from catalog_server.payments.repo import payment_provider_repo
 
 api_payments_bp = Blueprint("api_payments", __name__)
@@ -100,6 +101,8 @@ def webhook_payment(provider: str):
         )
     except WebhookNaoAutorizado as exc:
         return jsonify({"error": str(exc)}), 401
+    except ProviderIndisponivel as exc:
+        return jsonify({"error": str(exc)}), 503
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception:
