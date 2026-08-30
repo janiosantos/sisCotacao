@@ -5,8 +5,6 @@ import { api, type ProdutoComHistorico } from "../api/client";
 import { Input, Loading, PageHeader } from "../ui/ui";
 import { Detalhe } from "./historico/detalhe";
 
-const CORES = ["#C6871E", "#3C5468", "#35553B", "#A8432A", "#6B4A8F", "#1B7A8C", "#8F5F13", "#556B2F"];
-
 export default function Historico() {
   const [codigos, setCodigos] = useState<ProdutoComHistorico[]>([]);
   const [carregando, setCarregando] = useState(true);
