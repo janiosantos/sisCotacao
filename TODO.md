@@ -65,15 +65,28 @@ Revisar a cadeia completa após as migrações 0093/0094/0096 (caminhos relativo
 
 ---
 
-## Resultado da análise (preencher)
+## Resultado da análise
 
 | Área | Status | Bugs encontrados / correções |
 |---|---|---|
-| 1. Imagens | ☐ | |
-| 2. API pública | ☐ | |
-| 3. Imagens lote | ☐ | |
-| 4. TLS/nginx | ☐ | |
-| 5. Frontend | ☐ | |
-| 6. Dados | ☐ | |
+| 1. Imagens | ✅ | Sem regressão estrutural encontrada nesta revisão; manter teste de filesystem real. |
+| 2. API pública | ⚠️ | CORS wildcard; integração SSR do site ainda cai em catálogo demonstrativo. |
+| 3. Imagens lote | ✅ | Fluxo passa na suíte; falta cobertura de sites reais/HTML dinâmico. |
+| 4. TLS/nginx | ❌ | Staging monta volume de certificados da produção; healthcheck do Postgres produtivo usa usuário fixo. |
+| 5. Frontend | ⚠️ | Code-splitting/modularização OK; faltam Error Boundary, schemas runtime e testes E2E. |
+| 6. Dados | ⚠️ | Outbox e baixa de pagamentos têm riscos de concorrência/atomicidade. |
+
+### Achados prioritários desta revisão
+
+1. **P1 — baixa financeira não atômica:** webhook, rechecagem e consulta podem marcar a conta como paga antes de lançar o caixa; uma falha no caixa deixa a conta paga sem movimento recuperável.
+2. **P1 — outbox duplicável:** `prontas()` não faz claim/lock e `enfileirar()` usa SELECT→INSERT; workers concorrentes podem processar duas vezes ou gerar conflito de unicidade.
+3. **P1 — retry mascarado:** JSON inválido vira `{}` e um handler que retorna `erros` é marcado como `ok`, perdendo o reprocessamento.
+4. **P1 — produção:** `pg_isready` está fixo em `catalog`, incompatível com `POSTGRES_USER` configurável.
+5. **P1 — staging:** o compose monta `siscom_certbot-etc`, volume descrito como certificado da produção, em um serviço publicamente acessível.
+6. **P1 — site institucional:** o build estático força dados de exemplo no SSR; a home publicada pode exibir catálogo demonstrativo mesmo com a API disponível.
+7. **P2 — cobrança concorrente:** duas emissões simultâneas podem criar cobranças externas antes de persistir `payment_id`; falta lock/estado de emissão no banco.
+8. **P2 — webhook inválido:** `_evento_do_payload()` é chamado antes de validar que o JSON é objeto, causando 500 para payloads como lista/string.
+
+Validação: `234 passed` no backend em banco dev isolado; `27 passed`, `typecheck` e `build` no frontend; build Astro do site passou. Nenhum deploy, restart ou migração não-dev foi executado.
 
 > Ao finalizar: atualize `CONTEXTO_SESSAO.md` (log + pendências) e faça commit/push.
