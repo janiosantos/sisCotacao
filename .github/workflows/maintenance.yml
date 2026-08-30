@@ -19,6 +19,7 @@ on:
           - padronizar_descricoes
           - normalizar_subcategorias
           - reclassificar_cabos
+          - webhook-test
 
 jobs:
   maintenance:
@@ -33,3 +34,83 @@ jobs:
         run: |
           docker compose -f docker-compose.prod.yml exec -T backend \
             python -m catalog_server.maintenance ${{ github.event.inputs.task }}
+
+  # Valida a assinatura/token dos webhooks de pagamento no STAGING (porta 444
+  # com o certificado de produção). Roda dentro da rede do staging — sem
+  # depender de porta pública. Uso: task=webhook-test.
+  webhook_test:
+    if: github.event.inputs.task == 'webhook-test'
+    runs-on: [self-hosted, siscom-prod]
+    env:
+      COMPOSE_PROJECT_NAME: siscom-staging
+      COMPOSE_FILE: deployment/compose/docker-compose.staging.yml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Testa assinatura de webhooks no staging (HTTPS :444)
+        run: |
+          docker compose exec -T backend python - <<'PY'
+          import requests
+
+          from catalog_server.db import system_conn
+          from catalog_server.payments.repo import payment_provider_repo
+
+          # Configura provedores de teste no staging (sandbox + webhook_secret)
+          def cfg(codigo, nome, secret, **extra):
+              with system_conn() as conn:
+                  conn.execute(
+                      "INSERT INTO payment_provider (codigo, nome) VALUES (%s,%s) ON CONFLICT (codigo) DO NOTHING",
+                      (codigo, nome),
+                  )
+                  pid = int(conn.execute("SELECT id FROM payment_provider WHERE codigo=%s", (codigo,)).fetchone()["id"])
+                  conn.commit()
+              dados = {"provider_id": pid, "operacao": "pix", "ambiente": "sandbox",
+                       "webhook_secret": secret, "prioridade": 1, "ativo": 1}
+              dados.update(extra)
+              payment_provider_repo.upsert_config(dados)
+
+          cfg("asaas", "Asaas", "wh_test_asaas", api_key="TESTE")
+          cfg("mercadopago", "Mercado Pago", "wh_test_mp", access_token="TESTE")
+
+          BASE = "https://frontend:443"  # staging nginx (443 interno <- host :444)
+          falhas = []
+
+          def post(path, payload, headers=None, params=None):
+              return requests.post(BASE + path, json=payload, headers=headers or {},
+                                   params=params or {}, verify=False, timeout=10)
+
+          # Asaas: token correto -> 200 (ignorado, sem conta); token errado -> 401
+          p = {"event": "PAYMENT_RECEIVED", "payment": {"id": "pay_wh_asaas"}}
+          r = post("/api/webhooks/payments/asaas", p, headers={"asaas-access-token": "wh_test_asaas"})
+          if r.status_code != 200: falhas.append(f"asaas valido={r.status_code}")
+          r = post("/api/webhooks/payments/asaas", p, headers={"asaas-access-token": "errado"})
+          if r.status_code != 401: falhas.append(f"asaas invalido={r.status_code}")
+
+          # Mercado Pago: x-signature HMAC
+          import hashlib, hmac, time
+          def mp_sig(secret, data_id, ts_ms=None, x_req="wh-req"):
+              ts = ts_ms or str(int(time.time() * 1000))
+              manifest = f"id:{data_id};request-id:{x_req};ts:{ts};"
+              v1 = hmac.new(secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
+              return f"ts={ts},v1={v1}", x_req
+          data_id = "pay_wh_mp"
+          sig, xreq = mp_sig("wh_test_mp", data_id)
+          payload = {"type": "payment", "data": {"id": data_id}}
+          h = {"x-signature": sig, "x-request-id": xreq}
+          q = {"data.id": data_id, "type": "payment"}
+          r = post("/api/webhooks/payments/mercadopago", payload, headers=h, params=q)
+          if r.status_code != 200: falhas.append(f"mp valido={r.status_code}")
+          r = post("/api/webhooks/payments/mercadopago", payload,
+                   headers={"x-signature": "ts=1,v1=errado", "x-request-id": xreq}, params=q)
+          if r.status_code != 401: falhas.append(f"mp invalido={r.status_code}")
+          sig_old, _ = mp_sig("wh_test_mp", data_id, ts_ms=str(int(time.time() * 1000) - 3600 * 1000))
+          r = post("/api/webhooks/payments/mercadopago", payload,
+                   headers={"x-signature": sig_old, "x-request-id": xreq}, params=q)
+          if r.status_code != 401: falhas.append(f"mp replay(ts antigo)={r.status_code}")
+
+          if falhas:
+              print("WEBHOOK TEST: FALHAS ->", falhas)
+              raise SystemExit(1)
+          print("WEBHOOK TEST OK (asaas + mercadopago: valido 200, invalido 401, replay 401)")
+          PY
