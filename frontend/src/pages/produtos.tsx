@@ -27,6 +27,7 @@ import { ModalImportarCatalogo } from "./produtos/modal-importar-catalogo";
 import { ModalEtiquetas } from "./produtos/modal-etiquetas";
 import { Imagens } from "./produtos/imagens";
 import { PerfilFiscalPanel } from "./produtos/perfil-fiscal-panel";
+import { Conversoes } from "./produtos/conversoes";
 
 const PAGE = 60;
 
@@ -855,7 +856,7 @@ export function ProdutoEditor() {
   const [atributos, setAtributos] = useState<FamiliaAtributo[]>([]);
   const [dados, setDados] = useState<DadosOperacionais>(DADOS_INICIAIS);
   const [valores, setValores] = useState<Record<string, string>>({});
-  const [tab, setTab] = useState<"gerais" | "atributos" | "dados" | "imagens" | "fiscal">("gerais");
+  const [tab, setTab] = useState<"gerais" | "atributos" | "dados" | "imagens" | "fiscal" | "conversoes">("gerais");
   const [carregando, setCarregando] = useState(true);
 
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
@@ -1166,6 +1167,7 @@ export function ProdutoEditor() {
     { key: "dados", label: "Dados e Variação" },
     { key: "imagens", label: "Mídia e Anexos" },
     ...(id ? [{ key: "fiscal" as const, label: "Perfil Fiscal" }] : []),
+    ...(id ? [{ key: "conversoes" as const, label: "Conversões" }] : []),
   ];
 
   return (
@@ -1490,6 +1492,12 @@ export function ProdutoEditor() {
       {tab === "fiscal" && (
         <div>
           {id ? <PerfilFiscalPanel produto={produto} /> : null}
+        </div>
+      )}
+
+      {tab === "conversoes" && (
+        <div>
+          {id ? <Conversoes produtoId={id} /> : <p className="py-8 text-center text-sm text-gray-400">Salve o produto para configurar conversões.</p>}
         </div>
       )}
 

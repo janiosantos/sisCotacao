@@ -14,6 +14,7 @@ from catalog_server.repositories import (
 from catalog_server.services import imagens_service, parse_url_service
 from catalog_server.services import imagens_lote
 from catalog_server.services import sku_service
+from catalog_server.services import unidade_conversao as conv_svc
 from catalog_server.db import system_conn
 from catalog_server.utils import image_url
 
@@ -661,3 +662,60 @@ def preview_skus():
             marca_cod=marca_cod or None,
         )
     return jsonify({"skus": skus})
+
+
+# ----------------------------------------------------------------------
+# Conversões de unidade por produto/embalagem (MDM-002)
+# ----------------------------------------------------------------------
+
+
+def _usuario_atual() -> int | None:
+    u = getattr(request, "usuario", None)
+    return u.get("sub") if u else None
+
+
+@api_produtos_bp.get("/api/produtos-cadastro/<int:produto_id>/conversoes")
+def listar_conversoes(produto_id: int):
+    """Conversões ativas do produto (ex.: 1 CX = N UN)."""
+    return jsonify({"conversoes": conv_svc.listar(produto_id)})
+
+
+@api_produtos_bp.post("/api/produtos-cadastro/<int:produto_id>/conversoes")
+def salvar_conversao(produto_id: int):
+    """Cria/atualiza uma conversão (origem→destino) com unidade base e fator."""
+    data = request.get_json(silent=True) or {}
+    try:
+        c = conv_svc.salvar(
+            produto_id,
+            data.get("unidade_origem") or "",
+            data.get("unidade_destino") or "",
+            float(data.get("fator") or 0),
+            data.get("unidade_base") or "",
+            _usuario_atual(),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "conversao_invalida"}), 400
+    return jsonify({"conversao": c})
+
+
+@api_produtos_bp.delete("/api/produtos-cadastro/<int:produto_id>/conversoes/<origem>")
+def excluir_conversao(produto_id: int, origem: str):
+    if not conv_svc.excluir(produto_id, origem, _usuario_atual()):
+        return jsonify({"error": "Conversão não encontrada", "code": "conversao_nao_encontrada"}), 404
+    return jsonify({"ok": True})
+
+
+@api_produtos_bp.get("/api/produtos-cadastro/<int:produto_id>/conversao")
+def converter_unidade(produto_id: int):
+    """Converte quantidade entre unidades usando as conversões do produto."""
+    de = request.args.get("de") or ""
+    para = request.args.get("para") or ""
+    try:
+        qtd = float(request.args.get("qtd") or "1")
+    except ValueError:
+        return jsonify({"error": "qtd inválida", "code": "quantidade_invalida"}), 400
+    try:
+        r = conv_svc.converter(produto_id, qtd, de, para)
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "conversao_invalida"}), 400
+    return jsonify(r)

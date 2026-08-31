@@ -1334,6 +1334,19 @@ export const api = {
     request("PUT", `/api/unidades-compra/${id}`, { sigla, descricao, ativo }),
   excluirUnidadeCompra: (id: number) => request("DELETE", `/api/unidades-compra/${id}`),
 
+  // Conversões de unidade por produto (MDM-002)
+  listarConversoes: (produtoId: number) =>
+    request<{ conversoes: ConversaoUnidade[] }>("GET", `/api/produtos-cadastro/${produtoId}/conversoes`),
+  salvarConversao: (produtoId: number, data: ConversaoUnidadePayload) =>
+    request<{ conversao: ConversaoUnidade }>("POST", `/api/produtos-cadastro/${produtoId}/conversoes`, data),
+  excluirConversao: (produtoId: number, origem: string) =>
+    request("DELETE", `/api/produtos-cadastro/${produtoId}/conversoes/${encodeURIComponent(origem)}`),
+  converterUnidade: (produtoId: number, qtd: number, de: string, para: string) =>
+    request<{ resultado: number; fator: number; unidade_base: string }>(
+      "GET",
+      `/api/produtos-cadastro/${produtoId}/conversao` + qs({ qtd, de, para })
+    ),
+
   // base do ERP — clientes, vendedores, usuários e plano de contas
   listarClientes: (somenteAtivos = false, vendedorId?: number) =>
     request<Cliente[]>("GET", "/api/clientes" + qs({ somente_ativos: somenteAtivos, vendedor_id: vendedorId })),
@@ -1915,6 +1928,24 @@ export interface CategoriaTree {
   ativo: boolean;
   subgrupo_id?: number | null;
   subcategorias: { id: number; nome: string; ativo: boolean; product_count: number }[];
+}
+
+export interface ConversaoUnidade {
+  id: number;
+  produto_id: number;
+  unidade_origem: string;
+  unidade_destino: string;
+  fator: number;
+  unidade_base: string;
+  ativo: boolean;
+  versao: number;
+}
+
+export interface ConversaoUnidadePayload {
+  unidade_origem: string;
+  unidade_destino: string;
+  fator: number;
+  unidade_base: string;
 }
 
 export interface UnidadeCompra {
