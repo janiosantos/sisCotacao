@@ -2726,6 +2726,154 @@
           }
         }
       }
+    },
+    "/api/produtos-cadastro/{produto_id}/identificadores": {
+      "get": {
+        "tags": [
+          "produtos"
+        ],
+        "summary": "Lista os identificadores ativos do produto (MDM-003)",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Identificadores ativos"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "produtos"
+        ],
+        "summary": "Cria/atualiza um identificador (EAN/GTIN, c?digo interno, fabricante, fornecedor, embalagem)",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tipo",
+                  "valor"
+                ],
+                "properties": {
+                  "tipo": {
+                    "type": "string",
+                    "enum": [
+                      "ean",
+                      "gtin",
+                      "codigo_interno",
+                      "fabricante",
+                      "fornecedor",
+                      "embalagem"
+                    ]
+                  },
+                  "valor": {
+                    "type": "string"
+                  },
+                  "embalagem": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "origem": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Identificador salvo"
+          },
+          "400": {
+            "description": "Identificador inv?lido"
+          }
+        }
+      }
+    },
+    "/api/produtos-cadastro/{produto_id}/identificadores/{identificador_id}": {
+      "delete": {
+        "tags": [
+          "produtos"
+        ],
+        "summary": "Remove (desativa) um identificador do produto",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "identificador_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removido"
+          },
+          "404": {
+            "description": "N?o encontrado"
+          }
+        }
+      }
+    },
+    "/api/produtos/por-codigo": {
+      "get": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "Busca exata por c?digo (identificador ativo, EAN ou SKU) antes da busca textual",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Produtos correspondentes (id, nome, sku, ean)"
+          }
+        }
+      }
     }
   },
   "components": {

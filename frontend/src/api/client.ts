@@ -1347,6 +1347,16 @@ export const api = {
       `/api/produtos-cadastro/${produtoId}/conversao` + qs({ qtd, de, para })
     ),
 
+  // Identificadores múltiplos por produto (MDM-003)
+  listarIdentificadores: (produtoId: number) =>
+    request<{ identificadores: ProdutoIdentificador[] }>("GET", `/api/produtos-cadastro/${produtoId}/identificadores`),
+  salvarIdentificador: (produtoId: number, data: ProdutoIdentificadorPayload) =>
+    request<{ identificador: ProdutoIdentificador }>("POST", `/api/produtos-cadastro/${produtoId}/identificadores`, data),
+  excluirIdentificador: (produtoId: number, identificadorId: number) =>
+    request("DELETE", `/api/produtos-cadastro/${produtoId}/identificadores/${identificadorId}`),
+  buscarPorCodigo: (q: string) =>
+    request<{ produtos: { id: number; nome: string; sku: string; ean: string }[] }>("GET", "/api/produtos/por-codigo" + qs({ q })),
+
   // base do ERP — clientes, vendedores, usuários e plano de contas
   listarClientes: (somenteAtivos = false, vendedorId?: number) =>
     request<Cliente[]>("GET", "/api/clientes" + qs({ somente_ativos: somenteAtivos, vendedor_id: vendedorId })),
@@ -1946,6 +1956,23 @@ export interface ConversaoUnidadePayload {
   unidade_destino: string;
   fator: number;
   unidade_base: string;
+}
+
+export interface ProdutoIdentificador {
+  id: number;
+  produto_id: number;
+  tipo: string;
+  valor: string;
+  embalagem?: string | null;
+  origem: string;
+  ativo: boolean;
+}
+
+export interface ProdutoIdentificadorPayload {
+  tipo: string;
+  valor: string;
+  embalagem?: string | null;
+  origem?: string;
 }
 
 export interface UnidadeCompra {

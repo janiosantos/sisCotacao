@@ -28,6 +28,7 @@ import { ModalEtiquetas } from "./produtos/modal-etiquetas";
 import { Imagens } from "./produtos/imagens";
 import { PerfilFiscalPanel } from "./produtos/perfil-fiscal-panel";
 import { Conversoes } from "./produtos/conversoes";
+import { Identificadores } from "./produtos/identificadores";
 
 const PAGE = 60;
 
@@ -856,7 +857,7 @@ export function ProdutoEditor() {
   const [atributos, setAtributos] = useState<FamiliaAtributo[]>([]);
   const [dados, setDados] = useState<DadosOperacionais>(DADOS_INICIAIS);
   const [valores, setValores] = useState<Record<string, string>>({});
-  const [tab, setTab] = useState<"gerais" | "atributos" | "dados" | "imagens" | "fiscal" | "conversoes">("gerais");
+  const [tab, setTab] = useState<"gerais" | "atributos" | "dados" | "imagens" | "fiscal" | "conversoes" | "codigos">("gerais");
   const [carregando, setCarregando] = useState(true);
 
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
@@ -1168,6 +1169,7 @@ export function ProdutoEditor() {
     { key: "imagens", label: "Mídia e Anexos" },
     ...(id ? [{ key: "fiscal" as const, label: "Perfil Fiscal" }] : []),
     ...(id ? [{ key: "conversoes" as const, label: "Conversões" }] : []),
+    ...(id ? [{ key: "codigos" as const, label: "Códigos" }] : []),
   ];
 
   return (
@@ -1498,6 +1500,12 @@ export function ProdutoEditor() {
       {tab === "conversoes" && (
         <div>
           {id ? <Conversoes produtoId={id} /> : <p className="py-8 text-center text-sm text-gray-400">Salve o produto para configurar conversões.</p>}
+        </div>
+      )}
+
+      {tab === "codigos" && (
+        <div>
+          {id ? <Identificadores produtoId={id} /> : <p className="py-8 text-center text-sm text-gray-400">Salve o produto para cadastrar códigos.</p>}
         </div>
       )}
 

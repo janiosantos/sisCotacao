@@ -15,6 +15,7 @@ from catalog_server.services import imagens_service, parse_url_service
 from catalog_server.services import imagens_lote
 from catalog_server.services import sku_service
 from catalog_server.services import unidade_conversao as conv_svc
+from catalog_server.services import produto_identificador as ident_svc
 from catalog_server.db import system_conn
 from catalog_server.utils import image_url
 
@@ -719,3 +720,46 @@ def converter_unidade(produto_id: int):
     except ValueError as exc:
         return jsonify({"error": str(exc), "code": "conversao_invalida"}), 400
     return jsonify(r)
+
+
+# ----------------------------------------------------------------------
+# Identificadores múltiplos por produto (MDM-003)
+# ----------------------------------------------------------------------
+
+
+@api_produtos_bp.get("/api/produtos-cadastro/<int:produto_id>/identificadores")
+def listar_identificadores(produto_id: int):
+    """Identificadores ativos do produto (EAN/GTIN, códigos interno/fabricante/fornecedor/embalagem)."""
+    return jsonify({"identificadores": ident_svc.listar(produto_id)})
+
+
+@api_produtos_bp.post("/api/produtos-cadastro/<int:produto_id>/identificadores")
+def salvar_identificador(produto_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        ident = ident_svc.salvar(
+            produto_id,
+            data.get("tipo") or "",
+            data.get("valor") or "",
+            data.get("embalagem"),
+            data.get("origem"),
+            _usuario_atual(),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "identificador_invalido"}), 400
+    return jsonify({"identificador": ident})
+
+
+@api_produtos_bp.delete("/api/produtos-cadastro/<int:produto_id>/identificadores/<int:identificador_id>")
+def excluir_identificador(produto_id: int, identificador_id: int):
+    if not ident_svc.excluir(produto_id, identificador_id):
+        return jsonify({"error": "Identificador não encontrado", "code": "identificador_nao_encontrado"}), 404
+    return jsonify({"ok": True})
+
+
+@api_produtos_bp.get("/api/produtos/por-codigo")
+def buscar_por_codigo():
+    """Busca exata por código (identificador ativo, EAN ou SKU) antes da busca textual."""
+    q = request.args.get("q") or ""
+    limite = int(request.args.get("limite") or 20)
+    return jsonify({"produtos": ident_svc.buscar(q, limite)})
