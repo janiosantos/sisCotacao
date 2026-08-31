@@ -17,6 +17,7 @@ from catalog_server.services import sku_service
 from catalog_server.services import unidade_conversao as conv_svc
 from catalog_server.services import produto_identificador as ident_svc
 from catalog_server.services import cadastro_importacao as cadastro_svc
+from catalog_server.services import produto_relacao as relacao_svc
 from catalog_server.db import system_conn
 from catalog_server.utils import image_url
 
@@ -803,3 +804,47 @@ def alterar_status_cadastro(produto_id: int):
     except ValueError as exc:
         return jsonify({"error": str(exc), "code": "status_invalido"}), 400
     return jsonify({"ok": True, "status_cadastro": novo})
+
+
+# ----------------------------------------------------------------------
+# Relações entre produtos (MDM-005)
+# ----------------------------------------------------------------------
+
+
+@api_produtos_bp.get("/api/produtos-cadastro/<int:produto_id>/relacoes")
+def listar_relacoes(produto_id: int):
+    tipo = request.args.get("tipo") or None
+    return jsonify({"relacoes": relacao_svc.listar(produto_id, tipo)})
+
+
+@api_produtos_bp.get("/api/produtos-cadastro/<int:produto_id>/relacoes/relacionados")
+def listar_relacionados(produto_id: int):
+    """Relações ativas nos dois sentidos (origem e alvo) com nome/sku do outro produto."""
+    return jsonify({"relacionados": relacao_svc.relacionados(produto_id)})
+
+
+@api_produtos_bp.post("/api/produtos-cadastro/<int:produto_id>/relacoes")
+def salvar_relacao(produto_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        rel = relacao_svc.salvar(
+            produto_id,
+            int(data.get("relacionado_id") or 0),
+            data.get("tipo") or "",
+            float(data.get("fator") or 1),
+            int(data.get("prioridade") or 1),
+            data.get("vigencia_inicio"),
+            data.get("vigencia_fim"),
+            data.get("motivo"),
+            _usuario_atual(),
+        )
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "relacao_invalida"}), 400
+    return jsonify({"relacao": rel})
+
+
+@api_produtos_bp.delete("/api/produtos-cadastro/<int:produto_id>/relacoes/<int:relacao_id>")
+def excluir_relacao(produto_id: int, relacao_id: int):
+    if not relacao_svc.excluir(produto_id, relacao_id):
+        return jsonify({"error": "Relação não encontrada", "code": "relacao_nao_encontrada"}), 404
+    return jsonify({"ok": True})

@@ -31,6 +31,7 @@ import { Conversoes } from "./produtos/conversoes";
 import { Identificadores } from "./produtos/identificadores";
 import { ModalImportarLote } from "./produtos/modal-importar-lote";
 import { StatusCadastro } from "./produtos/status-cadastro";
+import { Relacoes } from "./produtos/relacoes";
 
 const PAGE = 60;
 
@@ -886,7 +887,7 @@ export function ProdutoEditor() {
   const [atributos, setAtributos] = useState<FamiliaAtributo[]>([]);
   const [dados, setDados] = useState<DadosOperacionais>(DADOS_INICIAIS);
   const [valores, setValores] = useState<Record<string, string>>({});
-  const [tab, setTab] = useState<"gerais" | "atributos" | "dados" | "imagens" | "fiscal" | "conversoes" | "codigos">("gerais");
+  const [tab, setTab] = useState<"gerais" | "atributos" | "dados" | "imagens" | "fiscal" | "conversoes" | "codigos" | "relacoes">("gerais");
   const [carregando, setCarregando] = useState(true);
 
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
@@ -1210,6 +1211,7 @@ export function ProdutoEditor() {
     ...(id ? [{ key: "fiscal" as const, label: "Perfil Fiscal" }] : []),
     ...(id ? [{ key: "conversoes" as const, label: "Conversões" }] : []),
     ...(id ? [{ key: "codigos" as const, label: "Códigos" }] : []),
+    ...(id ? [{ key: "relacoes" as const, label: "Relações" }] : []),
   ];
 
   return (
@@ -1589,6 +1591,12 @@ export function ProdutoEditor() {
       {tab === "codigos" && (
         <div>
           {id ? <Identificadores produtoId={id} /> : <p className="py-8 text-center text-sm text-gray-400">Salve o produto para cadastrar códigos.</p>}
+        </div>
+      )}
+
+      {tab === "relacoes" && (
+        <div>
+          {id ? <Relacoes produtoId={id} /> : <p className="py-8 text-center text-sm text-gray-400">Salve o produto para cadastrar relações.</p>}
         </div>
       )}
 

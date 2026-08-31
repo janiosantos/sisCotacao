@@ -1397,6 +1397,16 @@ export const api = {
   alterarStatusCadastro: (produtoId: number, status_cadastro: string) =>
     request<{ ok: boolean; status_cadastro: string }>("PATCH", `/api/produtos-cadastro/${produtoId}/status`, { status_cadastro }),
 
+  // Relações entre produtos (MDM-005)
+  listarRelacoes: (produtoId: number, tipo?: string) =>
+    request<{ relacoes: ProdutoRelacao[] }>("GET", `/api/produtos-cadastro/${produtoId}/relacoes` + qs({ tipo })),
+  listarRelacionados: (produtoId: number) =>
+    request<{ relacionados: ProdutoRelacionado[] }>("GET", `/api/produtos-cadastro/${produtoId}/relacoes/relacionados`),
+  salvarRelacao: (produtoId: number, data: ProdutoRelacaoPayload) =>
+    request<{ relacao: ProdutoRelacao }>("POST", `/api/produtos-cadastro/${produtoId}/relacoes`, data),
+  excluirRelacao: (produtoId: number, relacaoId: number) =>
+    request("DELETE", `/api/produtos-cadastro/${produtoId}/relacoes/${relacaoId}`),
+
   // base do ERP — clientes, vendedores, usuários e plano de contas
   listarClientes: (somenteAtivos = false, vendedorId?: number) =>
     request<Cliente[]>("GET", "/api/clientes" + qs({ somente_ativos: somenteAtivos, vendedor_id: vendedorId })),
@@ -2013,6 +2023,43 @@ export interface ProdutoIdentificadorPayload {
   valor: string;
   embalagem?: string | null;
   origem?: string;
+}
+
+export interface ProdutoRelacao {
+  id: number;
+  produto_id: number;
+  relacionado_id: number;
+  tipo: string;
+  fator: number;
+  prioridade: number;
+  vigencia_inicio?: string | null;
+  vigencia_fim?: string | null;
+  aprovado: boolean;
+  motivo?: string | null;
+  versao: number;
+}
+
+export interface ProdutoRelacionado {
+  id: number;
+  tipo: string;
+  fator: number;
+  prioridade: number;
+  aprovado: boolean;
+  motivo?: string | null;
+  outro_id: number;
+  outro_nome: string;
+  outro_sku: string;
+  direcao: string;
+}
+
+export interface ProdutoRelacaoPayload {
+  relacionado_id: number;
+  tipo: string;
+  fator: number;
+  prioridade: number;
+  vigencia_inicio?: string | null;
+  vigencia_fim?: string | null;
+  motivo?: string | null;
 }
 
 export interface UnidadeCompra {

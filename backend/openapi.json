@@ -2983,6 +2983,161 @@
           }
         }
       }
+    },
+    "/api/produtos-cadastro/{produto_id}/relacoes": {
+      "get": {
+        "tags": [
+          "produtos"
+        ],
+        "summary": "Lista rela??es ativas do produto (equivalente/substituto/acessorio/complementar/componente)",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "tipo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rela??es ativas"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "produtos"
+        ],
+        "summary": "Cria/atualiza rela??o entre produtos (MDM-005)",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "relacionado_id": {
+                    "type": "integer"
+                  },
+                  "tipo": {
+                    "type": "string",
+                    "enum": [
+                      "equivalente",
+                      "substituto",
+                      "acessorio",
+                      "complementar",
+                      "componente"
+                    ]
+                  },
+                  "fator": {
+                    "type": "number",
+                    "default": 1
+                  },
+                  "prioridade": {
+                    "type": "integer",
+                    "default": 1
+                  },
+                  "vigencia_inicio": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "vigencia_fim": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "motivo": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rela??o salva"
+          },
+          "400": {
+            "description": "Rela??o inv?lida"
+          }
+        }
+      }
+    },
+    "/api/produtos-cadastro/{produto_id}/relacoes/relacionados": {
+      "get": {
+        "tags": [
+          "produtos"
+        ],
+        "summary": "Rela??es ativas nos dois sentidos (origem e alvo) com nome/SKU do outro produto",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Relacionados"
+          }
+        }
+      }
+    },
+    "/api/produtos-cadastro/{produto_id}/relacoes/{relacao_id}": {
+      "delete": {
+        "tags": [
+          "produtos"
+        ],
+        "summary": "Remove (desativa) uma rela??o do produto",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "relacao_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removida"
+          },
+          "404": {
+            "description": "N?o encontrada"
+          }
+        }
+      }
     }
   },
   "components": {
