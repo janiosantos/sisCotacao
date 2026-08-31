@@ -14,41 +14,36 @@
 6. Gates por tarefa: `py_compile` → `pytest` (248 hoje) → `npm test` (34 hoje) → `typecheck` → `build` → `git diff --check` → OpenAPI + tipos → `CONTEXTO_SESSAO.md` → commit/push.
 7. Staging/produção só com autorização explícita (produção segue em v2.32.2).
 
-## B. Decisões bloqueantes (`DECISAO-*`) a abrir no início
+## B. Decisões bloqueantes (`DECISAO-*`)
 
-| Decisão | Bloqueia | Quem aprova |
-|---|---|---|
-| Monoempresa vs multifilial | MDM-001 | Usuário |
-| Método oficial de custo | EST-003/004, BI-006, FIS | Contador |
-| Regime tributário + matriz fiscal + certificado/provedor | FIS-001..006, REC-004, VEN-006 | Contador + usuário |
-| Adquirente/TEF (ou escopo manual) | VEN-007, INT-002 | Usuário |
-| Política de troca/devolução/garantia/crédito/comissão | POS-001..005 | Usuário |
-| Níveis de serviço, estoque de segurança, política de compra | COM-004/005, EST-005 | Usuário |
-| Margem mínima/alçada de preço | MDM-007, VEN-003 | Usuário |
-| Marketplaces/transportadoras | INT-004/005 | Usuário |
-| LGPD (retenção/consentimento) | ADM-003 | Usuário |
-| Famílias com lote/série/validade | EST-008 | Usuário |
-| Bancos e regras de conciliação | INT-001 | Usuário/banco |
+> **Todas as 12 decisões foram fechadas em 2026-08-31** (registro em
+> `docs/erp/decisoes/DECISAO-ERPs.md`). Resumo:
+> **001** monoempresa (modelo preparado) · **002** custo médio por depósito (contador: confirmar na homologação) ·
+> **003** Simples Nacional (preparado p/ Lucro Real) + **FOCUS** + **Certificado A1** ·
+> **004** TEF manual no piloto · **005** troca 30 dias, garantia por fornecedor ·
+> **006** comissão % venda líquida · **007** segurança por ABC · **008** reusar alçada de desconto ·
+> **009** marketplaces manual no piloto · **010** LGPD mascarar PII + consentimento ·
+> **011** lote/série parametrizado por família · **012** conciliação manual assistida.
 
-Saída: `docs/erp/decisoes/DECISAO-*.md` (opções + recomendação + bloqueio). Registrar em CONTEXTO. Nenhuma tarefa dependente avança até a decisão.
+Onde houver nova decisão ausente, criar `DECISAO-*` e bloquear somente a parte dependente.
 
 ## C. Ondas de execução (ordem §21 do plano mestre)
 
-| # | Onda | Tarefas | Depende | Bloqueado por decisão |
+| # | Onda | Tarefas | Depende | Observação (decisões fechadas 2026-08-31) |
 |---|---|---|---|---|
-| 0 | Governança | GOV-001..004 + abrir DECISAO-* | — | — |
-| 1 | Dados mestres | MDM-001..007 | Onda 0 | MDM-001 (mono/multi); MDM-007 (margem) |
-| 2 | Estoque/custo | EST-001..008 | Onda 1 | EST-003 (custo); EST-008 (lote) |
-| 3 | ABC/necessidade | COM-001..006 | Onda 2 | COM-004/005 (níveis) |
-| 4 | Compras | COM-007..012 | Onda 3 | COM-010 (alçada) |
-| 5 | Recebimento | REC-001..006 | Onda 4 | REC-004 (fiscal) |
-| 6 | Venda | VEN-001..007 | Onda 2 | VEN-007 (TEF) |
-| 7 | Fiscal | FIS-001..006 | EXTERNO | 100% contador/cert/provedor (só FIS-003/006 estruturais em paralelo) |
-| 8 | BI | BI-001..007 + catálogo §18 | Ondas 2/4/5/6 | — |
-| 9 | Pós-venda | POS-001..005 | Onda 6 | POS (políticas/comissão) |
+| 0 | Governança | GOV-001..004 + DECISAO-* | — | DECISAO-001..012 decididas |
+| 1 | Dados mestres | MDM-001..007 | Onda 0 | MDM-001 monoempresa; MDM-007 usa alçada de desconto |
+| 2 | Estoque/custo | EST-001..008 | Onda 1 | EST-003 custo médio; EST-008 lote por família |
+| 3 | ABC/necessidade | COM-001..006 | Onda 2 | Segurança por ABC (COM-004/005) |
+| 4 | Compras | COM-007..012 | Onda 3 | Alçada de compra conforme perfil |
+| 5 | Recebimento | REC-001..006 | Onda 4 | Entrada fiscal FOCUS (Simples) |
+| 6 | Venda | VEN-001..007 | Onda 2 | TEF manual no piloto |
+| 7 | Fiscal | FIS-001..006 | EXTERNO | Simples Nacional + FOCUS + Cert A1; produção só após homologação |
+| 8 | BI | BI-001..007 + catálogo §18 | Ondas 2/4/5/6 | Custo médio p/ DRE/CMV |
+| 9 | Pós-venda | POS-001..005 | Onda 6 | Troca 30 dias; comissão % venda líquida |
 | 10 | UX/ARC | UX-001..007, ARC-001..007 | contínuo/paralelo | — |
-| 11 | INT/ADM | INT-001..006, ADM-001..005 | decisões | INT/ADM |
-| 12 | Piloto | PIL-001..004 | todas P0/P1 | — |
+| 11 | INT/ADM | INT-001..006, ADM-001..005 | — | Conciliação manual; LGPD mascarar PII |
+| 12 | Piloto | PIL-001..004 | todas P0/P1 | Homologação fiscal/financeira (contador) |
 
 > FIS (7) fica **em paralelo só nas partes não dependentes**; UX/ARC (10) roda **durante** as ondas 1–9. BI (8) não inicia como relatório final antes de 2/4/5/6.
 
