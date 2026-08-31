@@ -169,10 +169,12 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
-      <div className="login-box w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-lg">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-100 px-4 py-8">
+      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-brand-100/70 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-28 -right-20 h-80 w-80 rounded-full bg-blue-100/70 blur-3xl" />
+      <div className="login-box relative w-full max-w-sm rounded-2xl border border-white/80 bg-white/95 p-6 shadow-[0_20px_50px_rgb(16_24_40/12%)] backdrop-blur sm:p-7">
         <div className="mb-4 flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm shadow-brand-600/30">
             <ShoppingBag size={18} />
           </div>
           <div>
@@ -186,7 +188,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
             <input
               id="lgLogin"
               ref={loginRef}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
               value={login}
               autoComplete="username"
               onChange={(e) => setLogin(e.target.value)}
@@ -197,7 +199,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
             <label className="mb-1 block text-xs font-medium text-gray-600">Senha</label>
             <input
               id="lgSenha"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
               type="password"
               value={senha}
               autoComplete="current-password"
@@ -288,16 +290,16 @@ export default function App() {
   const RouteComponent = route?.def.component ?? null;
 
   const SidebarNav = (
-    <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
+    <nav className="erp-scrollbar flex-1 space-y-5 overflow-y-auto px-3 py-4" aria-label="Navegação principal">
       {NAV.map((g) => {
         const visiveis = g.items.filter((it) => podeVisualizar(it.recurso));
         if (visiveis.length === 0) return null;
         return (
           <div key={g.label}>
-            <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+            <div className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
               {g.label}
             </div>
-            <div className="space-y-0.5">
+            <div className="space-y-1">
               {visiveis.map((it) => {
                 const active = isActive(hash, it.href);
                 const Icon = it.icon;
@@ -305,13 +307,14 @@ export default function App() {
                   <a
                     key={it.href}
                     href={it.href}
-                    className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium ${
+                    aria-current={active ? "page" : undefined}
+                    className={`group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium ${
                       active
-                        ? "bg-brand-50 text-brand-700"
-                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                        ? "bg-brand-50 text-brand-800 shadow-sm ring-1 ring-brand-100"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                     }`}
                   >
-                    <Icon size={16} className={active ? "text-brand-600" : "text-gray-400"} />
+                    <Icon size={16} strokeWidth={active ? 2.2 : 1.8} className={active ? "text-brand-600" : "text-slate-400 group-hover:text-slate-600"} />
                     {it.label}
                   </a>
                 );
@@ -324,8 +327,8 @@ export default function App() {
   );
 
   const SidebarBrand = (
-    <div className="flex h-14 items-center gap-2 border-b border-gray-200 px-4">
-      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white">
+    <div className="flex h-16 items-center gap-2.5 border-b border-slate-200 px-4">
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm shadow-brand-600/25">
         <ShoppingBag size={18} />
       </div>
       <div className="min-w-0">
@@ -338,9 +341,9 @@ export default function App() {
   return (
     <>
       <Manutencao />
-      <div className="flex h-dvh overflow-hidden bg-gray-100">
+      <div className="flex h-dvh overflow-hidden bg-slate-100">
       {/* Sidebar — desktop/tablet: fixa; mobile: drawer (off-canvas) */}
-      <aside className="hidden md:flex md:w-60 md:flex-none md:flex-col md:border-r md:border-gray-200 md:bg-white">
+      <aside className="hidden md:flex md:w-64 md:flex-none md:flex-col md:border-r md:border-slate-200 md:bg-white">
         {SidebarBrand}
         {SidebarNav}
       </aside>
@@ -349,7 +352,7 @@ export default function App() {
       {menuAberto && (
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMenuAberto(false)} />
-          <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-r border-gray-200 bg-white shadow-xl">
+          <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-xl">
             <div className="flex items-center justify-between pr-2">
               {SidebarBrand}
               <button className="p-2 text-gray-500 hover:text-gray-800" onClick={() => setMenuAberto(false)} title="Fechar menu">
@@ -363,22 +366,23 @@ export default function App() {
 
       {/* Conteúdo */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 flex-none items-center gap-2 border-b border-gray-200 bg-white px-3 sm:gap-4 sm:px-6">
+        <header className="z-20 flex h-16 flex-none items-center gap-2 border-b border-slate-200 bg-white/95 px-3 shadow-[0_1px_3px_rgb(16_24_40/4%)] backdrop-blur sm:gap-4 sm:px-6">
           <button
-            className="rounded-md p-2 text-gray-600 hover:bg-gray-100 md:hidden"
+            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
             onClick={() => setMenuAberto(true)}
             title="Menu"
             aria-label="Abrir menu"
           >
             <Menu size={20} />
           </button>
-          <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-gray-900 sm:flex-none sm:text-lg">
+          <h1 className="min-w-0 flex-1 truncate text-base font-bold tracking-[-0.02em] text-slate-900 sm:flex-none sm:text-lg">
             {route?.def.title ?? "ERP"}
           </h1>
           <div className="ml-auto flex flex-none items-center gap-1.5 sm:gap-3">
             <button
               onClick={() => toggleCart()}
-              className="relative rounded-md border border-gray-200 p-2 text-gray-600 hover:bg-gray-50"
+              aria-label="Abrir carrinho"
+              className="relative rounded-lg border border-slate-200 p-2 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
               title="Carrinho"
             >
               <ShoppingCart size={18} />
@@ -389,10 +393,10 @@ export default function App() {
               ) : null}
             </button>
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700 ring-2 ring-white">
                 {(usuario?.nome || "?").charAt(0).toUpperCase()}
               </div>
-              <span className="hidden text-sm text-gray-700 sm:inline">{usuario?.nome ?? ""}</span>
+              <span className="hidden max-w-40 truncate text-sm font-medium text-slate-700 sm:inline">{usuario?.nome ?? ""}</span>
             </div>
             <Button
               variant="ghost"
@@ -409,7 +413,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-5 lg:p-6">
+        <main id="main-content" className="erp-scrollbar flex-1 overflow-auto p-3 sm:p-4 md:p-5 lg:p-6">
           {!rotaLiberada ? (
             <div className="rounded-lg border border-dashed border-gray-300 bg-white py-16 text-center text-sm text-gray-400">
               <p className="text-base font-medium text-gray-600">Sem acesso</p>

@@ -13,6 +13,72 @@
   --color-brand-900: #1e2f6a;
 }
 
+:root {
+  color-scheme: light;
+  --erp-canvas: #f5f7fb;
+  --erp-ink: #182230;
+  --erp-muted: #667085;
+  --erp-line: #e4e7ec;
+  --erp-surface: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--erp-canvas);
+  color: var(--erp-ink);
+  font-family: "DM Sans", "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #dce6fd;
+  color: #1e337f;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease,
+    box-shadow 160ms ease, opacity 160ms ease;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgb(51 97 224 / 24%);
+  outline-offset: 1px;
+}
+
+.erp-skeleton {
+  animation: erp-pulse 1.5s ease-in-out infinite;
+  background: linear-gradient(90deg, #eef1f5 25%, #f8fafc 50%, #eef1f5 75%);
+  background-size: 200% 100%;
+}
+
+@keyframes erp-pulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.erp-scrollbar {
+  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-width: thin;
+}
+
 /* Garante que a sidebar desktop/tablet sempre apareça em telas >= 768px,
    mesmo que CSS legado defina `.hidden` com !important. */
 @media (min-width: 768px) {
@@ -43,11 +109,6 @@ body,
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Evita seleção acidental de texto ao tocar em botões no mobile. */
-button {
-  -webkit-tap-highlight-color: transparent;
-}
-
 /* Inputs não zoomam no iOS ao focar (font-size >= 16px). */
 input,
 select,
@@ -70,10 +131,10 @@ textarea {
 @media (max-width: 1023px) {
   .mob-card tbody tr {
     display: block;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--erp-line);
     border-radius: 10px;
     margin: 0 6px 10px;
-    background: #fff;
+    background: var(--erp-surface);
     overflow: hidden;
   }
   .mob-card tbody td {
@@ -82,7 +143,7 @@ textarea {
     justify-content: space-between;
     gap: 12px;
     padding: 8px 12px;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid #f1f3f6;
     font-size: 14px;
   }
   .mob-card tbody td > * {
@@ -98,7 +159,7 @@ textarea {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    color: #9ca3af;
+    color: var(--erp-muted);
     margin-right: auto;
     min-width: 84px;
     max-width: 40%;
@@ -109,7 +170,7 @@ textarea {
   /* Célula de ação (última coluna, normalmente sem label) fica só com o conteúdo. */
   .mob-card tbody td[data-label=""] {
     justify-content: flex-end;
-    background: #f9fafb;
+    background: #f8fafc;
     padding-top: 6px;
     padding-bottom: 6px;
   }
@@ -119,5 +180,22 @@ textarea {
   .mob-card tbody td.text-right,
   .mob-card tbody td.text-right::before {
     text-align: right;
+  }
+}
+
+@media (min-width: 1024px) {
+  .mob-card tbody tr:hover td {
+    background: #f8fafc;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

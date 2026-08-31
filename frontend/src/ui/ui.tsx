@@ -21,10 +21,10 @@ import { temPermissao } from "../perm";
 type BtnVariant = "primary" | "secondary" | "ghost" | "danger" | "outline";
 
 const BTN_VARIANTS: Record<BtnVariant, string> = {
-  primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-sm",
-  secondary: "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50",
-  ghost: "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
-  danger: "bg-red-600 text-white hover:bg-red-700",
+  primary: "bg-brand-600 text-white shadow-sm hover:bg-brand-700 hover:shadow focus-visible:ring-2 focus-visible:ring-brand-500/40",
+  secondary: "border border-slate-300 bg-white text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50",
+  ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+  danger: "bg-red-600 text-white shadow-sm hover:bg-red-700",
   outline: "border border-brand-600 text-brand-700 hover:bg-brand-50",
 };
 
@@ -41,7 +41,7 @@ export const Button = forwardRef<
   return (
     <button
       ref={ref}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/40 disabled:opacity-50 disabled:cursor-not-allowed ${BTN_VARIANTS[variant]} ${sizeCls} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-md font-semibold tracking-[-0.01em] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${BTN_VARIANTS[variant]} ${sizeCls} ${className}`}
       {...props}
       disabled={disabled || !permitido}
       aria-disabled={!permitido || undefined}
@@ -58,7 +58,7 @@ export const Button = forwardRef<
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-lg border border-gray-200 bg-white shadow-sm ${className}`}>
+    <div className={`rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgb(16_24_40/4%)] ${className}`}>
       {children}
     </div>
   );
@@ -86,10 +86,10 @@ export function StatCard({
   const valueCls =
     tone === "danger" ? "text-red-600" : tone === "success" ? "text-emerald-600" : "text-gray-900";
   return (
-    <Card className={`p-4 border-l-4 ${toneCls}`}>
-      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold ${valueCls}`}>{value}</div>
-      {sub ? <div className="mt-1 text-xs text-gray-500">{sub}</div> : null}
+    <Card className={`border-l-4 p-4 ${toneCls}`}>
+      <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">{label}</div>
+      <div className={`mt-1.5 text-[1.65rem] font-semibold leading-none tracking-[-0.03em] ${valueCls}`}>{value}</div>
+      {sub ? <div className="mt-2 text-xs text-slate-500">{sub}</div> : null}
     </Card>
   );
 }
@@ -106,7 +106,7 @@ export function Badge({
   tone?: "gray" | "green" | "red" | "amber" | "blue";
 }) {
   const tones: Record<string, string> = {
-    gray: "bg-gray-100 text-gray-700",
+    gray: "bg-slate-100 text-slate-700",
     green: "bg-emerald-100 text-emerald-700",
     red: "bg-red-100 text-red-700",
     amber: "bg-amber-100 text-amber-700",
@@ -147,8 +147,8 @@ export function Table({ children }: { children: ReactNode }) {
     return child;
   });
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-      <table className="mob-card w-full text-sm lg:min-w-full lg:table-fixed lg:divide-y lg:divide-gray-200">
+    <div className="erp-scrollbar overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgb(16_24_40/4%)]">
+      <table className="mob-card w-full text-[13px] lg:min-w-full lg:table-fixed lg:divide-y lg:divide-slate-200">
         {rows}
       </table>
     </div>
@@ -157,12 +157,12 @@ export function Table({ children }: { children: ReactNode }) {
 
 export function THead({ cols }: { cols: ReactNode[] }) {
   return (
-    <thead className="hidden bg-gray-50 lg:table-header-group">
+    <thead className="hidden bg-slate-50/90 lg:table-header-group">
       <tr>
         {cols.map((c, i) => (
           <th
             key={i}
-            className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+            className="sticky top-0 z-10 border-b border-slate-200 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500"
           >
             {c}
           </th>
@@ -196,9 +196,7 @@ export function TBody({
       }),
     });
   });
-  return (
-    <tbody className="divide-y divide-gray-100 lg:table-row-group">{rows}</tbody>
-  );
+  return <tbody className="divide-y divide-slate-100 lg:table-row-group">{rows}</tbody>;
 }
 
 export function Cell({
@@ -213,7 +211,7 @@ export function Cell({
   return (
     <td
       {...rest}
-      className={`block px-4 py-2.5 lg:table-cell lg:px-4 lg:py-2.5 ${className}`}
+    className={`block px-4 py-3 align-middle lg:table-cell lg:px-4 lg:py-2.5 ${className}`}
     >
       {children}
     </td>
@@ -223,7 +221,7 @@ export function Cell({
 export function EmptyRow({ colSpan, message }: { colSpan: number; message: string }) {
   return (
     <tr>
-      <td colSpan={colSpan} data-label="" className="px-4 py-10 text-center text-sm text-gray-400">
+      <td colSpan={colSpan} data-label="" className="px-4 py-12 text-center text-sm text-slate-500">
         {message}
       </td>
     </tr>
@@ -245,17 +243,27 @@ export function Field({
   children: ReactNode;
   className?: string;
 }) {
+  const fieldId = useId();
+  const childId = isValidElement(children)
+    ? (children.props as { id?: string }).id
+    : undefined;
+  const controlId = childId ?? fieldId;
+  const control = isValidElement(children)
+    ? cloneElement(children as ReactElement<{ id?: string }>, {
+        id: controlId,
+      })
+    : children;
   return (
     <div className={className}>
-      <label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>
-      {children}
-      {hint ? <p className="mt-1 text-xs text-gray-400">{hint}</p> : null}
+      <label htmlFor={controlId} className="mb-1.5 block text-xs font-semibold text-slate-600">{label}</label>
+      {control}
+      {hint ? <p className="mt-1.5 text-xs leading-5 text-slate-500">{hint}</p> : null}
     </div>
   );
 }
 
 const inputCls =
-  "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30";
+  "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm transition-colors focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 aria-invalid:border-red-400 aria-invalid:ring-red-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500";
 
 export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className = "", autoComplete, spellCheck, ...props }, ref) {
@@ -355,12 +363,12 @@ export function Modal({
           wide ? "sm:max-w-3xl" : "sm:max-w-lg"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-gray-200 px-3 py-3 sm:px-5">
+        <div className="flex items-center justify-between border-b border-slate-200 px-3 py-3.5 sm:px-5">
           <h2 id={titleId} className="min-w-0 truncate text-base font-semibold text-gray-900">{title}</h2>
           <button
             ref={closeRef}
             onClick={onClose}
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
             aria-label="Fechar"
           >
             <X size={18} />
@@ -368,7 +376,7 @@ export function Modal({
         </div>
         <div className="flex-1 overflow-auto px-3 py-4 sm:px-5">{children}</div>
         {footer ? (
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-3 py-3 sm:px-5 safe-bottom">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/80 px-3 py-3 sm:px-5 safe-bottom">
             {footer}
           </div>
         ) : null}
@@ -391,10 +399,10 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
-        {subtitle ? <p className="mt-1 text-sm text-gray-500">{subtitle}</p> : null}
+        <h1 className="text-[1.4rem] font-bold tracking-[-0.025em] text-slate-900 sm:text-2xl">{title}</h1>
+        {subtitle ? <p className="mt-1.5 max-w-3xl text-sm leading-5 text-slate-500">{subtitle}</p> : null}
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
     </div>
@@ -406,5 +414,11 @@ export function PageHeader({
 // ------------------------------------------------------------------
 
 export function Loading({ message = "Carregando…" }: { message?: string }) {
-  return <div className="py-16 text-center text-sm text-gray-400">{message}</div>;
+  return (
+    <div className="space-y-3 py-12" role="status" aria-live="polite" aria-label={message}>
+      <div className="mx-auto h-3 w-40 rounded-full erp-skeleton" />
+      <div className="mx-auto h-2.5 w-56 rounded-full erp-skeleton" />
+      <p className="pt-1 text-center text-xs text-slate-500">{message}</p>
+    </div>
+  );
 }
