@@ -83,6 +83,13 @@ Consumidores a mapear antes de qualquer DROP/RENAME/troca de tipo: blueprints, r
 
 - **Regra de ouro**: jamais Banco novo ↓ Backend novo ↓ Frontend novo numa única tacada (ponto único de falha). Sequência R1 (expand) → R2 (adotar) → R3 (troca completa) → R4 (remover legado); cada etapa intermediária deixa o sistema **100% funcional** para quem ainda não foi atualizado.
 - **Frontend nunca conhece o banco**: muda a tabela, a resposta da API continua igual até decisão consciente de mudar contrato.
+- **Padrão obrigatório de UI/UX do frontend**: toda nova tela, componente ou alteração visual deve seguir os princípios de ERP cloud abaixo, preservando o design system compartilhado:
+  - tabelas devem ter colunas semanticamente tipadas, hierarquia de informação, ações por linha e comportamento responsivo/adaptativo;
+  - tabelas interativas devem oferecer navegação por teclado, foco visível, distinção entre modo de navegação e modo de ação, seleção/ordenação quando aplicável e validação de dados no nível da célula/linha;
+  - formulários devem associar label e controle, expor estados `loading`, `disabled`, `invalid`, `error` e `empty`, além de manter feedback claro sem depender somente de cor;
+  - ações críticas devem respeitar RBAC no backend e refletir o estado de permissão na UI, sem esconder contexto necessário ao operador;
+  - qualquer mudança deve ser validada em desktop e mobile/tablet, com `typecheck`, testes e `build` do frontend.
+  - referência obrigatória para tabelas e navegação por teclado: [Salesforce Lightning Datatable](https://developer.salesforce.com/docs/platform/lwc/guide/data-table-a11y.html) e [Salesforce Lightning Design System (SLDS)](https://developer.salesforce.com/docs/platform/lightning-component-reference/guide/lightning-datatable.html?type=Example).
 - **Feature flags** em mudanças grandes: rollback comportamental independente do estrutural (flag `false` ≠ desfazer migration).
 - **Rollback em duas dimensões**: aplicação (imagens `prev`) × banco (dump pré-migração). Destrutiva sempre por último; plano documentado por migração destrutiva.
 - **Compatibilidade entre versões**: backend antigo ↔ PG ↔ backend novo devem funcionar durante toda a transição (protege também o rollback via `prev`).
