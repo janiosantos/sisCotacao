@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request
 
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.repositories import preco_historico_repo, promocao_repo, revisao_repo, tabela_preco_repo
-from catalog_server.services import pricing_engine
+from catalog_server.services import pricing_engine, preco_regra as preco_regra_svc
 
 api_precos_bp = Blueprint("api_precos", __name__)
 
@@ -31,7 +31,53 @@ def calcular_preco(variante_id: int):
 
 @api_precos_bp.get("/api/precos/efetivo/<int:variante_id>")
 def preco_efetivo(variante_id: int):
-    return jsonify(pricing_engine.preco_efetivo(variante_id, canal=request.args.get("canal") or "varejo"))
+    args = request.args
+    return jsonify(pricing_engine.preco_efetivo(
+        variante_id,
+        canal=args.get("canal") or "varejo",
+        cliente_id=args.get("cliente_id", type=int),
+        segmento=args.get("segmento"),
+        quantidade=args.get("quantidade", type=float),
+    ))
+
+
+# ─── Regras de preço (MDM-007) ─────────────────────────────
+
+
+@api_precos_bp.get("/api/precos/regras/<int:produto_id>")
+def listar_regras_preco(produto_id: int):
+    return jsonify({"regras": preco_regra_svc.listar(produto_id)})
+
+
+@api_precos_bp.post("/api/precos/regras/<int:produto_id>")
+def salvar_regra_preco(produto_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        regra = preco_regra_svc.salvar(
+            produto_id,
+            int(data.get("prioridade") or 10),
+            data.get("canal"),
+            int(data["cliente_id"]) if data.get("cliente_id") else None,
+            data.get("segmento"),
+            float(data["quantidade_min"]) if data.get("quantidade_min") else None,
+            float(data["preco"]) if data.get("preco") is not None else None,
+            float(data["desconto_pct"]) if data.get("desconto_pct") is not None else None,
+            float(data["margem_minima_pct"]) if data.get("margem_minima_pct") is not None else None,
+            data.get("vigencia_inicio"),
+            data.get("vigencia_fim"),
+            data.get("motivo"),
+            usuario_id_requisicao(),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "regra_preco_invalida"}), 400
+    return jsonify({"regra": regra})
+
+
+@api_precos_bp.delete("/api/precos/regras/<int:produto_id>/<int:regra_id>")
+def excluir_regra_preco(produto_id: int, regra_id: int):
+    if not preco_regra_svc.excluir(produto_id, regra_id):
+        return jsonify({"error": "Regra não encontrada", "code": "regra_nao_encontrada"}), 404
+    return jsonify({"ok": True})
 
 
 # ─── Tabelas de Preço ──────────────────────────────────────

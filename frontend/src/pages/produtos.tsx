@@ -32,6 +32,7 @@ import { Identificadores } from "./produtos/identificadores";
 import { ModalImportarLote } from "./produtos/modal-importar-lote";
 import { StatusCadastro } from "./produtos/status-cadastro";
 import { Relacoes } from "./produtos/relacoes";
+import { RegrasPreco } from "./produtos/regras-preco";
 
 const PAGE = 60;
 
@@ -887,7 +888,7 @@ export function ProdutoEditor() {
   const [atributos, setAtributos] = useState<FamiliaAtributo[]>([]);
   const [dados, setDados] = useState<DadosOperacionais>(DADOS_INICIAIS);
   const [valores, setValores] = useState<Record<string, string>>({});
-  const [tab, setTab] = useState<"gerais" | "atributos" | "dados" | "imagens" | "fiscal" | "conversoes" | "codigos" | "relacoes">("gerais");
+  const [tab, setTab] = useState<"gerais" | "atributos" | "dados" | "imagens" | "fiscal" | "conversoes" | "codigos" | "relacoes" | "precos">("gerais");
   const [carregando, setCarregando] = useState(true);
 
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
@@ -1212,6 +1213,7 @@ export function ProdutoEditor() {
     ...(id ? [{ key: "conversoes" as const, label: "Conversões" }] : []),
     ...(id ? [{ key: "codigos" as const, label: "Códigos" }] : []),
     ...(id ? [{ key: "relacoes" as const, label: "Relações" }] : []),
+    ...(id ? [{ key: "precos" as const, label: "Regras de preço" }] : []),
   ];
 
   return (
@@ -1597,6 +1599,12 @@ export function ProdutoEditor() {
       {tab === "relacoes" && (
         <div>
           {id ? <Relacoes produtoId={id} /> : <p className="py-8 text-center text-sm text-gray-400">Salve o produto para cadastrar relações.</p>}
+        </div>
+      )}
+
+      {tab === "precos" && (
+        <div>
+          {id ? <RegrasPreco produtoId={id} /> : <p className="py-8 text-center text-sm text-gray-400">Salve o produto para configurar regras de preço.</p>}
         </div>
       )}
 

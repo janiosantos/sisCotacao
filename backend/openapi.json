@@ -3138,6 +3138,144 @@
           }
         }
       }
+    },
+    "/api/precos/regras/{produto_id}": {
+      "get": {
+        "tags": [
+          "precos"
+        ],
+        "summary": "Lista regras de pre?o do produto (MDM-007)",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Regras ativas"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "precos"
+        ],
+        "summary": "Cria regra de pre?o (prioridade, contexto canal/cliente/segmento/quantidade, vig?ncia, pre?o ou desconto, margem m?nima)",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "prioridade": {
+                    "type": "integer",
+                    "default": 10
+                  },
+                  "canal": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "cliente_id": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "segmento": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "quantidade_min": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "preco": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "desconto_pct": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "margem_minima_pct": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "vigencia_inicio": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  },
+                  "vigencia_fim": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  },
+                  "motivo": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Regra salva"
+          },
+          "400": {
+            "description": "Regra inv?lida"
+          }
+        }
+      }
+    },
+    "/api/precos/regras/{produto_id}/{regra_id}": {
+      "delete": {
+        "tags": [
+          "precos"
+        ],
+        "summary": "Remove (desativa) uma regra de pre?o do produto",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "regra_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removida"
+          },
+          "404": {
+            "description": "N?o encontrada"
+          }
+        }
+      }
     }
   },
   "components": {

@@ -41,6 +41,24 @@ def _tabela_do_canal(canal: str | None, tabela_id: int | None) -> dict | None:
         return dict(row) if row else None
 
 
+def _explicacao_regra(regra: dict) -> str:
+    partes: list[str] = []
+    if regra.get("canal"):
+        partes.append(f"canal {regra['canal']}")
+    if regra.get("cliente_id"):
+        partes.append(f"cliente {regra['cliente_id']}")
+    if regra.get("segmento"):
+        partes.append(f"segmento {regra['segmento']}")
+    if regra.get("quantidade_min") is not None:
+        partes.append(f"qtd ≥ {regra['quantidade_min']}")
+    if regra.get("preco") is not None:
+        base = "preço fixo"
+    else:
+        base = f"desconto {regra.get('desconto_pct')}%"
+    contexto = f" [{', '.join(partes)}]" if partes else " [geral]"
+    return f"Regra #{regra['id']} (prio {regra.get('prioridade')}): {base}{contexto}"
+
+
 def calcular_preco(
     variante_id: int,
     canal: str | None = None,
@@ -116,9 +134,53 @@ def calcular_preco(
     return base
 
 
-def preco_efetivo(variante_id: int, canal: str = "varejo") -> dict:
-    """Preço efetivo de venda: tabela do canal → motor (sugerido) → preço base."""
+def preco_efetivo(
+    variante_id: int,
+    canal: str = "varejo",
+    cliente_id: int | None = None,
+    segmento: str | None = None,
+    quantidade: float | None = None,
+) -> dict:
+    """Preço efetivo de venda: regra de preço (MDM-007) → tabela do canal → motor (sugerido) → preço base."""
     canal = canal if canal in ("varejo", "atacado", "contrato", "promocional") else "varejo"
+
+    from catalog_server.services import preco_regra as preco_regra_svc
+
+    regra = preco_regra_svc.resolver(
+        variante_id, canal=canal, cliente_id=cliente_id, segmento=segmento, quantidade=quantidade
+    )
+    if regra:
+        base = 0.0
+        if regra.get("preco") is not None:
+            base = float(regra["preco"])
+        else:
+            with system_conn() as conn:
+                row = conn.execute(
+                    "SELECT preco FROM produtos_cadastro WHERE id=?", (variante_id,)
+                ).fetchone()
+            base = float(row["preco"]) if row and row["preco"] else 0.0
+            desconto = float(regra.get("desconto_pct") or 0)
+            base = round(base * (1 - desconto / 100), 2)
+        resp = {
+            "variante_id": variante_id, "canal": canal,
+            "preco": base, "origem": "regra",
+            "regra_id": regra["id"],
+            "prioridade": regra.get("prioridade"),
+            "explicacao": _explicacao_regra(regra),
+        }
+        if regra.get("margem_minima_pct") is not None:
+            custo = custo_engine.calcular_custo(variante_id)
+            custo_liq = float(custo.get("custo_liquido") or 0)
+            resp["custo_liquido"] = custo_liq
+            if custo_liq > 0:
+                margem_real = round((base - custo_liq) / base * 100, 2) if base > 0 else None
+                resp["margem_real_pct"] = margem_real
+                resp["margem_minima_pct"] = float(regra["margem_minima_pct"])
+                resp["abaixo_da_margem_minima"] = bool(
+                    margem_real is not None and margem_real < float(regra["margem_minima_pct"])
+                )
+        return resp
+
     tabela = _tabela_do_canal(canal, None)
     if tabela:
         with system_conn() as conn:

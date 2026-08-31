@@ -1407,6 +1407,14 @@ export const api = {
   excluirRelacao: (produtoId: number, relacaoId: number) =>
     request("DELETE", `/api/produtos-cadastro/${produtoId}/relacoes/${relacaoId}`),
 
+  // Regras de preço (MDM-007)
+  listarRegrasPreco: (produtoId: number) =>
+    request<{ regras: PrecoRegra[] }>("GET", `/api/precos/regras/${produtoId}`),
+  salvarRegraPreco: (produtoId: number, data: PrecoRegraPayload) =>
+    request<{ regra: PrecoRegra }>("POST", `/api/precos/regras/${produtoId}`, data),
+  excluirRegraPreco: (produtoId: number, regraId: number) =>
+    request("DELETE", `/api/precos/regras/${produtoId}/${regraId}`),
+
   // base do ERP — clientes, vendedores, usuários e plano de contas
   listarClientes: (somenteAtivos = false, vendedorId?: number) =>
     request<Cliente[]>("GET", "/api/clientes" + qs({ somente_ativos: somenteAtivos, vendedor_id: vendedorId })),
@@ -2057,6 +2065,38 @@ export interface ProdutoRelacaoPayload {
   tipo: string;
   fator: number;
   prioridade: number;
+  vigencia_inicio?: string | null;
+  vigencia_fim?: string | null;
+  motivo?: string | null;
+}
+
+export interface PrecoRegra {
+  id: number;
+  produto_id: number;
+  prioridade: number;
+  canal?: string | null;
+  cliente_id?: number | null;
+  segmento?: string | null;
+  quantidade_min?: number | null;
+  preco?: number | null;
+  desconto_pct?: number | null;
+  margem_minima_pct?: number | null;
+  vigencia_inicio?: string | null;
+  vigencia_fim?: string | null;
+  motivo?: string | null;
+  ativo: boolean;
+  versao: number;
+}
+
+export interface PrecoRegraPayload {
+  prioridade: number;
+  canal?: string | null;
+  cliente_id?: number | null;
+  segmento?: string | null;
+  quantidade_min?: number | null;
+  preco?: number | null;
+  desconto_pct?: number | null;
+  margem_minima_pct?: number | null;
   vigencia_inicio?: string | null;
   vigencia_fim?: string | null;
   motivo?: string | null;
