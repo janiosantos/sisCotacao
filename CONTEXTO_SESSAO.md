@@ -111,6 +111,8 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 9. Registro da sessão atual
 
+- **2026-08-31 (levantamento de lacunas do ERP):** realizada auditoria de escopo em todo o projeto para avaliar a prontidão de uma loja de materiais elétricos, hidráulicos, ferragens e ferramentas. O relatório completo foi criado em `RELATORIO_LACUNAS_ERP.md`. O diagnóstico preserva como existentes catálogo, pré-venda, compras/cotações, estoque, financeiro, fiscal, RBAC, outbox/webhooks e base de UI; classifica como pendências prioritárias a homologação fiscal real, reconciliação transacional ponta a ponta, motor de necessidade de compra, ABC histórica/XYZ, custo/valorização, recebimento profissional, inventário cíclico, relatórios gerenciais, PDV/TEF, devoluções com efeitos fiscais/financeiros, E2E e operação de produção. Nenhum código de aplicação, deploy, restart ou migração não-dev foi executado nesta auditoria.
+
 - **2026-08-29**: auditoria técnica/UX de todo o workspace concluída em modo somente leitura; nenhum deploy, restart, rebuild de ambiente ou migração foi disparado.
   - Backend: identificados riscos críticos de atomicidade no fechamento/reabertura de vendas, concorrência no saldo de estoque/caixa/contas, baixa automática de pagamentos, exposição de credenciais e SSRF/uploads sem limites.
   - Fiscal: emissão ainda deve ser tratada como não pronta para produção até XSD, assinatura, idempotência, autenticação de webhooks e homologação SEFAZ/Focus; há código estrutural com `aamm=0000` e campos tributários simplificados.
