@@ -34,6 +34,91 @@ Depois de aplicar um patch:
 - Python: `py_compile` nos arquivos alterados.
 - Frontend: `npm run typecheck` (a partir de `frontend/`).
 
+## Protocolo obrigatório do agente
+
+Estas regras valem para OpenCode, Codex e qualquer outro agente que altere este
+repositório. Elas existem para evitar regressões já observadas no projeto.
+
+### Antes de editar
+
+1. Ler `AGENTS.md`, `CONTEXTO_SESSAO.md` e, quando aplicável, `DESENVOLVIMENTO.md`,
+   `MODULO_TRIBUTARIO.md` e as regras/skills do domínio tocado.
+2. Executar `git status --short` e inspecionar o diff existente. Mudanças não
+   criadas pelo agente são estado do usuário: não reverter, sobrescrever ou
+   formatar em massa sem entender o impacto.
+3. Mapear consumidores do contrato antes de alterar endpoint, schema, nome de
+   campo, rota, componente compartilhado ou fluxo de negócio.
+
+### Edição e encoding
+
+1. Edições manuais devem usar `apply_patch`. Não usar `Set-Content`, redireção,
+   scripts de conversão ou formatadores para regravar arquivos inteiros sem
+   necessidade explícita.
+2. Todo arquivo textual deve permanecer UTF-8. Em PowerShell, qualquer leitura/
+   escrita necessária deve declarar explicitamente `-Encoding utf8`; após editar,
+   auditar acentos e executar `git diff --check`. Mojibake ou alteração de
+   encoding é regressão, não mero detalhe visual.
+3. Não fazer refatoração ou formatação global junto com uma correção funcional.
+   Cada mudança deve ser pequena, revisável e preservar comportamento não
+   relacionado.
+4. Nunca usar `git reset --hard`, `git checkout --`, remoção recursiva ou outro
+   comando destrutivo para “limpar” o workspace. Se houver conflito real com
+   trabalho de outro agente, parar e registrar o conflito.
+
+### Backend, API e segurança
+
+1. O backend é a autoridade: valida payload, autorização, RBAC, estado do
+   documento e regras fiscais/financeiras. Esconder/desabilitar botão no
+   frontend nunca substitui um gate HTTP.
+2. Em requisições autenticadas, autoria e auditoria devem usar a identidade
+   validada do Bearer (`request.usuario.sub`), nunca somente `flask.session`.
+   Token deve ser revogável, ter expiração e não aceitar bypass legado.
+3. Toda operação que altera mais de uma entidade de negócio deve usar uma única
+   transação com lock/idempotência apropriados. PostgreSQL `Row`/`PgRow` deve ser
+   normalizado para `dict` antes de usar `.get()` ou serializar.
+4. Erros de entrada, autorização e domínio devem retornar contrato JSON estável
+   (`error`, e `code` quando aplicável), sem stack trace, segredo ou credencial.
+5. Nenhum segredo, token, senha, certificado, PII ou payload sensível pode entrar
+   em código, log, fixture versionada, mensagem de erro ou comando shell.
+6. Alteração fiscal deve consultar as regras fiscais do projeto; é proibido
+   inferir imposto apenas por NCM. Em dúvida, usar `FISCAL_REVIEW_REQUIRED`.
+
+### Frontend e contratos
+
+1. O frontend acessa somente APIs versionadas/documentadas, nunca o PostgreSQL,
+   tabelas internas ou detalhes de persistência. Alteração de contrato exige
+   atualização do OpenAPI e compatibilidade Expand/Migrate/Contract quando
+   aplicável.
+2. Toda nova UI deve seguir o padrão obrigatório de UI/UX definido neste arquivo:
+   tabelas adaptativas, navegação por teclado, foco visível, estados de loading/
+   erro/empty/disabled, labels associados, feedback sem depender só de cor e
+   validação desktop/tablet/mobile.
+3. Fluxos de teclado existentes, especialmente Pré-venda/PDV, são contrato de
+   operação. Alterações não podem roubar foco, quebrar Enter/Escape/Tab ou
+   esconder o próximo passo do operador.
+4. Listas grandes devem ter paginação/infinite scroll/virtualização conforme o
+   volume. Não carregar milhares de registros nem criar listeners por linha sem
+   medir o impacto.
+5. Não digitar credenciais reais, tokens, dados de clientes ou dados financeiros
+   em navegador automatizado. Para validação autenticada, usar fixture/conta de
+   teste explicitamente aprovada e nunca ambiente de produção.
+
+### Testes e encerramento
+
+1. Validar primeiro o módulo alterado e depois a suíte completa. Backend deve
+   usar `uv run pytest -q` com `TEST_PG_URL` apontando para PostgreSQL de teste;
+   não considerar válido um resultado obtido em ambiente sem dependências ou
+   contra banco de desenvolvimento.
+2. Frontend deve passar `npm test -- --run`, `npm run typecheck` e `npm run build`.
+   Mudanças visuais devem ser verificadas em desktop e mobile/tablet; quando
+   possível, capturar também o estado autenticado com dados de teste.
+3. Migração deve ser testada banco vazio→head e incremental→head, ser idempotente
+   e conter `VERSION`, `RISCO`, `NAME`, `MUDANCA`, `guard`, `forward` e `backward`.
+4. Antes do handoff: `git diff --check`, `git status --short`, revisão do diff,
+   atualização do `CONTEXTO_SESSAO.md` com testes/commit/deploy e commit/push.
+   Deploy, restart de container ou migração fora do DEV continuam proibidos sem
+   confirmação explícita do usuário.
+
 ---
 
 # Checklist de alterações que impactam produção
@@ -242,7 +327,7 @@ SÓ DEPOIS: remover estrutura antiga (Contract)
 **Entregue (v2.16.0)** — migração `0075_controle_acesso`. **Dívidas fechadas (v2.17.0)** — migrações `0076` (negação por usuário) e `0077` (Contract de `usuarios.perfil`). **Correção v2.20.0** — migração `0081`: `atualizacoes.visualizar` concedida a Vendedor/Estoquista/Operador (smoke test pós-deploy lê `/api/sistema/status` com perfil vendedor).
 
 - **Modelo**: `perfis` (4 fixos: Administrador, Vendedor, Estoquista, Operador + perfis novos via CRUD), `recursos` (catálogo de módulos), `perfil_recurso` (matriz de ações), `usuario_perfis` (N:N) e `usuario_override` (`acoes_extra` concede e `acoes_negadas` nega — a efetiva é `(perfis ∪ conceder) − negar`; superuser ignora negações).
-- **Ações**: `visualizar, cadastrar, editar, excluir, imprimir, aprovar, configurar`.
+- **Ações**: `visualizar, cadastrar, editar, excluir, imprimir, aprovar, configurar, emitir`.
 - **Serviço**: `catalog_server/permissao.py` — `tem_permissao()`, `exige_permissao()` (decorator), `usuario_tem_rbac()`, cache em processo TTL 30s, `definir_perfis/overrides`, `criar/atualizar/set_ativo/excluir_perfil`.
 - **Gate central**: `app_factory._autorizar_acesso()` mapeia rota→recurso e método→ação (+ `_ACAO_ESPECIFICA` para config/impressão); atrás da flag `CONTROLE_ACESSO`. **Mapeamento 100%** das rotas `/api` (teste `test_mapeamento_100pct_rotas_api` garante cobertura); **deny-by-default** para rota não mapeada. Exceções: whitelist de auth (inclui webhook público `/api/webhooks/tecnospeed`), portal do fornecedor e `/api/usuarios/atual`.
 - **APIs**: `api_permissoes.py` (`/api/perfis` GET/POST, `/api/perfis/<id>` PUT/DELETE, `/api/perfis/<id>/ativo` PATCH, `/api/perfis/<id>/permissoes`, `/api/permissoes/catalogo`, `/api/usuarios/<id>/perfis`, `/api/usuarios/<id>/overrides` com `conceder`/`negar`); `/api/usuarios/atual` e login devolvem `perfil_ids`, `overrides` e `permissoes`.
