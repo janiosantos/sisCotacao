@@ -10,12 +10,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timedelta
 
 from catalog_server.db import system_conn
 from catalog_server.payments import registry
 
 _PAYLOAD_MAX = 1000  # caracteres do payload gravado no log
+logger = logging.getLogger(__name__)
 
 
 def registrar(
@@ -52,6 +54,9 @@ def registrar(
             conn.commit()
             return int(row[0])
     except Exception:
+        # Falha de auditoria não deve derrubar a resposta do webhook, mas não
+        # pode desaparecer silenciosamente do monitoramento do backend.
+        logger.exception("Falha ao registrar log de webhook")
         return 0
 
 
@@ -148,28 +153,32 @@ def rechecagem(provider: str = "", limite: int = 50, payment_id: str = "") -> di
         verificadas += 1
         if st.get("status_cobranca") != "pago":
             continue
-        with system_conn() as conn:
-            atual = conn.execute(
-                "SELECT * FROM contas_receber WHERE id=? FOR UPDATE",
-                (conta["id"],),
-            ).fetchone()
-            if atual is None or atual["status"] == "pago":
-                ja_pagas += 1
-                continue
-            valor = float(atual["saldo"] or 0)
-            _baixar(conn, dict(atual), pid, valor)
-            conn.commit()
-        # lança no caixa (entrada)
         try:
-            caixa_repo.movimentar(
-                "entrada",
-                f"Rechecagem {atual['documento'] or ''} — {atual['cliente'] or ''} ({codigo})",
-                valor,
-                forma_pagamento="pix" if operacao == "pix" else "boleto",
-                documento=atual.get("documento") or "",
-            )
+            with system_conn() as conn:
+                atual = conn.execute(
+                    "SELECT * FROM contas_receber WHERE id=? FOR UPDATE",
+                    (conta["id"],),
+                ).fetchone()
+                if atual is None or atual["status"] == "pago":
+                    ja_pagas += 1
+                    continue
+                atual = dict(atual)
+                valor = float(atual["saldo"] or 0)
+                _baixar(conn, atual, pid, valor)
+                caixa_repo.movimentar(
+                    "entrada",
+                    f"Rechecagem {atual['documento'] or ''} — {atual['cliente'] or ''} ({codigo})",
+                    valor,
+                    forma_pagamento="pix" if operacao == "pix" else "boleto",
+                    documento=atual.get("documento") or "",
+                    _conn=conn,
+                )
+                conn.commit()
         except Exception as exc:
             erros.append(f"caixa conta {conta.get('id')}: {exc}")
+            registrar(codigo, "erro", evento="rechecagem", payment_id=pid,
+                      erro=f"rechecagem/caixa: {exc}")
+            continue
         pagas += 1
         detalhes.append({"conta_id": conta["id"], "payment_id": pid, "valor": valor})
         registrar(codigo, "processado", evento="rechecagem", payment_id=pid,

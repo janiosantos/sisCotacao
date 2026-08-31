@@ -55,13 +55,16 @@ class SicoobProvider(PaymentProvider):
             raise ValueError(f"Sicoob: falha na autenticação: {r.status_code} {r.text[:300]}")
         return r.json().get("access_token") or ""
 
-    def _headers(self) -> dict:
-        return {
+    def _headers(self, idempotency_key: str | None = None) -> dict:
+        headers = {
             "Authorization": f"Bearer {self._token()}",
             "client_id": self.client_id,
             "Content-Type": "application/json",
             "accept": "application/json",
         }
+        if idempotency_key:
+            headers["x-idempotency-key"] = idempotency_key
+        return headers
 
     def _pagador(self, conta: dict) -> dict:
         doc = (conta.get("cliente_doc") or "").replace(".", "").replace("/", "").replace("-", "")
@@ -87,7 +90,12 @@ class SicoobProvider(PaymentProvider):
             "indicadorAceite": "N",
             "instrucao1": "Recebimento de venda a prazo",
         }
-        r = requests.post(f"{self.base}/cobranca-bancaria/v3/boletos", json=body, headers=self._headers(), timeout=30)
+        r = requests.post(
+            f"{self.base}/cobranca-bancaria/v3/boletos",
+            json=body,
+            headers=self._headers(self.cfg.get("payment_id")),
+            timeout=30,
+        )
         if not r.ok:
             raise ValueError(f"Sicoob: erro ao emitir boleto: {r.status_code} {r.text[:300]}")
         j = r.json()
@@ -109,7 +117,12 @@ class SicoobProvider(PaymentProvider):
             "valor": {"original": f"{float(conta.get('saldo') or conta.get('valor') or 0):.2f}"},
             "chave": self.cfg.get("chave_pix") or "",
         }
-        r = requests.post(f"{self.base}/pix/api/v2/cob", json=body, headers=self._headers(), timeout=30)
+        r = requests.post(
+            f"{self.base}/pix/api/v2/cob",
+            json=body,
+            headers=self._headers(self.cfg.get("payment_id")),
+            timeout=30,
+        )
         if not r.ok:
             raise ValueError(f"Sicoob: erro ao emitir PIX: {r.status_code} {r.text[:300]}")
         j = r.json()

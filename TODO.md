@@ -6,7 +6,7 @@
 
 ## Instruções gerais
 - Contexto: ERP Casa LM (`ecommerce_scraper`), Flask + PostgreSQL 16 + React/Vite.
-- Testes: `pytest` (env `TEST_PG_URL=postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test`), 234 verdes hoje.
+- Testes: `pytest` (env `TEST_PG_URL=postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test`), 236 verdes hoje.
 - Ao corrigir: rodar `py_compile`, os testes do módulo tocado e a suíte completa.
 - Registrar o resultado ao final deste arquivo (seção "Resultado da análise").
 
@@ -70,23 +70,18 @@ Revisar a cadeia completa após as migrações 0093/0094/0096 (caminhos relativo
 | Área | Status | Bugs encontrados / correções |
 |---|---|---|
 | 1. Imagens | ✅ | Sem regressão estrutural encontrada nesta revisão; manter teste de filesystem real. |
-| 2. API pública | ⚠️ | CORS wildcard; integração SSR do site ainda cai em catálogo demonstrativo. |
+| 2. API pública | ✅ | CORS passou a aceitar somente origens configuradas; site não publica catálogo demonstrativo no SSR. |
 | 3. Imagens lote | ✅ | Fluxo passa na suíte; falta cobertura de sites reais/HTML dinâmico. |
-| 4. TLS/nginx | ❌ | Staging monta volume de certificados da produção; healthcheck do Postgres produtivo usa usuário fixo. |
-| 5. Frontend | ⚠️ | Code-splitting/modularização OK; faltam Error Boundary, schemas runtime e testes E2E. |
-| 6. Dados | ⚠️ | Outbox e baixa de pagamentos têm riscos de concorrência/atomicidade. |
+| 4. TLS/nginx | ✅ | Staging usa o certificado compartilhado em somente-leitura na porta dedicada `:444` para webhooks; healthcheck produtivo usa credenciais do ambiente. |
+| 5. Frontend | ⚠️ | Code-splitting, modularização e Error Boundary OK; permanecem schemas runtime, virtualização e testes E2E. |
+| 6. Dados | ✅ | Outbox com claim/lease e baixa de pagamentos com conta+caixa na mesma transação. |
 
-### Achados prioritários desta revisão
+### Achados prioritários desta revisão — situação
 
-1. **P1 — baixa financeira não atômica:** webhook, rechecagem e consulta podem marcar a conta como paga antes de lançar o caixa; uma falha no caixa deixa a conta paga sem movimento recuperável.
-2. **P1 — outbox duplicável:** `prontas()` não faz claim/lock e `enfileirar()` usa SELECT→INSERT; workers concorrentes podem processar duas vezes ou gerar conflito de unicidade.
-3. **P1 — retry mascarado:** JSON inválido vira `{}` e um handler que retorna `erros` é marcado como `ok`, perdendo o reprocessamento.
-4. **P1 — produção:** `pg_isready` está fixo em `catalog`, incompatível com `POSTGRES_USER` configurável.
-5. **P1 — staging:** o compose monta `siscom_certbot-etc`, volume descrito como certificado da produção, em um serviço publicamente acessível.
-6. **P1 — site institucional:** o build estático força dados de exemplo no SSR; a home publicada pode exibir catálogo demonstrativo mesmo com a API disponível.
-7. **P2 — cobrança concorrente:** duas emissões simultâneas podem criar cobranças externas antes de persistir `payment_id`; falta lock/estado de emissão no banco.
-8. **P2 — webhook inválido:** `_evento_do_payload()` é chamado antes de validar que o JSON é objeto, causando 500 para payloads como lista/string.
+1. **Resolvido:** baixa financeira, outbox, retry, healthcheck, TLS dedicado por porta, SSR do site, emissão concorrente e payload webhook.
+2. **Pendente:** validação live do webhook externo no staging e TLS/roteamento da produção permanecem operações separadas.
+3. **Pendente:** schemas runtime, virtualização e testes E2E dos fluxos críticos do frontend.
 
-Validação: `234 passed` no backend em banco dev isolado; `27 passed`, `typecheck` e `build` no frontend; build Astro do site passou. Nenhum deploy, restart ou migração não-dev foi executado.
+Validação: `236 passed` no backend em banco dev isolado; `27 passed`, `typecheck` e `build` no frontend; build Astro do site passou e a home não contém produto demonstrativo. Nenhum deploy, restart ou migração não-dev foi executado.
 
 > Ao finalizar: atualize `CONTEXTO_SESSAO.md` (log + pendências) e faça commit/push.

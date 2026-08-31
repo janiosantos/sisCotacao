@@ -24,7 +24,7 @@ services:
     restart: unless-stopped
 
   backend:
-    image: siscom-backend-staging:latest
+    image: siscom-backend-staging:${APP_VERSION:?APP_VERSION obrigatório}
     build:
       # Paths em um compose são relativos AO PRÓPRIO ARQUIVO — daqui,
       # a raiz do repositório fica em ../..
@@ -41,6 +41,7 @@ services:
       - APP_VERSION=${APP_VERSION:-rc}
       - AUTO_MIGRATE=0
       - DATABASE_URL=postgresql+psycopg://catalog:catalog@db:5432/catalog
+      - PUBLIC_CORS_ORIGINS=https://casalm.com.br,https://www.casalm.com.br,https://siscom.casalm.com.br:444,http://localhost:8080,http://localhost:8081,http://127.0.0.1:8080
     depends_on:
       db:
         condition: service_healthy
@@ -53,14 +54,14 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: siscom-frontend-staging:latest
+    image: siscom-frontend-staging:${APP_VERSION:?APP_VERSION obrigatório}
     build:
       context: ../../frontend
       dockerfile: Dockerfile.prod
     ports:
       - "8081:80"
-      # HTTPS para testes de webhook fora do dev, com o MESMO certificado da
-      # produção (volume compartilhado). 443 do host é usado pela produção.
+      # HTTPS do staging usa o mesmo dominio/certificado e porta TCP dedicada
+      # para permitir webhooks externos sem tocar na porta 443 da producao.
       - "444:443"
     volumes:
       - siscom_certbot-etc:/etc/letsencrypt:ro
@@ -71,7 +72,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1/ -T 5 2>/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1/ -T 5 2>/dev/null && wget --no-check-certificate -qO /dev/null https://127.0.0.1/ -T 5 2>/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -88,7 +89,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: siscom-backend-staging:latest
+    image: siscom-backend-staging:${APP_VERSION:?APP_VERSION obrigatório}
     command: ["python", "-u", "-m", "catalog_server.jobs.worker"]
     environment:
       - REDIS_URL=redis://redis:6379/0
@@ -102,7 +103,7 @@ services:
     restart: unless-stopped
 
   scheduler:
-    image: siscom-backend-staging:latest
+    image: siscom-backend-staging:${APP_VERSION:?APP_VERSION obrigatório}
     command: ["python", "-u", "-m", "catalog_server.jobs.scheduler"]
     environment:
       - REDIS_URL=redis://redis:6379/0
@@ -115,7 +116,7 @@ services:
 
 volumes:
   postgres-data:
-  # Volume de certificados da PRODUÇÃO (projeto siscom) — staging reutiliza os
-  # certs Let's Encrypt (somente leitura) para servir HTTPS na porta 444.
+  # Compartilhamento intencional somente-leitura: o staging usa o mesmo
+  # certificado do dominio, mas permanece isolado por projeto e porta TCP.
   siscom_certbot-etc:
     external: true

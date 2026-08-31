@@ -195,7 +195,7 @@ def test_comprovante_deposito(system_db):
     c, h = _admin_client(system_db)
     conta_id = _conta(system_db)
     data = {
-        "file": (io.BytesIO(b"fakepdf"), "comprovante.pdf"),
+        "file": (io.BytesIO(b"%PDF-1.7\ncomprovante"), "comprovante.pdf"),
         "tipo": "ted",
 "descricao": "Depósito TED",
     }

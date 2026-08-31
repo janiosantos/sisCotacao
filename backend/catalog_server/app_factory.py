@@ -301,7 +301,18 @@ def create_app() -> Flask:
     @app.after_request
     def cors_publico(resp):
         if request.path.startswith("/api/publico/"):
-            resp.headers["Access-Control-Allow-Origin"] = "*"
+            permitidas = {
+                origem.strip()
+                for origem in os.getenv(
+                    "PUBLIC_CORS_ORIGINS",
+                    "https://casalm.com.br,https://www.casalm.com.br,http://localhost:4321,http://localhost:8080,http://127.0.0.1:4321,http://127.0.0.1:8080",
+                ).split(",")
+                if origem.strip()
+            }
+            origem = request.headers.get("Origin", "").strip()
+            if origem in permitidas:
+                resp.headers["Access-Control-Allow-Origin"] = origem
+                resp.headers["Vary"] = "Origin"
             resp.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
             resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         return resp

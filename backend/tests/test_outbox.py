@@ -56,6 +56,34 @@ def test_outbox_webhook_rechecagem_handler(system_db):
     m.assert_called_once_with(payment_id="pay_x", limite=1)
 
 
+def test_outbox_rejeita_payload_invalido(system_db):
+    from catalog_server.jobs import tasks
+
+    with patch("catalog_server.jobs.tasks.webhook_log.rechecagem") as m:
+        try:
+            tasks.processar_item({"topico": "webhook.rechecagem", "payload": "[1,2]"})
+        except ValueError as exc:
+            assert "objeto JSON" in str(exc)
+        else:
+            raise AssertionError("payload não-objeto deveria falhar")
+        m.assert_not_called()
+
+
+def test_outbox_rechecagem_com_erro_falha_para_retry(system_db):
+    from catalog_server.jobs import tasks
+
+    with patch(
+        "catalog_server.jobs.tasks.webhook_log.rechecagem",
+        return_value={"erros": ["provider indisponível"]},
+    ):
+        try:
+            tasks.processar_item({"topico": "webhook.rechecagem", "payload": '{"payment_id":"p"}'})
+        except RuntimeError as exc:
+            assert "provider indisponível" in str(exc)
+        else:
+            raise AssertionError("erro de rechecagem deveria falhar para retry")
+
+
 def test_webhook_503_enfileira_outbox(system_db):
     from catalog_server.app_factory import create_app
 

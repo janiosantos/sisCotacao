@@ -151,8 +151,16 @@ def test_publico_cors(system_db):
     from catalog_server.app_factory import create_app
 
     c = create_app().test_client()
-    r = c.get("/api/publico/produtos?limit=1")
-    assert r.headers.get("Access-Control-Allow-Origin") == "*"
+    r = c.get(
+        "/api/publico/produtos?limit=1",
+        headers={"Origin": "https://casalm.com.br"},
+    )
+    assert r.headers.get("Access-Control-Allow-Origin") == "https://casalm.com.br"
+    r_evil = c.get(
+        "/api/publico/produtos?limit=1",
+        headers={"Origin": "https://evil.example"},
+    )
+    assert r_evil.headers.get("Access-Control-Allow-Origin") is None
     r2 = c.get("/api/produtos?limit=1")  # não-público: sem CORS
     assert r2.headers.get("Access-Control-Allow-Origin") is None
 

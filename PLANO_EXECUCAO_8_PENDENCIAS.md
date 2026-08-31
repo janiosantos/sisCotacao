@@ -22,8 +22,9 @@ exclusao de arquivos e disparado automaticamente.
 - **Evidencias (2026-08-30):** secrets configurados no GitHub
   (`CATALOG_SECRET`, `POSTGRES_USER`/`POSTGRES_PASSWORD`); deploy Staging
   validado (run 33293628345 — migracoes 0097/0098 em banco vazio->head, smoke,
-  rate limit). Schema hoje no dev/staging: **101** (0097 cobranca_ambiente,
-  0098 login_rate_limit, 0099 webhook_secret, 0100 webhook_log, 0101 outbox).
+  rate limit). Schema no DEV: **102** (0097 cobranca_ambiente,
+  0098 login_rate_limit, 0099 webhook_secret, 0100 webhook_log, 0101 outbox,
+  0102 outbox_claim).
 
 ## 2. Webhooks e segredos de provedores
 
@@ -61,16 +62,17 @@ exclusao de arquivos e disparado automaticamente.
 
 ## 4. Site institucional
 
-- **Status:** [~] em andamento.
+- **Status:** [x] integração de código concluída; validação live pendente.
 - **Escopo:** disponibilizar o projeto `CASA_LM/site`, apontar `siteConfig.ts`
   para `/api/publico/*`, consumir `has_more` e validar busca/filtros.
 - **Aceite:** build do site, CORS restrito aos dominios aprovados, pagina inicial
   e catalogo funcionando em desktop/mobile.
 - **Situacao real (2026-08-30):** o projeto **existe** em
   `C:\Users\jpsantos\Documents\Projetos\CASA_LM\site` (repo `janiosantos/casa-lm-site`,
-  Astro) — `api.ts` ja consome `/api/publico/*` com fallback SSR (mock). Falta:
-  apontar `siteConfig.ts`, restringir CORS aos dominios aprovados e validar
-  busca/filtros/paginacao no site.
+  Astro). `api.ts` usa `PUBLIC_API_ORIGIN`; o fallback demonstrativo ficou
+  restrito ao navegador e a home gerada no SSR nao publica dados demo. O
+  backend restringe CORS por `PUBLIC_CORS_ORIGINS`. Build Astro validado;
+  falta somente validacao live apos publicacao.
 
 ## 5. Outbox e processamento assincrono
 
@@ -84,13 +86,16 @@ exclusao de arquivos e disparado automaticamente.
   seguro, duplicatas sao ignoradas e itens mortos aparecem para operador.
 - **Evidencias (2026-08-30):** Redis + worker RQ + scheduler nos 3 composes;
   rechecagem periodica (`RECHECAGEM_INTERVAL_MIN`, default 15) e `rodar_outbox`
-  (`OUTBOX_INTERVAL_SEC`, default 60); tabela **`outbox`** (migracao 0101) com
-  `topico/payload/status/tentativas/proxima_tentativa/ultimo_erro/idempotencia_key`;
+  (`OUTBOX_INTERVAL_SEC`, default 60); tabela **`outbox`** (migracoes 0101 e
+  0102) com `topico/payload/status/tentativas/proxima_tentativa/ultimo_erro/
+  idempotencia_key` e lease de processamento (`processando_em/processando_por`);
   backoff exponencial 60s·2ⁿ, dead-letter apos 5 tentativas; consumidor
   `webhook.rechecagem`; **webhook 503 enfileira a rechecagem da conta**
   (idempotente `webhook:provider:payment_id`). Endpoints
   `GET /api/webhooks/outbox`, `POST /api/webhooks/outbox/rodar`. Validado em
   staging (webhook efipay sem config -> 503 -> outbox -> worker processou -> ok).
+  A implementacao tambem faz claim atomico com `SKIP LOCKED`, recupera leases
+  expirados e transforma payload/resultado invalido em retry, sem falso sucesso.
 
 ## 6. Frontend, performance e testes E2E
 
@@ -114,21 +119,22 @@ exclusao de arquivos e disparado automaticamente.
 
 ## 7. TLS e sincronizacao de ambientes
 
-- **Status:** [x] concluida (TLS ativo em STAGING; VM sincronizada).
+- **Status:** [x] concluida para isolamento de ambientes; staging usa HTTPS
+  em porta dedicada e TLS publico de producao continua pendente de publicacao.
 - **Escopo:** emitir Let's Encrypt via DNS-01 Cloudflare, revisar roteamento
   443, validar renovacao e sincronizar a VM com git/pull e a release aprovada.
 - **Pre-requisitos:** token Cloudflare Zone:DNS:Edit, acesso ao roteador/VM,
   backup e autorizacao explicita de deploy/restart.
 - **Aceite:** HTTPS valido, renovacao verificada, `/api/health` e smoke test
   executados na VM e staging.
-- **Evidencias (2026-08-30):** cert Let's Encrypt emitido via DNS-01 Cloudflare
-  (produzido e compartilhado via volume `siscom_certbot-etc`); **staging em
-  HTTPS :444** (`NGINX_MODE=staging`, HTTP :8081 + HTTPS :444; NAT publica
-  6174 -> 444). `nginx-entrypoint.sh` com NGINX_MODE, `resolver 127.0.0.11` +
-  proxy com variavel. **VM 10.189.14.9 sincronizada** (git pull, stack rebuild,
-  `versioning apply` — schema 101; health + pronto OK).
-  **Pendente de operacao autorizada:** ativar o TLS no dominio de producao
-  (redirecionamento de porta para a 443 interna + `compose up -d --build`).
+- **Evidencias (2026-08-30):** staging permanece isolado por projeto Docker e
+  banco/rede próprios, usa HTTP `:8081` e HTTPS `:444` com o mesmo certificado
+  do domínio em volume somente-leitura, necessário aos webhooks externos. O
+  compose de produção tem healthcheck parametrizado por
+  `POSTGRES_USER/POSTGRES_DB`; deploy/TLS da produção continuam sujeitos a
+  autorização.
+  **Pendente de operacao autorizada:** ativar/confirmar o roteamento do TLS no
+  dominio de producao (porta 443 interna + `compose up -d --build`).
 
 ## 8. Saneamento de imagens e arquivos
 

@@ -9,17 +9,17 @@ on:
       branch:
         description: 'Branch a validar'
         required: true
-        default: 'reestruturacao-casa-lm'
+        default: 'main'
         type: string
       app_version:
         description: 'APP_VERSION exibido no painel'
         required: true
-        default: 'v1.6.5-rc'
+        default: 'v2.35.0-rc'
         type: string
       modo:
         description: 'rápido pula as suítes de teste (iteração); completo roda o CI'
         required: true
-        default: 'rapido'
+        default: 'completo'
         type: choice
         options:
           - rapido

@@ -73,19 +73,38 @@ def anexar_comprovante(conta_id: int):
     ext = os.path.splitext(arquivo.filename)[1].lower() or ".png"
     if ext not in {".pdf", ".png", ".jpg", ".jpeg"}:
         return jsonify({"error": "Formato de comprovante não permitido"}), 400
+    assinatura = arquivo.stream.read(16)
+    arquivo.stream.seek(0)
+    assinaturas = {
+        ".pdf": assinatura.startswith(b"%PDF-"),
+        ".png": assinatura.startswith(b"\x89PNG\r\n\x1a\n"),
+        ".jpg": assinatura.startswith(b"\xff\xd8\xff"),
+        ".jpeg": assinatura.startswith(b"\xff\xd8\xff"),
+    }
+    if not assinaturas[ext]:
+        return jsonify({"error": "O conteúdo não corresponde ao formato informado"}), 400
     filename = f"comprovante_{conta_id}_{uuid.uuid4().hex[:12]}{ext}"
     # salva em diretório dedicado de comprovantes
     base = os.environ.get("COMPROVANTES_DIR", "/app/images/comprovantes")
     os.makedirs(base, exist_ok=True)
-    arquivo.save(os.path.join(base, filename))
-
-    with system_conn() as conn:
-        conn.execute(
-            "INSERT INTO conta_comprovante (conta_id, tipo, filename, descricao, usuario_id)"
-            " VALUES (?,?,?,?,?)",
-            (conta_id, tipo, filename, descricao, session.get(SESSION_KEY)),
-        )
-        conn.commit()
+    caminho = os.path.join(base, filename)
+    try:
+        arquivo.save(caminho)
+        with system_conn() as conn:
+            conn.execute(
+                "INSERT INTO conta_comprovante (conta_id, tipo, filename, descricao, usuario_id)"
+                " VALUES (?,?,?,?,?)",
+                (conta_id, tipo, filename, descricao, session.get(SESSION_KEY)),
+            )
+            conn.commit()
+    except Exception:
+        # Não deixa arquivo órfão se a persistência do registro falhar.
+        try:
+            os.remove(caminho)
+        except OSError:
+            pass
+        current_app.logger.exception("Falha ao salvar comprovante")
+        return jsonify({"error": "Não foi possível salvar o comprovante"}), 500
     return jsonify({"ok": True, "filename": filename})
 
 
@@ -123,11 +142,11 @@ def _status_do_resultado(r: dict) -> str:
 def webhook_payment(provider: str):
     ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or request.remote_addr
     payload = request.get_json(silent=True) or {}
-    evento, payment_id = _evento_do_payload(provider, payload)
     if not isinstance(payload, dict) or not payload:
         webhook_log.registrar(provider, "payload_invalido", http_status=400, ip=ip,
-                              payload=payload, evento=evento, payment_id=payment_id)
+                              payload=payload)
         return jsonify({"error": "Payload de webhook inválido"}), 400
+    evento, payment_id = _evento_do_payload(provider, payload)
     try:
         resultado = payment_service.processar_webhook(
             provider, payload, dict(request.headers), request.args.to_dict()
@@ -198,7 +217,7 @@ def rechecagem_webhooks():
         )
     except Exception as exc:
         current_app.logger.exception("Falha na rechecagem de webhooks")
-        return jsonify({"error": f"Rechecagem falhou: {exc}"}), 400
+        return jsonify({"error": "Rechecagem falhou"}), 500
     return jsonify(resultado)
 
 

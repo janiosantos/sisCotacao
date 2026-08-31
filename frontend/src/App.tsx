@@ -1,6 +1,6 @@
 // App.tsx — shell do ERP (sidebar + topbar + conteúdo) em React + Tailwind.
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Component, Suspense, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import {
   LayoutDashboard,
   Package,
@@ -125,6 +125,33 @@ function useHashRoute(): string {
 
 function isActive(hash: string, href: string): boolean {
   return hash === href || hash.startsWith(href + "/");
+}
+
+class RouteErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error("Falha ao carregar módulo da rota", error, info);
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="rounded-lg border border-dashed border-red-200 bg-white py-16 text-center text-sm text-gray-500">
+          <p className="text-base font-medium text-gray-700">Não foi possível carregar esta tela</p>
+          <p className="mt-1">Atualize a página ou tente novamente.</p>
+          <Button variant="outline" className="mt-4" onClick={() => location.reload()}>
+            Tentar novamente
+          </Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
@@ -392,9 +419,11 @@ export default function App() {
               </Button>
             </div>
           ) : (
-            <Suspense fallback={<div className="py-16 text-center text-sm text-gray-400">Carregando…</div>}>
-              {route && RouteComponent ? <RouteComponent key={route.m[0]} /> : null}
-            </Suspense>
+            <RouteErrorBoundary>
+              <Suspense fallback={<div className="py-16 text-center text-sm text-gray-400">Carregando…</div>}>
+                {route && RouteComponent ? <RouteComponent key={route.m[0]} /> : null}
+              </Suspense>
+            </RouteErrorBoundary>
           )}
         </main>
       </div>

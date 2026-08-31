@@ -2501,7 +2501,7 @@
     "tags": [
      "financeiro"
     ],
-    "summary": "Outbox — operações assíncronas (pendentes/ok/erro/mortas)",
+   "summary": "Outbox — operações assíncronas (pendentes/processando/ok/erro/mortas)",
     "parameters": [
      {
       "name": "status",

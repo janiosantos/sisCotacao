@@ -1,0 +1,52 @@
+{
+  "versao": "v2.35.0",
+  "componentes": [
+    "backend",
+    "schema",
+    "frontend",
+    "deployment",
+    "site-institucional"
+  ],
+  "correcoes": [
+    "Baixa financeira de webhook, consulta e rechecagem confirma conta e caixa na mesma transacao",
+    "Emissao de cobranca protege concorrencia com lock local e chave idempotente por conta e operacao",
+    "Outbox usa upsert atomico, claim com SKIP LOCKED, lease recuperavel e retry de payload/handler invalido",
+    "Uploads validam assinatura de arquivo e limpam o arquivo quando a persistencia falha",
+    "Payloads de webhook nao-objeto retornam erro controlado em vez de 500 interno"
+  ],
+  "melhorias": [
+    "CORS da API publica restrito por PUBLIC_CORS_ORIGINS",
+    "Healthcheck de PostgreSQL usa POSTGRES_USER e POSTGRES_DB do ambiente",
+    "Staging usa o certificado compartilhado em somente-leitura na porta TCP dedicada e usa imagens versionadas",
+    "Rotas lazy do React protegidas por Error Boundary",
+    "Site Astro nao injeta catalogo demonstrativo no HTML gerado por SSR"
+  ],
+  "recursos": [
+    "Migracao 0102 outbox_claim (processando_em/processando_por + indice de lease)",
+    "Outbox com observabilidade de processamento e recuperacao de worker interrompido",
+    "Chaves idempotentes nos requests de emissao dos provedores de pagamento"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.35.0",
+    "frontend": "siscom-frontend:v2.35.0"
+  },
+  "database": {
+    "migration": 102
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "outbox_claim_lease": true,
+    "payment_transactional_settlement": true,
+    "public_cors_allowlist": true,
+    "site_ssr_without_demo": true
+  },
+  "rollback": {
+    "application": "Retornar imagens v2.34.0; manter o schema 102, pois a migracao e retrocompativel.",
+    "database": "Nao executar downgrade automatico em producao; restaurar backup somente conforme o runbook da release."
+  }
+}

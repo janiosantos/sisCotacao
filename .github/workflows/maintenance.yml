@@ -36,9 +36,9 @@ jobs:
           docker compose -f docker-compose.prod.yml exec -T backend \
             python -m catalog_server.maintenance ${{ github.event.inputs.task }}
 
-  # Valida a assinatura/token dos webhooks de pagamento no STAGING (porta 444
-  # com o certificado de produção). Roda dentro da rede do staging — sem
-  # depender de porta pública. Uso: task=webhook-test.
+  # Valida a assinatura/token dos webhooks de pagamento no STAGING pela rede
+  # interna, passando pelo listener HTTPS :443 do frontend. O host publica essa
+  # porta como :444 e usa intencionalmente o certificado do dominio.
   webhook_test:
     if: github.event.inputs.task == 'webhook-test'
     runs-on: [self-hosted, siscom-prod]
@@ -49,7 +49,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Testa assinatura de webhooks no staging (HTTPS :444)
+      - name: Testa assinatura de webhooks no staging (HTTPS interno)
         run: |
           docker compose exec -T backend python - <<'PY'
           import requests
@@ -74,7 +74,7 @@ jobs:
           cfg("asaas", "Asaas", "wh_test_asaas", api_key="TESTE")
           cfg("mercadopago", "Mercado Pago", "wh_test_mp", access_token="TESTE")
 
-          BASE = "https://frontend:443"  # staging nginx (443 interno <- host :444)
+          BASE = "https://frontend:443"  # staging nginx TLS na rede interna
           falhas = []
 
           def post(path, payload, headers=None, params=None):

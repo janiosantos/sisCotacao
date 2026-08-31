@@ -43,13 +43,16 @@ class AsaasProvider(PaymentProvider):
 
     # -- helpers -----------------------------------------------------------
 
-    def _headers(self) -> dict:
-        return {
+    def _headers(self, idempotency_key: str | None = None) -> dict:
+        headers = {
             "access_token": self.api_key,
             "Content-Type": "application/json",
             "accept": "application/json",
             "User-Agent": "siscom/1.0",
         }
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
+        return headers
 
     def _criar_cliente(self, conta: dict) -> str | None:
         """Cria/consulta o cliente no Asaas (CPF/CNPJ como chave). Retorna o id."""
@@ -89,7 +92,12 @@ class AsaasProvider(PaymentProvider):
             "description": f"Venda {conta.get('documento') or ''} — {conta.get('descricao') or ''}",
             "externalReference": str(conta.get("documento") or conta.get("id") or ""),
         }
-        r = requests.post(f"{self.base}/payments", json=body, headers=self._headers(), timeout=30)
+        r = requests.post(
+            f"{self.base}/payments",
+            json=body,
+            headers=self._headers(self.cfg.get("payment_id")),
+            timeout=30,
+        )
         if not r.ok:
             raise ValueError(f"Asaas: erro ao emitir boleto: {r.status_code} {r.text[:300]}")
         j = r.json()
@@ -113,7 +121,12 @@ class AsaasProvider(PaymentProvider):
             "description": f"Venda {conta.get('documento') or ''} — {conta.get('descricao') or ''}",
             "externalReference": str(conta.get("documento") or conta.get("id") or ""),
         }
-        r = requests.post(f"{self.base}/payments", json=body, headers=self._headers(), timeout=30)
+        r = requests.post(
+            f"{self.base}/payments",
+            json=body,
+            headers=self._headers(self.cfg.get("payment_id")),
+            timeout=30,
+        )
         if not r.ok:
             raise ValueError(f"Asaas: erro ao emitir PIX: {r.status_code} {r.text[:300]}")
         j = r.json()

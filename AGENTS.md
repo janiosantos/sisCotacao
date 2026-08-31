@@ -449,4 +449,4 @@ Cada antiga `variantes` virou um **produto independente** em `produtos_cadastro`
 - Relabels "variante"→"produto" nas telas secundárias.
 
 ### Testes
-Backend **189 testes** verdes (suíte total caiu de 194 para 189 — testes de variantes removidos/substituídos). Frontend: typecheck + 13 testes + build verdes. Validado em **staging** (CI, migrações em banco vazio 0052→0090, health, smoke, reconciliação).
+Backend **236 testes** verdes. Frontend: typecheck + 27 testes + build verdes. O estado atual inclui outbox com claim/lease (0102), transações conta+caixa e isolamento de TLS do staging; a validação desta correção foi feita em DEV, sem deploy.

@@ -111,7 +111,9 @@ arquivo limpo (`img_<md5(url)[:10]>.ext`), sem nome original.
 
 ### 3.6 API pública para o site institucional (v2.32–v2.33)
 
-- `blueprints/api_publico.py`: rotas **sem token**, CORS `*`, somente leitura.
+- `blueprints/api_publico.py`: rotas **sem token**, somente leitura; CORS é
+  limitado por `PUBLIC_CORS_ORIGINS` (allowlist, com origens locais apenas no
+  default de desenvolvimento).
 - Endpoints: `GET /api/publico/produtos` (paginado `offset`/`limit` máx 100 +
   `has_more`; busca `?q=`; filtros `categoria`, `subcategoria`, `marca`,
   `grupo`, `em_linha`), `GET /api/publico/produtos/{id}` (detalhe + todas as
@@ -156,10 +158,10 @@ abertas) → desafio **DNS-01 via Cloudflare** (sem abrir porta).
   Webhooks; `POST /api/webhooks/rechecagem` consulta os provedores das pendentes.
   Validado em staging (baixa por notificação Asaas sandbox pix/boleto).
 - **P5 — Outbox**: Redis + worker RQ + scheduler (3 composes); rechecagem
-  periódica + `rodar_outbox`; tabela **`outbox`** (0101) com retry/backoff
-  exponencial (60s·2ⁿ), dead-letter (5 tentativas) e idempotência
-  (`idempotencia_key`). **Webhook 503 enfileira a rechecagem da conta** — quando
-  o provedor é configurado, o worker baixa sem nova notificação.
+  periódica + `rodar_outbox`; tabela **`outbox`** (0101/0102) com retry/backoff
+  exponencial (60s·2ⁿ), dead-letter (5 tentativas), upsert idempotente e
+  claim/lease concorrente. **Webhook 503 enfileira a rechecagem da conta** —
+  quando o provedor é configurado, o worker baixa sem nova notificação.
 
 ### 3.9 P6 — Frontend modularizado (2026-08-30)
 
@@ -184,13 +186,13 @@ abertas) → desafio **DNS-01 via Cloudflare** (sem abrir porta).
 | `imagens_produto` | `produto_id`, `filename` (relativo), `ordem` (0 = capa) |
 | `grupos` / `subgrupos` / `categorias` | Taxonomia (código/nome) |
 | `variantes` / `variante_atributos` / `variante_produto_map` | **Dropadas** (0090) |
-| `schema_migrations` | Controle de versões (52..101) |
+| `schema_migrations` | Controle de versões (52..102) |
 
 ## 5. Como rodar e testar
 
 - **Dev (docker):** `docker compose up -d`; frontend `http://localhost:8080`;
   migrações: `docker compose exec -T backend python -m catalog_server.versioning apply --origem local`.
-- **Backend tests:** `$env:TEST_PG_URL="postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test"; python -m pytest` (234 verdes).
+- **Backend tests:** `$env:TEST_PG_URL="postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test"; python -m pytest` (236 verdes).
 - **Frontend:** `npm run typecheck` e `npm run build` (em `frontend/`).
 - **Compilar:** `python -m py_compile <arquivo>`.
 - **IMPORTANTE:** rodar o backend fora do docker grava imagens em
@@ -216,7 +218,7 @@ abertas) → desafio **DNS-01 via Cloudflare** (sem abrir porta).
 | Imagens (service) | `backend/catalog_server/services/imagens_service.py` |
 | Imagens em lote | `backend/catalog_server/services/imagens_lote.py` |
 | Produtos (repo) | `backend/catalog_server/repositories/produtos.py` |
-| Migrações | `backend/migrations/versions/0085..0101` |
+| Migrações | `backend/migrations/versions/0085..0102` |
 | Página demo | `frontend/public/demo-publico.html` |
 | nginx TLS/HTTP | `frontend/nginx.conf` · `frontend/nginx.http.conf` · `frontend/nginx-entrypoint.sh` |
 | Compose produção | `deployment/compose/docker-compose.prod.yml` |

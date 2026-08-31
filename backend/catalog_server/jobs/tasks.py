@@ -30,8 +30,11 @@ def _handler_rechecagem_conta(payload: dict) -> dict:
     """Recheca uma conta específica (webhook falhou / provider não configurado)."""
     payment_id = str(payload.get("payment_id") or "")
     if not payment_id:
-        return {"ignorado": True}
-    return webhook_log.rechecagem(payment_id=payment_id, limite=1)
+        raise ValueError("Outbox: payment_id obrigatório para rechecagem")
+    resultado = webhook_log.rechecagem(payment_id=payment_id, limite=1)
+    if resultado.get("erros"):
+        raise RuntimeError("; ".join(str(e) for e in resultado["erros"]))
+    return resultado
 
 
 _HANDLERS = {
@@ -44,11 +47,16 @@ def processar_item(item: dict) -> dict:
     try:
         payload = json.loads(item["payload"] or "{}")
     except (ValueError, TypeError):
-        payload = {}
+        raise ValueError("Outbox: payload JSON inválido") from None
+    if not isinstance(payload, dict):
+        raise ValueError("Outbox: payload deve ser um objeto JSON")
     handler = _HANDLERS.get(topico)
     if not handler:
         raise ValueError(f"Outbox: tópico sem handler: {topico}")
-    return handler(payload) or {}
+    resultado = handler(payload) or {}
+    if resultado.get("erros"):
+        raise RuntimeError("; ".join(str(e) for e in resultado["erros"]))
+    return resultado
 
 
 def rodar_outbox(limite: int = 50) -> dict:

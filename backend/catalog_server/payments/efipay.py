@@ -62,12 +62,15 @@ class EfiPayProvider(PaymentProvider):
             raise ValueError(f"EfiPay: falha na autenticação: {r.status_code} {r.text[:300]}")
         return r.json().get("access_token") or ""
 
-    def _headers(self, token: str) -> dict:
-        return {
+    def _headers(self, token: str, idempotency_key: str | None = None) -> dict:
+        headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "accept": "application/json",
         }
+        if idempotency_key:
+            headers["x-idempotency-key"] = idempotency_key
+        return headers
 
     def _devedor(self, conta: dict) -> dict:
         doc = (conta.get("cliente_doc") or "").replace(".", "").replace("/", "").replace("-", "")
@@ -96,7 +99,13 @@ class EfiPayProvider(PaymentProvider):
                 }
             },
         }
-        r = requests.post(f"{self.base_cob}/v1/charges", json=body, headers=self._headers(token), cert=self.cert, timeout=30)
+        r = requests.post(
+            f"{self.base_cob}/v1/charges",
+            json=body,
+            headers=self._headers(token, self.cfg.get("payment_id")),
+            cert=self.cert,
+            timeout=30,
+        )
         if not r.ok:
             raise ValueError(f"EfiPay: erro ao emitir boleto: {r.status_code} {r.text[:300]}")
         j = r.json()
@@ -122,7 +131,13 @@ class EfiPayProvider(PaymentProvider):
             "chave": self.chave_pix,
             "solicitacaoPagador": "Recebimento de venda a prazo",
         }
-        r = requests.post(f"{self.base_pix}/v2/cob", json=body, headers=self._headers(token), cert=self.cert, timeout=30)
+        r = requests.post(
+            f"{self.base_pix}/v2/cob",
+            json=body,
+            headers=self._headers(token, self.cfg.get("payment_id")),
+            cert=self.cert,
+            timeout=30,
+        )
         if not r.ok:
             raise ValueError(f"EfiPay: erro ao emitir PIX: {r.status_code} {r.text[:300]}")
         j = r.json()
