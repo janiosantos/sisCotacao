@@ -32,7 +32,7 @@ export function ModalDetalhe({
         <>
           <Button onClick={onClose}>Fechar</Button>
           {d.status === "finalizado" && (
-            <Button variant="ghost" onClick={onReabrir}>
+            <Button variant="ghost" permission={{ recurso: "orcamentos", acao: "aprovar" }} onClick={onReabrir}>
               Reabrir para correção
             </Button>
           )}
@@ -55,21 +55,21 @@ export function ModalDetalhe({
                 </a>
               </>
             ) : (
-              <Button variant="primary" onClick={onReceber}>
+                <Button variant="primary" permission={{ recurso: "caixa", acao: "cadastrar" }} onClick={onReceber}>
                 Receber
               </Button>
             ))}
           {pendenteDesconto && (
             <>
-              <Button variant="ghost" onClick={onRejeitar}>
+              <Button variant="ghost" permission={{ recurso: "orcamentos", acao: "aprovar" }} onClick={onRejeitar}>
                 Rejeitar
               </Button>
-              <Button variant="primary" onClick={onAutorizar}>
+              <Button variant="primary" permission={{ recurso: "orcamentos", acao: "aprovar" }} onClick={onAutorizar}>
                 Autorizar desconto
               </Button>
             </>
           )}
-          <Button variant="danger" onClick={() => onExcluir(d.id)}>
+          <Button variant="danger" permission={{ recurso: "orcamentos", acao: "excluir" }} onClick={() => onExcluir(d.id)}>
             Excluir
           </Button>
         </>

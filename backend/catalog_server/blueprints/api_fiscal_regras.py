@@ -5,9 +5,9 @@ fica no serviço `fiscal_regras.buscar_regra` (consumida pelo motor).
 """
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, request
 
-from catalog_server.blueprints.api_usuarios import SESSION_KEY
+from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.repositories import fiscal_regra_repo, fiscal_regra_versao_repo
 from catalog_server.services import fiscal_regras
 
@@ -15,7 +15,7 @@ api_fiscal_regras_bp = Blueprint("api_fiscal_regras", __name__)
 
 
 def _usuario() -> int | None:
-    return session.get(SESSION_KEY)
+    return usuario_id_requisicao()
 
 
 @api_fiscal_regras_bp.get("/api/fiscal/regras")

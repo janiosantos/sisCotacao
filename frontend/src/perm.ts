@@ -14,7 +14,8 @@ export type AcaoPermissao =
   | "excluir"
   | "imprimir"
   | "aprovar"
-  | "configurar";
+  | "configurar"
+  | "emitir";
 
 export const ACOES_PERMISSAO: AcaoPermissao[] = [
   "visualizar",
@@ -24,6 +25,7 @@ export const ACOES_PERMISSAO: AcaoPermissao[] = [
   "imprimir",
   "aprovar",
   "configurar",
+  "emitir",
 ];
 
 export const ROTULO_ACAO: Record<AcaoPermissao, string> = {
@@ -34,6 +36,7 @@ export const ROTULO_ACAO: Record<AcaoPermissao, string> = {
   imprimir: "Imprimir",
   aprovar: "Aprovar",
   configurar: "Configurar",
+  emitir: "Emitir",
 };
 
 export function permissoesAtuais(): Set<string> {

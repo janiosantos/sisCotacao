@@ -124,7 +124,7 @@ export function ListaPedidosCompra() {
                   PDF
                 </a>
                 {p.status !== "recebido" ? (
-                  <Button size="sm" variant="primary" onClick={() => void abrirReceber(p)} disabled={recebendo === p.id}>
+                  <Button size="sm" variant="primary" permission={{ recurso: "compras", acao: "cadastrar" }} onClick={() => void abrirReceber(p)} disabled={recebendo === p.id}>
                     {recebendo === p.id ? "Recebendo…" : "Receber"}
                   </Button>
                 ) : null}
@@ -141,7 +141,7 @@ export function ListaPedidosCompra() {
         footer={
           <>
             <Button onClick={() => setModalReceber(null)}>Cancelar</Button>
-            <Button variant="primary" onClick={() => void confirmarRecebimento()} disabled={recebendo === modalReceber?.id}>
+            <Button variant="primary" permission={{ recurso: "compras", acao: "cadastrar" }} onClick={() => void confirmarRecebimento()} disabled={recebendo === modalReceber?.id}>
               {recebendo === modalReceber?.id ? "Recebendo…" : "Confirmar recebimento"}
             </Button>
           </>

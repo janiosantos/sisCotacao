@@ -11,6 +11,7 @@ from catalog_server.repositories.fiscal_documentos import (
     tecnospeed_config_repo,
 )
 from catalog_server.services import tecnospeed
+from catalog_server import permissao
 from catalog_server.fiscal.snapshot import (
     montar_contextos_orcamento,
     persistir as persistir_snapshot,
@@ -38,6 +39,7 @@ api_fiscal_docs_bp = Blueprint("api_fiscal_docs", __name__)
 
 
 @api_fiscal_docs_bp.post("/api/orcamentos/<int:orcamento_id>/nfce")
+@permissao.exige_permissao("fiscal", "emitir")
 def emitir_nfce(orcamento_id: int):
     try:
         doc = tecnospeed.emitir_nfce(orcamento_id)
@@ -61,6 +63,7 @@ def status_nfce(orcamento_id: int):
 
 
 @api_fiscal_docs_bp.post("/api/orcamentos/<int:orcamento_id>/nfe")
+@permissao.exige_permissao("fiscal", "emitir")
 def emitir_nfe(orcamento_id: int):
     """NF-e (modelo 55) — venda B2B faturada. Exige que o orçamento tenha
     um cliente vinculado (cliente_id) com CNPJ/CPF, IE e endereço
@@ -129,6 +132,7 @@ def webhook_tecnospeed():
 # ─── Provedor alternativo: Focus NFe ───────────────────────
 
 @api_fiscal_docs_bp.post("/api/orcamentos/<int:orcamento_id>/focus/<modelo>")
+@permissao.exige_permissao("fiscal", "emitir")
 def emitir_focus(orcamento_id: int, modelo: str):
     """Emite NFC-e/NF-e via Focus NFe (provedor alternativo ao TecnoSpeed)."""
     from catalog_server.services import focus_emissao

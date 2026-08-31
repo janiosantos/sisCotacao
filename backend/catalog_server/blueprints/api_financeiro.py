@@ -351,8 +351,7 @@ def excluir_lote(tabela: str, grupo_id: str):
 
 @api_financeiro_bp.post("/api/financeiro/anexo/<tabela>/<int:conta_id>")
 def anexar_documento(tabela: str, conta_id: int):
-    from catalog_server.blueprints.api_usuarios import SESSION_KEY
-    from flask import session
+    from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 
     if tabela not in ("pagar", "receber"):
         return jsonify({"error": "tabela inválida"}), 400
@@ -373,7 +372,7 @@ def anexar_documento(tabela: str, conta_id: int):
         conn.execute(
             "INSERT INTO conta_anexo (tabela, conta_id, tipo, filename, descricao, usuario_id)"
             " VALUES (?,?,?,?,?,?)",
-            (tabela, conta_id, tipo, filename, descricao, session.get(SESSION_KEY)),
+            (tabela, conta_id, tipo, filename, descricao, usuario_id_requisicao()),
         )
         conn.commit()
     return jsonify({"ok": True, "filename": filename})

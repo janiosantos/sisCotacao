@@ -1,9 +1,9 @@
 """API de operações da loja (PDV/estoque/compras/pós-venda)."""
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, request
 
-from catalog_server.blueprints.api_usuarios import SESSION_KEY
+from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.repositories import loja
 
 api_loja_bp = Blueprint("api_loja", __name__)
@@ -105,7 +105,7 @@ def registrar_devolucao():
         motivo=data.get("motivo", ""),
         tipo=data.get("tipo", "devolucao"),
         deposito_id=data.get("deposito_id", 1),
-        usuario_id=session.get(SESSION_KEY),
+        usuario_id=usuario_id_requisicao(),
     )
     return jsonify({"id": dev_id}), 201
 

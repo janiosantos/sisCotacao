@@ -7,6 +7,7 @@ import pytest
 
 from catalog_server import permissao
 from catalog_server.db import system_conn
+from catalog_server.repositories import usuario_repo
 
 
 def _criar_usuario(login: str = "teste") -> int:
@@ -321,3 +322,148 @@ def test_webhook_publico_sem_token(system_db):
     r = c.post("/api/webhooks/tecnospeed", json={})
     # Sem token deve passar pela auth (whitelist); resposta depende do handler.
     assert r.status_code != 401
+
+
+def test_acoes_sensiveis_mapeiam_para_acao_correta():
+    from catalog_server.app_factory import _acao_da_rota
+
+    assert _acao_da_rota("/api/impressao/orcamentos/10", "POST") == "imprimir"
+    assert _acao_da_rota("/api/orcamentos/10/nfce", "POST") == "emitir"
+    assert _acao_da_rota("/api/orcamentos/10/nfe", "POST") == "emitir"
+    assert _acao_da_rota("/api/orcamentos/10/focus/65", "POST") == "emitir"
+    assert _acao_da_rota("/api/orcamentos/10/rejeitar-desconto", "POST") == "cadastrar"
+
+
+def test_perfil_admin_nao_pode_ser_removido_se_for_o_ultimo(system_db):
+    uid = _criar_usuario("ultimoadm")
+    _vincular(uid, "Administrador")
+
+    with pytest.raises(ValueError, match="último administrador"):
+        permissao.definir_perfis(uid, [_perfil_id("Vendedor")])
+
+
+def test_usuario_sem_perfil_pode_ser_resultado_de_revogacao(system_db):
+    admin = _criar_usuario("rbacadminrev")
+    _vincular(admin, "Administrador")
+    alvo = _criar_usuario("rbacalvo")
+    _vincular(alvo, "Vendedor")
+    permissao.definir_overrides(alvo, conceder={"produtos": ["visualizar"]})
+
+    from catalog_server import auth_token
+    from catalog_server.app_factory import create_app
+
+    token = auth_token.criar_token({"id": admin, "login": "rbacadminrev"})
+    response = create_app().test_client().put(
+        f"/api/usuarios/{alvo}",
+        json={"nome": "Alvo", "perfil_ids": [], "conceder": {}, "negar": {}},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200, response.get_json()
+    assert permissao.usuario_tem_rbac(alvo) is False
+    assert permissao.listar_auditoria(usuario_id=alvo)
+
+
+def test_usuario_nao_admin_nao_administra_rbac(system_db):
+    uid = _criar_usuario("rbacvendedor")
+    _vincular(uid, "Vendedor")
+    from catalog_server import auth_token
+    from catalog_server.app_factory import create_app
+
+    token = auth_token.criar_token({"id": uid, "login": "rbacvendedor"})
+    response = create_app().test_client().post(
+        "/api/usuarios",
+        json={"nome": "Escalada", "login": "escalada", "senha": "x123"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 403
+
+
+def test_logout_revoga_token_emitido(system_db):
+    uid = _criar_usuario("logoutrev")
+    _vincular(uid, "Administrador")
+    from catalog_server import auth_token
+    from catalog_server.app_factory import create_app
+
+    token = auth_token.criar_token({"id": uid, "login": "logoutrev"})
+    client = create_app().test_client()
+    headers = {"Authorization": f"Bearer {token}"}
+    assert client.get("/api/usuarios/atual", headers=headers).status_code == 200
+    assert client.post("/api/logout", headers=headers).status_code == 200
+    assert client.get("/api/usuarios/atual", headers=headers).status_code == 401
+
+
+def test_admin_nao_pode_remover_a_propria_ultima_conta_ativa(system_db):
+    uid = _criar_usuario("autobloqueio")
+    _vincular(uid, "Administrador")
+
+    with pytest.raises(ValueError, match="própria conta"):
+        permissao.alterar_ativo(uid, uid, False)
+
+
+def test_usuario_vendedor_nao_alcanca_emissao_fiscal(system_db):
+    uid = _criar_usuario("semfiscal")
+    _vincular(uid, "Vendedor")
+    from catalog_server import auth_token
+    from catalog_server.app_factory import create_app
+
+    token = auth_token.criar_token({"id": uid, "login": "semfiscal"})
+    response = create_app().test_client().post(
+        "/api/orcamentos/999999/nfce",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 403
+
+
+def test_alteracao_de_perfil_registra_auditoria_com_ator(system_db):
+    admin = _criar_usuario("auditadmin")
+    _vincular(admin, "Administrador")
+    alvo = _criar_usuario("auditalvo")
+    _vincular(alvo, "Vendedor")
+
+    permissao.definir_perfis(
+        alvo, [_perfil_id("Operador")], actor_id=admin, ip="127.0.0.1"
+    )
+    eventos = permissao.listar_auditoria(usuario_id=alvo)
+    assert eventos
+    assert eventos[0]["actor_usuario_id"] == admin
+    assert eventos[0]["operacao"] == "definir_perfis"
+
+
+def test_payload_rbac_invalido_nao_cria_usuario_parcialmente(system_db):
+    admin = _criar_usuario("adminpayload")
+    _vincular(admin, "Administrador")
+    from catalog_server import auth_token
+    from catalog_server.app_factory import create_app
+
+    token = auth_token.criar_token({"id": admin, "login": "adminpayload"})
+    response = create_app().test_client().post(
+        "/api/usuarios",
+        json={
+            "nome": "Usuário inválido",
+            "login": "usuariorbacinvalido",
+            "senha": "x123",
+            "perfil_ids": [999999],
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 400
+    assert usuario_repo.get_by_login("usuariorbacinvalido") is None
+
+
+def test_matriz_rbac_invalida_nao_cria_perfil_parcialmente(system_db):
+    admin = _criar_usuario("adminmatriz")
+    _vincular(admin, "Administrador")
+    from catalog_server import auth_token
+    from catalog_server.app_factory import create_app
+
+    token = auth_token.criar_token({"id": admin, "login": "adminmatriz"})
+    response = create_app().test_client().post(
+        "/api/perfis",
+        json={"nome": "Perfil inválido", "permissoes": {"nao_existe": ["visualizar"]}},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 400
+    with system_conn() as conn:
+        assert conn.execute(
+            "SELECT 1 FROM perfis WHERE nome=%s", ("Perfil inválido",)
+        ).fetchone() is None

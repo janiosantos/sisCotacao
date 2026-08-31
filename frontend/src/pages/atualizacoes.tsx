@@ -153,6 +153,7 @@ export default function Atualizacoes() {
               <Button
                 key={r.nivel}
                 variant={r.nivel === "todos" ? "primary" : "ghost"}
+                permission={{ recurso: "atualizacoes", acao: "cadastrar" }}
                 onClick={() => void aplicar(r.nivel)}
                 disabled={aplicando !== null || pendentes === 0}
               >

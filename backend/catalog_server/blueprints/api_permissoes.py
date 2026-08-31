@@ -4,7 +4,7 @@
 - PUT /api/perfis/<id>/permissoes    grava a matriz de um perfil
 - GET /api/permissoes/catalogo       catálogo de recursos/ações (para a UI)
 - PUT /api/usuarios/<id>/perfis      define os perfis de um usuário
-- PUT /api/usuarios/<id>/overrides   concede ações extras por tela (nunca nega)
+- PUT /api/usuarios/<id>/overrides   concede ou nega ações extras por tela
 """
 from __future__ import annotations
 
@@ -16,6 +16,11 @@ from catalog_server import permissao
 from catalog_server.db import system_conn
 
 api_permissoes_bp = Blueprint("api_permissoes", __name__)
+
+
+def _actor_id() -> int | None:
+    payload = getattr(request, "usuario", None)
+    return int(payload["sub"]) if payload and payload.get("sub") else None
 
 
 def _recursos(conn) -> dict[int, dict]:
@@ -60,13 +65,26 @@ def listar_perfis():
 @api_permissoes_bp.post("/api/perfis")
 def criar_perfil():
     data = request.get_json(silent=True) or {}
+    matriz = data.get("permissoes")
+    if matriz is not None:
+        try:
+            _validar_matriz(matriz)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
     try:
-        pid = permissao.criar_perfil(data.get("nome") or "", data.get("descricao") or "")
+        pid = permissao.criar_perfil(
+            data.get("nome") or "", data.get("descricao") or "",
+            actor_id=_actor_id(), ip=request.remote_addr,
+        )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    matriz = data.get("permissoes")
     if matriz:
-        _aplicar_matriz(pid, matriz)
+        try:
+            _aplicar_matriz(
+                pid, matriz, actor_id=_actor_id(), ip=request.remote_addr
+            )
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
     return jsonify({"id": pid}), 201
 
 
@@ -75,7 +93,8 @@ def atualizar_perfil(perfil_id: int):
     data = request.get_json(silent=True) or {}
     try:
         ok = permissao.atualizar_perfil(
-            perfil_id, data.get("nome") or "", data.get("descricao") or ""
+            perfil_id, data.get("nome") or "", data.get("descricao") or "",
+            actor_id=_actor_id(), ip=request.remote_addr,
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -88,7 +107,9 @@ def atualizar_perfil(perfil_id: int):
 def alternar_ativo_perfil(perfil_id: int):
     ativo = request.args.get("ativo", "").lower() in ("1", "true")
     try:
-        ok = permissao.set_perfil_ativo(perfil_id, ativo)
+        ok = permissao.set_perfil_ativo(
+            perfil_id, ativo, actor_id=_actor_id(), ip=request.remote_addr
+        )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     if not ok:
@@ -99,7 +120,9 @@ def alternar_ativo_perfil(perfil_id: int):
 @api_permissoes_bp.delete("/api/perfis/<int:perfil_id>")
 def excluir_perfil(perfil_id: int):
     try:
-        ok = permissao.excluir_perfil(perfil_id)
+        ok = permissao.excluir_perfil(
+            perfil_id, actor_id=_actor_id(), ip=request.remote_addr
+        )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     if not ok:
@@ -107,18 +130,35 @@ def excluir_perfil(perfil_id: int):
     return jsonify({"ok": True})
 
 
-def _aplicar_matriz(perfil_id: int, matriz: dict) -> None:
+def _aplicar_matriz(
+    perfil_id: int,
+    matriz: dict,
+    *,
+    actor_id: int | None = None,
+    ip: str | None = None,
+) -> None:
     """Persiste a matriz recurso→ações de um perfil (após criar/atualizar)."""
+    _validar_matriz(matriz)
     with system_conn() as conn:
         recursos = {r["codigo"]: int(r["id"]) for r in conn.execute(
             "SELECT id, codigo FROM recursos"
         ).fetchall()}
+        antes = [dict(row) for row in conn.execute(
+            "SELECT r.codigo, pr.acoes FROM perfil_recurso pr "
+            "JOIN recursos r ON r.id=pr.recurso_id WHERE pr.perfil_id=? ORDER BY r.codigo",
+            (perfil_id,),
+        ).fetchall()]
         conn.execute("DELETE FROM perfil_recurso WHERE perfil_id=?", (perfil_id,))
         for codigo, acoes in matriz.items():
             rid = recursos.get(str(codigo))
             if rid is None:
-                continue
-            validas = [a for a in acoes if a in permissao.ACOES]
+                raise ValueError(f"Recurso inválido: {codigo}")
+            if not isinstance(acoes, list):
+                raise ValueError(f"Ações inválidas para o recurso: {codigo}")
+            desconhecidas = [a for a in acoes if a not in permissao.ACOES]
+            if desconhecidas:
+                raise ValueError(f"Ação inválida: {desconhecidas[0]}")
+            validas = list(dict.fromkeys(acoes))
             if not validas:
                 continue
             conn.execute(
@@ -126,8 +166,33 @@ def _aplicar_matriz(perfil_id: int, matriz: dict) -> None:
                 " VALUES (?,?,?)",
                 (perfil_id, rid, json.dumps(validas)),
             )
+        depois = [dict(row) for row in conn.execute(
+            "SELECT r.codigo, pr.acoes FROM perfil_recurso pr "
+            "JOIN recursos r ON r.id=pr.recurso_id WHERE pr.perfil_id=? ORDER BY r.codigo",
+            (perfil_id,),
+        ).fetchall()]
+        permissao._registrar_auditoria(
+            conn, actor_id=actor_id, target_usuario_id=None,
+            target_perfil_id=perfil_id, operacao="gravar_permissoes",
+            recurso="perfis", antes=antes, depois=depois, ip=ip,
+        )
         conn.commit()
-    permissao.invalidar()
+        permissao.invalidar()
+
+
+def _validar_matriz(matriz: dict) -> None:
+    if not isinstance(matriz, dict):
+        raise ValueError("permissoes deve ser um objeto recurso -> ações")
+    with system_conn() as conn:
+        recursos = {r["codigo"] for r in conn.execute("SELECT codigo FROM recursos")}
+    for codigo, acoes in matriz.items():
+        if str(codigo) not in recursos:
+            raise ValueError(f"Recurso inválido: {codigo}")
+        if not isinstance(acoes, list):
+            raise ValueError(f"Ações inválidas para o recurso: {codigo}")
+        desconhecidas = [a for a in acoes if a not in permissao.ACOES]
+        if desconhecidas:
+            raise ValueError(f"Ação inválida: {desconhecidas[0]}")
 
 
 @api_permissoes_bp.put("/api/perfis/<int:perfil_id>/permissoes")
@@ -144,7 +209,12 @@ def gravar_permissoes(perfil_id: int):
             return jsonify({"error": "Perfil não encontrado"}), 404
         if p["nome"] == "Administrador":
             return jsonify({"error": "O perfil Administrador é superuser (não usa matriz)"}), 400
-    _aplicar_matriz(perfil_id, matriz)
+    try:
+        _aplicar_matriz(
+            perfil_id, matriz, actor_id=_actor_id(), ip=request.remote_addr
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"ok": True})
 
 
@@ -174,7 +244,13 @@ def definir_perfis(usuario_id: int):
             "SELECT 1 FROM usuarios WHERE id=?", (usuario_id,)
         ).fetchone() is None:
             return jsonify({"error": "Usuário não encontrado"}), 404
-    permissao.definir_perfis(usuario_id, [int(p) for p in perfil_ids])
+    try:
+        permissao.definir_perfis(
+            usuario_id, [int(p) for p in perfil_ids],
+            actor_id=_actor_id(), ip=request.remote_addr,
+        )
+    except (TypeError, ValueError) as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"ok": True})
 
 
@@ -197,10 +273,22 @@ def definir_overrides(usuario_id: int):
             "SELECT 1 FROM usuarios WHERE id=?", (usuario_id,)
         ).fetchone() is None:
             return jsonify({"error": "Usuário não encontrado"}), 404
-    permissao.definir_overrides(
-        usuario_id, legado, conceder=conceder, negar=negar
-    )
+    try:
+        permissao.definir_overrides(
+            usuario_id, legado, conceder=conceder, negar=negar,
+            actor_id=_actor_id(), ip=request.remote_addr,
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"ok": True})
+
+
+@api_permissoes_bp.get("/api/perfis/auditoria")
+def auditoria():
+    return jsonify(permissao.listar_auditoria(
+        limite=request.args.get("limite", type=int) or 200,
+        usuario_id=request.args.get("usuario_id", type=int),
+    ))
 
 
 def _parse_acoes(valor) -> list[str]:

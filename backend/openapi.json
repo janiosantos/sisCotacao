@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "sisCotacao — API",
-  "description": "Contrato dos endpoints principais do ERP (fase 1). Autenticação por Bearer token emitido em /api/login (TTL 7 dias). Portal do fornecedor usa token próprio na URL e está fora deste contrato.",
+  "description": "Contrato dos endpoints principais do ERP (fase 1). Autenticação por Bearer token emitido em /api/login (TTL 7 dias, revogável por logout ou troca de senha). Portal do fornecedor usa token próprio na URL e está fora deste contrato.",
   "version": "v1"
  },
  "servers": [
@@ -725,6 +725,37 @@
         }
        }
       }
+     }
+    }
+   }
+  },
+  "/api/perfis/auditoria": {
+   "get": {
+    "tags": [
+     "permissoes"
+    ],
+    "summary": "Consulta o histórico de alterações do RBAC",
+    "parameters": [
+     {
+      "name": "limite",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "default": 200,
+       "maximum": 500
+      }
+     },
+     {
+      "name": "usuario_id",
+      "in": "query",
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Eventos de auditoria RBAC"
      }
     }
    }

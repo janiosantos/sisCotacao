@@ -32,7 +32,7 @@ export function ModalRejeitar({ id, onClose, onOk }: { id: number; onClose: () =
       footer={
         <>
           <Button onClick={onClose}>Cancelar</Button>
-          <Button variant="danger" onClick={() => void tentar()} disabled={enviando}>
+          <Button variant="danger" permission={{ recurso: "orcamentos", acao: "aprovar" }} onClick={() => void tentar()} disabled={enviando}>
             {enviando ? "Rejeitando…" : "Rejeitar"}
           </Button>
         </>

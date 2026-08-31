@@ -227,6 +227,7 @@ def _seed_rbac_pg(conn) -> None:
             "clientes": ["visualizar"],
             "produtos": ["visualizar"],
             "estoque": ["visualizar"],
+            "fiscal": ["visualizar", "emitir"],
             "impressao": ["imprimir"],
         },
     }

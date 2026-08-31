@@ -1,10 +1,10 @@
 """API de orçamentos de venda ao cliente (PDV)."""
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, request
 from werkzeug.security import check_password_hash
 
-from catalog_server.blueprints.api_usuarios import SESSION_KEY
+from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.repositories.orcamentos import orcamento_repo, resumo_desconto
 from catalog_server.orcamento_status import (
     STATUS_LIST,
@@ -20,6 +20,7 @@ from catalog_server.repositories.estoque import estoque_repo
 from catalog_server.services import venda_fiscal
 from catalog_server.repositories import loja
 from catalog_server import contabil_gatilhos
+from catalog_server import permissao
 from catalog_server.db import system_conn
 
 api_orcamentos_bp = Blueprint("api_orcamentos", __name__)
@@ -29,7 +30,7 @@ api_orcamentos_bp = Blueprint("api_orcamentos", __name__)
 def listar():
     status = (request.args.get("status") or "").strip()
     somente_meus = request.args.get("somente_meus", "").lower() in ("1", "true")
-    usuario_id = session.get(SESSION_KEY) if somente_meus else None
+    usuario_id = usuario_id_requisicao() if somente_meus else None
     q = (request.args.get("q") or "").strip()
     data_inicio = request.args.get("data_inicio") or None
     data_fim = request.args.get("data_fim") or None
@@ -90,7 +91,7 @@ def criar():
         despesas_acessorias=float(data.get("despesas_acessorias") or 0),
         status=status_criacao,
         condicao_pagamento_id=data.get("condicao_pagamento_id"),
-        usuario_id=getattr(request, "usuario", {}).get("sub") or session.get(SESSION_KEY),
+        usuario_id=usuario_id_requisicao(),
         cliente_id=cliente_id,
         cliente_doc=cliente_doc,
         uf_destino=uf_destino,
@@ -496,7 +497,7 @@ def receber(orcamento_id: int):
                 forma_pagamento=forma,
                 documento=orc.get("numero", ""),
                 orcamento_id=orcamento_id,
-                usuario_id=getattr(request, "usuario", {}).get("sub") or session.get(SESSION_KEY),
+                usuario_id=usuario_id_requisicao(),
                 bandeira=bandeira,
                 codigo_autorizacao=codigo,
             )
@@ -694,6 +695,14 @@ def rejeitar_desconto(orcamento_id: int):
     orc = orcamento_repo.buscar(orcamento_id)
     if orc is None:
         return jsonify({"error": "Orçamento não encontrado"}), 404
+    user = usuario_repo.get(usuario_id) or {}
+    pode_aprovar = user.get("autoriza_desconto") or permissao.tem_permissao(
+        usuario_id, "orcamentos", "aprovar"
+    )
+    if not pode_aprovar:
+        return jsonify({"error": "Rejeitar desconto exige permissão de aprovação"}), 403
+    if orc.get("usuario_id") == usuario_id:
+        return jsonify({"error": "O vendedor não pode rejeitar o próprio desconto"}), 403
     if not orcamento_repo.rejeitar_desconto(orcamento_id, usuario_id, motivo):
         return jsonify({"error": "Não foi possível registrar a rejeição"}), 500
     _registrar_log_aprovacao(

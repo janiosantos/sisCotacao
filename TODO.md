@@ -6,7 +6,7 @@
 
 ## Instruções gerais
 - Contexto: ERP Casa LM (`ecommerce_scraper`), Flask + PostgreSQL 16 + React/Vite.
-- Testes: `pytest` (env `TEST_PG_URL=postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test`), 237 verdes hoje.
+- Testes: `pytest` (env `TEST_PG_URL=postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test`), 247 verdes hoje.
 - Ao corrigir: rodar `py_compile`, os testes do módulo tocado e a suíte completa.
 - Registrar o resultado ao final deste arquivo (seção "Resultado da análise").
 
@@ -78,9 +78,10 @@ Revisar a cadeia completa após as migrações 0093/0094/0096 (caminhos relativo
 
 ### Auditoria RBAC — 2026-08-30
 
-**Status: ⚠️ requer correções antes da próxima release.** A cobertura atual valida
-que as 366 rotas `/api` possuem um recurso, mas não valida a ação efetiva nem a
-segregação de funções. Os achados prioritários são:
+**Status: ✅ corrigido no código; requer validação em staging antes da release.**
+Além do mapeamento das 366 rotas `/api`, a ação efetiva e a segregação de funções
+agora são aplicadas no backend e cobertas por testes de regressão. Os achados
+originais foram:
 
 1. **P1 — escalação de privilégio:** endpoints de criação/edição de usuários e
    de atribuição de perfis/overrides permitem que qualquer papel com
@@ -106,15 +107,24 @@ segregação de funções. Os achados prioritários são:
    falham apenas depois no backend.
 
 Validação desta auditoria: `21 passed` em `test_permissao.py` +
-`test_hardening.py`; `34 passed` no frontend e `typecheck` concluído. Nenhuma
-alteração comportamental, migração, restart ou deploy foi executado.
+`test_hardening.py`; `34 passed` no frontend e `typecheck` concluído. As
+correções posteriores adicionaram as migrações `0103`/`0104`, testes de regressão
+e passaram em `247 passed` no backend, além de `34 passed`, `typecheck` e `build`
+no frontend. Nenhum deploy, restart ou migração não-dev foi executado.
 
 ### Achados prioritários desta revisão — situação
 
 1. **Resolvido:** baixa financeira, outbox, retry, healthcheck, TLS dedicado por porta, SSR do site, emissão concorrente e payload webhook.
 2. **Pendente:** validação live do webhook externo no staging e TLS/roteamento da produção permanecem operações separadas.
-3. **Pendente:** corrigir os achados P1 do RBAC antes de publicar; depois cobrir ações sensíveis com testes de integração. Também permanecem virtualização e testes E2E dos fluxos críticos do frontend; cache e validação runtime mínima já entregues.
+3. **RBAC corrigido:** atribuição privilegiada, emissão fiscal, segregação de
+   desconto, revogação vazia, último administrador, revogação de tokens, autoria
+   Bearer, auditoria e gates de ações críticas foram tratados. Permanecem a
+   validação live em staging, testes E2E dos fluxos críticos e virtualização de
+   tabelas extensas; cache e validação runtime mínima já entregues.
 
-Validação anterior: `237 passed` no backend em banco dev isolado; `34 passed`, `typecheck` e `build` no frontend; build Astro do site passou e a home não contém produto demonstrativo. Nenhum deploy, restart ou migração não-dev foi executado.
+Validação atual: `247 passed` no backend em banco dev isolado; `34 passed`,
+`typecheck` e `build` no frontend; build Astro do site passou e a home não
+contém produto demonstrativo. Nenhum deploy, restart ou migração não-dev foi
+executado.
 
 > Ao finalizar: atualize `CONTEXTO_SESSAO.md` (log + pendências) e faça commit/push.

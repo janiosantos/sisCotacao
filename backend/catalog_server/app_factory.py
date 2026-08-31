@@ -149,9 +149,16 @@ _ACAO_ESPECIFICA: dict[tuple[str, str], str] = {
     ("PUT", "/api/tecnospeed/config"): "configurar",
     ("PUT", "/api/fiscal/config/"): "configurar",
     ("POST", "/api/fiscal/config/gerar"): "configurar",
-    ("POST", "/api/impressao/orcamentos/"): "imprimir",
     ("POST", "/api/impressao/teste"): "imprimir",
 }
+
+_ROTAS_ADMINISTRACAO = (
+    "/api/usuarios",
+    "/api/perfis",
+    "/api/permissoes",
+    "/api/flags",
+    "/api/sistema/updates/apply",
+)
 
 # Rotas /api públicas que exigem token válido, mas ignoram o RBAC
 # (perfil próprio/sessão). Além da whitelist de auth (sem token).
@@ -165,11 +172,26 @@ def _recurso_da_rota(path: str) -> str | None:
     return None
 
 
+def _rota_emissao_fiscal(path: str, method: str) -> bool:
+    if method != "POST" or not path.startswith("/api/orcamentos/"):
+        return False
+    partes = path.strip("/").split("/")
+    return len(partes) >= 4 and partes[2].isdigit() and (
+        partes[3] in ("nfce", "nfe")
+        or (partes[3] == "focus" and len(partes) == 5 and partes[4] in ("55", "65"))
+    )
+
+
 def _acao_da_rota(path: str, method: str) -> str | None:
     """Ação da rota: específica (config/impressão) ou derivada do método."""
     especifica = _ACAO_ESPECIFICA.get((method, path))
     if especifica:
         return especifica
+    if method == "POST" and path.startswith("/api/impressao/orcamentos/"):
+        return "imprimir"
+    # Emissão fiscal é uma operação distinta de cadastrar orçamento.
+    if _rota_emissao_fiscal(path, method):
+        return "emitir"
     # Prefixos de config que casam qualquer sub-rota (ex.: /api/fiscal/config/5)
     if method == "PUT" and path.startswith("/api/fiscal/config/"):
         return "configurar"
@@ -190,15 +212,25 @@ def _autorizar_acesso() -> None:
     """
     from catalog_server import flags, permissao
 
-    if not flags.ativa("CONTROLE_ACESSO", default=True):
-        return
     payload = getattr(request, "usuario", None)
     usuario_id = payload.get("sub") if payload else None
     if request.path in _ROTAS_SEM_RBAC:
         return
-    if not usuario_id or not permissao.usuario_tem_rbac(usuario_id):
+    if not usuario_id:
+        abort(403, description="Usuário não identificado")
+    # A flag é um rollback de compatibilidade, mas nunca pode abrir a
+    # administração do próprio RBAC, flags ou aplicação de migrações.
+    if request.path.startswith(_ROTAS_ADMINISTRACAO):
+        if not permissao.usuario_e_superuser(usuario_id):
+            abort(403, description="Somente Administrador pode administrar acessos e sistema")
+        return
+    if not flags.ativa("CONTROLE_ACESSO", default=True):
+        return
+    if not permissao.usuario_tem_rbac(usuario_id):
         abort(403, description="Usuário sem perfil RBAC ativo")
     recurso = _recurso_da_rota(request.path)
+    if _rota_emissao_fiscal(request.path, request.method):
+        recurso = "fiscal"
     if recurso is None:
         abort(403, description=f"Permissão negada: recurso não mapeado ({request.path})")
     acao = _acao_da_rota(request.path, request.method)
@@ -374,10 +406,13 @@ def create_app() -> Flask:
                 abort(401, description="Token de API inválido ou expirado")
             with system_conn() as conn:
                 ativo = conn.execute(
-                    "SELECT ativo FROM usuarios WHERE id=?", (payload.get("sub"),)
+                    "SELECT ativo, token_version FROM usuarios WHERE id=?",
+                    (payload.get("sub"),),
                 ).fetchone()
             if not ativo or not ativo["ativo"]:
                 abort(401, description="Usuário inativo ou inexistente")
+            if int(payload.get("ver") or 0) != int(ativo["token_version"] or 0):
+                abort(401, description="Token revogado")
             request.usuario = payload
             return
         auth = request.headers.get("Authorization", "")
@@ -388,10 +423,13 @@ def create_app() -> Flask:
             abort(401, description="Token de API inválido ou expirado")
         with system_conn() as conn:
             ativo = conn.execute(
-                "SELECT ativo FROM usuarios WHERE id=?", (payload.get("sub"),)
+                "SELECT ativo, token_version FROM usuarios WHERE id=?",
+                (payload.get("sub"),),
             ).fetchone()
         if not ativo or not ativo["ativo"]:
             abort(401, description="Usuário inativo ou inexistente")
+        if int(payload.get("ver") or 0) != int(ativo["token_version"] or 0):
+            abort(401, description="Token revogado")
         request.usuario = payload
         _autorizar_acesso()
 

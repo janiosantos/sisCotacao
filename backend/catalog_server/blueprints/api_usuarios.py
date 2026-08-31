@@ -14,6 +14,15 @@ api_usuarios_bp = Blueprint("api_usuarios", __name__)
 SESSION_KEY = "usuario_id"
 
 
+def usuario_id_requisicao() -> int | None:
+    """Identidade da requisição validada pelo Bearer, com fallback legado."""
+    payload = getattr(request, "usuario", None)
+    if payload and payload.get("sub"):
+        return int(payload["sub"])
+    valor = session.get(SESSION_KEY)
+    return int(valor) if valor else None
+
+
 @api_usuarios_bp.get("/api/usuarios")
 def listar():
     somente_ativos = request.args.get("somente_ativos", "").lower() in ("1", "true")
@@ -59,10 +68,22 @@ def criar():
                 ),
             )
             usuario_id = int(cur.lastrowid)
-        _sincronizar_rbac(usuario_id, {**data, "perfil": "admin"})
+        bootstrap_data = {
+            key: value for key, value in data.items()
+            if key not in ("perfil", "perfil_ids")
+        }
+        _sincronizar_rbac(
+            usuario_id, {**bootstrap_data, "perfil": "admin"}, actor_id=None
+        )
         return jsonify({"id": usuario_id}), 201
     if usuario_repo.get_by_login(login):
         return jsonify({"error": "Login já em uso"}), 409
+    from catalog_server import permissao
+
+    try:
+        _validar_payload_rbac(data, permissao, usuario_id_requisicao())
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     usuario_id = usuario_repo.create(
         nome,
         login,
@@ -70,11 +91,19 @@ def criar():
         desconto_limite_pct=float(data.get("desconto_limite_pct") or 0),
         autoriza_desconto=bool(data.get("autoriza_desconto")),
     )
-    _sincronizar_rbac(usuario_id, data)
+    try:
+        _sincronizar_rbac(usuario_id, data, actor_id=usuario_id_requisicao())
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"id": usuario_id}), 201
 
 
-def _sincronizar_rbac(usuario_id: int, data: dict) -> None:
+def _sincronizar_rbac(
+    usuario_id: int,
+    data: dict,
+    *,
+    actor_id: int | None = None,
+) -> None:
     """Mantém a relação RBAC coerente com o cadastro de usuário.
 
     Usa `perfil_ids` quando informado; senão deriva do hint `perfil` legado
@@ -84,8 +113,10 @@ def _sincronizar_rbac(usuario_id: int, data: dict) -> None:
     from catalog_server import permissao
 
     perfil_ids = data.get("perfil_ids")
-    if perfil_ids:
-        permissao.definir_perfis(usuario_id, [int(p) for p in perfil_ids])
+    if "perfil_ids" in data:
+        permissao.definir_perfis(
+            usuario_id, perfil_ids, actor_id=actor_id, ip=request.remote_addr
+        )
     else:
         hint = (data.get("perfil") or "").strip().lower()
         nome_perfil = "Administrador" if hint == "admin" else "Vendedor"
@@ -94,13 +125,28 @@ def _sincronizar_rbac(usuario_id: int, data: dict) -> None:
                 "SELECT id FROM perfis WHERE nome=?", (nome_perfil,)
             ).fetchone()
         if pid:
-            permissao.definir_perfis(usuario_id, [pid["id"]])
+            permissao.definir_perfis(
+                usuario_id, [pid["id"]], actor_id=actor_id, ip=request.remote_addr
+            )
 
     conceder = data.get("conceder")
     negar = data.get("negar")
     legado = data.get("overrides")
-    if conceder or negar or legado:
-        permissao.definir_overrides(usuario_id, legado, conceder=conceder, negar=negar)
+    if "conceder" in data or "negar" in data or "overrides" in data:
+        permissao.definir_overrides(
+            usuario_id, legado, conceder=conceder, negar=negar,
+            actor_id=actor_id, ip=request.remote_addr,
+        )
+
+
+def _validar_payload_rbac(data: dict, permissao, actor_id: int | None) -> None:
+    """Valida RBAC antes de persistir os campos escalares do usuário."""
+    if "perfil_ids" in data:
+        permissao.validar_perfil_ids(data["perfil_ids"], actor_id=actor_id)
+    if "conceder" in data or "negar" in data or "overrides" in data:
+        permissao.validar_overrides_payload(
+            data.get("conceder"), data.get("negar"), overrides=data.get("overrides")
+        )
 
 
 @api_usuarios_bp.put("/api/usuarios/<int:usuario_id>")
@@ -110,6 +156,12 @@ def atualizar(usuario_id: int):
     senha = data.get("senha") or ""
     if not nome:
         return jsonify({"error": "Informe o nome do usuário"}), 400
+    from catalog_server import permissao
+
+    try:
+        _validar_payload_rbac(data, permissao, usuario_id_requisicao())
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     senha_hash = generate_password_hash(senha) if len(senha) >= 4 else None
     ok = usuario_repo.update(
         usuario_id,
@@ -128,14 +180,25 @@ def atualizar(usuario_id: int):
     )
     if not ok:
         return jsonify({"error": "Usuário não encontrado"}), 404
-    _sincronizar_rbac(usuario_id, data)
+    try:
+        _sincronizar_rbac(usuario_id, data, actor_id=usuario_id_requisicao())
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"ok": True})
 
 
 @api_usuarios_bp.patch("/api/usuarios/<int:usuario_id>/ativo")
 def alternar_ativo(usuario_id: int):
     ativo = request.args.get("ativo", "").lower() in ("1", "true")
-    ok = usuario_repo.set_ativo(usuario_id, ativo)
+    from catalog_server import permissao
+
+    actor_id = usuario_id_requisicao()
+    try:
+        ok = permissao.alterar_ativo(
+            actor_id, usuario_id, ativo, ip=request.remote_addr
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if not ok:
         return jsonify({"error": "Usuário não encontrado"}), 404
     return jsonify({"ok": True})
@@ -178,6 +241,22 @@ def login():
 
 @api_usuarios_bp.post("/api/logout")
 def logout():
+    payload = auth_token.validar_token(
+        request.headers.get("Authorization", "")[7:]
+        if request.headers.get("Authorization", "").startswith("Bearer ")
+        else None
+    )
+    if payload and payload.get("sub"):
+        with system_conn() as conn:
+            conn.execute(
+                "UPDATE usuarios SET token_version=token_version+1, "
+                "atualizado_em=datetime('now') WHERE id=?",
+                (payload["sub"],),
+            )
+        from catalog_server import permissao
+
+        permissao.invalidar(int(payload["sub"]))
+    session.clear()
     return jsonify({"ok": True})
 
 

@@ -164,7 +164,7 @@ export function ModalPedidoCaixa({ d, onSair }: { d: OrcamentoDetalhe; onSair: (
             <Button variant="ghost" onClick={onSair}>
               ← Voltar para o Caixa <kbd className="ml-1 rounded bg-white px-1 text-[10px] shadow-sm">ESC</kbd>
             </Button>
-            <Button ref={imprimirRef} variant="primary" onClick={() => void imprimir()} disabled={imprimindo}>
+            <Button ref={imprimirRef} variant="primary" permission={{ recurso: "impressao", acao: "imprimir" }} onClick={() => void imprimir()} disabled={imprimindo}>
               {imprimindo ? "Imprimindo…" : "Imprimir"}
               <kbd className="ml-2 rounded bg-white/20 px-1 text-[10px]">ENTER</kbd>
             </Button>
@@ -174,7 +174,7 @@ export function ModalPedidoCaixa({ d, onSair }: { d: OrcamentoDetalhe; onSair: (
             <Button variant="ghost" onClick={onSair}>
               ← Voltar <kbd className="ml-1 rounded bg-white px-1 text-[10px] shadow-sm">ESC</kbd>
             </Button>
-            <Button ref={retryRef} variant="primary" onClick={() => void emitirNfceAuto()}>
+            <Button ref={retryRef} variant="primary" permission={{ recurso: "fiscal", acao: "emitir" }} onClick={() => void emitirNfceAuto()}>
               Tentar novamente <kbd className="ml-2 rounded bg-white/20 px-1 text-[10px]">ENTER</kbd>
             </Button>
           </>
@@ -183,7 +183,7 @@ export function ModalPedidoCaixa({ d, onSair }: { d: OrcamentoDetalhe; onSair: (
             <Button variant="ghost" onClick={onSair}>
               ← Voltar para o Caixa <kbd className="ml-1 rounded bg-white px-1 text-[10px] shadow-sm">ESC</kbd>
             </Button>
-            <Button ref={confirmarRef} variant="primary" onClick={() => void confirmar()} disabled={enviando}>
+            <Button ref={confirmarRef} variant="primary" permission={{ recurso: "caixa", acao: "cadastrar" }} onClick={() => void confirmar()} disabled={enviando}>
               {enviando ? "Registrando…" : "Confirmar recebimento"}
               <kbd className="ml-2 rounded bg-white/20 px-1 text-[10px]">Ctrl+Enter</kbd>
             </Button>

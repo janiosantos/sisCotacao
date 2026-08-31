@@ -104,6 +104,7 @@ class UsuarioRepository:
         if senha_hash:
             fields.append("senha_hash=?")
             params.append(senha_hash)
+            fields.append("token_version=token_version+1")
         if desconto_limite_pct is not None:
             fields.append("desconto_limite_pct=?")
             params.append(max(0.0, float(desconto_limite_pct)))

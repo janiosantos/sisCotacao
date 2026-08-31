@@ -61,8 +61,7 @@ def consultar_cobranca(conta_id: int):
 
 @api_payments_bp.post("/api/financeiro/receber/<int:conta_id>/comprovante")
 def anexar_comprovante(conta_id: int):
-    from catalog_server.blueprints.api_usuarios import SESSION_KEY
-    from flask import session
+    from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 
     tipo = (request.form.get("tipo") or "deposito").strip()
     descricao = (request.form.get("descricao") or "").strip()
@@ -94,7 +93,7 @@ def anexar_comprovante(conta_id: int):
             conn.execute(
                 "INSERT INTO conta_comprovante (conta_id, tipo, filename, descricao, usuario_id)"
                 " VALUES (?,?,?,?,?)",
-                (conta_id, tipo, filename, descricao, session.get(SESSION_KEY)),
+                (conta_id, tipo, filename, descricao, usuario_id_requisicao()),
             )
             conn.commit()
     except Exception:

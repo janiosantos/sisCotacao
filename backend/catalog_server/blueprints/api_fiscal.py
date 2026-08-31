@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, request
 
-from catalog_server.blueprints.api_usuarios import SESSION_KEY
+from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.repositories import (
     beneficio_fiscal_repo,
     cest_repo,
@@ -102,7 +102,7 @@ def upsert_config(variante_id: int):
         vigencia_inicio=data.get("vigencia_inicio"),
         vigencia_fim=data.get("vigencia_fim"),
     )
-    fiscal_config_repo.registrar_historico_config(variante_id, tipo, session.get(SESSION_KEY))
+    fiscal_config_repo.registrar_historico_config(variante_id, tipo, usuario_id_requisicao())
     return jsonify({"ok": True})
 
 

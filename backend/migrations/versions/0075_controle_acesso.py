@@ -28,7 +28,7 @@ MUDANCA = {
     ],
 }
 
-_ACOES = ["visualizar", "cadastrar", "editar", "excluir", "imprimir", "aprovar", "configurar"]
+_ACOES = ["visualizar", "cadastrar", "editar", "excluir", "imprimir", "aprovar", "configurar", "emitir"]
 
 # (codigo, nome, grupo)
 _RECURSOS = [
@@ -93,6 +93,7 @@ _PRESETS = {
         "clientes": ["visualizar"],
         "produtos": ["visualizar"],
         "estoque": ["visualizar"],
+        "fiscal": ["visualizar", "emitir"],
         "impressao": ["imprimir"],
     },
 }

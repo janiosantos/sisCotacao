@@ -34,7 +34,9 @@ export default function Usuarios() {
   const carregarContexto = async () => {
     try {
       const [p, c] = await Promise.all([api.listarPerfis(), api.catalogoPermissoes()]);
-      setPerfis(p.filter((x) => !x.superuser));
+      // Mantém o Administrador visível para exibir corretamente os vínculos
+      // existentes e permitir que a política do backend controle atribuições.
+      setPerfis(p);
       setCatalogo(c);
     } catch {
       setPerfis([]);

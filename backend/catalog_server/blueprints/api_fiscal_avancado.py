@@ -4,11 +4,13 @@ from flask import Blueprint, jsonify, request
 from catalog_server.db import system_conn
 from catalog_server.repositories import emitente_repo, ibpt_repo, nfe_entrada_repo, nfe_saida_repo
 from catalog_server.services import ibpt_matcher, nfe_gerador, sefaz_focus
+from catalog_server import permissao
 
 api_fiscal_avancado_bp = Blueprint("api_fiscal_avancado", __name__)
 
 
 @api_fiscal_avancado_bp.post("/api/nfe/emitir/<int:orcamento_id>")
+@permissao.exige_permissao("fiscal", "emitir")
 def emitir_nfe(orcamento_id: int):
     """Gera o XML (NF-e/NFC-e) a partir do snapshot e armazena em nfe_saida.
 

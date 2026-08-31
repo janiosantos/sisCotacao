@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, request
 
-from catalog_server.blueprints.api_usuarios import SESSION_KEY
+from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.repositories import preco_historico_repo, promocao_repo, revisao_repo, tabela_preco_repo
 from catalog_server.services import pricing_engine
 
@@ -152,7 +152,7 @@ def reajustar_tabela(tabela_id: int):
         tabela_id,
         margem=margem,
         markup=markup,
-        usuario_id=session.get(SESSION_KEY),
+        usuario_id=usuario_id_requisicao(),
         origem=data.get("origem") or "motor-precificacao",
     )
     return jsonify({"confirmado": True, **result})
