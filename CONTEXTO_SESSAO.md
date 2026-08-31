@@ -108,6 +108,7 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 - **Migração nova**: arquivo `NNNN_*.py` em `backend/migrations/versions/` com `VERSION`, `RISCO`, `NAME`, `MUDANCA`, `guard`, `forward`, `backward`. Aplicar no dev com `python -m catalog_server.versioning apply --origem local`. Testar banco vazio→head (o CI do staging faz isso).
 - **Deploy**: NUNCA sem confirmação explícita do usuário (ver AGENTS.md). Apresentar resumo e aguardar.
 - **Manter os dois ambientes em sincronia** (notebook ↔ VM) via git pull/push.
+- **Backend dev (Docker) NÃO tem reloader** (`CATALOG_DEBUG` default 0): após alterar código backend, **`docker compose restart backend`** para carregar as rotas/serviços novos (o código é bind-mount; só o processo precisa reiniciar). Testar via `http://127.0.0.1:8080` (o `localhost:8080` é sequestrado pelo wslrelay no `[::1]`).
 
 ## 9. Registro da sessão atual
 
