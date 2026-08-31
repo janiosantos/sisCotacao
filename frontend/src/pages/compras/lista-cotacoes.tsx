@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { api, type CotacaoLista } from "../../api/client";
 import { fmtDate } from "../../ui/format";
-import { Badge, Button, Cell, Loading, Table, TBody, THead } from "../../ui/ui";
+import { Badge, Button, Card, Cell, Loading, StatCard, Table, TBody, THead } from "../../ui/ui";
 
 const STATUS_COT_LABEL: Record<string, string> = {
   aberta: "Pendente",
@@ -34,16 +34,32 @@ export function ListaCotacoes({ onNova, onAbrirCompra }: { onNova: () => void; o
 
   if (carregando) return <Loading />;
 
+  const pendentes = cotacoes.filter((c) => c.status === "aberta" || c.status === "pendente").length;
+  const emAnalise = cotacoes.filter((c) => c.status === "analise").length;
+  const finalizadas = cotacoes.filter((c) => c.status === "finalizada" || c.status === "fechada").length;
+
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="Cotações abertas" value={String(pendentes)} sub="aguardando retorno" tone={pendentes ? "highlight" : "default"} />
+        <StatCard label="Em análise" value={String(emAnalise)} sub="prontas para decisão" tone={emAnalise ? "success" : "default"} />
+        <StatCard label="Finalizadas" value={String(finalizadas)} sub="com pedido gerado" />
+      </div>
+      <Card className="p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-900">Cotações</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Histórico de cotações</h3>
+          <p className="mt-1 text-xs text-gray-500">Abra uma cotação para acompanhar respostas ou escolher os vencedores.</p>
+        </div>
         <Button size="sm" variant="primary" onClick={onNova}>
           + Nova cotação
         </Button>
       </div>
       {cotacoes.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-400">Nenhuma cotação ainda.</p>
+        <div className="rounded-md border border-dashed border-gray-300 py-10 text-center text-sm text-gray-400">
+          <p>Nenhuma cotação ainda.</p>
+          <p className="mt-1">Comece uma nova cotação para comparar fornecedores.</p>
+        </div>
       ) : (
         <Table>
           <THead cols={["Nº", "Título", "Status", "Respostas", "Criada em", ""]} />
@@ -71,6 +87,7 @@ export function ListaCotacoes({ onNova, onAbrirCompra }: { onNova: () => void; o
           </TBody>
         </Table>
       )}
+      </Card>
     </div>
   );
 }

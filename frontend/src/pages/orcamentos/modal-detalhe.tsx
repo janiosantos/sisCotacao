@@ -1,8 +1,8 @@
 // pages/orcamentos/modal-detalhe.tsx — detalhe do orçamento/pedido com ações por status.
 import { type OrcamentoDetalhe } from "../../api/client";
 import { fmtDate, fmtMoney } from "../../ui/format";
-import { Badge, Button, Cell, Modal, Table, TBody, THead } from "../../ui/ui";
-import { DESCONTO_LABELS, STATUS_LABELS, descontoTone } from "./tones";
+import { Badge, Button, Cell, Modal, StatCard, Table, TBody, THead } from "../../ui/ui";
+import { DESCONTO_LABELS, STATUS_LABELS, descontoTone, statusTone } from "./tones";
 
 export function ModalDetalhe({
   d,
@@ -33,7 +33,7 @@ export function ModalDetalhe({
           <Button onClick={onClose}>Fechar</Button>
           {d.status === "finalizado" && (
             <Button variant="ghost" onClick={onReabrir}>
-              Reabrir p/ correção
+              Reabrir para correção
             </Button>
           )}
           {d.status === "finalizado" &&
@@ -75,13 +75,25 @@ export function ModalDetalhe({
         </>
       }
     >
-      <p className="mb-3 text-sm text-gray-500">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Badge tone={statusTone(d.status)}>{STATUS_LABELS[d.status] || d.status}</Badge>
+        {d.desconto_status ? <Badge tone={descontoTone(d.desconto_status)}>{DESCONTO_LABELS[d.desconto_status] || d.desconto_status}</Badge> : null}
+        {d.virou_pedido ? <Badge tone="blue">Pedido gerado</Badge> : null}
+      </div>
+
+      <p className="mb-4 text-sm text-gray-500">
         {d.cliente || "Sem cliente"}
         {d.contato ? " · " + d.contato : ""} · criado em {fmtDate(d.criado_em)}
         {d.virou_pedido ? " · virou pedido" : ""}
         {d.condicao_nome ? " · condição: " + d.condicao_nome : ""}
         {d.n_parcelas && d.n_parcelas > 1 ? ` · ${d.n_parcelas} parcela(s) a receber` : ""}
       </p>
+
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="Itens" value={String(d.itens.length)} sub="produtos no documento" />
+        <StatCard label="Desconto" value={fmtMoney(d.desconto)} sub={d.desconto_status ? DESCONTO_LABELS[d.desconto_status] || d.desconto_status : "sem desconto"} />
+        <StatCard label="Total" value={fmtMoney(d.total)} sub={d.n_parcelas && d.n_parcelas > 1 ? `${d.n_parcelas} parcelas` : "pagamento à vista"} tone="highlight" />
+      </div>
 
       {d.desconto_status ? (
         <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">

@@ -12,7 +12,7 @@ import {
 } from "../api/client";
 import { fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
-import { Badge, Button, Input, Loading, Select } from "../ui/ui";
+import { Badge, Button, Card, Input, Loading, Select, StatCard } from "../ui/ui";
 import { LinksPanel } from "./compras/links-panel";
 import { AguardandoRespostas } from "./compras/aguardando-respostas";
 import { EtapaPedidos } from "./compras/etapa-pedidos";
@@ -209,7 +209,10 @@ export default function Compras() {
     <div>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Compras</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold text-gray-900">Compras</h1>
+            <Badge tone="blue">Fluxo operacional</Badge>
+          </div>
           <p className="mt-1 text-sm text-gray-500">
             Solicite, cote com fornecedores e acompanhe os pedidos — o processo de compra em um só lugar.
           </p>
@@ -219,11 +222,13 @@ export default function Compras() {
         </Button>
       </div>
 
-      <div className="mb-4 flex gap-2 overflow-x-auto border-b border-gray-200 pb-2">
+      <div className="mb-4 flex gap-2 overflow-x-auto border-b border-gray-200 pb-2" role="tablist" aria-label="Módulos de compras">
         {ABAS.map((a) => (
           <button
             key={a.key}
             onClick={() => setAba(a.key)}
+            role="tab"
+            aria-selected={aba === a.key}
             className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ${
               aba === a.key ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-100"
             }`}
@@ -247,11 +252,11 @@ export default function Compras() {
         <ListaPedidosCompra />
       ) : (
         <>
-          <div className="mb-6 flex items-center">
+          <div className="mb-6 flex items-center overflow-x-auto pb-1" aria-label="Etapas da cotação">
             {ETAPAS.map((e, i) => (
-              <div key={e.n} className="flex items-center">
-                {i > 0 && <div className={`h-0.5 w-10 ${e.n <= etapa ? "bg-brand-600" : "bg-gray-200"}`} />}
-                <div className="flex items-center gap-2">
+              <div key={e.n} className="flex shrink-0 items-center">
+                {i > 0 && <div className={`h-0.5 w-6 sm:w-10 ${e.n <= etapa ? "bg-brand-600" : "bg-gray-200"}`} />}
+                <div className="flex items-center gap-2" aria-current={e.n === etapa ? "step" : undefined}>
                   <span
                     className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium ${
                       e.n === etapa ? "bg-brand-600 text-white" : e.n < etapa ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-400"
@@ -327,6 +332,7 @@ function EtapaLista({
   const [categorias, setCategorias] = useState<string[]>([]);
   const [resultados, setResultados] = useState<CardBusca[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const totalQuantidade = draft.itens.reduce((total, item) => total + item.quantidade, 0);
 
   useEffect(() => {
     void api
@@ -366,10 +372,13 @@ function EtapaLista({
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="mb-3 text-sm font-semibold text-gray-900">Buscar produtos</h3>
+      <Card className="p-4">
+        <div className="mb-3">
+          <h3 className="text-sm font-semibold text-gray-900">1. Monte a lista de compra</h3>
+          <p className="mt-1 text-xs text-gray-500">Pesquise por nome, SKU ou EAN e informe apenas o que precisa cotar.</p>
+        </div>
         <div className="mb-3 flex gap-2">
-          <Input placeholder="Nome, código, EAN ou grupo…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input aria-label="Buscar produto" placeholder="Nome, código, EAN ou grupo…" value={q} onChange={(e) => setQ(e.target.value)} />
           <Select value={cat} onChange={(e) => setCat(e.target.value)} className="w-44">
             <option value="">Todos os grupos</option>
             {categorias.map((c) => (
@@ -382,6 +391,7 @@ function EtapaLista({
         <label className="mb-3 flex items-center gap-2 text-sm text-gray-600">
           <input
             type="checkbox"
+            aria-label="Não misturar grupos de produtos"
             checked={draft.agrupar}
             onChange={(e) => {
               const next = { ...draft, agrupar: e.target.checked };
@@ -393,11 +403,14 @@ function EtapaLista({
         </label>
         <div className="space-y-2">
           {resultados.length === 0 ? (
-            <div className="py-8 text-center text-sm text-gray-400">Digite para buscar</div>
+            <div className="rounded-md border border-dashed border-gray-200 py-8 text-center text-sm text-gray-400">
+              {q.trim() ? "Nenhum produto encontrado para essa busca." : "Digite para buscar um produto."}
+            </div>
           ) : (
             resultados.map((p) => {
+              const quantidadeSelecionada = draft.itens.find((item) => item.produto_id === p.id)?.quantidade;
               return (
-                <div key={p.id} className="flex items-center gap-3 rounded-md border border-gray-100 p-2">
+                <div key={p.id} className="flex items-center gap-3 rounded-md border border-gray-100 p-2 transition-colors hover:border-brand-200 hover:bg-brand-50/30">
                   {p.imagem_url ? (
                     <img src={p.imagem_url} className="h-10 w-10 object-contain" alt="" onError={(e) => ((e.target as HTMLImageElement).style.visibility = "hidden")} />
                   ) : null}
@@ -410,25 +423,29 @@ function EtapaLista({
                     </div>
                     <div className="text-sm font-semibold">{fmtMoney(p.group ? p.price_min : p.price)}</div>
                   </div>
-                  <Button size="sm" variant="primary" onClick={() => adicionar(p)}>
-                    Adicionar
+                  <Button size="sm" variant={quantidadeSelecionada ? "secondary" : "primary"} onClick={() => adicionar(p)} aria-label={`Adicionar ${p.name}`}>
+                    {quantidadeSelecionada ? `Somar 1 (${quantidadeSelecionada})` : "Adicionar"}
                   </Button>
                 </div>
               );
             })
           )}
         </div>
-      </div>
+      </Card>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="mb-3 text-sm font-semibold text-gray-900">
-          Minha lista <Badge>{draft.itens.length}</Badge>
-        </h3>
+      <Card className="p-4">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">2. Minha lista</h3>
+            <p className="mt-1 text-xs text-gray-500">Revise os itens e quantidades antes de escolher os fornecedores.</p>
+          </div>
+          <Badge tone={draft.itens.length ? "blue" : "gray"}>{draft.itens.length} item(ns)</Badge>
+        </div>
         <div className="mb-3">
-          <Input placeholder="Apelido amigável (ex.: Parafusos Agosto)" value={draft.apelido} onChange={(e) => { const next = { ...draft, apelido: e.target.value }; setDraft(next); salvar(next, cotacaoId); }} />
+          <Input aria-label="Apelido da cotação" placeholder="Apelido amigável (ex.: Parafusos Agosto)" value={draft.apelido} onChange={(e) => { const next = { ...draft, apelido: e.target.value }; setDraft(next); salvar(next, cotacaoId); }} />
         </div>
         <div className="mb-3 flex items-center gap-2">
-          <Input type="date" value={draft.data_limite} onChange={(e) => { const next = { ...draft, data_limite: e.target.value }; setDraft(next); salvar(next, cotacaoId); }} className="w-48" />
+          <Input aria-label="Data limite para retorno" type="date" value={draft.data_limite} onChange={(e) => { const next = { ...draft, data_limite: e.target.value }; setDraft(next); salvar(next, cotacaoId); }} className="w-48" />
           <span className="text-sm text-gray-500">Retorno até</span>
         </div>
         <div className="space-y-2">
@@ -440,9 +457,10 @@ function EtapaLista({
             </div>
           ) : (
             draft.itens.map((it, idx) => (
-              <div key={idx} className="flex items-center gap-2">
+              <div key={idx} className="flex items-center gap-2 rounded-md border border-gray-100 px-2 py-1.5">
                 <span className="flex-1 truncate text-sm">{it.name || "#" + it.produto_id}</span>
                 <input
+                  aria-label={`Quantidade de ${it.name || "item " + (idx + 1)}`}
                   type="number"
                   min={1}
                   step={1}
@@ -458,6 +476,8 @@ function EtapaLista({
                 <Button
                   size="sm"
                   variant="ghost"
+                  aria-label={`Remover ${it.name || "item " + (idx + 1)}`}
+                  title="Remover item"
                   onClick={() => {
                     const next = { ...draft, itens: draft.itens.filter((_, i) => i !== idx) };
                     setDraft(next);
@@ -470,7 +490,8 @@ function EtapaLista({
             ))
           )}
         </div>
-        <div className="mt-4">
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+          <span className="text-xs text-gray-500">{totalQuantidade} unidade(s) no total</span>
           <Button
             variant="primary"
             onClick={() => {
@@ -481,10 +502,10 @@ function EtapaLista({
               onProximo();
             }}
           >
-            Continuar ➔ Cotação
+            Continuar para fornecedores
           </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -505,10 +526,16 @@ function EtapaCotando({
   onDisparado: (id: number, invites: Invite[]) => void;
 }) {
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+  const [buscaFornecedor, setBuscaFornecedor] = useState("");
   const [fxNome, setFxNome] = useState("");
   const [fxWhats, setFxWhats] = useState("");
   const [fxEmail, setFxEmail] = useState("");
   const [disparando, setDisparando] = useState(false);
+  const fornecedoresVisiveis = fornecedores.filter((f) => {
+    const termo = buscaFornecedor.trim().toLocaleLowerCase();
+    if (!termo) return true;
+    return [f.nome, f.razao_social, f.cnpj_cpf, f.cidade].some((valor) => valor?.toLocaleLowerCase().includes(termo));
+  });
 
   useEffect(() => {
     void api
@@ -520,6 +547,11 @@ function EtapaCotando({
   const adicionarExpress = () => {
     if (!fxNome.trim()) {
       toast("Informe o nome do fornecedor.", "error");
+      return;
+    }
+    const nomeNormalizado = fxNome.trim().toLocaleLowerCase();
+    if (draft.fornecedores.some((f) => f.nome?.toLocaleLowerCase() === nomeNormalizado || (fxEmail.trim() && f.email === fxEmail.trim()))) {
+      toast("Este fornecedor já está selecionado.", "error");
       return;
     }
     const next = {
@@ -565,33 +597,73 @@ function EtapaCotando({
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="mb-2 text-sm font-semibold text-gray-900">Sua lista está pronta</h3>
+      <Card className="p-4">
+        <h3 className="text-sm font-semibold text-gray-900">1. Itens da cotação</h3>
         <p className="mb-3 text-sm text-gray-500">
-          {draft.itens.length} itens {draft.apelido ? `· “${draft.apelido}”` : ""}
+          {draft.itens.length} item(ns) · {draft.itens.reduce((total, item) => total + item.quantidade, 0)} unidade(s)
+          {draft.apelido ? ` · “${draft.apelido}”` : ""}
         </p>
-        <div className="space-y-1">
+        <div className="divide-y divide-gray-100 rounded-md border border-gray-100">
           {draft.itens.map((it, i) => (
-            <div key={i} className="flex justify-between text-sm">
-              <span>{it.name || "#" + it.produto_id}</span>
-              <b>{it.quantidade}</b>
+            <div key={i} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+              <span className="truncate">{it.name || "#" + it.produto_id}</span>
+              <b className="shrink-0 text-gray-700">{it.quantidade} un.</b>
             </div>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="mb-3 text-sm font-semibold text-gray-900">Convide fornecedores</h3>
-        <div className="space-y-1">
+      <Card className="p-4">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">2. Escolha quem vai cotar</h3>
+            <p className="mt-1 text-xs text-gray-500">Convide fornecedores com contato ativo para aumentar a chance de resposta.</p>
+          </div>
+          <Badge tone={draft.fornecedores.length ? "blue" : "gray"}>{draft.fornecedores.length} selecionado(s)</Badge>
+        </div>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <Input aria-label="Buscar fornecedor" placeholder="Buscar fornecedor, CNPJ ou cidade" value={buscaFornecedor} onChange={(e) => setBuscaFornecedor(e.target.value)} className="min-w-56 flex-1" />
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              const idsVisiveis = new Set(fornecedoresVisiveis.map((f) => f.id));
+              const atuais = draft.fornecedores.filter((f) => f.id != null && !idsVisiveis.has(f.id));
+              const novos = fornecedoresVisiveis.filter((f) => !draft.fornecedores.some((item) => item.id === f.id)).map((f) => ({ id: f.id }));
+              const next = { ...draft, fornecedores: [...atuais, ...draft.fornecedores.filter((f) => f.id != null && idsVisiveis.has(f.id)), ...novos] };
+              setDraft(next);
+              salvar(next, cotacaoId);
+            }}
+            disabled={!fornecedoresVisiveis.length}
+          >
+            Selecionar visíveis
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              const next = { ...draft, fornecedores: [] };
+              setDraft(next);
+              salvar(next, cotacaoId);
+            }}
+            disabled={!draft.fornecedores.length}
+          >
+            Limpar seleção
+          </Button>
+        </div>
+        <div className="max-h-72 space-y-1 overflow-y-auto rounded-md border border-gray-100 p-1">
           {fornecedores.length === 0 ? (
             <p className="py-4 text-center text-sm text-gray-400">Nenhum fornecedor cadastrado.</p>
+          ) : fornecedoresVisiveis.length === 0 ? (
+            <p className="py-4 text-center text-sm text-gray-400">Nenhum fornecedor corresponde à busca.</p>
           ) : (
-            fornecedores.map((f) => {
+            fornecedoresVisiveis.map((f) => {
               const sel = draft.fornecedores.some((x) => x.id === f.id);
               return (
-                <label key={f.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-gray-50">
+                <label key={f.id} className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-2 text-sm ${sel ? "border-brand-200 bg-brand-50/50" : "border-transparent hover:bg-gray-50"}`}>
                   <input
                     type="checkbox"
+                    aria-label={`Selecionar ${f.nome}`}
                     checked={sel}
                     onChange={(e) => {
                       let next: FornecedorDraft[];
@@ -602,28 +674,33 @@ function EtapaCotando({
                       salvar(d, cotacaoId);
                     }}
                   />
-                  <span className="flex-1">{f.nome}</span>
-                  <small className="text-xs text-gray-400">{f.whatsapp || (f.email ? "e-mail" : "sem contato")}</small>
+                  <span className="min-w-0 flex-1 truncate font-medium">{f.nome}</span>
+                  <small className="shrink-0 text-xs text-gray-400">{f.whatsapp || (f.email ? "e-mail" : "sem contato")}</small>
+                  {sel ? <Badge tone="blue">Selecionado</Badge> : null}
                 </label>
               );
             })
           )}
         </div>
 
-        <h4 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Cadastro rápido</h4>
-        <div className="space-y-2">
-          <Input placeholder="Nome do fornecedor" value={fxNome} onChange={(e) => setFxNome(e.target.value)} />
-          <Input placeholder="WhatsApp (só números)" value={fxWhats} onChange={(e) => setFxWhats(e.target.value)} />
-          <Input placeholder="E-mail (opcional)" value={fxEmail} onChange={(e) => setFxEmail(e.target.value)} />
-          <Button onClick={adicionarExpress}>Adicionar</Button>
+        <div className="mt-4 rounded-md border border-dashed border-gray-300 bg-gray-50 p-3">
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Fornecedor avulso</h4>
+          <p className="mb-2 text-xs text-gray-500">Use quando o contato ainda não foi cadastrado no ERP.</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Input aria-label="Nome do fornecedor avulso" placeholder="Nome" value={fxNome} onChange={(e) => setFxNome(e.target.value)} />
+            <Input aria-label="WhatsApp do fornecedor avulso" placeholder="WhatsApp" value={fxWhats} onChange={(e) => setFxWhats(e.target.value)} />
+            <Input aria-label="E-mail do fornecedor avulso" placeholder="E-mail (opcional)" value={fxEmail} onChange={(e) => setFxEmail(e.target.value)} />
+          </div>
+          <Button className="mt-2" size="sm" onClick={adicionarExpress}>Adicionar fornecedor avulso</Button>
         </div>
 
-        <div className="mt-4">
-          <Button variant="primary" className="w-full" onClick={() => void disparar()} disabled={disparando}>
-            {disparando ? "Enviando…" : "Disparar Cotação ➔"}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
+          <span className="text-xs text-gray-500">{draft.fornecedores.length ? "Convites prontos para envio." : "Selecione pelo menos um fornecedor."}</span>
+          <Button variant="primary" onClick={() => void disparar()} disabled={disparando || !draft.fornecedores.length}>
+            {disparando ? "Enviando…" : "Enviar cotação"}
           </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -678,6 +755,10 @@ function EtapaComparando({
     const central = m.centralizado;
     const vencedorCentral = central ? central.fornecedor_id : null;
     const recomendados = logica === "recomendado" ? calcularRecomendados(m.itens, fornecedores, pesos) : new Map<number, number>();
+    const respondidos = fornecedores.filter((f) => f.status === "respondido").length;
+    const itensComPreco = m.itens.filter((item) => Object.values(item.precos).some((preco) => preco.disponivel && preco.preco_liquido > 0)).length;
+    const podeGerarPedidos = respondidos > 0 && itensComPreco > 0;
+    const estrategiaLabel = logica === "fracionado" ? "Melhor preço por item" : logica === "centralizado" ? "Melhor preço por lote" : "Recomendado";
 
     const importarIA = () => {
       const opts = {
@@ -705,13 +786,23 @@ function EtapaComparando({
     };
 
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <StatCard label="Itens da cotação" value={String(m.itens.length)} sub={`${itensComPreco} com preço informado`} />
+          <StatCard label="Respostas" value={`${respondidos}/${fornecedores.length}`} sub="fornecedores responderam" tone={respondidos ? "success" : "default"} />
+          <StatCard label="Estratégia" value={estrategiaLabel} sub={central ? `Lote disponível: ${central.nome}` : "Escolha como distribuir os pedidos"} tone="highlight" />
+        </div>
+
+        <Card className="p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-gray-900">Comparar propostas {m.cotacao.titulo ? `— “${m.cotacao.titulo}”` : ""}</h3>
-          <div className="flex gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Compare as propostas {m.cotacao.titulo ? `— “${m.cotacao.titulo}”` : ""}</h3>
+            <p className="mt-1 text-xs text-gray-500">A estratégia escolhida define como os pedidos serão distribuídos entre fornecedores.</p>
+          </div>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Estratégia de compra">
             {["fracionado", "centralizado", "recomendado"].map((l) => (
-              <Button key={l} variant={logica === l ? "primary" : "secondary"} size="sm" onClick={() => setLogica(l)}>
-                {l === "fracionado" ? "💰 Melhor preço por item" : l === "centralizado" ? "📦 Melhor preço por lote" : "⭐ Recomendado"}
+              <Button key={l} variant={logica === l ? "primary" : "secondary"} size="sm" onClick={() => setLogica(l)} aria-pressed={logica === l}>
+                {l === "fracionado" ? "Melhor preço por item" : l === "centralizado" ? "Melhor preço por lote" : "Recomendado"}
               </Button>
             ))}
           </div>
@@ -726,12 +817,18 @@ function EtapaComparando({
         )}
 
         {logica === "recomendado" && (
-          <div className="mb-3 flex flex-wrap items-center gap-4 rounded-md bg-gray-50 p-3 text-sm">
-            <span className="font-medium text-gray-600">Priorizar:</span>
+          <div className="mb-3 rounded-md border border-brand-100 bg-brand-50/50 p-3 text-sm">
+            <div className="mb-2">
+              <span className="font-medium text-gray-700">Critérios do recomendado</span>
+              <p className="mt-0.5 text-xs text-gray-500">Ajuste os pesos. O total não precisa somar 100%; o sistema normaliza automaticamente.</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
             {(["preco", "prazo", "pagamento"] as const).map((k) => (
               <label key={k} className="flex items-center gap-2">
-                <span>{k === "preco" ? "💰 Preço" : k === "prazo" ? "🚚 Prazo" : "💳 Pagamento"}</span>
+                <span className="w-20 text-xs text-gray-600">{k === "preco" ? "Preço" : k === "prazo" ? "Prazo" : "Pagamento"}</span>
                 <input
+                  aria-label={`Peso de ${k}`}
+                  className="min-w-0 flex-1 accent-brand-600"
                   type="range"
                   min={0}
                   max={100}
@@ -746,18 +843,21 @@ function EtapaComparando({
                 <b>{pesos[k]}%</b>
               </label>
             ))}
+            </div>
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
+        <div className="overflow-x-auto rounded-md border border-gray-200">
+          <table className="min-w-[920px] divide-y divide-gray-200 text-sm">
+            <thead className="sticky top-0 z-10 bg-gray-50">
               <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Produto</th>
+                <th className="sticky left-0 z-20 bg-gray-50 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Produto</th>
                 {fornecedores.map((f) => (
-                  <th key={f.fornecedor_id} className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    {f.nome}
-                    {f.status === "respondido" ? null : <span className="ml-1 text-gray-400">—</span>}
+                  <th key={f.fornecedor_id} className="min-w-44 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    <div className="flex items-center gap-1.5">
+                      <span>{f.nome}</span>
+                      <Badge tone={f.status === "respondido" ? "green" : "gray"}>{f.status === "respondido" ? "Respondeu" : "Pendente"}</Badge>
+                    </div>
                     {f.condicao_pagamento ? <div className="mt-0.5 text-[11px] font-normal normal-case text-gray-400">{f.condicao_pagamento}</div> : null}
                   </th>
                 ))}
@@ -766,9 +866,9 @@ function EtapaComparando({
             <tbody className="divide-y divide-gray-100">
               {m.itens.map((it) => (
                 <tr key={it.cotacao_item_id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5">
+                  <td className="sticky left-0 z-[1] bg-white px-4 py-2.5">
                     <b>{it.name}</b>
-                    <small className="block text-xs text-gray-400">qtd {it.quantidade}</small>
+                    <small className="block text-xs text-gray-400">SKU {it.sku || "—"} · qtd {it.quantidade}</small>
                   </td>
                   {fornecedores.map((f) => {
                     const pr = it.precos[String(f.fornecedor_id)];
@@ -835,19 +935,26 @@ function EtapaComparando({
           </table>
         </div>
 
-        <p className="mt-2 text-xs text-gray-400">
-          💰 melhor preço · 🚚 menor prazo de entrega {logica === "recomendado" ? "· ⭐ recomendado (preço + prazo + pagamento)" : ""} · unidade/embalagem e marca vêm da proposta do representante
-        </p>
-
-        <div className="mt-4 flex flex-wrap justify-between gap-2">
-          <div className="flex gap-2">
-            <Button onClick={() => void carregar()}>↻ Atualizar respostas</Button>
-            <Button onClick={importarIA}>⚡ Importar resposta IA</Button>
-          </div>
-          <Button variant="primary" onClick={() => void gerarPedidos()} disabled={gerando}>
-            {gerando ? "Gerando…" : "Gerar Pedidos ➔"}
-          </Button>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+          <span><b className="text-gray-700">Melhor preço</b> = menor valor líquido</span>
+          <span><b className="text-gray-700">Menor prazo</b> = entrega mais rápida</span>
+          {logica === "recomendado" ? <span><b className="text-gray-700">Recomendado</b> = preço + prazo + pagamento</span> : null}
+          <span>Unidade, embalagem e marca vêm da proposta.</span>
         </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => void carregar()}>Atualizar respostas</Button>
+            <Button onClick={importarIA}>Importar resposta IA</Button>
+          </div>
+          <div className="flex items-center gap-3">
+            {!podeGerarPedidos ? <span className="text-xs text-amber-700">Aguarde ao menos uma resposta com preço.</span> : null}
+            <Button variant="primary" onClick={() => void gerarPedidos()} disabled={gerando || !podeGerarPedidos}>
+              {gerando ? "Gerando…" : "Gerar pedidos"}
+            </Button>
+          </div>
+        </div>
+        </Card>
       </div>
     );
   }

@@ -1,0 +1,41 @@
+{
+  "versao": "v2.36.0",
+  "componentes": [
+    "frontend"
+  ],
+  "correcoes": [
+    "Impede duplicacao de fornecedor avulso no convite da cotacao",
+    "Bloqueia a geracao de pedidos quando nao existe resposta com preco utilizavel",
+    "Acrescenta rotulos acessiveis em buscas, quantidades, selecao e acoes de documentos"
+  ],
+  "melhorias": [
+    "Redesign incremental do fluxo Compras com resumo por etapa e estados vazios orientativos",
+    "Busca, selecao em lote e limpeza de fornecedores preservando contatos avulsos",
+    "Matriz de propostas com status de resposta, cabecalho e produto fixos no scroll",
+    "Cards de situacao para cotacoes, pedidos de compra, pedidos gerados e orcamentos",
+    "Detalhe de orcamento com hierarquia para status, desconto, itens e total"
+  ],
+  "recursos": [],
+  "imagens": {
+    "backend": "siscom-backend:v2.36.0",
+    "frontend": "siscom-frontend:v2.36.0"
+  },
+  "database": {
+    "migration": null
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "compras_ux": true,
+    "orcamentos_ux": true,
+    "database_change": false
+  },
+  "rollback": {
+    "application": "Retornar a imagem frontend da release anterior; nao ha alteracao de backend ou schema.",
+    "database": "Nenhuma migration nesta release; manter o schema atual."
+  }
+}

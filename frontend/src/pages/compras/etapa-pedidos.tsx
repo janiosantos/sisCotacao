@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { api, type Pedido } from "../../api/client";
 import { fmtMoney } from "../../ui/format";
-import { Loading } from "../../ui/ui";
+import { Badge, Button, Card, Loading, StatCard } from "../../ui/ui";
 
 export function EtapaPedidos({ cotacaoId }: { cotacaoId: number | null }) {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
@@ -18,20 +18,33 @@ export function EtapaPedidos({ cotacaoId }: { cotacaoId: number | null }) {
 
   if (carregando) return <Loading />;
 
+  const total = pedidos.reduce((sum, pedido) => sum + (pedido.total ?? 0), 0);
+  const enviados = pedidos.filter((pedido) => pedido.status !== "recebido").length;
+
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <h3 className="text-sm font-semibold text-gray-900">Pedidos gerados — envie para os fornecedores</h3>
-      <p className="mb-3 text-sm text-gray-500">Cada pedido consolida os itens vencedores por fornecedor.</p>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="Pedidos gerados" value={String(pedidos.length)} sub="um por fornecedor vencedor" tone="success" />
+        <StatCard label="Aguardando envio" value={String(enviados)} sub="compartilhe PDF ou WhatsApp" tone={enviados ? "highlight" : "default"} />
+        <StatCard label="Valor total" value={fmtMoney(total)} sub="soma desta cotação" />
+      </div>
+      <Card className="p-4">
+        <h3 className="text-sm font-semibold text-gray-900">Pedidos gerados</h3>
+        <p className="mb-3 mt-1 text-sm text-gray-500">Cada pedido consolida os itens vencedores por fornecedor. Envie o documento e acompanhe o recebimento na aba de pedidos.</p>
       {pedidos.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-400">Nenhum pedido ainda.</p>
+        <div className="rounded-md border border-dashed border-gray-300 py-10 text-center text-sm text-gray-400">
+          <p>Nenhum pedido foi gerado.</p>
+          <p className="mt-1">Volte à comparação e selecione uma proposta com preço informado.</p>
+        </div>
       ) : (
         <div className="space-y-2">
           {pedidos.map((p) => (
             <div key={p.id} className="rounded-md border border-gray-100 p-3">
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
                   <b className="text-sm">Pedido {p.numero}</b>
                   <span className="ml-2 text-xs text-gray-400">{p.fornecedor}</span>
+                  <Badge tone={p.status === "recebido" ? "green" : "amber"}>{p.status === "recebido" ? "Recebido" : "Aguardando envio"}</Badge>
                 </div>
                 <div className="text-sm font-semibold">{fmtMoney(p.total ?? 0)}</div>
               </div>
@@ -52,9 +65,7 @@ export function EtapaPedidos({ cotacaoId }: { cotacaoId: number | null }) {
                 </div>
               ) : null}
               <div className="mt-2 flex gap-2">
-                <a className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50" target="_blank" rel="noreferrer" href={`/compras/pedidos/${p.id}/imprimir`}>
-                  PDF
-                </a>
+                <Button size="sm" onClick={() => window.open(`/compras/pedidos/${p.id}/imprimir`, "_blank", "noopener,noreferrer")}>Abrir PDF</Button>
                 {p.whatsapp ? (
                   <a
                     className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
@@ -72,6 +83,7 @@ export function EtapaPedidos({ cotacaoId }: { cotacaoId: number | null }) {
           ))}
         </div>
       )}
+      </Card>
     </div>
   );
 }

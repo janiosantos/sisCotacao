@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { api, type OrcamentoDetalhe, type OrcamentoLista } from "../api/client";
 import { fmtDate, fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
-import { Badge, Button, Cell, Field, Loading, Modal, PageHeader, Select, Table, TBody, THead } from "../ui/ui";
+import { Badge, Button, Cell, Field, Loading, Modal, PageHeader, Select, StatCard, Table, TBody, THead } from "../ui/ui";
 import { ModalRecebimento } from "./recebimento";
 import { STATUS_LABELS, DESCONTO_LABELS, statusTone, descontoTone } from "./orcamentos/tones";
 import { ModalDetalhe } from "./orcamentos/modal-detalhe";
@@ -38,6 +38,10 @@ export default function Orcamentos() {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtro]);
+
+  const emAberto = lista.filter((o) => ["rascunho", "ativo", "em_analise", "liberado"].includes(o.status)).length;
+  const finalizados = lista.filter((o) => o.status === "finalizado").length;
+  const totalEmAberto = lista.filter((o) => o.status !== "cancelado").reduce((total, o) => total + (o.total || 0), 0);
 
   const abrirDetalhe = async (id: number) => {
     try {
@@ -99,9 +103,15 @@ export default function Orcamentos() {
         }
       />
 
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="Em andamento" value={String(emAberto)} sub="propostas que ainda exigem ação" tone={emAberto ? "highlight" : "default"} />
+        <StatCard label="Pedidos finalizados" value={String(finalizados)} sub="nesta consulta" tone={finalizados ? "success" : "default"} />
+        <StatCard label="Valor dos registros" value={fmtMoney(totalEmAberto)} sub={filtro ? "considerando o filtro atual" : "considerando todos os status"} />
+      </div>
+
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Field label="Status">
-          <Select value={filtro} onChange={(e) => setFiltro(e.target.value)} className="w-44">
+          <Select aria-label="Filtrar orçamentos por status" value={filtro} onChange={(e) => setFiltro(e.target.value)} className="w-44">
             <option value="">Todos</option>
             {Object.entries(STATUS_LABELS).map(([k, v]) => (
               <option key={k} value={k}>
@@ -110,7 +120,7 @@ export default function Orcamentos() {
             ))}
           </Select>
         </Field>
-        <span className="mb-2 text-sm text-gray-500">{lista.length} registro(s)</span>
+        <span className="mb-2 text-sm text-gray-500">{lista.length} registro(s) nesta consulta</span>
       </div>
 
       {carregando ? (
@@ -151,6 +161,7 @@ export default function Orcamentos() {
                       (o.n_parcelas && o.n_parcelas > 1 ? (
                         <>
                           <a
+                            aria-label={`Abrir boleto do pedido ${o.numero}`}
                             className="rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700"
                             target="_blank"
                             rel="noreferrer"
@@ -160,6 +171,7 @@ export default function Orcamentos() {
                             Boleto
                           </a>
                           <a
+                            aria-label={`Abrir contas a receber do pedido ${o.numero}`}
                             className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                             href="#/financeiro"
                             title="Ver contas a receber"
@@ -173,6 +185,7 @@ export default function Orcamentos() {
                         </Button>
                       ))}
                     <a
+                      aria-label={`Imprimir PDF do orçamento ${o.numero}`}
                       className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                       target="_blank"
                       rel="noreferrer"
@@ -181,8 +194,8 @@ export default function Orcamentos() {
                     >
                       PDF
                     </a>
-                    <Button size="sm" variant="ghost" onClick={() => void abrirDetalhe(o.id)} title="Detalhes">
-                      ⚙
+                    <Button size="sm" variant="ghost" onClick={() => void abrirDetalhe(o.id)} title="Abrir detalhes" aria-label={`Abrir detalhes do orçamento ${o.numero}`}>
+                      Detalhes
                     </Button>
                   </div>
                 </Cell>

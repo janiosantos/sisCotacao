@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { api, type CondicaoPagamento, type ParcelaCalculada, type Pedido } from "../../api/client";
 import { fmtDate, fmtMoney } from "../../ui/format";
 import { toast } from "../../ui/dom";
-import { Badge, Button, Field, Loading, Modal, Select } from "../../ui/ui";
+import { Badge, Button, Card, Field, Loading, Modal, Select, StatCard } from "../../ui/ui";
 
 export function ListaPedidosCompra() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
@@ -80,11 +80,26 @@ export function ListaPedidosCompra() {
 
   if (carregando) return <Loading />;
 
+  const pendentes = pedidos.filter((p) => p.status !== "recebido").length;
+  const totalAberto = pedidos.filter((p) => p.status !== "recebido").reduce((total, p) => total + (p.total ?? 0), 0);
+
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <h3 className="mb-3 text-sm font-semibold text-gray-900">Pedidos de compra</h3>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="Pedidos em aberto" value={String(pendentes)} sub="aguardando recebimento" tone={pendentes ? "highlight" : "default"} />
+        <StatCard label="Valor em aberto" value={fmtMoney(totalAberto)} sub="entrada ainda não recebida" tone={totalAberto ? "success" : "default"} />
+        <StatCard label="Total de pedidos" value={String(pedidos.length)} sub="nesta consulta" />
+      </div>
+      <Card className="p-4">
+      <div className="mb-3">
+        <h3 className="text-sm font-semibold text-gray-900">Pedidos de compra</h3>
+        <p className="mt-1 text-xs text-gray-500">Receba o pedido uma única vez para atualizar estoque e contas a pagar.</p>
+      </div>
       {pedidos.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-400">Nenhum pedido de compra ainda.</p>
+        <div className="rounded-md border border-dashed border-gray-300 py-10 text-center text-sm text-gray-400">
+          <p>Nenhum pedido de compra ainda.</p>
+          <p className="mt-1">Os pedidos aparecem aqui após a aprovação de uma cotação.</p>
+        </div>
       ) : (
         <div className="space-y-2">
           {pedidos.map((p) => (
@@ -166,6 +181,7 @@ export function ListaPedidosCompra() {
           </div>
         ) : null}
       </Modal>
+      </Card>
     </div>
   );
 }

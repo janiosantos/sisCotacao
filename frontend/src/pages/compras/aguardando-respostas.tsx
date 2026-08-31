@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { api, type Invite, type MatrizComparacao } from "../../api/client";
 import { copiarTexto, toast } from "../../ui/dom";
-import { Button } from "../../ui/ui";
+import { Badge, Button, Card, StatCard } from "../../ui/ui";
 
 export function AguardandoRespostas({
   cotacaoId,
@@ -50,6 +50,8 @@ export function AguardandoRespostas({
     const inv = invites.find((i) => i.fornecedor_id === f.fornecedor_id);
     return { ...f, link: inv?.link, whatsapp_url: inv?.whatsapp_url || "" };
   });
+  const respondidos = fornecedores.filter((f) => f.status === "respondido").length;
+  const pendentes = fornecedores.length - respondidos;
 
   const obterLink = async (fid: number): Promise<string | null> => {
     if (!cotacaoId) return null;
@@ -115,12 +117,18 @@ export function AguardandoRespostas({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="Respostas" value={`${respondidos}/${fornecedores.length}`} sub="fornecedores responderam" tone={respondidos ? "success" : "default"} />
+        <StatCard label="Pendentes" value={String(pendentes)} sub="convites ainda abertos" tone={pendentes ? "highlight" : "default"} />
+        <StatCard label="Itens" value={String(m.itens.length)} sub="podem ser ajustados antes do fechamento" />
+      </div>
+
+      <Card className="p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Cotação {m.cotacao.numero} — aguardando respostas</h3>
             <p className="text-sm text-gray-500">
-              {m.itens.length} item(ns) · {m.fornecedores.filter((f) => f.status === "respondido").length} de {m.fornecedores.length} fornecedor(es) responderam
+              Você pode atualizar quantidades enquanto os convites continuam abertos.
             </p>
           </div>
           <Button variant="primary" onClick={onAtualizar}>
@@ -129,7 +137,7 @@ export function AguardandoRespostas({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="min-w-[680px] w-full text-sm">
             <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="px-3 py-2">Produto</th>
@@ -147,6 +155,7 @@ export function AguardandoRespostas({
                     <input
                       type="number"
                       min={1}
+                      aria-label={`Quantidade de ${it.name}`}
                       value={quantidades[it.cotacao_item_id] ?? it.quantidade}
                       onChange={(e) => setQuantidades({ ...quantidades, [it.cotacao_item_id]: e.target.value })}
                       className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none"
@@ -162,11 +171,13 @@ export function AguardandoRespostas({
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h4 className="mb-2 text-sm font-semibold text-gray-900">Enviar / reenviar convite</h4>
-        <p className="mb-3 text-sm text-gray-500">Os links continuam disponíveis para reenviar aos fornecedores pendentes.</p>
+      <Card className="p-4">
+        <div className="mb-3">
+          <h4 className="text-sm font-semibold text-gray-900">Enviar ou reenviar convite</h4>
+          <p className="mt-1 text-sm text-gray-500">Use WhatsApp quando houver contato. Caso contrário, copie o link seguro do fornecedor.</p>
+        </div>
         {fornecedores.length === 0 ? (
           <p className="text-sm text-gray-400">Nenhum fornecedor convidado nesta cotação.</p>
         ) : (
@@ -175,7 +186,7 @@ export function AguardandoRespostas({
               <div key={f.fornecedor_id} className="flex flex-wrap items-center gap-3 rounded-md border border-gray-100 p-2">
                 <div className="flex-1">
                   <b className="text-sm">{f.nome}</b>
-                  <span className="ml-2 text-xs text-gray-400">{f.status === "respondido" ? "✓ respondeu" : "pendente"}</span>
+                  <span className="ml-2"><Badge tone={f.status === "respondido" ? "green" : "amber"}>{f.status === "respondido" ? "Respondeu" : "Pendente"}</Badge></span>
                   {f.data_limite_retorno ? <span className="ml-2 text-xs text-gray-400">retorno até {f.data_limite_retorno}</span> : null}
                 </div>
                 <div className="flex gap-2">
@@ -185,11 +196,11 @@ export function AguardandoRespostas({
                     </a>
                   ) : null}
                   <Button size="sm" onClick={() => void copiarLink(f.fornecedor_id)}>
-                    Copiar link
+                      Copiar link
                   </Button>
                   {f.status !== "respondido" ? (
                     <Button size="sm" variant="secondary" onClick={() => void lembrar(f.fornecedor_id, f.nome)} disabled={lembrando === f.fornecedor_id}>
-                      {lembrando === f.fornecedor_id ? "…" : "🔔 Lembrar"}
+                      {lembrando === f.fornecedor_id ? "…" : "Lembrar fornecedor"}
                     </Button>
                   ) : null}
                 </div>
@@ -197,7 +208,7 @@ export function AguardandoRespostas({
             ))}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
