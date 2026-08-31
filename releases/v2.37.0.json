@@ -1,0 +1,38 @@
+{
+  "versao": "v2.37.0",
+  "componentes": [
+    "frontend"
+  ],
+  "correcoes": [
+    "Ignora respostas antigas de pesquisa quando uma busca mais recente ja foi digitada",
+    "Evita que Enter avance para desconto quando nao ha produto encontrado"
+  ],
+  "melhorias": [
+    "Pesquisa de produtos no PDV com combobox/listbox acessivel",
+    "Navegacao por setas, Home/End e Enter sem uso do mouse",
+    "Ctrl+K retorna o foco para a pesquisa e Delete remove a linha focada",
+    "Linhas do cupom e botoes de atalhos com foco e rotulos explicitos"
+  ],
+  "recursos": [],
+  "imagens": {
+    "backend": "siscom-backend:v2.37.0",
+    "frontend": "siscom-frontend:v2.37.0"
+  },
+  "database": {
+    "migration": null
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "pre_venda_keyboard_navigation": true,
+    "database_change": false
+  },
+  "rollback": {
+    "application": "Retornar a imagem frontend da release anterior; nao ha alteracao de backend ou schema.",
+    "database": "Nenhuma migration nesta release; manter o schema atual."
+  }
+}

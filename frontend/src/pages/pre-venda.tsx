@@ -44,7 +44,7 @@ function parseNum(v: string): number {
   return isNaN(n) ? 0 : n;
 }
 
-function parseBusca(v: string): { qtd: number; termo: string } {
+export function parseBusca(v: string): { qtd: number; termo: string } {
   const m = v.trim().match(/^(\d+(?:[.,]\d+)?)\s*\*+\s*([\s\S]*)$/);
   if (!m) return { qtd: 1, termo: v.trim() };
   const n = parseFloat(m[1].replace(",", "."));
@@ -105,6 +105,7 @@ export default function PreVenda() {
   const salvarRef = useRef<HTMLButtonElement>(null);
   const qtdCentralRef = useRef<HTMLInputElement>(null);
   const buscaTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const buscaRequestRef = useRef(0);
 
   const [linhaAtiva, setLinhaAtiva] = useState<number | null>(null);
   const [hora, setHora] = useState(() => new Date().toLocaleTimeString("pt-BR"));
@@ -155,10 +156,12 @@ export default function PreVenda() {
 
   useEffect(() => {
     clearTimeout(buscaTimer.current);
+    const requestId = ++buscaRequestRef.current;
     const { qtd, termo } = parseBusca(busca);
     if (!termo) {
       setSugestoes([]);
       setFocoLista(-1);
+      setQtdDigitada(1);
       return;
     }
     setQtdDigitada(qtd);
@@ -166,10 +169,13 @@ export default function PreVenda() {
       void api
         .listarProdutos({ q: termo, limit: 8, agrupado: 0 })
         .then((res) => {
+          if (requestId !== buscaRequestRef.current) return;
           setSugestoes(res.items.map((i) => i as ProdutoResumo));
           setFocoLista(-1);
         })
-        .catch(() => setSugestoes([]));
+        .catch(() => {
+          if (requestId === buscaRequestRef.current) setSugestoes([]);
+        });
     }, 180);
     return () => clearTimeout(buscaTimer.current);
   }, [busca]);
@@ -267,6 +273,15 @@ export default function PreVenda() {
     setLinhas((arr) => arr.filter((_, j) => j !== i));
     setLinhaAtiva(null);
     buscaRef.current?.focus();
+  };
+
+  const ativarLinha = (i: number) => {
+    if (i < 0 || i >= linhas.length) return;
+    setLinhaAtiva(i);
+    setTimeout(() => {
+      qtdCentralRef.current?.focus();
+      qtdCentralRef.current?.select();
+    }, 0);
   };
 
   const onQtyChange = (i: number, raw: string) => {
@@ -551,6 +566,14 @@ export default function PreVenda() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        const origem = e.target as HTMLElement | null;
+        if (origem?.closest('[role="dialog"]')) return;
+        e.preventDefault();
+        buscaRef.current?.focus();
+        buscaRef.current?.select();
+        return;
+      }
       const m = e.key?.toUpperCase().match(/^F([1-9])$/);
       if (!m) return;
       e.preventDefault();
@@ -668,28 +691,44 @@ export default function PreVenda() {
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Código / nome (ex.: 3*Cabo) · ENTER adiciona"
+              role="combobox"
+              aria-label="Pesquisar produto"
+              aria-autocomplete="list"
+              aria-controls="pre-venda-sugestoes"
+              aria-expanded={sugestoes.length > 0}
+              aria-activedescendant={focoLista >= 0 ? `produto-sugestao-${sugestoes[focoLista]?.id}` : undefined}
+              aria-keyshortcuts="Control+K"
+              autoComplete="off"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-center text-lg text-gray-900 placeholder-gray-400 focus:border-orange-400 focus:outline-none"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
                   if (sugestoes.length > 0) adicionar(sugestoes[focoLista >= 0 ? focoLista : 0]);
-                  else descontoRef.current?.focus();
                 } else if (e.key === "ArrowDown") {
                   e.preventDefault();
                   setFocoLista((f) => (sugestoes.length ? (f + 1) % sugestoes.length : -1));
                 } else if (e.key === "ArrowUp") {
                   e.preventDefault();
                   setFocoLista((f) => (sugestoes.length ? (f - 1 + sugestoes.length) % sugestoes.length : -1));
+                } else if (e.key === "Home" && sugestoes.length > 0) {
+                  e.preventDefault();
+                  setFocoLista(0);
+                } else if (e.key === "End" && sugestoes.length > 0) {
+                  e.preventDefault();
+                  setFocoLista(sugestoes.length - 1);
                 } else if (e.key === "Escape") {
                   setSugestoes([]);
                 }
               }}
             />
             {sugestoes.length > 0 && (
-              <div className="absolute z-20 mt-1 w-full rounded-lg border border-gray-300 bg-white shadow-lg">
+              <div id="pre-venda-sugestoes" role="listbox" aria-label="Produtos encontrados" className="absolute z-20 mt-1 w-full rounded-lg border border-gray-300 bg-white shadow-lg">
                 {sugestoes.map((p, i) => (
                   <button
                     key={p.id}
+                    id={`produto-sugestao-${p.id}`}
+                    role="option"
+                    aria-selected={i === focoLista}
                     className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${i === focoLista ? "bg-orange-500 text-white" : "hover:bg-orange-50"}`}
                     onMouseEnter={() => setFocoLista(i)}
                     onClick={() => adicionar(p)}
@@ -705,6 +744,9 @@ export default function PreVenda() {
               </div>
             )}
           </div>
+          <p className="mx-auto max-w-2xl text-center text-[11px] text-gray-500">
+            Digite <b>quantidade*produto</b> para lançar várias unidades. Use ↑ ↓, Home/End e Enter para escolher sem o mouse.
+          </p>
           <h1 className="py-1 text-center text-2xl font-bold text-black">{linhaAtual?.nome || "Informe um produto para iniciar a venda"}</h1>
           {linhaAtual?.especificacao ? (
             <p className="text-center text-sm text-gray-500">{linhaAtual.especificacao}</p>
@@ -732,6 +774,7 @@ export default function PreVenda() {
                 type="number"
                 min={0}
                 step="any"
+                aria-label={linhaAtual ? `Quantidade de ${linhaAtual.nome}` : "Quantidade do item selecionado"}
                 value={linhaAtual ? String(linhaAtual.quantidade) : ""}
                 placeholder="0"
                 onChange={(e) => {
@@ -768,8 +811,27 @@ export default function PreVenda() {
                 linhas.map((l, i) => (
                   <div
                     key={i}
-                    onClick={() => setLinhaAtiva(i)}
-                    className={`grid cursor-pointer grid-cols-[64px_1fr_52px_72px_76px_20px] items-center gap-1 border-b border-gray-100 py-1.5 sm:grid-cols-[80px_1fr_60px_84px_84px_24px] ${linhaAtiva === i ? "bg-orange-100" : ""}`}
+                    role="group"
+                    tabIndex={0}
+                    aria-label={`Selecionar ${l.nome}, quantidade ${l.quantidade}`}
+                    aria-current={linhaAtiva === i ? "true" : undefined}
+                    onClick={() => ativarLinha(i)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        ativarLinha(i);
+                      } else if (e.key === "Delete") {
+                        e.preventDefault();
+                        removerLinha(i);
+                      } else if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        ativarLinha(Math.min(i + 1, linhas.length - 1));
+                      } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        ativarLinha(Math.max(i - 1, 0));
+                      }
+                    }}
+                    className={`grid cursor-pointer grid-cols-[64px_1fr_52px_72px_76px_20px] items-center gap-1 rounded border-b border-gray-100 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-orange-400 sm:grid-cols-[80px_1fr_60px_84px_84px_24px] ${linhaAtiva === i ? "bg-orange-100" : "hover:bg-orange-50"}`}
                   >
                     <span className="truncate text-xs">{l.sku || "#" + (i + 1)}</span>
                     <span className="truncate">{[l.nome, l.especificacao].filter(Boolean).join(" · ")}</span>
@@ -777,6 +839,9 @@ export default function PreVenda() {
                     <span className="hidden text-right text-xs sm:block">{fmtMoney(l.preco_unitario)}</span>
                     <span className="text-right font-semibold">{fmtMoney(l.subtotal)}</span>
                     <button
+                      type="button"
+                      aria-label={`Remover ${l.nome}`}
+                      title="Remover item (Delete)"
                       className="text-gray-400 hover:text-red-600"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -867,26 +932,27 @@ export default function PreVenda() {
 
       {/* ── Rodapé: atalhos + ações ───────────────────────── */}
       <footer className="safe-bottom flex flex-shrink-0 flex-wrap items-center gap-1.5 border-t border-gray-400 bg-[#f0f0f0] px-2 py-2 sm:gap-2 sm:px-4">
-        <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(5)}>
+        <span className="hidden text-[11px] text-gray-500 lg:inline">Ctrl+K pesquisa · ↑↓ navega · Enter seleciona · Delete remove</span>
+        <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(5)} aria-keyshortcuts="F5" title="F5">
           Limpar
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(6)}>
+        <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(6)} aria-keyshortcuts="F6" title="F6">
           Cliente
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(7)} disabled={!linhas.length} className="hidden sm:inline-flex">
+        <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(7)} disabled={!linhas.length} aria-keyshortcuts="F7" title="F7" className="hidden sm:inline-flex">
           Impressora
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(8)}>
+        <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(8)} aria-keyshortcuts="F8" title="F8">
           Localizar
         </Button>
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-          <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(2)} disabled={!linhas.length} className="hidden sm:inline-flex">
+          <Button size="sm" variant="ghost" onClick={() => void acaoAtalho(2)} disabled={!linhas.length} aria-keyshortcuts="F2" title="F2" className="hidden sm:inline-flex">
             Visualizar
           </Button>
-          <Button size="sm" variant="outline" onClick={() => void acaoAtalho(3)} disabled={!linhas.length || salvando}>
+          <Button size="sm" variant="outline" onClick={() => void acaoAtalho(3)} disabled={!linhas.length || salvando} aria-keyshortcuts="F3" title="F3">
             Salvar
           </Button>
-          <Button ref={salvarRef} variant="primary" onClick={() => void acaoAtalho(1)} disabled={!linhas.length || salvando}>
+          <Button ref={salvarRef} variant="primary" onClick={() => void acaoAtalho(1)} disabled={!linhas.length || salvando} aria-keyshortcuts="F1" title="F1">
             Finalizar
           </Button>
         </div>
