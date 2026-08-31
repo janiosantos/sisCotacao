@@ -6,7 +6,7 @@
 
 ## Instruções gerais
 - Contexto: ERP Casa LM (`ecommerce_scraper`), Flask + PostgreSQL 16 + React/Vite.
-- Testes: `pytest` (env `TEST_PG_URL=postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test`), 236 verdes hoje.
+- Testes: `pytest` (env `TEST_PG_URL=postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test`), 237 verdes hoje.
 - Ao corrigir: rodar `py_compile`, os testes do módulo tocado e a suíte completa.
 - Registrar o resultado ao final deste arquivo (seção "Resultado da análise").
 
@@ -76,12 +76,45 @@ Revisar a cadeia completa após as migrações 0093/0094/0096 (caminhos relativo
 | 5. Frontend | ⚠️ | Code-splitting, modularização, cache, validação runtime mínima e Error Boundary OK; permanecem virtualização e testes E2E. |
 | 6. Dados | ✅ | Outbox com claim/lease e baixa de pagamentos com conta+caixa na mesma transação. |
 
+### Auditoria RBAC — 2026-08-30
+
+**Status: ⚠️ requer correções antes da próxima release.** A cobertura atual valida
+que as 366 rotas `/api` possuem um recurso, mas não valida a ação efetiva nem a
+segregação de funções. Os achados prioritários são:
+
+1. **P1 — escalação de privilégio:** endpoints de criação/edição de usuários e
+   de atribuição de perfis/overrides permitem que qualquer papel com
+   `usuarios.editar` atribua Administrador ou conceda ações superiores, sem
+   limite pela alçada do ator.
+2. **P1 — emissão fiscal:** NFC-e/NF-e/Focus não possuem permissão explícita e
+   caem no genérico `orcamentos.cadastrar`; vendedor/operador podem alcançar a
+   emissão se as demais validações de negócio passarem.
+3. **P1 — fluxo de desconto:** rejeitar desconto não verifica
+   `orcamentos.aprovar`/`autoriza_desconto`, permitindo que perfis de venda
+   rejeitem solicitações fora da segregação esperada.
+4. **P1 — revogação pelo cadastro:** o formulário envia `perfil_ids: []` e
+   overrides vazios; o backend interpreta o primeiro como Vendedor e não limpa
+   o segundo, mantendo acessos que o administrador tentou remover.
+5. **P1/P2 — continuidade administrativa:** não há proteção transacional contra
+   remover/desativar todos os administradores, nem auditoria de alterações de
+   perfis, matriz e overrides.
+6. **P2 — sessão e tokens:** logout não revoga tokens HMAC de sete dias, e
+   registros de autoria usam `flask.session` em vários endpoints apesar da
+   autenticação ser Bearer.
+7. **P2 — UX de autorização:** o frontend filtra somente `visualizar`; ações
+   de cadastrar/editar/excluir/aprovar/configurar/imprimir continuam visíveis e
+   falham apenas depois no backend.
+
+Validação desta auditoria: `21 passed` em `test_permissao.py` +
+`test_hardening.py`; `34 passed` no frontend e `typecheck` concluído. Nenhuma
+alteração comportamental, migração, restart ou deploy foi executado.
+
 ### Achados prioritários desta revisão — situação
 
 1. **Resolvido:** baixa financeira, outbox, retry, healthcheck, TLS dedicado por porta, SSR do site, emissão concorrente e payload webhook.
 2. **Pendente:** validação live do webhook externo no staging e TLS/roteamento da produção permanecem operações separadas.
-3. **Pendente:** virtualização e testes E2E dos fluxos críticos do frontend; cache e validação runtime mínima já entregues.
+3. **Pendente:** corrigir os achados P1 do RBAC antes de publicar; depois cobrir ações sensíveis com testes de integração. Também permanecem virtualização e testes E2E dos fluxos críticos do frontend; cache e validação runtime mínima já entregues.
 
-Validação: `236 passed` no backend em banco dev isolado; `27 passed`, `typecheck` e `build` no frontend; build Astro do site passou e a home não contém produto demonstrativo. Nenhum deploy, restart ou migração não-dev foi executado.
+Validação anterior: `237 passed` no backend em banco dev isolado; `34 passed`, `typecheck` e `build` no frontend; build Astro do site passou e a home não contém produto demonstrativo. Nenhum deploy, restart ou migração não-dev foi executado.
 
 > Ao finalizar: atualize `CONTEXTO_SESSAO.md` (log + pendências) e faça commit/push.
