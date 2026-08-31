@@ -176,7 +176,7 @@ abertas) → desafio **DNS-01 via Cloudflare** (sem abrir porta).
 - **Correção de encoding**: arquivos com acentos corrompidos por `Set-Content`
   ANSI (double-encoding UTF-8→cp1252→UTF-8) foram restaurados e um fixer
   cp1252 por bytes eliminou o mojibake em todo o frontend (dry-run = 0).
-- **27 testes frontend** (era 13) + typecheck/build verdes.
+- **29 testes frontend** (era 13) + typecheck/build verdes; client HTTP com cache curto, invalidação após mutações e validação runtime mínima no catálogo.
 
 ## 4. Modelo de dados relevante
 

@@ -73,14 +73,14 @@ Revisar a cadeia completa após as migrações 0093/0094/0096 (caminhos relativo
 | 2. API pública | ✅ | CORS passou a aceitar somente origens configuradas; site não publica catálogo demonstrativo no SSR. |
 | 3. Imagens lote | ✅ | Fluxo passa na suíte; falta cobertura de sites reais/HTML dinâmico. |
 | 4. TLS/nginx | ✅ | Staging usa o certificado compartilhado em somente-leitura na porta dedicada `:444` para webhooks; healthcheck produtivo usa credenciais do ambiente. |
-| 5. Frontend | ⚠️ | Code-splitting, modularização e Error Boundary OK; permanecem schemas runtime, virtualização e testes E2E. |
+| 5. Frontend | ⚠️ | Code-splitting, modularização, cache, validação runtime mínima e Error Boundary OK; permanecem virtualização e testes E2E. |
 | 6. Dados | ✅ | Outbox com claim/lease e baixa de pagamentos com conta+caixa na mesma transação. |
 
 ### Achados prioritários desta revisão — situação
 
 1. **Resolvido:** baixa financeira, outbox, retry, healthcheck, TLS dedicado por porta, SSR do site, emissão concorrente e payload webhook.
 2. **Pendente:** validação live do webhook externo no staging e TLS/roteamento da produção permanecem operações separadas.
-3. **Pendente:** schemas runtime, virtualização e testes E2E dos fluxos críticos do frontend.
+3. **Pendente:** virtualização e testes E2E dos fluxos críticos do frontend; cache e validação runtime mínima já entregues.
 
 Validação: `236 passed` no backend em banco dev isolado; `27 passed`, `typecheck` e `build` no frontend; build Astro do site passou e a home não contém produto demonstrativo. Nenhum deploy, restart ou migração não-dev foi executado.
 

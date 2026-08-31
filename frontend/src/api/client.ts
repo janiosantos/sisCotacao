@@ -900,7 +900,17 @@ import { sinalizarFalhaConexao, sinalizarSucesso } from "../manutencao";
 
 let _apiToken: string | null =
   typeof sessionStorage !== "undefined" ? sessionStorage.getItem("sis_token") : null;
+
+const GET_CACHE_TTL_MS = 15_000;
+const getCache = new Map<string, { expiresAt: number; value: unknown }>();
+
+/** Limpa leituras locais após mutações ou troca de usuário. */
+export function limparCacheApi(): void {
+  getCache.clear();
+}
+
 export function setToken(t: string | null): void {
+  if (_apiToken !== t) limparCacheApi();
   _apiToken = t;
   if (typeof sessionStorage === "undefined") return;
   if (t) sessionStorage.setItem("sis_token", t);
@@ -918,6 +928,21 @@ const TIMEOUT_PADRAO_MS = 45000;
 
 interface RequestOpts {
   timeoutMs?: number;
+}
+
+function validarObjeto<T>(value: unknown, endpoint: string, campos: string[]): T {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    campos.some((campo) => !(campo in (value as Record<string, unknown>)))
+  ) {
+    // Uma resposta incompatível não deve ficar presa no cache e mascarar uma
+    // recuperação posterior do backend após rollout.
+    limparCacheApi();
+    throw new ApiError(502, `Resposta inválida da API (${endpoint})`, "contrato_invalido");
+  }
+  return value as T;
 }
 
 function sinalizarRes(res: Response): void {
@@ -959,6 +984,17 @@ async function request<T>(
       opts2.body = JSON.stringify(body);
     }
   }
+
+  const cacheKey = method === "GET" ? `${getToken() || "anon"}:${url}` : "";
+  if (method === "GET") {
+    const cached = getCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.value as T;
+    if (cached) getCache.delete(cacheKey);
+  } else {
+    // Evita que uma lista antiga sobreviva a qualquer cadastro/edição/exclusão.
+    limparCacheApi();
+  }
+
   let res: Response;
   try {
     res = await fetch(url, { ...opts2, signal: ctrl.signal });
@@ -993,7 +1029,11 @@ async function request<T>(
     throw err;
   }
   if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  const result = (await res.json()) as T;
+  if (method === "GET") {
+    getCache.set(cacheKey, { expiresAt: Date.now() + GET_CACHE_TTL_MS, value: result });
+  }
+  return result;
 }
 
 async function enviarArquivo<T>(
@@ -1056,7 +1096,9 @@ function qs(params: Record<string, unknown>): string {
 export const api = {
   // catálogo
   listarProdutos: (params: Record<string, unknown> = {}) =>
-    request<ListCatalogo>("GET", "/api/produtos" + qs(params)),
+    request<unknown>("GET", "/api/produtos" + qs(params)).then((value) =>
+      validarObjeto<ListCatalogo>(value, "/api/produtos", ["items", "total", "offset", "limit"])
+    ),
   resumoAbc: (params: Record<string, unknown> = {}) =>
     request<ResumoAbc>("GET", "/api/produtos/abc-resumo" + qs(params)),
   detalharProduto: (id: number) => request<ProdutoResumo>("GET", `/api/produtos/${id}`),
@@ -1145,7 +1187,9 @@ export const api = {
     request<{ ok: boolean }>("PUT", `/api/familias/${id}`, payload),
   excluirFamilia: (id: number) => request<{ ok: boolean }>("DELETE", `/api/familias/${id}`),
   listarProdutosCadastro: (params: Record<string, unknown> = {}) =>
-    request<ListaCadastro>("GET", "/api/produtos-cadastro" + qs(params)),
+    request<unknown>("GET", "/api/produtos-cadastro" + qs(params)).then((value) =>
+      validarObjeto<ListaCadastro>(value, "/api/produtos-cadastro", ["items", "total", "offset", "limit"])
+    ),
   detalharProdutoCadastro: (id: number) =>
     request<ProdutoCadastro>("GET", `/api/produtos-cadastro/${id}`),
   criarProdutoCadastro: (payload: ProdutoCadastroPayload) =>

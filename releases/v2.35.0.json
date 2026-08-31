@@ -19,6 +19,7 @@
     "Healthcheck de PostgreSQL usa POSTGRES_USER e POSTGRES_DB do ambiente",
     "Staging usa o certificado compartilhado em somente-leitura na porta TCP dedicada e usa imagens versionadas",
     "Rotas lazy do React protegidas por Error Boundary",
+    "Cliente HTTP com cache curto, invalidação em mutações e validação runtime mínima do catálogo",
     "Site Astro nao injeta catalogo demonstrativo no HTML gerado por SSR"
   ],
   "recursos": [

@@ -99,7 +99,8 @@ exclusao de arquivos e disparado automaticamente.
 
 ## 6. Frontend, performance e testes E2E
 
-- **Status:** [x] modularizacao concluida; **divida residual** (performance/E2E).
+- **Status:** [x] modularizacao, cache e validacao runtime minima concluidos;
+  **divida residual** (virtualizacao/E2E).
 - **Escopo:** modularizar telas grandes, adicionar cache/query client e schemas
   runtime, virtualizar tabelas extensas e ampliar testes de fluxos criticos.
 - **Pre-requisitos:** definir contrato de erro da API e paginas prioritarias:
@@ -112,10 +113,11 @@ exclusao de arquivos e disparado automaticamente.
   posvenda, bancos, atualizacoes, historico, dashboard, clientes, fornecedores,
   usuarios, perfis, unidades, vendedores, plano_contas, solicitacoes,
   diagnostico_variacoes). Contrato de erro `ApiError` + `mensagemErro`.
-  **27 testes frontend** (era 13) + typecheck/build verdes. Corrigido mojibake
+  **29 testes frontend** (era 13) + typecheck/build verdes. Corrigido mojibake
   (double-encoding cp1252) em todo o frontend (dry-run = 0).
-  **Divida residual do P6:** query client/cache, schemas runtime, virtualizacao
-  de tabelas extensas e testes E2E de fluxos criticos.
+  **Divida residual do P6:** virtualizacao de tabelas extensas e testes E2E de
+  fluxos criticos. Cache curto/invalidação e validacao minima de contrato foram
+  implementados no client HTTP.
 
 ## 7. TLS e sincronizacao de ambientes
 

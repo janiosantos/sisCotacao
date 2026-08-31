@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, mensagemErro } from "../src/api/client";
+import { api, ApiError, limparCacheApi, mensagemErro } from "../src/api/client";
 
 // Contrato de erro da API (P6): toda falha lança ApiError com status/code.
 
@@ -15,6 +15,7 @@ function res(status: number, body: unknown, extra?: Record<string, string>) {
 
 beforeEach(() => {
   fetchMock.mockReset();
+  limparCacheApi();
 });
 
 describe("request", () => {
@@ -23,6 +24,21 @@ describe("request", () => {
     const r = await api.listarPagar({});
     expect(Array.isArray(r)).toBe(true);
     expect(r).toHaveLength(1);
+  });
+
+  it("reutiliza GET no cache curto e invalida após mutação", async () => {
+    fetchMock
+      .mockResolvedValueOnce(res(200, [{ id: 1 }]))
+      .mockResolvedValueOnce(res(200, { id: 2 }))
+      .mockResolvedValueOnce(res(200, [{ id: 1 }, { id: 2 }]));
+
+    await api.listarPagar({});
+    await api.listarPagar({});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await api.criarCliente({ nome: "Cliente cache" });
+    await api.listarPagar({});
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("lança ApiError com status/code/details em 4xx", async () => {
@@ -38,6 +54,14 @@ describe("request", () => {
       expect(err.message).toBe("Limite excedido");
       expect(err.details?.error).toBe("Limite excedido");
     }
+  });
+
+  it("rejeita resposta de lista sem o contrato mínimo", async () => {
+    fetchMock.mockResolvedValue(res(200, { items: [] }));
+    await expect(api.listarProdutosCadastro()).rejects.toMatchObject({
+      status: 502,
+      code: "contrato_invalido",
+    });
   });
 
   it("lança ApiError com status em 5xx", async () => {
