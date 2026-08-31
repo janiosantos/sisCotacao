@@ -46,6 +46,15 @@ def _to_float(value):
         return None
 
 
+def _to_int(value):
+    try:
+        if value in (None, ""):
+            return None
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
 def _list_atributos(conn, familia_id: int) -> list[dict]:
     rows = conn.execute(
         "SELECT * FROM familia_atributos WHERE familia_id=? ORDER BY ordem, id",
@@ -323,8 +332,9 @@ class ProdutoRepository:
                 " (familia_id, nome, marca, marca_id, descricao, termos_busca, categoria_id, subcategoria_id, external_id, grupo_id, subgrupo_id,"
                 "  sku, ean, preco, preco_promocional, old_price, pix_price, custo_unitario, preco_venda, ncm,"
                 "  peso, dimensoes, unidade_venda, embalagem, fator_conversao, localizacao, unidade_tributavel,"
-                "  atributos)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "  atributos, bitola, tensao, potencia, comprimento, diametro, rosca, material, cor, norma,"
+                "  validade_dias, garantia_dias)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     familia_id,
                     nome,
@@ -354,6 +364,17 @@ class ProdutoRepository:
                     dados.get("localizacao") or "",
                     (dados.get("unidade_tributavel") or "").strip(),
                     json.dumps({str(k): str(v) for k, v in atributos.items() if v not in (None, "")}, ensure_ascii=False),
+                    (dados.get("bitola") or "").strip(),
+                    (dados.get("tensao") or "").strip(),
+                    (dados.get("potencia") or "").strip(),
+                    (dados.get("comprimento") or "").strip(),
+                    (dados.get("diametro") or "").strip(),
+                    (dados.get("rosca") or "").strip(),
+                    (dados.get("material") or "").strip(),
+                    (dados.get("cor") or "").strip(),
+                    (dados.get("norma") or "").strip(),
+                    _to_int(dados.get("validade_dias")),
+                    _to_int(dados.get("garantia_dias")),
                 ),
             )
             produto_id = cur.lastrowid
@@ -405,6 +426,8 @@ class ProdutoRepository:
                 " sku=?, ean=?, preco=?, preco_promocional=?, old_price=?, pix_price=?, custo_unitario=?, preco_venda=?,"
                 " ncm=COALESCE(NULLIF(?, ''), ncm), peso=?, dimensoes=?, unidade_venda=?, embalagem=?,"
                 " fator_conversao=?, localizacao=?, unidade_tributavel=?, atributos=?,"
+                " bitola=?, tensao=?, potencia=?, comprimento=?, diametro=?, rosca=?, material=?, cor=?, norma=?,"
+                " validade_dias=?, garantia_dias=?,"
                 " atualizado_em=datetime('now') WHERE id=?",
                 (
                     familia_id,
@@ -435,6 +458,17 @@ class ProdutoRepository:
                     dados.get("localizacao") or "",
                     (dados.get("unidade_tributavel") or "").strip(),
                     json.dumps({str(k): str(v) for k, v in atributos.items() if v not in (None, "")}, ensure_ascii=False),
+                    (dados.get("bitola") or "").strip(),
+                    (dados.get("tensao") or "").strip(),
+                    (dados.get("potencia") or "").strip(),
+                    (dados.get("comprimento") or "").strip(),
+                    (dados.get("diametro") or "").strip(),
+                    (dados.get("rosca") or "").strip(),
+                    (dados.get("material") or "").strip(),
+                    (dados.get("cor") or "").strip(),
+                    (dados.get("norma") or "").strip(),
+                    _to_int(dados.get("validade_dias")),
+                    _to_int(dados.get("garantia_dias")),
                     produto_id,
                 ),
             )

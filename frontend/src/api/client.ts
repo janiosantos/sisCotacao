@@ -807,6 +807,17 @@ export interface ProdutoCadastro {
   lucro_total_estimado?: number | null;
   em_linha?: number | null;
   status_cadastro?: string | null;
+  bitola?: string;
+  tensao?: string;
+  potencia?: string;
+  comprimento?: string;
+  diametro?: string;
+  rosca?: string;
+  material?: string;
+  cor?: string;
+  norma?: string;
+  validade_dias?: number | null;
+  garantia_dias?: number | null;
 }
 
 export interface VarianteCadastroPayload {
@@ -856,6 +867,18 @@ export interface ProdutoCadastroPayload {
   fator_conversao?: number | null;
   localizacao?: string;
   unidade_tributavel?: string;
+  // Atributos técnicos do ramo (MDM-004) — colunas relacionais para filtro/tributação.
+  bitola?: string;
+  tensao?: string;
+  potencia?: string;
+  comprimento?: string;
+  diametro?: string;
+  rosca?: string;
+  material?: string;
+  cor?: string;
+  norma?: string;
+  validade_dias?: number | null;
+  garantia_dias?: number | null;
   // Valores de atributos por NOME (modelo unificado).
   atributos?: Record<string, string>;
 }

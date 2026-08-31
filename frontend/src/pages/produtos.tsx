@@ -47,6 +47,17 @@ interface DadosOperacionais {
   localizacao: string;
   ncm: string;
   unidade_tributavel: string;
+  bitola: string;
+  tensao: string;
+  potencia: string;
+  comprimento: string;
+  diametro: string;
+  rosca: string;
+  material: string;
+  cor: string;
+  norma: string;
+  validade_dias: string;
+  garantia_dias: string;
 }
 
 const DADOS_INICIAIS: DadosOperacionais = {
@@ -62,6 +73,17 @@ const DADOS_INICIAIS: DadosOperacionais = {
   localizacao: "",
   ncm: "",
   unidade_tributavel: "",
+  bitola: "",
+  tensao: "",
+  potencia: "",
+  comprimento: "",
+  diametro: "",
+  rosca: "",
+  material: "",
+  cor: "",
+  norma: "",
+  validade_dias: "",
+  garantia_dias: "",
 };
 
 interface FornecedorRow {
@@ -1062,6 +1084,17 @@ export function ProdutoEditor() {
       localizacao: dados.localizacao || "",
       ncm: dados.ncm || "",
       unidade_tributavel: dados.unidade_tributavel || "",
+      bitola: dados.bitola || "",
+      tensao: dados.tensao || "",
+      potencia: dados.potencia || "",
+      comprimento: dados.comprimento || "",
+      diametro: dados.diametro || "",
+      rosca: dados.rosca || "",
+      material: dados.material || "",
+      cor: dados.cor || "",
+      norma: dados.norma || "",
+      validade_dias: dados.validade_dias !== "" ? Number(dados.validade_dias) : null,
+      garantia_dias: dados.garantia_dias !== "" ? Number(dados.garantia_dias) : null,
       atributos: valores,
     };
     try {
@@ -1415,6 +1448,48 @@ export function ProdutoEditor() {
             </table>
           </div>
 
+          <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+            <h4 className="mb-1 text-sm font-semibold text-gray-900">Atributos técnicos do ramo</h4>
+            <p className="mb-3 text-xs text-gray-500">
+              Campos estruturais para filtro, tributação e integração (MDM-004). Não substituem a descrição comercial.
+            </p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              <Field label="Bitola / tamanho">
+                <Input value={dados.bitola} onChange={(e) => setDados((d) => ({ ...d, bitola: e.target.value }))} placeholder="2,5mm²" />
+              </Field>
+              <Field label="Tensão">
+                <Input value={dados.tensao} onChange={(e) => setDados((d) => ({ ...d, tensao: e.target.value }))} placeholder="220V" />
+              </Field>
+              <Field label="Potência">
+                <Input value={dados.potencia} onChange={(e) => setDados((d) => ({ ...d, potencia: e.target.value }))} placeholder="10W" />
+              </Field>
+              <Field label="Comprimento">
+                <Input value={dados.comprimento} onChange={(e) => setDados((d) => ({ ...d, comprimento: e.target.value }))} placeholder="100m" />
+              </Field>
+              <Field label="Diâmetro (Ø)">
+                <Input value={dados.diametro} onChange={(e) => setDados((d) => ({ ...d, diametro: e.target.value }))} placeholder="1/2" />
+              </Field>
+              <Field label="Rosca">
+                <Input value={dados.rosca} onChange={(e) => setDados((d) => ({ ...d, rosca: e.target.value }))} placeholder="M8 / 1/4" />
+              </Field>
+              <Field label="Material">
+                <Input value={dados.material} onChange={(e) => setDados((d) => ({ ...d, material: e.target.value }))} placeholder="Cobre / Aço" />
+              </Field>
+              <Field label="Cor">
+                <Input value={dados.cor} onChange={(e) => setDados((d) => ({ ...d, cor: e.target.value }))} placeholder="Azul" />
+              </Field>
+              <Field label="Norma">
+                <Input value={dados.norma} onChange={(e) => setDados((d) => ({ ...d, norma: e.target.value }))} placeholder="NBR 6880" />
+              </Field>
+              <Field label="Validade (dias)">
+                <Input type="number" min={0} value={dados.validade_dias} onChange={(e) => setDados((d) => ({ ...d, validade_dias: e.target.value }))} placeholder="—" />
+              </Field>
+              <Field label="Garantia (dias)">
+                <Input type="number" min={0} value={dados.garantia_dias} onChange={(e) => setDados((d) => ({ ...d, garantia_dias: e.target.value }))} placeholder="—" />
+              </Field>
+            </div>
+          </div>
+
           {atributos.length > 0 && (
             <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
               <h4 className="mb-1 text-sm font-semibold text-gray-900">Valores dos atributos da família</h4>
@@ -1668,6 +1743,17 @@ function buildAtributosState(familias: Familia[], familiaId: number | null, prod
       localizacao: produto.localizacao ?? "",
       ncm: produto.ncm ?? "",
       unidade_tributavel: produto.unidade_tributavel ?? "",
+      bitola: produto.bitola ?? "",
+      tensao: produto.tensao ?? "",
+      potencia: produto.potencia ?? "",
+      comprimento: produto.comprimento ?? "",
+      diametro: produto.diametro ?? "",
+      rosca: produto.rosca ?? "",
+      material: produto.material ?? "",
+      cor: produto.cor ?? "",
+      norma: produto.norma ?? "",
+      validade_dias: produto.validade_dias?.toString() ?? "",
+      garantia_dias: produto.garantia_dias?.toString() ?? "",
     };
     valores = produto.atributos_valores ?? {};
   }
