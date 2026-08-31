@@ -703,7 +703,12 @@ export default function PreVenda() {
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  if (sugestoes.length > 0) adicionar(sugestoes[focoLista >= 0 ? focoLista : 0]);
+                  if (sugestoes.length > 0) {
+                    adicionar(sugestoes[focoLista >= 0 ? focoLista : 0]);
+                  } else if (!busca.trim()) {
+                    descontoRef.current?.focus();
+                    descontoRef.current?.select();
+                  }
                 } else if (e.key === "ArrowDown") {
                   e.preventDefault();
                   setFocoLista((f) => (sugestoes.length ? (f + 1) % sugestoes.length : -1));
@@ -745,7 +750,8 @@ export default function PreVenda() {
             )}
           </div>
           <p className="mx-auto max-w-2xl text-center text-[11px] text-gray-500">
-            Digite <b>quantidade*produto</b> para lançar várias unidades. Use ↑ ↓, Home/End e Enter para escolher sem o mouse.
+            Digite <b>quantidade*produto</b> para lançar várias unidades. Com a descrição vazia, Enter inicia o fluxo de desconto e pagamento.
+            Use ↑ ↓, Home/End e Enter para escolher sem o mouse.
           </p>
           <h1 className="py-1 text-center text-2xl font-bold text-black">{linhaAtual?.nome || "Informe um produto para iniciar a venda"}</h1>
           {linhaAtual?.especificacao ? (
@@ -901,7 +907,7 @@ export default function PreVenda() {
               </option>
             ))}
           </select>
-          <span className="hidden font-semibold text-gray-600 sm:inline">Obs</span>
+          <span className="font-semibold text-gray-600">Observação</span>
           <input
             ref={obsRef}
             value={obs}
@@ -912,7 +918,9 @@ export default function PreVenda() {
                 salvarRef.current?.focus();
               }
             }}
-            className="hidden min-w-40 flex-1 rounded border border-gray-300 px-2 py-1 text-sm sm:block"
+            aria-label="Observação do orçamento"
+            placeholder="Observação (opcional)"
+            className="min-w-40 flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
           />
         </div>
 

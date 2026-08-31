@@ -1,0 +1,35 @@
+{
+  "versao": "v2.37.1",
+  "componentes": [
+    "frontend"
+  ],
+  "correcoes": [
+    "Enter no campo de produto vazio inicia o fluxo de fechamento do PDV",
+    "Evita que o foco do teclado avance para uma observacao escondida em telas pequenas"
+  ],
+  "melhorias": [
+    "Fluxo de teclado Desconto -> Condicao de pagamento -> Observacao -> Finalizar"
+  ],
+  "recursos": [],
+  "imagens": {
+    "backend": "siscom-backend:v2.37.1",
+    "frontend": "siscom-frontend:v2.37.1"
+  },
+  "database": {
+    "migration": null
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "pre_venda_enter_flow": true,
+    "database_change": false
+  },
+  "rollback": {
+    "application": "Retornar a imagem frontend v2.37.0; nao ha alteracao de backend ou schema.",
+    "database": "Nenhuma migration nesta release; manter o schema atual."
+  }
+}
