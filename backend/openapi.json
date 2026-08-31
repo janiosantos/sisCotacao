@@ -2874,6 +2874,115 @@
           }
         }
       }
+    },
+    "/api/produtos/importar/preview": {
+      "post": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "Simula a importa??o em lote de produtos (valida??o por linha, sem gravar)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "itens": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pr?via: total, erros e linhas"
+          }
+        }
+      }
+    },
+    "/api/produtos/importar": {
+      "post": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "Importa produtos em lote (idempotente por hash; cria novos como rascunho; dedup por SKU/EAN/nome+marca)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "arquivo_nome": {
+                    "type": "string"
+                  },
+                  "itens": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado do lote (criados, atualizados, erros, duplicado)"
+          }
+        }
+      }
+    },
+    "/api/produtos-cadastro/{produto_id}/status": {
+      "patch": {
+        "tags": [
+          "produtos"
+        ],
+        "summary": "Altera o status de cadastro do produto (rascunho/em_revisao/publicado/bloqueado)",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status_cadastro": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status alterado (publicado = ativo)"
+          },
+          "400": {
+            "description": "Status/transi??o inv?lida"
+          },
+          "404": {
+            "description": "Produto n?o encontrado"
+          }
+        }
+      }
     }
   },
   "components": {

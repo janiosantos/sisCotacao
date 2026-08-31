@@ -16,6 +16,7 @@ from catalog_server.services import imagens_lote
 from catalog_server.services import sku_service
 from catalog_server.services import unidade_conversao as conv_svc
 from catalog_server.services import produto_identificador as ident_svc
+from catalog_server.services import cadastro_importacao as cadastro_svc
 from catalog_server.db import system_conn
 from catalog_server.utils import image_url
 
@@ -763,3 +764,42 @@ def buscar_por_codigo():
     q = request.args.get("q") or ""
     limite = int(request.args.get("limite") or 20)
     return jsonify({"produtos": ident_svc.buscar(q, limite)})
+
+
+# ----------------------------------------------------------------------
+# Workflow de cadastro e importação em lote (MDM-006)
+# ----------------------------------------------------------------------
+
+
+@api_produtos_bp.post("/api/produtos/importar/preview")
+def preview_importacao():
+    data = request.get_json(silent=True) or {}
+    itens = data.get("itens") or []
+    if not isinstance(itens, list):
+        return jsonify({"error": "itens deve ser uma lista", "code": "importacao_invalida"}), 400
+    if len(itens) > 1000:
+        return jsonify({"error": "máximo de 1000 linhas por lote", "code": "importacao_limite"}), 400
+    return jsonify(cadastro_svc.preview(itens))
+
+
+@api_produtos_bp.post("/api/produtos/importar")
+def importar_produtos():
+    data = request.get_json(silent=True) or {}
+    itens = data.get("itens") or []
+    if not isinstance(itens, list) or not itens:
+        return jsonify({"error": "itens deve ser uma lista não vazia", "code": "importacao_invalida"}), 400
+    if len(itens) > 1000:
+        return jsonify({"error": "máximo de 1000 linhas por lote", "code": "importacao_limite"}), 400
+    return jsonify(cadastro_svc.importar(itens, data.get("arquivo_nome"), _usuario_atual()))
+
+
+@api_produtos_bp.patch("/api/produtos-cadastro/<int:produto_id>/status")
+def alterar_status_cadastro(produto_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        novo = cadastro_svc.set_status_cadastro(produto_id, data.get("status_cadastro") or "", _usuario_atual())
+    except LookupError:
+        return jsonify({"error": "Produto não encontrado", "code": "produto_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "status_invalido"}), 400
+    return jsonify({"ok": True, "status_cadastro": novo})

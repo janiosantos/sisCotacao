@@ -806,6 +806,7 @@ export interface ProdutoCadastro {
   valor_agregado?: string | null;
   lucro_total_estimado?: number | null;
   em_linha?: number | null;
+  status_cadastro?: string | null;
 }
 
 export interface VarianteCadastroPayload {
@@ -1356,6 +1357,22 @@ export const api = {
     request("DELETE", `/api/produtos-cadastro/${produtoId}/identificadores/${identificadorId}`),
   buscarPorCodigo: (q: string) =>
     request<{ produtos: { id: number; nome: string; sku: string; ean: string }[] }>("GET", "/api/produtos/por-codigo" + qs({ q })),
+
+  // Workflow de cadastro e importação em lote (MDM-006)
+  previewImportacaoProdutos: (itens: Record<string, unknown>[]) =>
+    request<{ total: number; erros: number; linhas: { linha: number; status: string; motivo?: string }[] }>(
+      "POST",
+      "/api/produtos/importar/preview",
+      { itens }
+    ),
+  importarProdutos: (itens: Record<string, unknown>[], arquivo_nome?: string) =>
+    request<{ id: number; duplicado: boolean; total: number; criados: number; atualizados: number; erros: number }>(
+      "POST",
+      "/api/produtos/importar",
+      { itens, arquivo_nome }
+    ),
+  alterarStatusCadastro: (produtoId: number, status_cadastro: string) =>
+    request<{ ok: boolean; status_cadastro: string }>("PATCH", `/api/produtos-cadastro/${produtoId}/status`, { status_cadastro }),
 
   // base do ERP — clientes, vendedores, usuários e plano de contas
   listarClientes: (somenteAtivos = false, vendedorId?: number) =>

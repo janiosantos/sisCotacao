@@ -29,6 +29,8 @@ import { Imagens } from "./produtos/imagens";
 import { PerfilFiscalPanel } from "./produtos/perfil-fiscal-panel";
 import { Conversoes } from "./produtos/conversoes";
 import { Identificadores } from "./produtos/identificadores";
+import { ModalImportarLote } from "./produtos/modal-importar-lote";
+import { StatusCadastro } from "./produtos/status-cadastro";
 
 const PAGE = 60;
 
@@ -128,6 +130,7 @@ export default function Produtos() {
   const [modalUrl, setModalUrl] = useState(false);
   const [modalEtiquetas, setModalEtiquetas] = useState(false);
   const [modalImportar, setModalImportar] = useState(false);
+  const [modalImportarLote, setModalImportarLote] = useState(false);
   const [loteProduto, setLoteProduto] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -246,6 +249,9 @@ export default function Produtos() {
         <Button variant="outline" onClick={() => setModalImportar(true)}>
           Importar catálogo
         </Button>
+        <Button variant="outline" onClick={() => setModalImportarLote(true)}>
+          Importar lote
+        </Button>
         <Button variant="outline" onClick={() => setModalUrl(true)}>
           Novo via URL
         </Button>
@@ -335,6 +341,7 @@ export default function Produtos() {
       <ModalFamilias familias={familias} open={modalFamilias} onClose={() => setModalFamilias(false)} onChanged={carregarFamilias} />
       <ModalImportarUrl open={modalUrl} onClose={() => setModalUrl(false)} />
       <ModalImportarCatalogo open={modalImportar} onClose={() => setModalImportar(false)} />
+      <ModalImportarLote open={modalImportarLote} onClose={() => setModalImportarLote(false)} />
       <ModalEtiquetas open={modalEtiquetas} onClose={() => setModalEtiquetas(false)} />
       {loteProduto != null && (
         <ModalImagensLote
@@ -1179,6 +1186,7 @@ export function ProdutoEditor() {
         subtitle="Cadastre o produto uma vez; as variações são geradas pelas combinações dos atributos."
         actions={
           <div className="flex gap-2">
+            {produto && id ? <StatusCadastro produtoId={id} inicial={produto.status_cadastro} /> : null}
             {produto && (
               <Button variant="ghost" onClick={duplicar}>⧉ Duplicar</Button>
             )}
