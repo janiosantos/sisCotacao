@@ -31,6 +31,31 @@ REGISTRADAS: dict[str, str] = {
         "rotas + permissões por recurso/ação. Desligar restaura o "
         "comportamento anterior (tudo liberado para autenticados)"
     ),
+    "MOTOR_COMPRAS": (
+        "Habilita o motor de reposição (COM-004): sugestões de compra "
+        "calculadas por disponibilidade projetada, demanda e política. "
+        "Desligado = mantém a visão simplificada atual"
+    ),
+    "ABC_HISTORICA": (
+        "Usa a curva ABC calculada por período histórico (valor de consumo, "
+        "receita, margem, quantidade ou frequência) em vez da ABC estimada "
+        "inicial. Desligado = ABC estimada identificada como bootstrap"
+    ),
+    "CUSTO_HISTORICO": (
+        "Persiste e utiliza o custo do momento em movimentos e margens "
+        "(valorização por data de corte), conforme o método de custo aprovado. "
+        "Desligado = usa o custo atual do produto"
+    ),
+    "ENTRADA_FISCAL": (
+        "Habilita o fluxo de entrada fiscal por XML (REC-004/FIS-006): "
+        "matching, conferência e postagem de nota de entrada. "
+        "Desligado = recebimento simplificado atual"
+    ),
+    "NOVO_RECEBIMENTO": (
+        "Habilita o documento de recebimento profissional (REC-001..003): "
+        "conferência parcial, três vias e postagem transacional. "
+        "Desligado = recebimento simplificado atual"
+    ),
 }
 
 _TTL = 30.0  # segundos
