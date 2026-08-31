@@ -1,0 +1,35 @@
+{
+  "versao": "v2.37.2",
+  "componentes": [
+    "frontend"
+  ],
+  "correcoes": [
+    "Preserva o foco do login no modal de autorizacao durante a digitacao",
+    "Mantem o trap de teclado e a restauracao do foco sem reiniciar a cada renderizacao"
+  ],
+  "melhorias": [
+    "Teste de regressao para foco em formularios modais"
+  ],
+  "recursos": [],
+  "imagens": {
+    "backend": "siscom-backend:v2.37.2",
+    "frontend": "siscom-frontend:v2.37.2"
+  },
+  "database": {
+    "migration": null
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "modal_focus_stability": true,
+    "database_change": false
+  },
+  "rollback": {
+    "application": "Retornar a imagem frontend v2.37.1; nao ha alteracao de backend ou schema.",
+    "database": "Nenhuma migration nesta release; manter o schema atual."
+  }
+}
