@@ -292,6 +292,27 @@ def test_admin_passacheck_no_gate(system_db):
     assert r.status_code == 404
 
 
+def test_admin_pode_cadastrar_cliente_pelo_pdv(system_db):
+    """O superusuário Administrador passa o gate do cadastro rápido do PDV."""
+    from catalog_server import auth_token
+    from catalog_server.app_factory import create_app
+
+    uid = _criar_usuario("gateadmcliente")
+    _vincular(uid, "Administrador")
+    app = create_app()
+    c = app.test_client()
+    tok = auth_token.criar_token({"id": uid, "login": "gateadmcliente"})
+
+    r = c.post(
+        "/api/clientes",
+        json={"nome": "Cliente criado pelo teste", "doc": "12345678909"},
+        headers={"Authorization": f"Bearer {tok}"},
+    )
+
+    assert r.status_code == 201, r.get_json()
+    assert r.get_json()["id"] > 1
+
+
 def test_webhook_publico_sem_token(system_db):
     """Webhook Tecnospeed é público (sem token) — whitelist de auth."""
     from catalog_server.app_factory import create_app

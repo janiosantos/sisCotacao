@@ -49,7 +49,10 @@ export class ApiError extends Error {
 
 /** Formata o erro para toast/UI: mensagem amigável, sem expor detalhes internos. */
 export function mensagemErro(e: unknown): string {
-  if (e instanceof ApiError) return e.message || `Erro ${e.status}`;
+  if (e instanceof ApiError) {
+    if (e.status === 401) return "Sua sessão expirou. Faça login novamente.";
+    return e.message || `Erro ${e.status}`;
+  }
   if (e instanceof Error) return e.message;
   return String(e);
 }
@@ -1007,14 +1010,6 @@ async function request<T>(
   window.clearTimeout(t);
   sinalizarRes(res);
   if (!res.ok) {
-    if (res.status === 401) {
-      // Só força re-login se HAVIA token (expirou). Sem token, deixa o erro
-      // propagar para que o gate de sessão mostre a tela de login (evita loop).
-      if (getToken()) {
-        setToken(null);
-        location.reload();
-      }
-    }
     let detail = res.statusText;
     let code: string | undefined;
     let json: Record<string, unknown> = {};
@@ -1025,7 +1020,21 @@ async function request<T>(
     } catch {
       /* resposta não-JSON */
     }
-    const err = new ApiError(res.status, detail, code, json);
+    const err = new ApiError(
+      res.status,
+      res.status === 401 ? "Sua sessão expirou. Faça login novamente." : detail,
+      code,
+      json,
+    );
+    if (res.status === 401) {
+      // Só força re-login se HAVIA token (expirou). Sem token, deixa o erro
+      // propagar para que o gate de sessão mostre a tela de login (evita loop).
+      // A navegação é agendada para que o chamador consiga tratar o ApiError.
+      if (getToken()) {
+        setToken(null);
+        window.setTimeout(() => window.location.reload(), 0);
+      }
+    }
     throw err;
   }
   if (res.status === 204) return undefined as T;

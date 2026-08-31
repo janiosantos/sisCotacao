@@ -109,15 +109,21 @@ class ClienteRepository:
         """
         with system_conn() as conn:
             row = conn.execute("SELECT id FROM clientes WHERE id = 1").fetchone()
-            if row is not None:
-                return 1
+            if row is None:
+                conn.execute(
+                    "INSERT INTO clientes"
+                    " (id, nome, tipo_pessoa, doc, email, telefone, whatsapp, endereco,"
+                    "  cidade, uf, cep, vendedor_id, limite_credito, observacoes,"
+                    "  contribuinte, ie, c_municipio, ativo)"
+                    " VALUES (1, 'CONSUMIDOR', 'f', NULL, NULL, NULL, NULL, NULL,"
+                    "  NULL, NULL, NULL, NULL, 0, NULL, '', '', '', 1)"
+                )
+            # O id 1 é inserido explicitamente, portanto o BIGSERIAL não
+            # avança sozinho. Sem este ajuste, o primeiro cliente real tenta
+            # reutilizar a chave 1 e falha com UniqueViolation.
             conn.execute(
-                "INSERT INTO clientes"
-                " (id, nome, tipo_pessoa, doc, email, telefone, whatsapp, endereco,"
-                "  cidade, uf, cep, vendedor_id, limite_credito, observacoes,"
-                "  contribuinte, ie, c_municipio, ativo)"
-                " VALUES (1, 'CONSUMIDOR', 'f', NULL, NULL, NULL, NULL, NULL,"
-                "  NULL, NULL, NULL, NULL, 0, NULL, '', '', '', 1)"
+                "SELECT setval(pg_get_serial_sequence('clientes', 'id'),"
+                " GREATEST((SELECT COALESCE(MAX(id), 1) FROM clientes), 1), true)"
             )
             return 1
 

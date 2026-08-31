@@ -1,6 +1,6 @@
 // pages/pre-venda/modal-cadastro-cliente.tsx — cadastro rápido de cliente no PDV.
 import { useState } from "react";
-import { api, type Cliente } from "../../api/client";
+import { api, mensagemErro, type Cliente } from "../../api/client";
 import { toast } from "../../ui/dom";
 import { Button, Field, Input, Modal } from "../../ui/ui";
 
@@ -49,7 +49,7 @@ export function ModalCadastroCliente({
       onClose();
       onSaved({ id: res.id, nome: nome.trim(), doc: doc.trim(), tipo_pessoa: "f", email: "", telefone: "", whatsapp: wpp.trim(), endereco: "", cidade: cid.trim(), uf: uf.trim().toUpperCase(), cep: "", vendedor_id: null, vendedor_nome: null, limite_credito: 0, observacoes: "", ativo: true } as Cliente);
     } catch (e) {
-      toast("Erro: " + (e as Error).message, "error");
+      toast("Erro: " + mensagemErro(e), "error");
     }
   };
 

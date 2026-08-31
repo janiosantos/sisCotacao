@@ -6,7 +6,7 @@ import secrets
 import psycopg
 from flask import Flask, abort, request, send_from_directory
 from sqlalchemy.exc import OperationalError as SAOperationalError
-from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
 from catalog_server import auth_token, config
 from catalog_server.blueprints import (
@@ -214,6 +214,17 @@ def create_app() -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MAX_CONTENT_LENGTH", str(25 * 1024 * 1024)))
 
     app.secret_key = config.SECRET_KEY
+
+    @app.errorhandler(HTTPException)
+    def erro_http_api(e: HTTPException):
+        """Mantém os erros HTTP da API em um contrato JSON estável."""
+        if not request.path.startswith("/api/"):
+            return e
+        status = e.code or 500
+        return {
+            "error": e.description or e.name,
+            "code": e.name.lower().replace(" ", "_"),
+        }, status
 
     # A busca usa ILIKE + pg_trgm sobre produtos_cadastro (índices criados na
     # migração 0091) — não há mais índice derivado (produtos_fts) a reconstruir.
