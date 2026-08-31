@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import base64
+import time
 
 import pytest
 
@@ -390,6 +392,22 @@ def test_logout_revoga_token_emitido(system_db):
     assert client.get("/api/usuarios/atual", headers=headers).status_code == 200
     assert client.post("/api/logout", headers=headers).status_code == 200
     assert client.get("/api/usuarios/atual", headers=headers).status_code == 401
+
+
+def test_token_legado_sem_versao_e_rejeitado(system_db):
+    uid = _criar_usuario("tokenlegado")
+    _vincular(uid, "Administrador")
+    from catalog_server import auth_token
+    from catalog_server.app_factory import create_app
+
+    payload = {"sub": uid, "login": "tokenlegado", "exp": int(time.time()) + 300}
+    data = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    token = f"{data}.{auth_token._sign(data)}"
+    response = create_app().test_client().get(
+        "/api/usuarios/atual",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401
 
 
 def test_admin_nao_pode_remover_a_propria_ultima_conta_ativa(system_db):

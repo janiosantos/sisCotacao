@@ -411,7 +411,7 @@ def create_app() -> Flask:
                 ).fetchone()
             if not ativo or not ativo["ativo"]:
                 abort(401, description="Usuário inativo ou inexistente")
-            if int(payload.get("ver") or 0) != int(ativo["token_version"] or 0):
+            if "ver" not in payload or int(payload["ver"]) != int(ativo["token_version"] or 0):
                 abort(401, description="Token revogado")
             request.usuario = payload
             return
@@ -428,7 +428,7 @@ def create_app() -> Flask:
             ).fetchone()
         if not ativo or not ativo["ativo"]:
             abort(401, description="Usuário inativo ou inexistente")
-        if int(payload.get("ver") or 0) != int(ativo["token_version"] or 0):
+        if "ver" not in payload or int(payload["ver"]) != int(ativo["token_version"] or 0):
             abort(401, description="Token revogado")
         request.usuario = payload
         _autorizar_acesso()

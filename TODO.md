@@ -6,7 +6,7 @@
 
 ## Instruções gerais
 - Contexto: ERP Casa LM (`ecommerce_scraper`), Flask + PostgreSQL 16 + React/Vite.
-- Testes: `pytest` (env `TEST_PG_URL=postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test`), 247 verdes hoje.
+- Testes: `pytest` (env `TEST_PG_URL=postgresql+psycopg://catalog:catalog@localhost:5432/catalog_test`), 248 verdes hoje.
 - Ao corrigir: rodar `py_compile`, os testes do módulo tocado e a suíte completa.
 - Registrar o resultado ao final deste arquivo (seção "Resultado da análise").
 
@@ -109,7 +109,7 @@ originais foram:
 Validação desta auditoria: `21 passed` em `test_permissao.py` +
 `test_hardening.py`; `34 passed` no frontend e `typecheck` concluído. As
 correções posteriores adicionaram as migrações `0103`/`0104`, testes de regressão
-e passaram em `247 passed` no backend, além de `34 passed`, `typecheck` e `build`
+e passaram em `248 passed` no backend, além de `34 passed`, `typecheck` e `build`
 no frontend. Nenhum deploy, restart ou migração não-dev foi executado.
 
 ### Achados prioritários desta revisão — situação
@@ -122,7 +122,7 @@ no frontend. Nenhum deploy, restart ou migração não-dev foi executado.
    validação live em staging, testes E2E dos fluxos críticos e virtualização de
    tabelas extensas; cache e validação runtime mínima já entregues.
 
-Validação atual: `247 passed` no backend em banco dev isolado; `34 passed`,
+Validação atual: `248 passed` no backend em banco dev isolado; `34 passed`,
 `typecheck` e `build` no frontend; build Astro do site passou e a home não
 contém produto demonstrativo. Nenhum deploy, restart ou migração não-dev foi
 executado.
