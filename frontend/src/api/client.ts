@@ -1576,6 +1576,12 @@ export const api = {
       "GET",
       "/api/estoque/valorizacao" + qs({ deposito_id: depositoId, data_corte: dataCorte })
     ),
+  listarParametrosEstoque: (produtoId: number) =>
+    request<{ parametros: EstoqueParametro[] }>("GET", "/api/estoque/parametros" + qs({ produto_id: produtoId })),
+  salvarParametroEstoque: (data: EstoqueParametroPayload) =>
+    request<{ parametro: EstoqueParametro }>("POST", "/api/estoque/parametros", data),
+  excluirParametroEstoque: (produtoId: number, depositoId: number) =>
+    request("DELETE", "/api/estoque/parametros" + qs({ produto_id: produtoId, deposito_id: depositoId })),
   registrarMovimento: (data: MovimentoPayload) =>
     request<MovimentoResult>("POST", "/api/estoque/movimento", data),
   listarMovimentos: (params: Record<string, unknown> = {}) =>
@@ -2301,6 +2307,42 @@ export interface Deposito {
   nome: string;
   ativo: number | boolean;
   criado_em: string;
+}
+
+export interface EstoqueParametro {
+  id: number;
+  produto_id: number;
+  deposito_id: number;
+  politica: string;
+  minimo?: number | null;
+  maximo?: number | null;
+  ponto_pedido?: number | null;
+  estoque_seguranca?: number | null;
+  lead_time_dias?: number | null;
+  lote_minimo?: number | null;
+  lote_maximo?: number | null;
+  lote_multiplo?: number | null;
+  calendario?: string | null;
+  fonte_valor: string;
+  motivo?: string | null;
+  versao: number;
+}
+
+export interface EstoqueParametroPayload {
+  produto_id: number;
+  deposito_id: number;
+  politica?: string;
+  minimo?: number | null;
+  maximo?: number | null;
+  ponto_pedido?: number | null;
+  estoque_seguranca?: number | null;
+  lead_time_dias?: number | null;
+  lote_minimo?: number | null;
+  lote_maximo?: number | null;
+  lote_multiplo?: number | null;
+  calendario?: string | null;
+  fonte_valor?: string;
+  motivo?: string | null;
 }
 
 export interface SaldoItem {

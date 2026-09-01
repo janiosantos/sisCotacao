@@ -5,6 +5,8 @@ from flask import Blueprint, jsonify, request
 from catalog_server.db import system_conn
 from catalog_server.repositories import deposito_repo, estoque_repo, expedicao_repo, lote_repo
 from catalog_server.repositories import loja as loja_repo
+from catalog_server.services import estoque_parametro as parametro_svc
+from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server import contabil_gatilhos
 
 api_estoque_bp = Blueprint("api_estoque", __name__)
@@ -86,6 +88,64 @@ def consultar_valorizacao():
     data_corte = request.args.get("data_corte") or None
     produto_id = request.args.get("produto_id", type=int)
     return jsonify(estoque_repo.valorizar(deposito_id, data_corte=data_corte, produto_id=produto_id))
+
+
+# ─── Parâmetros de planejamento (EST-005) ──────────────────
+
+
+@api_estoque_bp.get("/api/estoque/parametros")
+def listar_parametros():
+    produto_id = request.args.get("produto_id", type=int)
+    deposito_id = request.args.get("deposito_id", type=int)
+    if not produto_id:
+        return jsonify({"error": "produto_id é obrigatório", "code": "produto_obrigatorio"}), 400
+    return jsonify({"parametros": parametro_svc.listar(produto_id, deposito_id)})
+
+
+@api_estoque_bp.get("/api/estoque/parametros/efetivo")
+def parametro_efetivo():
+    produto_id = request.args.get("produto_id", type=int)
+    deposito_id = request.args.get("deposito_id", type=int)
+    if not produto_id or not deposito_id:
+        return jsonify({"error": "produto_id e deposito_id são obrigatórios", "code": "parametro_obrigatorio"}), 400
+    return jsonify(parametro_svc.obter_efetivo(produto_id, deposito_id))
+
+
+@api_estoque_bp.post("/api/estoque/parametros")
+def salvar_parametro():
+    data = request.get_json(silent=True) or {}
+    try:
+        p = parametro_svc.salvar(
+            int(data["produto_id"]),
+            int(data["deposito_id"]),
+            data.get("politica") or "manual",
+            float(data["minimo"]) if data.get("minimo") is not None else None,
+            float(data["maximo"]) if data.get("maximo") is not None else None,
+            float(data["ponto_pedido"]) if data.get("ponto_pedido") is not None else None,
+            float(data["estoque_seguranca"]) if data.get("estoque_seguranca") is not None else None,
+            int(data["lead_time_dias"]) if data.get("lead_time_dias") else None,
+            float(data["lote_minimo"]) if data.get("lote_minimo") is not None else None,
+            float(data["lote_maximo"]) if data.get("lote_maximo") is not None else None,
+            float(data["lote_multiplo"]) if data.get("lote_multiplo") is not None else None,
+            data.get("calendario"),
+            data.get("fonte_valor") or "manual",
+            data.get("motivo"),
+            usuario_id_requisicao(),
+        )
+    except (KeyError, ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "parametro_invalido"}), 400
+    return jsonify({"parametro": p})
+
+
+@api_estoque_bp.delete("/api/estoque/parametros")
+def excluir_parametro():
+    produto_id = request.args.get("produto_id", type=int)
+    deposito_id = request.args.get("deposito_id", type=int)
+    if not produto_id or not deposito_id:
+        return jsonify({"error": "produto_id e deposito_id são obrigatórios", "code": "parametro_obrigatorio"}), 400
+    if not parametro_svc.excluir(produto_id, deposito_id):
+        return jsonify({"error": "Parâmetro não encontrado", "code": "parametro_nao_encontrado"}), 404
+    return jsonify({"ok": True})
 
 
 # ─── Movimento ─────────────────────────────────────────────

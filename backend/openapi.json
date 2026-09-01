@@ -3347,6 +3347,177 @@
           }
         }
       }
+    },
+    "/api/estoque/parametros": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Lista par?metros de planejamento do produto (EST-005)",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Par?metros ativos"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Cria/atualiza par?metro de planejamento (pol?tica, min/max, ponto de pedido, seguran?a, lead time, lote, fonte)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "produto_id": {
+                    "type": "integer"
+                  },
+                  "deposito_id": {
+                    "type": "integer"
+                  },
+                  "politica": {
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "calculada"
+                    ]
+                  },
+                  "minimo": {
+                    "type": "number"
+                  },
+                  "maximo": {
+                    "type": "number"
+                  },
+                  "ponto_pedido": {
+                    "type": "number"
+                  },
+                  "estoque_seguranca": {
+                    "type": "number"
+                  },
+                  "lead_time_dias": {
+                    "type": "integer"
+                  },
+                  "lote_minimo": {
+                    "type": "number"
+                  },
+                  "lote_maximo": {
+                    "type": "number"
+                  },
+                  "lote_multiplo": {
+                    "type": "number"
+                  },
+                  "calendario": {
+                    "type": "string"
+                  },
+                  "fonte_valor": {
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "abc",
+                      "lead_time_real",
+                      "custom"
+                    ]
+                  },
+                  "motivo": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Par?metro salvo"
+          },
+          "400": {
+            "description": "Par?metro inv?lido"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Remove (desativa) o par?metro de planejamento",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removido"
+          },
+          "404": {
+            "description": "N?o encontrado"
+          }
+        }
+      }
+    },
+    "/api/estoque/parametros/efetivo": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Par?metro efetivo do produto/dep?sito (configura??o nova ou fallback para m?nimo/m?ximo legados)",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Par?metro efetivo"
+          }
+        }
+      }
     }
   },
   "components": {
