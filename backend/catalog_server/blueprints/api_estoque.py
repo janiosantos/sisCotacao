@@ -12,6 +12,7 @@ from catalog_server.services import lote_rastreabilidade
 from catalog_server.services import abc_historica
 from catalog_server.services import xyz as xyz_svc
 from catalog_server.services import demanda as demanda_svc
+from catalog_server.services import motor_reposicao
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server import contabil_gatilhos
 
@@ -596,6 +597,16 @@ def marcar_demanda_perdida(demanda_id: int):
     except ValueError as exc:
         return jsonify({"error": str(exc), "code": "demanda_invalida"}), 400
     return jsonify({"ok": True})
+
+
+# ─── Motor de reposição (COM-004) ──────────────────────────
+
+
+@api_estoque_bp.get("/api/estoque/reposicao")
+def calcular_reposicao():
+    produto_id = request.args.get("produto_id", type=int)
+    deposito_id = request.args.get("deposito_id", type=int)
+    return jsonify(motor_reposicao.calcular(produto_id, deposito_id))
 
 
 # ─── Expedição ─────────────────────────────────────────────

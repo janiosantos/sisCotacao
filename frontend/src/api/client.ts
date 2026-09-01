@@ -1655,6 +1655,8 @@ export const api = {
       "GET",
       "/api/estoque/demanda" + qs({ produto_id: produtoId })
     ),
+  calcularReposicao: (produtoId?: number, depositoId?: number) =>
+    request<ReposicaoResultado>("GET", "/api/estoque/reposicao" + qs({ produto_id: produtoId, deposito_id: depositoId })),
   listarExpedicao: (params: Record<string, unknown> = {}) =>
     request<Expedicao[]>("GET", "/api/expedicao" + qs(params)),
   criarExpedicao: (data: { codigo: string; deposito_id: number; transportadora?: string; observacao?: string }) =>
@@ -2487,6 +2489,42 @@ export interface AbcCalculo {
   sem_venda?: number;
   resumo: Record<string, { produtos: number; valor: number; pct: number }>;
   itens: AbcItem[];
+}
+
+export interface SugestaoReposicao {
+  produto_id: number;
+  sku: string;
+  nome: string;
+  unidade_venda: string;
+  deposito_id: number;
+  fisico: number;
+  reservado: number;
+  bloqueado: number;
+  disponivel: number;
+  transito: number;
+  demanda_aberta: number;
+  disponivel_projetado: number;
+  estoque_alvo: number;
+  estoque_seguranca: number;
+  demanda_lead_time: number;
+  lead_time_dias: number;
+  necessidade: number;
+  sugestao: number;
+  ponto_pedido?: number | null;
+  politica: string;
+  ruptura_provavel?: string | null;
+  fornecedor_id?: number | null;
+  fornecedor_nome?: string | null;
+  ultimo_preco?: number | null;
+  trigger_ponto_pedido: boolean;
+  sob_encomenda: boolean;
+  justificativa: string;
+}
+
+export interface ReposicaoResultado {
+  data: string;
+  resumo: { com_necessidade: number; total_sugerido: number };
+  sugestoes: SugestaoReposicao[];
 }
 
 export interface SaldoItem {

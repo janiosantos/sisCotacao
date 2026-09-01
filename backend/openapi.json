@@ -4389,6 +4389,35 @@
           }
         }
       }
+    },
+    "/api/estoque/reposicao": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Motor de reposição (COM-004): necessidade por produto/depósito com componentes, sem duplicar compra",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sugestões de compra com componentes do cálculo"
+          }
+        }
+      }
     }
   },
   "components": {
