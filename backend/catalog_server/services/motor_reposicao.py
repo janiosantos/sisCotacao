@@ -134,7 +134,7 @@ def calcular(produto_id: int | None = None, deposito_id: int | None = None) -> d
 
         produtos = {}
         for pid in {p for p, _ in ids}:
-            r = conn.execute("SELECT id, nome, sku, unidade_venda, fator_conversao, custo_unitario FROM produtos_cadastro WHERE id=?", (pid,)).fetchone()
+            r = conn.execute("SELECT id, nome, sku, unidade_venda, fator_conversao, custo_unitario, classe_abc, classe_xyz FROM produtos_cadastro WHERE id=?", (pid,)).fetchone()
             if r:
                 produtos[pid] = r
 
@@ -202,6 +202,8 @@ def calcular(produto_id: int | None = None, deposito_id: int | None = None) -> d
             sugestoes.append({
                 "produto_id": pid, "sku": p["sku"], "nome": p["nome"],
                 "unidade_venda": p["unidade_venda"] or "UN",
+                "classe_abc": p["classe_abc"] or "",
+                "classe_xyz": p["classe_xyz"] or "",
                 "deposito_id": dep,
                 "fisico": round(s["fisico"], 3), "reservado": round(s["reservado"], 3),
                 "bloqueado": round(s["bloqueado"], 3),

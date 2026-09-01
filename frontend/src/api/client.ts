@@ -2505,6 +2505,8 @@ export interface SugestaoReposicao {
   sku: string;
   nome: string;
   unidade_venda: string;
+  classe_abc?: string;
+  classe_xyz?: string;
   deposito_id: number;
   fisico: number;
   reservado: number;

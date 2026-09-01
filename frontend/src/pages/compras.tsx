@@ -18,6 +18,7 @@ import { AguardandoRespostas } from "./compras/aguardando-respostas";
 import { EtapaPedidos } from "./compras/etapa-pedidos";
 import { ListaCotacoes } from "./compras/lista-cotacoes";
 import { ListaPedidosCompra } from "./compras/lista-pedidos-compra";
+import { Necessidades } from "./compras/necessidades";
 
 const KEY_DRAFT = "compras_draft";
 const KEY_COT = "compras_cotacao";
@@ -143,13 +144,14 @@ const ETAPAS = [
 ];
 
 export default function Compras() {
-  const [aba, setAba] = useState<"nova" | "cotacoes" | "pedidos">("nova");
+  const [aba, setAba] = useState<"nova" | "cotacoes" | "pedidos" | "necessidades">("nova");
   const [etapa, setEtapa] = useState(1);
   const [cotacaoId, setCotacaoId] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft>(novoDraft);
   const [logica, setLogica] = useState("fracionado");
   const [invites, setInvites] = useState<Invite[] | null>(null);
   const [iniciado, setIniciado] = useState(false);
+  const [depositos, setDepositos] = useState<{ id: number; nome: string }[]>([]);
 
   const salvar = (d: Draft, cot: number | null) => {
     sessionStorage.setItem(KEY_DRAFT, JSON.stringify(d || {}));
@@ -185,6 +187,7 @@ export default function Compras() {
       setEtapa(1);
       setIniciado(true);
     }
+    void api.listarDepositos().then((ds) => setDepositos(ds)).catch(() => {});
   }, []);
 
   const novaCompra = () => {
@@ -200,6 +203,7 @@ export default function Compras() {
   if (!iniciado) return <Loading />;
 
   const ABAS: { key: typeof aba; label: string }[] = [
+    { key: "necessidades", label: "Sugestões de compra" },
     { key: "nova", label: "Nova cotação" },
     { key: "cotacoes", label: "Cotações" },
     { key: "pedidos", label: "Pedidos de compra" },
@@ -238,7 +242,9 @@ export default function Compras() {
         ))}
       </div>
 
-      {aba === "cotacoes" ? (
+      {aba === "necessidades" ? (
+        <Necessidades depositos={depositos} />
+      ) : aba === "cotacoes" ? (
         <ListaCotacoes
           onNova={() => setAba("nova")}
           onAbrirCompra={(id) => {
