@@ -70,10 +70,10 @@ export function Saldo({ depositos }: { depositos: Deposito[] }) {
         <Loading />
       ) : (
         <Table>
-<THead cols={["Produto", "SKU", "Família", "Depósito", "Unid.", "Emb.", "Físico", "Reservado", "Disponível", "Situação", "Preço", "NCM", "Localização", "Atualizado"]} />
+<THead cols={["Produto", "SKU", "Família", "Depósito", "Unid.", "Emb.", "Físico", "Reservado", "Disponível", "Custo médio", "Situação", "Preço", "NCM", "Localização", "Atualizado"]} />
           <TBody>
             {rows.length === 0 ? (
-              <EmptyRow colSpan={14} message="Nenhum saldo encontrado" />
+              <EmptyRow colSpan={15} message="Nenhum saldo encontrado" />
             ) : (
               rows.map((s) => (
                 <tr key={s.id} className="hover:bg-gray-50">
@@ -89,6 +89,7 @@ export function Saldo({ depositos }: { depositos: Deposito[] }) {
                   <Cell className="font-medium">{s.quantidade}</Cell>
                   <Cell className="text-xs">{s.reserva > 0 ? s.reserva : "—"}</Cell>
                   <Cell className="font-medium text-emerald-700">{s.disponivel ?? s.quantidade - s.reserva}</Cell>
+                  <Cell className="text-xs text-gray-500">{s.custo_medio ? fmtMoney(s.custo_medio) : "—"}</Cell>
                   <Cell>
                     {s.situacao === "ruptura" ? <Badge tone="red">ruptura</Badge> : s.situacao === "excesso" ? <Badge tone="amber">excesso</Badge> : <span className="text-xs text-gray-400">ok</span>}
                   </Cell>

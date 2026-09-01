@@ -23,6 +23,7 @@ class EstoqueRepository:
             " COALESCE(s.bloqueado,0) AS bloqueado, COALESCE(s.separacao,0) AS separacao,"
             " COALESCE(s.transito,0) AS transito,"
             " (s.quantidade - s.reserva - COALESCE(s.bloqueado,0) - COALESCE(s.separacao,0)) AS disponivel,"
+            " s.custo_medio,"
             " s.atualizado_em, d.nome AS deposito_nome,"
             " p.sku, p.preco, p.nome AS produto_nome, p.marca,"
             " p.familia_id, f.nome AS familia_nome,"
@@ -157,6 +158,7 @@ class EstoqueRepository:
         observacao: str | None = None,
         lote_id: int | None = None,
         usuario_id: int | None = None,
+        custo_unitario: float | None = None,
         _conn=None,
     ) -> dict:
         """Fato de estoque idempotente (ADR 0003): retrida com a mesma
@@ -193,13 +195,14 @@ class EstoqueRepository:
             # benigno graças à chave única (deposito_id, produto_id); depois
             # dele sempre relê com lock para evitar lost update.
             row = conn.execute(
-                "SELECT id, quantidade, reserva FROM estoque_saldo"
+                "SELECT id, quantidade, reserva, custo_medio FROM estoque_saldo"
                 " WHERE deposito_id=? AND produto_id=? FOR UPDATE",
                 (deposito_id, produto_id),
             ).fetchone()
             if row:
                 saldo_atual = float(row["quantidade"] or 0)
                 reserva_atual = float(row["reserva"] or 0)
+                custo_medio_atual = float(row["custo_medio"] or 0)
                 saldo_id = row["id"]
             else:
                 conn.execute(
@@ -208,18 +211,20 @@ class EstoqueRepository:
                     (deposito_id, produto_id),
                 )
                 saldo_atual, reserva_atual = 0.0, 0.0
+                custo_medio_atual = 0.0
                 saldo_id = conn.execute(
                     "SELECT id, quantidade, reserva FROM estoque_saldo"
                     " WHERE deposito_id=? AND produto_id=? FOR UPDATE",
                     (deposito_id, produto_id),
                 ).fetchone()["id"]
                 row = conn.execute(
-                    "SELECT id, quantidade, reserva FROM estoque_saldo"
+                    "SELECT id, quantidade, reserva, custo_medio FROM estoque_saldo"
                     " WHERE deposito_id=? AND produto_id=? FOR UPDATE",
                     (deposito_id, produto_id),
                 ).fetchone()
                 saldo_atual = float(row["quantidade"] or 0)
                 reserva_atual = float(row["reserva"] or 0)
+                custo_medio_atual = float(row["custo_medio"] or 0)
 
             # O primeiro check é apenas um fast-path. O segundo ocorre depois
             # do lock e fecha a corrida entre duas requisições idempotentes.
@@ -237,6 +242,30 @@ class EstoqueRepository:
                 }
 
             q = float(quantidade)
+
+            # Custo (EST-003, DECISAO-002): entrada define o custo; saída usa o
+            # custo do momento. Custo médio ponderado por depósito.
+            custo_medio_anterior = custo_medio_atual
+            custo_mov = custo_medio_atual
+            novo_custo_medio = custo_medio_atual
+            if tipo in ("entrada", "inventario", "ajuste"):
+                if custo_unitario is not None:
+                    custo_mov = float(custo_unitario)
+                else:
+                    prod = conn.execute(
+                        "SELECT custo_unitario FROM produtos_cadastro WHERE id=?",
+                        (produto_id,),
+                    ).fetchone()
+                    custo_mov = float(prod["custo_unitario"]) if prod and prod["custo_unitario"] else 0.0
+                if tipo == "ajuste":
+                    novo_custo_medio = custo_mov
+                elif (saldo_atual + q) > 0:
+                    novo_custo_medio = round(
+                        (saldo_atual * custo_medio_atual + q * custo_mov) / (saldo_atual + q), 4
+                    )
+            elif tipo in ("saida", "transferencia"):
+                custo_mov = custo_medio_atual
+                novo_custo_medio = custo_medio_atual
 
             if tipo == "reserva":
                 disponivel = saldo_atual - reserva_atual
@@ -279,22 +308,23 @@ class EstoqueRepository:
                         )
                     novo_saldo = saldo_atual - q
                 conn.execute(
-                    "UPDATE estoque_saldo SET quantidade=?, atualizado_em=datetime('now')"
+                    "UPDATE estoque_saldo SET quantidade=?, custo_medio=?, atualizado_em=datetime('now')"
                     " WHERE id=?",
-                    (novo_saldo, saldo_id),
+                    (novo_saldo, novo_custo_medio, saldo_id),
                 )
 
             cur = conn.execute(
                 "INSERT INTO estoque_movimento (deposito_id, produto_id, tipo,"
                 " quantidade, saldo_anterior, saldo_posterior, documento,"
                 " observacao, lote_id, usuario_id, idempotency_key,"
-                " origem_tipo, origem_id)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " origem_tipo, origem_id, custo_unitario, custo_medio_anterior, estorno_de)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     deposito_id, produto_id, tipo, quantidade,
                     saldo_atual, novo_saldo, documento, observacao,
                     lote_id, usuario_id, idempotency_key,
                     origem_tipo, origem_id,
+                    custo_mov, custo_medio_anterior, None,
                 ),
             )
             if ctx is None:
@@ -305,6 +335,8 @@ class EstoqueRepository:
                 "duplicado": False,
                 "saldo_anterior": saldo_atual,
                 "saldo_posterior": novo_saldo,
+                "custo_medio": novo_custo_medio,
+                "custo_unitario": custo_mov,
                 "tipo": tipo,
             }
         except BaseException as exc:
@@ -315,6 +347,147 @@ class EstoqueRepository:
         finally:
             if ctx is not None and not closed:
                 ctx.__exit__(None, None, None)
+
+    def estornar(
+        self,
+        deposito_id: int,
+        produto_id: int,
+        movimento_id: int,
+        *,
+        idempotency_key: str | None = None,
+        origem_tipo: str = "",
+        origem_id: int | None = None,
+        documento: str | None = None,
+        observacao: str | None = None,
+        usuario_id: int | None = None,
+    ) -> dict:
+        """Estorna um fato de estoque (EST-002): cria um movimento reverso com
+        `estorno_de` apontando para o original. Nunca edita o fato.
+
+        Regras: o original deve ser o **último** movimento do produto+depósito
+        (LIFO) — evita sobrescrever efeitos posteriores; o estorno restaura o
+        saldo e o custo médio anteriores. Retrida (idempotency_key) não duplica.
+        """
+        if not idempotency_key:
+            idempotency_key = f"estorno-{uuid.uuid4().hex}"
+        reverso = {
+            "entrada": "saida", "saida": "entrada", "ajuste": "ajuste",
+            "reserva": "liberacao", "liberacao": "reserva", "inventario": "ajuste",
+        }
+        with system_conn() as conn:
+            existente = conn.execute(
+                "SELECT id FROM estoque_movimento WHERE idempotency_key=?",
+                (idempotency_key,),
+            ).fetchone()
+            if existente:
+                return {"movimento_id": existente["id"], "duplicado": True}
+            orig = conn.execute(
+                "SELECT * FROM estoque_movimento"
+                " WHERE id=? AND deposito_id=? AND produto_id=?",
+                (movimento_id, deposito_id, produto_id),
+            ).fetchone()
+            if not orig:
+                raise LookupError("Movimento de origem não encontrado")
+            if conn.execute(
+                "SELECT 1 FROM estoque_movimento WHERE estorno_de=?",
+                (movimento_id,),
+            ).fetchone():
+                raise ValueError("Movimento já estornado")
+            posterior = conn.execute(
+                "SELECT 1 FROM estoque_movimento"
+                " WHERE deposito_id=? AND produto_id=? AND id>?",
+                (deposito_id, produto_id, movimento_id),
+            ).fetchone()
+            if posterior:
+                raise ValueError("Estorno só permitido no último movimento do produto+depósito (LIFO)")
+            tipo_reverso = reverso.get(orig["tipo"])
+            if tipo_reverso is None:
+                raise ValueError(f"tipo sem estorno definido: {orig['tipo']}")
+
+            q = float(orig["quantidade"])
+            custo_orig = float(orig["custo_unitario"] or 0)
+            custo_medio_restaurado = float(orig["custo_medio_anterior"] or 0)
+            saldo_alvo = float(orig["saldo_anterior"] or 0)
+
+            row = conn.execute(
+                "SELECT id, quantidade, reserva, custo_medio FROM estoque_saldo"
+                " WHERE deposito_id=? AND produto_id=? FOR UPDATE",
+                (deposito_id, produto_id),
+            ).fetchone()
+            saldo_atual = float(row["quantidade"] or 0) if row else 0.0
+            reserva_atual = float(row["reserva"] or 0) if row else 0.0
+            saldo_id = row["id"] if row else None
+            if saldo_id is None:
+                conn.execute(
+                    "INSERT INTO estoque_saldo (deposito_id, produto_id, quantidade, reserva)"
+                    " VALUES (?,?,0,0) ON CONFLICT (deposito_id, produto_id) DO NOTHING",
+                    (deposito_id, produto_id),
+                )
+                saldo_id = conn.execute(
+                    "SELECT id FROM estoque_saldo WHERE deposito_id=? AND produto_id=? FOR UPDATE",
+                    (deposito_id, produto_id),
+                ).fetchone()["id"]
+                saldo_atual = reserva_atual = 0.0
+
+            novo_saldo = saldo_atual
+            novo_reserva = reserva_atual
+            novo_custo_medio = float(conn.execute(
+                "SELECT custo_medio FROM estoque_saldo WHERE id=?", (saldo_id,)
+            ).fetchone()["custo_medio"] or 0)
+            if tipo_reverso in ("saida", "entrada", "ajuste"):
+                novo_saldo = saldo_alvo
+                novo_custo_medio = custo_medio_restaurado
+                conn.execute(
+                    "UPDATE estoque_saldo SET quantidade=?, custo_medio=?, atualizado_em=datetime('now')"
+                    " WHERE id=?",
+                    (novo_saldo, novo_custo_medio, saldo_id),
+                )
+            elif tipo_reverso == "liberacao":
+                if q > reserva_atual:
+                    raise ValueError("Estorno de reserva excede a reserva atual")
+                novo_reserva = reserva_atual - q
+                conn.execute(
+                    "UPDATE estoque_saldo SET reserva=?, atualizado_em=datetime('now') WHERE id=?",
+                    (novo_reserva, saldo_id),
+                )
+            elif tipo_reverso == "reserva":
+                novo_reserva = reserva_atual + q
+                conn.execute(
+                    "UPDATE estoque_saldo SET reserva=?, atualizado_em=datetime('now') WHERE id=?",
+                    (novo_reserva, saldo_id),
+                )
+
+            cur = conn.execute(
+                "INSERT INTO estoque_movimento (deposito_id, produto_id, tipo,"
+                " quantidade, saldo_anterior, saldo_posterior, documento,"
+                " observacao, lote_id, usuario_id, idempotency_key,"
+                " origem_tipo, origem_id, custo_unitario, custo_medio_anterior, estorno_de)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    deposito_id, produto_id, tipo_reverso, q,
+                    saldo_atual, novo_saldo, documento, observacao,
+                    orig["lote_id"], usuario_id, idempotency_key,
+                    origem_tipo or "estorno", origem_id,
+                    custo_orig, novo_custo_medio, movimento_id,
+                ),
+            )
+            return {
+                "movimento_id": cur.lastrowid,
+                "duplicado": False,
+                "estornado": True,
+                "tipo": tipo_reverso,
+                "saldo_anterior": saldo_atual,
+                "saldo_posterior": novo_saldo,
+                "custo_medio": novo_custo_medio,
+            }
+
+    def custo_medio(self, deposito_id: int, produto_id: int) -> float:
+        with system_conn() as conn:
+            row = conn.execute(
+                "SELECT custo_medio FROM estoque_saldo WHERE deposito_id=? AND produto_id=?",
+                (deposito_id, produto_id),
+            ).fetchone()
+        return float(row["custo_medio"] or 0) if row else 0.0
 
     def reconciliar(self, deposito_id: int, produto_id: int) -> dict:
         produto_id = produto_id

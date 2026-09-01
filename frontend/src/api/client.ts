@@ -2308,6 +2308,7 @@ export interface SaldoItem {
   separacao?: number;
   transito?: number;
   disponivel?: number;
+  custo_medio?: number;
   atualizado_em: string;
   deposito_nome: string;
   sku: string;
