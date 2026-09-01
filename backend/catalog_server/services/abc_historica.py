@@ -137,9 +137,9 @@ def _resumo_por_classe(itens: list[dict], total: float) -> dict:
         c = it["classe"]
         r = resumo[c]
         r["produtos"] += 1
-        r["valor"] += it["valor"]
+        r["valor"] += float(it["valor"])
     for c, r in resumo.items():
-        r["pct"] = round(r["valor"] / total * 100, 1) if total > 0 else 0.0
+        r["pct"] = round(r["valor"] / float(total) * 100, 1) if total > 0 else 0.0
     return resumo
 
 
