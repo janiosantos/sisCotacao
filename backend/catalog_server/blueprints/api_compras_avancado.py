@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 from catalog_server.repositories import fornecedor_preco_repo, fornecedor_preferencial_repo, solicitacao_repo, tolerancia_repo
-from catalog_server.services import custo_engine
+from catalog_server.services import custo_engine, cotacao_necessidade, comparacao
 
 api_compras_avancado_bp = Blueprint("api_compras_avancado", __name__)
 
@@ -105,6 +105,47 @@ def remover_item_solicitacao(sc_id: int, item_id: int):
     except ValueError as exc:
         return jsonify({"error": str(exc), "code": "solicitacao_nao_editavel"}), 400
     return jsonify({"ok": True})
+
+
+# ─── Cotação a partir de necessidade (COM-008) ─────────────
+
+
+@api_compras_avancado_bp.post("/api/solicitacoes-compra/<int:sc_id>/cotar")
+def cotar_solicitacao(sc_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(cotacao_necessidade.gerar_cotacao(sc_id, data.get("apelido"), data.get("usuario_id")))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "solicitacao_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "solicitacao_nao_cotavel"}), 400
+
+
+@api_compras_avancado_bp.get("/api/cotacoes/<int:cotacao_id>/propostas")
+def propostas_por_produto(cotacao_id: int):
+    return jsonify(cotacao_necessidade.buscar_propostas_por_produto(cotacao_id))
+
+
+# ─── Comparação de propostas (COM-009) ─────────────────────
+
+
+@api_compras_avancado_bp.get("/api/cotacoes/<int:cotacao_id>/comparacao")
+def comparacao_cotacao(cotacao_id: int):
+    try:
+        return jsonify(comparacao.montar_comparacao(cotacao_id))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "cotacao_nao_encontrada"}), 404
+
+
+@api_compras_avancado_bp.post("/api/cotacoes/precos/<int:preco_id>/vencedor")
+def decidir_vencedor(preco_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(comparacao.decidir_vencedor(preco_id, data.get("justificativa") or "", data.get("usuario_id")))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "proposta_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "vencedor_invalido"}), 400
 
 
 @api_compras_avancado_bp.get("/api/fornecedor-preferencial")
