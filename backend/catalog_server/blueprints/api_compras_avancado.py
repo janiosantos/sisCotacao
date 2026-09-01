@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 from catalog_server.repositories import fornecedor_preco_repo, fornecedor_preferencial_repo, solicitacao_repo, tolerancia_repo
-from catalog_server.services import custo_engine, cotacao_necessidade, comparacao, alcada_compra, pedido_compra, recebimento as recebimento_svc, conferencia, tres_vias
+from catalog_server.services import custo_engine, cotacao_necessidade, comparacao, alcada_compra, pedido_compra, recebimento as recebimento_svc, conferencia, tres_vias, nfe_entrada
 
 api_compras_avancado_bp = Blueprint("api_compras_avancado", __name__)
 
@@ -369,6 +369,67 @@ def rejeitar_tres_vias(recebimento_id: int):
         return jsonify(tres_vias.rejeitar(recebimento_id, data.get("motivo") or ""))
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "recebimento_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "rejeicao_invalida"}), 400
+
+
+# ─── Entrada fiscal XML (REC-004) ──────────────────────────
+
+
+@api_compras_avancado_bp.post("/api/nfe-entrada")
+def importar_nfe_entrada():
+    data = request.get_json(silent=True) or {}
+    xml_conteudo = data.get("xml")
+    if not xml_conteudo:
+        return jsonify({"error": "xml é obrigatório", "code": "xml_obrigatorio"}), 400
+    try:
+        return jsonify(nfe_entrada.importar_xml(xml_conteudo)), 201
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "xml_invalido"}), 400
+
+
+@api_compras_avancado_bp.get("/api/nfe-entrada")
+def listar_nfe_entrada():
+    return jsonify({"notas": nfe_entrada.listar(request.args.get("status"))})
+
+
+@api_compras_avancado_bp.get("/api/nfe-entrada/<int:nfe_id>")
+def detalhe_nfe_entrada(nfe_id: int):
+    nfe = nfe_entrada.detalhe(nfe_id)
+    if not nfe:
+        return jsonify({"error": "NF não encontrada", "code": "nfe_nao_encontrada"}), 404
+    return jsonify(nfe)
+
+
+@api_compras_avancado_bp.post("/api/nfe-entrada/itens/<int:item_id>/vincular")
+def vincular_nfe_item(item_id: int):
+    data = request.get_json(silent=True) or {}
+    produto_id = data.get("produto_id")
+    if not produto_id:
+        return jsonify({"error": "produto_id é obrigatório", "code": "vinculo_invalido"}), 400
+    try:
+        return jsonify(nfe_entrada.vincular_item(item_id, int(produto_id)))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "item_nao_encontrado"}), 404
+
+
+@api_compras_avancado_bp.post("/api/nfe-entrada/<int:nfe_id>/confirmar")
+def confirmar_nfe_entrada(nfe_id: int):
+    try:
+        return jsonify(nfe_entrada.confirmar(nfe_id))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "nfe_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "nfe_sem_vinculo"}), 400
+
+
+@api_compras_avancado_bp.post("/api/nfe-entrada/<int:nfe_id>/rejeitar")
+def rejeitar_nfe_entrada(nfe_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(nfe_entrada.rejeitar(nfe_id, data.get("motivo") or ""))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "nfe_nao_encontrada"}), 404
     except ValueError as exc:
         return jsonify({"error": str(exc), "code": "rejeicao_invalida"}), 400
 
