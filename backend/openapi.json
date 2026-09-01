@@ -4418,6 +4418,112 @@
           }
         }
       }
+    },
+    "/api/estoque/fornecedores/{fornecedor_id}/desempenho": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Desempenho real do fornecedor (COM-005): lead time médio/desvio, fill rate, atraso, confiança",
+        "parameters": [
+          {
+            "name": "fornecedor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "data_inicio",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "data_fim",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Desempenho"
+          },
+          "404": {
+            "description": "Fornecedor não encontrado"
+          }
+        }
+      }
+    },
+    "/api/estoque/fornecedores/{fornecedor_id}/desempenho/historico": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Histórico de cálculos de desempenho do fornecedor",
+        "parameters": [
+          {
+            "name": "fornecedor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Histórico"
+          }
+        }
+      }
+    },
+    "/api/estoque/fornecedores/{fornecedor_id}/lead-time": {
+      "put": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Override manual de lead time do fornecedor (com motivo)",
+        "parameters": [
+          {
+            "name": "fornecedor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "lead_time_dias": {
+                    "type": "integer"
+                  },
+                  "motivo": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Override aplicado"
+          }
+        }
+      }
     }
   },
   "components": {

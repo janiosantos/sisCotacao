@@ -1657,6 +1657,15 @@ export const api = {
     ),
   calcularReposicao: (produtoId?: number, depositoId?: number) =>
     request<ReposicaoResultado>("GET", "/api/estoque/reposicao" + qs({ produto_id: produtoId, deposito_id: depositoId })),
+  desempenhoFornecedor: (fornecedorId: number) =>
+    request<FornecedorDesempenho>("GET", `/api/estoque/fornecedores/${fornecedorId}/desempenho`),
+  historicoDesempenho: (fornecedorId: number) =>
+    request<{ historico: { id: number; n_pedidos: number; lead_time_medio: number | null; fill_rate: number | null; atraso_medio_dias: number | null; confianca: string; calculado_em: string }[] }>(
+      "GET",
+      `/api/estoque/fornecedores/${fornecedorId}/desempenho/historico`
+    ),
+  overrideLeadTime: (fornecedorId: number, leadTimeDias: number | null, motivo?: string) =>
+    request<{ ok: boolean }>("PUT", `/api/estoque/fornecedores/${fornecedorId}/lead-time`, { lead_time_dias: leadTimeDias, motivo }),
   listarExpedicao: (params: Record<string, unknown> = {}) =>
     request<Expedicao[]>("GET", "/api/expedicao" + qs(params)),
   criarExpedicao: (data: { codigo: string; deposito_id: number; transportadora?: string; observacao?: string }) =>
@@ -2525,6 +2534,21 @@ export interface ReposicaoResultado {
   data: string;
   resumo: { com_necessidade: number; total_sugerido: number };
   sugestoes: SugestaoReposicao[];
+}
+
+export interface FornecedorDesempenho {
+  fornecedor_id: number;
+  fornecedor_nome: string;
+  n_pedidos: number;
+  lead_time_medio?: number | null;
+  lead_time_desvio?: number | null;
+  fill_rate?: number | null;
+  atraso_medio_dias?: number | null;
+  confianca: string;
+  prazo_contratual?: number | null;
+  lead_time_override?: number | null;
+  lead_time_override_motivo?: string | null;
+  lead_time_efetivo?: number | null;
 }
 
 export interface SaldoItem {

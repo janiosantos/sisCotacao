@@ -13,6 +13,7 @@ from catalog_server.services import abc_historica
 from catalog_server.services import xyz as xyz_svc
 from catalog_server.services import demanda as demanda_svc
 from catalog_server.services import motor_reposicao
+from catalog_server.services import fornecedor_desempenho
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server import contabil_gatilhos
 
@@ -607,6 +608,33 @@ def calcular_reposicao():
     produto_id = request.args.get("produto_id", type=int)
     deposito_id = request.args.get("deposito_id", type=int)
     return jsonify(motor_reposicao.calcular(produto_id, deposito_id))
+
+
+# ─── Desempenho do fornecedor (COM-005) ────────────────────
+
+
+@api_estoque_bp.get("/api/estoque/fornecedores/<int:fornecedor_id>/desempenho")
+def desempenho_fornecedor(fornecedor_id: int):
+    data_inicio = request.args.get("data_inicio")
+    data_fim = request.args.get("data_fim")
+    try:
+        return jsonify(fornecedor_desempenho.calcular(fornecedor_id, data_inicio, data_fim))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "fornecedor_nao_encontrado"}), 404
+
+
+@api_estoque_bp.get("/api/estoque/fornecedores/<int:fornecedor_id>/desempenho/historico")
+def historico_desempenho(fornecedor_id: int):
+    return jsonify({"historico": fornecedor_desempenho.historico(fornecedor_id)})
+
+
+@api_estoque_bp.put("/api/estoque/fornecedores/<int:fornecedor_id>/lead-time")
+def override_lead_time(fornecedor_id: int):
+    data = request.get_json(silent=True) or {}
+    lead = data.get("lead_time_dias")
+    if not fornecedor_desempenho.set_override(fornecedor_id, int(lead) if lead else None, data.get("motivo"), usuario_id_requisicao()):
+        return jsonify({"error": "Fornecedor não encontrado", "code": "fornecedor_nao_encontrado"}), 404
+    return jsonify({"ok": True})
 
 
 # ─── Expedição ─────────────────────────────────────────────
