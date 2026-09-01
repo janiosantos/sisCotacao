@@ -53,11 +53,31 @@ def detalhar_solicitacao(sc_id: int):
 @api_compras_avancado_bp.post("/api/solicitacoes-compra")
 def criar_solicitacao():
     data = request.get_json(silent=True) or {}
-    sc_id = solicitacao_repo.create(
-        data.get("codigo", ""), data.get("descricao", ""),
-        data.get("observacao", ""), data.get("usuario_id"),
-    )
+    try:
+        sc_id = solicitacao_repo.create(
+            data.get("codigo", ""), data.get("descricao", ""),
+            data.get("observacao", ""), data.get("usuario_id"),
+            data.get("prioridade") or "media", data.get("origem") or "manual",
+            data.get("centro_custo"), data.get("deposito_id"),
+            data.get("prazo_desejado"),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "solicitacao_invalida"}), 400
     return jsonify({"id": sc_id}), 201
+
+
+@api_compras_avancado_bp.post("/api/solicitacoes-compra/<int:sc_id>/transicao")
+def transicionar_solicitacao(sc_id: int):
+    data = request.get_json(silent=True) or {}
+    status = data.get("status")
+    if not status:
+        return jsonify({"error": "status é obrigatório", "code": "status_obrigatorio"}), 400
+    try:
+        return jsonify({"resultado": solicitacao_repo.transicionar(sc_id, status, data.get("usuario_id"))})
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "solicitacao_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "transicao_invalida"}), 400
 
 
 @api_compras_avancado_bp.post("/api/solicitacoes-compra/<int:sc_id>/itens")
@@ -67,9 +87,24 @@ def add_item_solicitacao(sc_id: int):
     qtd = data.get("quantidade")
     if not v_id or not qtd:
         return jsonify({"error": "produto_id e quantidade obrigatórios"}), 400
-    return jsonify({"id": solicitacao_repo.add_item(
-        sc_id, v_id, float(qtd), data.get("justificativa", ""),
-    )}), 201
+    try:
+        return jsonify({"id": solicitacao_repo.add_item(
+            sc_id, v_id, float(qtd), data.get("justificativa", ""),
+            data.get("unidade") or "UN", data.get("necessidade"),
+            data.get("origem_sugestao"),
+        )}), 201
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "solicitacao_nao_editavel"}), 400
+
+
+@api_compras_avancado_bp.delete("/api/solicitacoes-compra/<int:sc_id>/itens/<int:item_id>")
+def remover_item_solicitacao(sc_id: int, item_id: int):
+    try:
+        if not solicitacao_repo.remover_item(sc_id, item_id):
+            return jsonify({"error": "Item não encontrado", "code": "item_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "solicitacao_nao_editavel"}), 400
+    return jsonify({"ok": True})
 
 
 @api_compras_avancado_bp.get("/api/fornecedor-preferencial")

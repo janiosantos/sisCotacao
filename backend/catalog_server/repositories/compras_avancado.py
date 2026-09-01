@@ -64,26 +64,86 @@ class SolicitacaoRepository:
             d["itens"] = [dict(r) for r in itens]
             return d
 
-    def create(self, codigo: str, descricao: str = "", observacao: str = "", usuario_id: int | None = None) -> int:
+    def create(self, codigo: str, descricao: str = "", observacao: str = "", usuario_id: int | None = None,
+               prioridade: str = "media", origem: str = "manual", centro_custo: str | None = None,
+               deposito_id: int | None = None, prazo_desejado: str | None = None) -> int:
+        prioridade = (prioridade or "media").strip().lower()
+        if prioridade not in ("baixa", "media", "alta", "urgente"):
+            raise ValueError("prioridade inválida")
+        origem = (origem or "manual").strip().lower()
+        if origem not in ("manual", "sugestao", "obra", "projeto"):
+            raise ValueError("origem inválida")
         with system_conn() as conn:
             return conn.execute(
-                "INSERT INTO solicitacao_compra (codigo, descricao, observacao, usuario_id) VALUES (?,?,?,?)",
-                (codigo.strip(), descricao.strip(), observacao.strip(), usuario_id),
+                "INSERT INTO solicitacao_compra (codigo, descricao, observacao, usuario_id,"
+                " prioridade, origem, centro_custo, deposito_id, prazo_desejado)"
+                " VALUES (?,?,?,?,?,?,?,?,?)",
+                (codigo.strip(), descricao.strip(), observacao.strip(), usuario_id,
+                 prioridade, origem, (centro_custo or "").strip() or None, deposito_id, prazo_desejado),
             ).lastrowid
+
+    # ── Máquina de estados (COM-007) ──────────────────────────
+    _TRANSICOES: dict[str, set[str]] = {
+        "rascunho": {"enviada", "cancelada"},
+        "enviada": {"aprovada", "cancelada"},
+        "aprovada": {"cotando"},
+        "cotando": {"convertida"},
+        "convertida": set(),
+        "cancelada": set(),
+    }
+    _EDITAVEIS = {"rascunho", "enviada"}
+
+    def transicionar(self, sc_id: int, novo_status: str, usuario_id: int | None = None) -> dict:
+        novo_status = (novo_status or "").strip().lower()
+        with system_conn() as conn:
+            row = conn.execute("SELECT * FROM solicitacao_compra WHERE id=?", (sc_id,)).fetchone()
+            if not row:
+                raise LookupError("Solicitação não encontrada")
+            atual = row["status"]
+            if novo_status not in self._TRANSICOES.get(atual, set()):
+                raise ValueError(f"Transição inválida: {atual} → {novo_status}")
+            if novo_status == "enviada":
+                conn.execute("UPDATE solicitacao_compra SET status='enviada', data_enviada=NOW() WHERE id=?", (sc_id,))
+            elif novo_status == "aprovada":
+                if usuario_id is not None and row["usuario_id"] == usuario_id:
+                    raise ValueError("Aprovador não pode ser o próprio solicitante")
+                conn.execute(
+                    "UPDATE solicitacao_compra SET status='aprovada', data_aprovacao=NOW(), aprovador_id=? WHERE id=?",
+                    (usuario_id, sc_id),
+                )
+            else:
+                conn.execute("UPDATE solicitacao_compra SET status=? WHERE id=?", (novo_status, sc_id))
+            return {"id": sc_id, "de": atual, "para": novo_status}
+
+    def _garantir_editavel(self, conn, sc_id: int) -> None:
+        row = conn.execute("SELECT status FROM solicitacao_compra WHERE id=?", (sc_id,)).fetchone()
+        if not row:
+            raise LookupError("Solicitação não encontrada")
+        if row["status"] not in self._EDITAVEIS:
+            raise ValueError(f"Solicitação {row['status']} não pode ser editada sem nova versão")
 
     def aprovar(self, sc_id: int, aprovador_id: int, status: str = "aprovada") -> bool:
-        with system_conn() as conn:
-            return conn.execute(
-                "UPDATE solicitacao_compra SET status=?, data_aprovacao=datetime('now'), aprovador_id=? WHERE id=?",
-                (status, aprovador_id, sc_id),
-            ).rowcount > 0
+        return self.transicionar(sc_id, status, aprovador_id).get("para") == status
 
-    def add_item(self, sc_id: int, produto_id: int, quantidade: float, justificativa: str = "") -> int:
+    def add_item(self, sc_id: int, produto_id: int, quantidade: float, justificativa: str = "",
+                 unidade: str = "UN", necessidade: float | None = None, origem_sugestao: str | None = None) -> int:
         with system_conn() as conn:
+            self._garantir_editavel(conn, sc_id)
             return conn.execute(
-                "INSERT INTO solicitacao_itens (solicitacao_id, produto_id, quantidade, justificativa) VALUES (?,?,?,?)",
-                (sc_id, produto_id, quantidade, justificativa.strip()),
+                "INSERT INTO solicitacao_itens (solicitacao_id, produto_id, quantidade, justificativa,"
+                " unidade, necessidade, origem_sugestao) VALUES (?,?,?,?,?,?,?)",
+                (sc_id, produto_id, quantidade, justificativa.strip(),
+                 (unidade or "UN").strip().upper(), necessidade, origem_sugestao),
             ).lastrowid
+
+    def remover_item(self, sc_id: int, item_id: int) -> bool:
+        with system_conn() as conn:
+            self._garantir_editavel(conn, sc_id)
+            cur = conn.execute(
+                "DELETE FROM solicitacao_itens WHERE id=? AND solicitacao_id=?",
+                (item_id, sc_id),
+            )
+            return cur.rowcount > 0
 
 
 fornecedor_preco_repo = FornecedorPrecoRepository()
