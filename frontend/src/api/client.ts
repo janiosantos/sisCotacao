@@ -1582,6 +1582,18 @@ export const api = {
     request<{ parametro: EstoqueParametro }>("POST", "/api/estoque/parametros", data),
   excluirParametroEstoque: (produtoId: number, depositoId: number) =>
     request("DELETE", "/api/estoque/parametros" + qs({ produto_id: produtoId, deposito_id: depositoId })),
+  criarCicloInventario: (data: { deposito_id: number; nome: string }) =>
+    request<{ ciclo: InventarioCiclo }>("POST", "/api/estoque/inventario/ciclos", data),
+  listarCiclosInventario: (depositoId?: number) =>
+    request<{ ciclos: InventarioCiclo[] }>("GET", "/api/estoque/inventario/ciclos" + qs({ deposito_id: depositoId })),
+  detalheCicloInventario: (id: number) =>
+    request<{ ciclo: InventarioCicloDetalhe }>("GET", `/api/estoque/inventario/ciclos/${id}`),
+  registrarContagem: (id: number, data: { produto_id: number; quantidade_contada: number; observacao?: string }) =>
+    request<{ contagem: { status: string; diferenca: number } }>("POST", `/api/estoque/inventario/ciclos/${id}/contagens`, data),
+  aprovarCicloInventario: (id: number) =>
+    request<{ resultado: { ajustes: number; duplicado?: boolean } }>("POST", `/api/estoque/inventario/ciclos/${id}/aprovar`),
+  cancelarCicloInventario: (id: number) =>
+    request("POST", `/api/estoque/inventario/ciclos/${id}/cancelar`),
   registrarMovimento: (data: MovimentoPayload) =>
     request<MovimentoResult>("POST", "/api/estoque/movimento", data),
   listarMovimentos: (params: Record<string, unknown> = {}) =>
@@ -2343,6 +2355,44 @@ export interface EstoqueParametroPayload {
   calendario?: string | null;
   fonte_valor?: string;
   motivo?: string | null;
+}
+
+export interface InventarioCiclo {
+  id: number;
+  deposito_id: number;
+  deposito_nome: string;
+  nome: string;
+  status: string;
+  criado_em: string;
+  fechado_em?: string | null;
+  pendentes: number;
+  conferidas: number;
+  divergentes: number;
+  itens?: number;
+}
+
+export interface InventarioContagem {
+  id: number;
+  produto_id: number;
+  sku: string;
+  produto_nome: string;
+  saldo_esperado: number;
+  quantidade_contada?: number | null;
+  diferenca?: number | null;
+  status: string;
+  executor_nome?: string | null;
+  observacao?: string | null;
+}
+
+export interface InventarioCicloDetalhe {
+  id: number;
+  deposito_id: number;
+  deposito_nome: string;
+  nome: string;
+  status: string;
+  criado_em: string;
+  fechado_em?: string | null;
+  contagens: InventarioContagem[];
 }
 
 export interface SaldoItem {

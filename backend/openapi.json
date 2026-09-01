@@ -3518,6 +3518,179 @@
           }
         }
       }
+    },
+    "/api/estoque/inventario/ciclos": {
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Cria ciclo de contagem e gera a lista de contagem do dep?sito (EST-006)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "deposito_id": {
+                    "type": "integer"
+                  },
+                  "nome": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ciclo criado"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Lista ciclos de contagem (com contagem de pendentes/conferidas/divergentes)",
+        "parameters": [
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ciclos"
+          }
+        }
+      }
+    },
+    "/api/estoque/inventario/ciclos/{ciclo_id}": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Detalhe do ciclo com a lista de contagens e diferen?as",
+        "parameters": [
+          {
+            "name": "ciclo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ciclo com contagens"
+          }
+        }
+      }
+    },
+    "/api/estoque/inventario/ciclos/{ciclo_id}/contagens": {
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Registra a contagem de um produto no ciclo",
+        "parameters": [
+          {
+            "name": "ciclo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "produto_id": {
+                    "type": "integer"
+                  },
+                  "quantidade_contada": {
+                    "type": "number"
+                  },
+                  "observacao": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contagem registrada"
+          },
+          "400": {
+            "description": "Contagem inv?lida"
+          }
+        }
+      }
+    },
+    "/api/estoque/inventario/ciclos/{ciclo_id}/aprovar": {
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Aprova o ciclo e aplica o ajuste aprovado (fato inventario no ledger)",
+        "parameters": [
+          {
+            "name": "ciclo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ajustes aplicados"
+          },
+          "400": {
+            "description": "H? pend?ncias ou ciclo inv?lido"
+          }
+        }
+      }
+    },
+    "/api/estoque/inventario/ciclos/{ciclo_id}/cancelar": {
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Cancela o ciclo",
+        "parameters": [
+          {
+            "name": "ciclo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancelado"
+          },
+          "400": {
+            "description": "N?o cancel?vel"
+          }
+        }
+      }
     }
   },
   "components": {

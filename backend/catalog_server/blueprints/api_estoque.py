@@ -6,6 +6,7 @@ from catalog_server.db import system_conn
 from catalog_server.repositories import deposito_repo, estoque_repo, expedicao_repo, lote_repo
 from catalog_server.repositories import loja as loja_repo
 from catalog_server.services import estoque_parametro as parametro_svc
+from catalog_server.services import inventario_ciclo as inventario_svc
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server import contabil_gatilhos
 
@@ -145,6 +146,67 @@ def excluir_parametro():
         return jsonify({"error": "produto_id e deposito_id são obrigatórios", "code": "parametro_obrigatorio"}), 400
     if not parametro_svc.excluir(produto_id, deposito_id):
         return jsonify({"error": "Parâmetro não encontrado", "code": "parametro_nao_encontrado"}), 404
+    return jsonify({"ok": True})
+
+
+# ─── Inventário cíclico (EST-006) ──────────────────────────
+
+
+@api_estoque_bp.post("/api/estoque/inventario/ciclos")
+def criar_ciclo():
+    data = request.get_json(silent=True) or {}
+    deposito_id = data.get("deposito_id")
+    nome = data.get("nome")
+    if not deposito_id or not nome:
+        return jsonify({"error": "deposito_id e nome são obrigatórios", "code": "ciclo_obrigatorio"}), 400
+    try:
+        return jsonify({"ciclo": inventario_svc.criar_ciclo(int(deposito_id), nome, usuario_id_requisicao())})
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "ciclo_invalido"}), 400
+
+
+@api_estoque_bp.get("/api/estoque/inventario/ciclos")
+def listar_ciclos():
+    deposito_id = request.args.get("deposito_id", type=int)
+    return jsonify({"ciclos": inventario_svc.listar_ciclos(deposito_id)})
+
+
+@api_estoque_bp.get("/api/estoque/inventario/ciclos/<int:ciclo_id>")
+def detalhe_ciclo(ciclo_id: int):
+    ciclo = inventario_svc.detalhe_ciclo(ciclo_id)
+    if not ciclo:
+        return jsonify({"error": "Ciclo não encontrado", "code": "ciclo_nao_encontrado"}), 404
+    return jsonify({"ciclo": ciclo})
+
+
+@api_estoque_bp.post("/api/estoque/inventario/ciclos/<int:ciclo_id>/contagens")
+def registrar_contagem(ciclo_id: int):
+    data = request.get_json(silent=True) or {}
+    produto_id = data.get("produto_id")
+    quantidade_contada = data.get("quantidade_contada")
+    if not produto_id or quantidade_contada is None:
+        return jsonify({"error": "produto_id e quantidade_contada são obrigatórios", "code": "contagem_obrigatoria"}), 400
+    try:
+        return jsonify({"contagem": inventario_svc.registrar_contagem(
+            ciclo_id, int(produto_id), float(quantidade_contada),
+            usuario_id_requisicao(), data.get("observacao"),
+        )})
+    except (LookupError, ValueError) as exc:
+        return jsonify({"error": str(exc), "code": "contagem_invalida"}), 400
+
+
+@api_estoque_bp.post("/api/estoque/inventario/ciclos/<int:ciclo_id>/aprovar")
+def aprovar_ciclo(ciclo_id: int):
+    try:
+        return jsonify({"resultado": inventario_svc.aprovar_ciclo(ciclo_id, usuario_id_requisicao())})
+    except (LookupError, ValueError) as exc:
+        return jsonify({"error": str(exc), "code": "ciclo_aprovacao_invalida"}), 400
+
+
+@api_estoque_bp.post("/api/estoque/inventario/ciclos/<int:ciclo_id>/cancelar")
+def cancelar_ciclo(ciclo_id: int):
+    if not inventario_svc.cancelar_ciclo(ciclo_id):
+        return jsonify({"error": "Ciclo não encontrado ou já encerrado", "code": "ciclo_nao_cancelavel"}), 400
     return jsonify({"ok": True})
 
 

@@ -5,6 +5,7 @@ import { api, type Deposito } from "../../api/client";
 import { fmtDate } from "../../ui/format";
 import { toast } from "../../ui/dom";
 import { Badge, Button, Cell, Field, Input, Modal, Select, Table, TBody, THead } from "../../ui/ui";
+import { InventarioCiclo as InventarioCicloView } from "./inventario-ciclo";
 
 interface InventarioRow {
   id: number;
@@ -24,6 +25,21 @@ interface InventarioItem {
 }
 
 export function Inventario({ depositos }: { depositos: Deposito[] }) {
+  const [modo, setModo] = useState<"simples" | "ciclos">("simples");
+  if (modo === "ciclos") {
+    return (
+      <div>
+        <div className="mb-3 flex items-center justify-end">
+          <Button size="sm" variant="ghost" onClick={() => setModo("simples")}>← Inventário simples</Button>
+        </div>
+        <InventarioCicloView depositos={depositos} />
+      </div>
+    );
+  }
+  return <InventarioSimples depositos={depositos} onCiclos={() => setModo("ciclos")} />;
+}
+
+function InventarioSimples({ depositos, onCiclos }: { depositos: Deposito[]; onCiclos: () => void }) {
   const [rows, setRows] = useState<InventarioRow[]>([]);
   const [nome, setNome] = useState("");
   const [dep, setDep] = useState("");
@@ -109,6 +125,9 @@ export function Inventario({ depositos }: { depositos: Deposito[] }) {
         </Field>
         <Button variant="primary" onClick={() => void criar()}>
           + Novo inventário
+        </Button>
+        <Button variant="secondary" onClick={onCiclos}>
+          Ciclos de contagem
         </Button>
       </div>
 
