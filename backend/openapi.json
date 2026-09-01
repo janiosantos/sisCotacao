@@ -3894,6 +3894,123 @@
           }
         }
       }
+    },
+    "/api/estoque/lotes/{lote_id}/status": {
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Bloqueia/desbloqueia lote (ativo|bloqueado)",
+        "parameters": [
+          {
+            "name": "lote_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ativo",
+                      "bloqueado"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status atualizado"
+          },
+          "404": {
+            "description": "Lote n?o encontrado"
+          }
+        }
+      }
+    },
+    "/api/estoque/lotes/fefo": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Aloca??o FEFO de um produto/dep?sito (primeiro a vencer primeiro a sair)",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "quantidade",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aloca??o FEFO"
+          },
+          "400": {
+            "description": "Dispon?vel insuficiente"
+          }
+        }
+      }
+    },
+    "/api/estoque/lotes/recall": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Recall: clientes e documentos afetados por lote (via ledger)",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "lote_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Itens afetados"
+          }
+        }
+      }
     }
   },
   "components": {

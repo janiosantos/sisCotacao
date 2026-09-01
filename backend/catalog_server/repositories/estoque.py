@@ -292,6 +292,8 @@ class EstoqueRepository:
                 if tipo in ("entrada", "inventario"):
                     novo_saldo = saldo_atual + q
                 elif tipo == "saida":
+                    if lote_id is not None:
+                        self._validar_lote_saida(conn, lote_id)
                     disponivel = saldo_atual - reserva_atual
                     if q > disponivel:
                         raise ValueError(
@@ -301,6 +303,8 @@ class EstoqueRepository:
                 elif tipo == "ajuste":
                     novo_saldo = q
                 elif tipo == "transferencia":
+                    if lote_id is not None:
+                        self._validar_lote_saida(conn, lote_id)
                     disponivel = saldo_atual - reserva_atual
                     if q > disponivel:
                         raise ValueError(
@@ -312,6 +316,11 @@ class EstoqueRepository:
                     " WHERE id=?",
                     (novo_saldo, novo_custo_medio, saldo_id),
                 )
+                if lote_id is not None and tipo in ("saida", "transferencia"):
+                    conn.execute(
+                        "UPDATE lotes SET quantidade = GREATEST(quantidade - ?, 0) WHERE id=?",
+                        (q, lote_id),
+                    )
 
             cur = conn.execute(
                 "INSERT INTO estoque_movimento (deposito_id, produto_id, tipo,"
@@ -488,6 +497,20 @@ class EstoqueRepository:
                 (deposito_id, produto_id),
             ).fetchone()
         return float(row["custo_medio"] or 0) if row else 0.0
+
+    @staticmethod
+    def _validar_lote_saida(conn, lote_id: int) -> None:
+        """Bloqueia saída de lote vencido ou bloqueado (EST-008)."""
+        row = conn.execute(
+            "SELECT codigo, status, data_validade FROM lotes WHERE id=?",
+            (lote_id,),
+        ).fetchone()
+        if row:
+            v = (row["data_validade"] or "").strip()[:10] if (row["data_validade"] or "").strip() else ""
+            from datetime import date
+            derivado = "vencido" if v and v <= date.today().isoformat() else (row["status"] or "ativo")
+            if derivado in ("vencido", "bloqueado"):
+                raise ValueError(f"Lote {row['codigo']} está {derivado} — não pode ser usado em saída")
 
     @staticmethod
     def _saldo_na_data(conn, deposito_id: int, produto_id: int, data_corte: str) -> float:

@@ -1618,6 +1618,15 @@ export const api = {
     request<LoteItem[]>("GET", "/api/estoque/lotes" + qs(params)),
   detalharLote: (id: number) => request<LoteItem>("GET", `/api/estoque/lotes/${id}`),
   criarLote: (data: LotePayload) => request<{ id: number }>("POST", "/api/estoque/lotes", data),
+  alterarStatusLote: (id: number, status: string) =>
+    request<{ ok: boolean }>("POST", `/api/estoque/lotes/${id}/status`, { status }),
+  fefoLote: (produtoId: number, depositoId: number, quantidade: number) =>
+    request<{ alocacao: { lote_id: number; codigo: string; quantidade: number; data_validade: string | null }[] }>(
+      "GET",
+      "/api/estoque/lotes/fefo" + qs({ produto_id: produtoId, deposito_id: depositoId, quantidade })
+    ),
+  recallLote: (produtoId: number, loteId?: number) =>
+    request<{ itens: RecallItem[] }>("GET", "/api/estoque/lotes/recall" + qs({ produto_id: produtoId, lote_id: loteId })),
   listarExpedicao: (params: Record<string, unknown> = {}) =>
     request<Expedicao[]>("GET", "/api/expedicao" + qs(params)),
   criarExpedicao: (data: { codigo: string; deposito_id: number; transportadora?: string; observacao?: string }) =>
@@ -2511,6 +2520,12 @@ export interface LoteItem {
   data_fabricacao: string | null;
   data_validade: string | null;
   quantidade: number;
+  status?: string;
+  origem?: string;
+  documento?: string | null;
+  custo_unitario?: number | null;
+  fornecedor_id?: number | null;
+  observacao?: string | null;
   criado_em: string;
   deposito_nome: string;
   sku: string;
@@ -2525,6 +2540,24 @@ export interface LotePayload {
   quantidade?: number;
   data_fabricacao?: string;
   data_validade?: string;
+  origem?: string;
+  documento?: string;
+  custo_unitario?: number;
+  fornecedor_id?: number;
+  observacao?: string;
+}
+
+export interface RecallItem {
+  lote_id: number;
+  lote: string;
+  quantidade: number;
+  criado_em: string;
+  orcamento_id: number;
+  orcamento_numero: string;
+  data: string;
+  cliente_id: number;
+  cliente: string;
+  cliente_doc: string;
 }
 
 export interface Expedicao {

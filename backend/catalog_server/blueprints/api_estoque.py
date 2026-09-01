@@ -8,6 +8,7 @@ from catalog_server.repositories import loja as loja_repo
 from catalog_server.services import estoque_parametro as parametro_svc
 from catalog_server.services import inventario_ciclo as inventario_svc
 from catalog_server.services import endereco as endereco_svc
+from catalog_server.services import lote_rastreabilidade
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server import contabil_gatilhos
 
@@ -417,13 +418,54 @@ def criar_lote():
         erros.append("codigo")
     if erros:
         return jsonify({"error": "Campos inválidos: " + ", ".join(erros)}), 400
-    lote_id = lote_repo.create(
-        deposito_id, produto_id, codigo,
-        quantidade=float(data.get("quantidade") or 0),
-        data_fabricacao=data.get("data_fabricacao"),
-        data_validade=data.get("data_validade"),
-    )
+    try:
+        lote_id = lote_rastreabilidade.criar_lote(
+            int(deposito_id), int(produto_id), codigo,
+            quantidade=float(data.get("quantidade") or 0),
+            data_fabricacao=data.get("data_fabricacao"),
+            data_validade=data.get("data_validade"),
+            custo_unitario=float(data["custo_unitario"]) if data.get("custo_unitario") is not None else None,
+            fornecedor_id=int(data["fornecedor_id"]) if data.get("fornecedor_id") else None,
+            documento=data.get("documento"),
+            origem=data.get("origem") or "avulsa",
+            observacao=data.get("observacao"),
+        )
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "lote_invalido"}), 400
     return jsonify({"id": lote_id}), 201
+
+
+@api_estoque_bp.post("/api/estoque/lotes/<int:lote_id>/status")
+def alterar_status_lote(lote_id: int):
+    data = request.get_json(silent=True) or {}
+    status = data.get("status")
+    if status not in ("ativo", "bloqueado"):
+        return jsonify({"error": "status inválido (ativo|bloqueado)", "code": "status_invalido"}), 400
+    if not lote_rastreabilidade.atualizar_status(lote_id, status):
+        return jsonify({"error": "Lote não encontrado", "code": "lote_nao_encontrado"}), 404
+    return jsonify({"ok": True})
+
+
+@api_estoque_bp.get("/api/estoque/lotes/fefo")
+def consultar_fefo():
+    produto_id = request.args.get("produto_id", type=int)
+    deposito_id = request.args.get("deposito_id", type=int)
+    quantidade = request.args.get("quantidade", type=float)
+    if not produto_id or not deposito_id or not quantidade:
+        return jsonify({"error": "produto_id, deposito_id e quantidade são obrigatórios", "code": "fefo_obrigatorio"}), 400
+    try:
+        return jsonify({"alocacao": lote_rastreabilidade.fefo(produto_id, deposito_id, quantidade)})
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "fefo_insuficiente"}), 400
+
+
+@api_estoque_bp.get("/api/estoque/lotes/recall")
+def recall_lote():
+    produto_id = request.args.get("produto_id", type=int)
+    lote_id = request.args.get("lote_id", type=int)
+    if not produto_id:
+        return jsonify({"error": "produto_id é obrigatório", "code": "recall_obrigatorio"}), 400
+    return jsonify({"itens": lote_rastreabilidade.recall(produto_id, lote_id)})
 
 
 # ─── Expedição ─────────────────────────────────────────────
