@@ -3306,6 +3306,47 @@
           }
         }
       }
+    },
+    "/api/estoque/valorizacao": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Valoriza??o do estoque por dep?sito (quantidade ? custo m?dio), opcional por data de corte (EST-004)",
+        "parameters": [
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "data_corte",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "produto_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Valoriza??o (total + itens)"
+          },
+          "400": {
+            "description": "deposito_id obrigat?rio"
+          }
+        }
+      }
     }
   },
   "components": {

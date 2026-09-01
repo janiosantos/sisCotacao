@@ -13,7 +13,8 @@ export function Saldo({ depositos }: { depositos: Deposito[] }) {
   const [q, setQ] = useState("");
   const [familia, setFamilia] = useState("");
 
-  const [familias, setFamilias] = useState<{ id: number; nome: string }[]>([]);
+const [familias, setFamilias] = useState<{ id: number; nome: string }[]>([]);
+  const [valorizacao, setValorizacao] = useState<{ total: number; data_corte?: string | null } | null>(null);
   useEffect(() => {
     void api.listarFamilias().then(setFamilias).catch(() => {});
   }, []);
@@ -28,6 +29,15 @@ export function Saldo({ depositos }: { depositos: Deposito[] }) {
       toast("Erro ao carregar saldo", "error");
     } finally {
       setCarregando(false);
+    }
+    if (dep) {
+      try {
+        setValorizacao(await api.valorizacaoEstoque(Number(dep)));
+      } catch {
+        setValorizacao(null);
+      }
+    } else {
+      setValorizacao(null);
     }
   };
 
@@ -65,6 +75,16 @@ export function Saldo({ depositos }: { depositos: Deposito[] }) {
           Filtrar
         </Button>
       </div>
+
+{valorizacao ? (
+        <div className="mb-3 flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3">
+          <div className="text-sm text-gray-600">
+            <span className="font-semibold text-gray-800">Valorização do estoque</span>
+            <span className="ml-2 text-xs text-gray-400">quantidade × custo médio</span>
+          </div>
+          <div className="text-lg font-bold text-emerald-700">{fmtMoney(valorizacao.total)}</div>
+        </div>
+      ) : null}
 
       {carregando ? (
         <Loading />

@@ -1571,6 +1571,11 @@ export const api = {
     request<{ ok: boolean }>("PATCH", `/api/depositos/${id}/ativo` + qs({ ativo })),
   saldoEstoque: (params: Record<string, unknown> = {}) =>
     request<SaldoItem[]>("GET", "/api/estoque/saldo" + qs(params)),
+  valorizacaoEstoque: (depositoId: number, dataCorte?: string) =>
+    request<{ deposito_id: number; data_corte?: string | null; total: number; itens: { produto_id: number; sku: string; nome: string; quantidade: number; custo_medio: number; valor: number }[] }>(
+      "GET",
+      "/api/estoque/valorizacao" + qs({ deposito_id: depositoId, data_corte: dataCorte })
+    ),
   registrarMovimento: (data: MovimentoPayload) =>
     request<MovimentoResult>("POST", "/api/estoque/movimento", data),
   listarMovimentos: (params: Record<string, unknown> = {}) =>

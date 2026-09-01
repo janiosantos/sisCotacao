@@ -77,6 +77,17 @@ def consultar_disponibilidade(produto_id: int):
     return jsonify({"produto_id": produto_id, "depositos": loja_repo.disponibilidade(produto_id, deposito_id)})
 
 
+@api_estoque_bp.get("/api/estoque/valorizacao")
+def consultar_valorizacao():
+    """Valorização do estoque por depósito (quantidade × custo médio), opcionalmente por data de corte (EST-004)."""
+    deposito_id = request.args.get("deposito_id", type=int)
+    if not deposito_id:
+        return jsonify({"error": "deposito_id é obrigatório", "code": "deposito_obrigatorio"}), 400
+    data_corte = request.args.get("data_corte") or None
+    produto_id = request.args.get("produto_id", type=int)
+    return jsonify(estoque_repo.valorizar(deposito_id, data_corte=data_corte, produto_id=produto_id))
+
+
 # ─── Movimento ─────────────────────────────────────────────
 
 @api_estoque_bp.post("/api/estoque/movimento")

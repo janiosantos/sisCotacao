@@ -489,6 +489,86 @@ class EstoqueRepository:
             ).fetchone()
         return float(row["custo_medio"] or 0) if row else 0.0
 
+    @staticmethod
+    def _saldo_na_data(conn, deposito_id: int, produto_id: int, data_corte: str) -> float:
+        """Saldo materializado na data de corte = saldo_posterior do último fato <= data."""
+        row = conn.execute(
+            "SELECT saldo_posterior FROM estoque_movimento"
+            " WHERE deposito_id=? AND produto_id=? AND SUBSTR(criado_em,1,10) <= ?"
+            " ORDER BY id DESC LIMIT 1",
+            (deposito_id, produto_id, data_corte),
+        ).fetchone()
+        return float(row["saldo_posterior"] or 0) if row else 0.0
+
+    @staticmethod
+    def _custo_medio_na_data(conn, deposito_id: int, produto_id: int, data_corte: str) -> float:
+        """Custo médio vigente na data de corte (custo_medio_anterior do 1º fato após a data)."""
+        row = conn.execute(
+            "SELECT custo_medio_anterior FROM estoque_movimento"
+            " WHERE deposito_id=? AND produto_id=? AND SUBSTR(criado_em,1,10) > ?"
+            " ORDER BY id ASC LIMIT 1",
+            (deposito_id, produto_id, data_corte),
+        ).fetchone()
+        if row:
+            return float(row["custo_medio_anterior"] or 0)
+        cur = conn.execute(
+            "SELECT custo_medio FROM estoque_saldo WHERE deposito_id=? AND produto_id=?",
+            (deposito_id, produto_id),
+        ).fetchone()
+        return float(cur["custo_medio"] or 0) if cur else 0.0
+
+    def valorizar(
+        self,
+        deposito_id: int,
+        data_corte: str | None = None,
+        produto_id: int | None = None,
+    ) -> dict:
+        """Valorização do estoque (EST-004): quantidade × custo médio.
+
+        Sem `data_corte`, usa o saldo e o custo médio vigentes. Com `data_corte`,
+        reprojeta saldo (último fato ≤ data) e custo médio (estado na data) a
+        partir do ledger — nunca edita o fato.
+        """
+        with system_conn() as conn:
+            sql = (
+                "SELECT s.produto_id, p.sku, p.nome, p.unidade_venda,"
+                " s.quantidade, s.custo_medio, s.deposito_id"
+                " FROM estoque_saldo s JOIN produtos_cadastro p ON p.id=s.produto_id"
+                " WHERE s.deposito_id=?"
+            )
+            params: list = [deposito_id]
+            if produto_id:
+                sql += " AND s.produto_id=?"
+                params.append(produto_id)
+            sql += " ORDER BY p.nome, p.sku"
+            rows = conn.execute(sql, tuple(params)).fetchall()
+
+            itens = []
+            total = 0.0
+            for r in rows:
+                qtd = float(r["quantidade"] or 0)
+                cm = float(r["custo_medio"] or 0)
+                if data_corte:
+                    qtd = self._saldo_na_data(conn, deposito_id, r["produto_id"], data_corte)
+                    cm = self._custo_medio_na_data(conn, deposito_id, r["produto_id"], data_corte)
+                valor = round(qtd * cm, 2)
+                total += valor
+                itens.append({
+                    "produto_id": r["produto_id"],
+                    "sku": r["sku"],
+                    "nome": r["nome"],
+                    "unidade_venda": r["unidade_venda"] or "UN",
+                    "quantidade": qtd,
+                    "custo_medio": cm,
+                    "valor": valor,
+                })
+            return {
+                "deposito_id": deposito_id,
+                "data_corte": data_corte,
+                "total": round(total, 2),
+                "itens": itens,
+            }
+
     def reconciliar(self, deposito_id: int, produto_id: int) -> dict:
         produto_id = produto_id
         with system_conn() as conn:
