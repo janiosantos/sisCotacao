@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 from catalog_server.repositories import fornecedor_preco_repo, fornecedor_preferencial_repo, solicitacao_repo, tolerancia_repo
-from catalog_server.services import custo_engine, cotacao_necessidade, comparacao, alcada_compra, pedido_compra
+from catalog_server.services import custo_engine, cotacao_necessidade, comparacao, alcada_compra, pedido_compra, recebimento as recebimento_svc
 
 api_compras_avancado_bp = Blueprint("api_compras_avancado", __name__)
 
@@ -244,6 +244,62 @@ def historico_compra():
     if not produto_id:
         return jsonify({"error": "produto_id é obrigatório", "code": "produto_obrigatorio"}), 400
     return jsonify(pedido_compra.historico_produto(produto_id))
+
+
+# ─── Documento de recebimento (REC-001, flag NOVO_RECEBIMENTO) ─
+
+
+@api_compras_avancado_bp.post("/api/compras/pedidos/<int:pedido_id>/recebimentos")
+def criar_recebimento(pedido_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(recebimento_svc.criar(
+            pedido_id, int(data.get("deposito_id") or 1), data.get("documento_fiscal"), data.get("operador_id"),
+        ))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "pedido_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "recebimento_invalido"}), 400
+
+
+@api_compras_avancado_bp.get("/api/compras/recebimentos")
+def listar_recebimentos():
+    return jsonify({"recebimentos": recebimento_svc.listar(request.args.get("pedido_id", type=int))})
+
+
+@api_compras_avancado_bp.get("/api/compras/recebimentos/<int:recebimento_id>")
+def detalhe_recebimento(recebimento_id: int):
+    r = recebimento_svc.detalhe(recebimento_id)
+    if not r:
+        return jsonify({"error": "Recebimento não encontrado", "code": "recebimento_nao_encontrado"}), 404
+    return jsonify(r)
+
+
+@api_compras_avancado_bp.post("/api/compras/recebimentos/<int:recebimento_id>/itens/<int:item_id>/conferir")
+def conferir_recebimento(recebimento_id: int, item_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(recebimento_svc.conferir_item(
+            recebimento_id, item_id, data.get("qtd_aceita") or 0,
+            data.get("qtd_recusada") or 0, data.get("qtd_avariada") or 0,
+        ))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "recebimento_item_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "conferencia_invalida"}), 400
+
+
+@api_compras_avancado_bp.post("/api/compras/recebimentos/<int:recebimento_id>/finalizar")
+def finalizar_recebimento(recebimento_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(recebimento_svc.finalizar(
+            recebimento_id, data.get("condicao_pagamento_id"), data.get("usuario_id"),
+        ))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "recebimento_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "recebimento_invalido"}), 400
 
 
 @api_compras_avancado_bp.get("/api/fornecedor-preferencial")
