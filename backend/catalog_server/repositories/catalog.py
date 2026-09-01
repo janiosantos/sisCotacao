@@ -321,6 +321,64 @@ SELECT p.id, p.sku, p.preco, p.marca, p.external_id,
                     }
         return out
 
+    def busca_rapida(self, q: str, limite: int = 20, deposito_id: int | None = None) -> list[dict]:
+        """Busca rápida do PDV (VEN-002): exata por EAN/SKU/código fornecedor
+        primeiro (ranking), depois termo no nome/marca/atributos. Traz saldo."""
+        q = (q or "").strip()
+        if not q:
+            return []
+        limite = min(max(limite, 1), 100)
+        q_digits = "".join(ch for ch in q if ch.isdigit())
+        q_like = f"%{q}%"
+        with system_conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT p.id, p.sku, p.ean, p.nome, p.marca, p.preco, p.preco_promocional,
+                       p.unidade_venda, p.fator_conversao, p.ativo,
+                       cat.nome AS categoria, sub.nome AS subcategoria,
+                       (p.preco_promocional > 0 AND p.preco_promocional < p.preco) AS tem_promocao,
+                       CASE
+                         WHEN p.ean=? OR p.sku=? THEN 0
+                         WHEN EXISTS (SELECT 1 FROM produto_identificador i
+                                      WHERE i.produto_id=p.id AND i.ativo AND i.valor=?) THEN 1
+                         WHEN p.sku ILIKE ? THEN 2
+                         WHEN p.nome ILIKE ? OR p.marca ILIKE ? THEN 3
+                         ELSE 4
+                       END AS rank
+                FROM produtos_cadastro p
+                LEFT JOIN categorias cat ON cat.id=p.categoria_id
+                LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id
+                WHERE p.ean=? OR p.sku=? OR p.sku ILIKE ? OR p.nome ILIKE ? OR p.marca ILIKE ?
+                   OR EXISTS (SELECT 1 FROM produto_identificador i
+                              WHERE i.produto_id=p.id AND i.ativo
+                                AND (i.valor=? OR i.valor LIKE ?))
+                ORDER BY rank, p.nome
+                LIMIT ?
+                """,
+                (q_digits, q, q, q_like, q_like, q_like,
+                 q_digits, q, q_like, q_like, q_like, q, q_like, limite),
+            ).fetchall()
+            itens = []
+            for r in rows:
+                item = dict(r)
+                item["disponibilidade"] = None
+                item["disponivel"] = 0.0
+                if deposito_id:
+                    s = conn.execute(
+                        "SELECT quantidade, reserva, COALESCE(bloqueado,0) AS bloqueado,"
+                        " COALESCE(separacao,0) AS separacao FROM estoque_saldo"
+                        " WHERE produto_id=? AND deposito_id=?",
+                        (r["id"], deposito_id),
+                    ).fetchone()
+                    if s:
+                        disp = float(s["quantidade"] or 0) - float(s["reserva"] or 0) - float(s["bloqueado"] or 0) - float(s["separacao"] or 0)
+                        item["disponivel"] = round(disp, 3)
+                        item["disponibilidade"] = {"fisico": float(s["quantidade"] or 0),
+                                                   "reservado": float(s["reserva"] or 0),
+                                                   "disponivel": round(disp, 3)}
+                itens.append(item)
+        return itens
+
     # ------------------------------------------------------------------
 
     def products_with_history(self) -> list[dict]:

@@ -10,6 +10,7 @@ from catalog_server.repositories import (
     produto_repo,
     marcas as marcas_repo,
     grupos as grupos_repo,
+    catalog_repo,
 )
 from catalog_server.services import imagens_service, parse_url_service
 from catalog_server.services import imagens_lote
@@ -765,6 +766,16 @@ def buscar_por_codigo():
     q = request.args.get("q") or ""
     limite = int(request.args.get("limite") or 20)
     return jsonify({"produtos": ident_svc.buscar(q, limite)})
+
+
+@api_produtos_bp.get("/api/produtos/busca-rapida")
+def busca_rapida():
+    """Busca rápida do PDV (VEN-002): exata (EAN/SKU/código fornecedor) antes de
+    textual, rankeada, com disponibilidade por depósito."""
+    q = request.args.get("q") or ""
+    limite = int(request.args.get("limite") or 20)
+    deposito_id = request.args.get("deposito_id", type=int)
+    return jsonify({"produtos": catalog_repo.busca_rapida(q, limite, deposito_id)})
 
 
 # ----------------------------------------------------------------------

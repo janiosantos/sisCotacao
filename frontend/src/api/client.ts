@@ -1571,6 +1571,8 @@ export const api = {
     request<{ ok: boolean }>("PATCH", `/api/depositos/${id}/ativo` + qs({ ativo })),
   saldoEstoque: (params: Record<string, unknown> = {}) =>
     request<SaldoItem[]>("GET", "/api/estoque/saldo" + qs(params)),
+  buscaRapida: (q: string, depositoId?: number, limite = 20) =>
+    request<{ produtos: BuscaRapidaItem[] }>("GET", "/api/produtos/busca-rapida" + qs({ q, deposito_id: depositoId, limite })),
   valorizacaoEstoque: (depositoId: number, dataCorte?: string) =>
     request<{ deposito_id: number; data_corte?: string | null; total: number; itens: { produto_id: number; sku: string; nome: string; quantidade: number; custo_medio: number; valor: number }[] }>(
       "GET",
@@ -2551,6 +2553,21 @@ export interface FornecedorDesempenho {
   lead_time_override?: number | null;
   lead_time_override_motivo?: string | null;
   lead_time_efetivo?: number | null;
+}
+
+export interface BuscaRapidaItem {
+  id: number;
+  sku: string;
+  ean?: string | null;
+  nome: string;
+  marca?: string | null;
+  preco: number;
+  preco_promocional?: number | null;
+  unidade_venda?: string | null;
+  fator_conversao?: number | null;
+  tem_promocao?: boolean;
+  disponivel: number;
+  disponibilidade?: { fisico: number; reservado: number; disponivel: number } | null;
 }
 
 export interface SaldoItem {
