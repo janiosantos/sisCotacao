@@ -1603,7 +1603,7 @@ export const api = {
   upsertItemTabela: (id: number, data: TabelaPrecoItemPayload) =>
     request<{ ok: boolean }>("POST", `/api/tabelas-preco/${id}/itens`, data),
   deletarItemTabela: (id: number, varianteId: number) =>
-    request<{ ok: boolean }>("DELETE", `/api/tabelas-preco/${id}/itens` + qs({ variante_id: varianteId })),
+    request<{ ok: boolean }>("DELETE", `/api/tabelas-preco/${id}/itens` + qs({ produto_id: varianteId })),
   gerarPrecosTabela: (id: number, data?: Record<string, unknown>) =>
     request<{ gerados: number }>("POST", `/api/tabelas-preco/${id}/gerar`, data || {}),
   calcularPreco: (varianteId: number, params: Record<string, unknown> = {}) =>
@@ -1655,9 +1655,9 @@ export const api = {
   upsertItemPromocao: (id: number, data: PromocaoItemPayload) =>
     request<{ ok: boolean }>("POST", `/api/promocoes/${id}/itens`, data),
   aplicarPromocao: (id: number, varianteIds: number[]) =>
-    request<{ aplicados: number }>("POST", `/api/promocoes/${id}/aplicar`, { variante_ids: varianteIds }),
+    request<{ aplicados: number }>("POST", `/api/promocoes/${id}/aplicar`, { produto_ids: varianteIds }),
   deletarItemPromocao: (id: number, varianteId: number) =>
-    request<{ ok: boolean }>("DELETE", `/api/promocoes/${id}/itens` + qs({ variante_id: varianteId })),
+    request<{ ok: boolean }>("DELETE", `/api/promocoes/${id}/itens` + qs({ produto_id: varianteId })),
   listarRevisoesPreco: (tabelaId?: number) =>
     request<RevisaoPreco[]>("GET", "/api/revisoes-preco" + qs({ tabela_id: tabelaId || "" })),
   criarRevisaoPreco: (data: { tabela_id: number; codigo: string; descricao?: string; data_validade?: string; cliente_id?: number }) =>
@@ -1787,7 +1787,7 @@ export const api = {
   // pós-venda
   listarFornecedorPreco: (params: Record<string, unknown> = {}) =>
     request<FornecedorPrecoItem[]>("GET", "/api/fornecedor-preco" + qs(params)),
-  upsertFornecedorPreco: (data: { fornecedor_id: number; variante_id: number; preco: number; prazo_entrega?: number; icms?: number; ipi?: number }) =>
+  upsertFornecedorPreco: (data: { fornecedor_id: number; produto_id: number; preco: number; prazo_entrega?: number; icms?: number; ipi?: number }) =>
     request<{ id: number }>("POST", "/api/fornecedor-preco", data),
   listarSolicitacoesCompra: (status?: string) =>
     request<SolicitacaoCompra[]>("GET", "/api/solicitacoes-compra" + qs({ status: status || "" })),
@@ -1795,11 +1795,11 @@ export const api = {
     request<SolicitacaoCompraDetalhe>("GET", `/api/solicitacoes-compra/${id}`),
   criarSolicitacaoCompra: (data: { codigo: string; descricao?: string; observacao?: string }) =>
     request<{ id: number }>("POST", "/api/solicitacoes-compra", data),
-  addItemSolicitacao: (id: number, data: { variante_id: number; quantidade: number; justificativa?: string }) =>
+  addItemSolicitacao: (id: number, data: { produto_id: number; quantidade: number; justificativa?: string }) =>
     request<{ id: number }>("POST", `/api/solicitacoes-compra/${id}/itens`, data),
   listarFornecedorPreferencial: (varianteId?: number) =>
-    request<FornecedorPrefItem[]>("GET", "/api/fornecedor-preferencial" + qs({ variante_id: varianteId || "" })),
-  upsertFornecedorPreferencial: (data: { variante_id: number; fornecedor_id: number; ranking?: number; ultimo_preco?: number; ultimo_prazo?: number }) =>
+    request<FornecedorPrefItem[]>("GET", "/api/fornecedor-preferencial" + qs({ produto_id: varianteId || "" })),
+  upsertFornecedorPreferencial: (data: { produto_id: number; fornecedor_id: number; ranking?: number; ultimo_preco?: number; ultimo_prazo?: number }) =>
     request<{ id: number }>("POST", "/api/fornecedor-preferencial", data),
   getToleranciaCompra: (fornecedorId: number) =>
     request<ToleranciaCompra>("GET", "/api/tolerancias-compra" + qs({ fornecedor_id: fornecedorId })),
@@ -1940,7 +1940,7 @@ export interface FeatureFlag {
 }
 
 export interface PerfilFiscal {
-  variante_id?: number;
+  produto_id?: number;
   ncm: string;
   cest: string;
   origem: number;
@@ -1950,8 +1950,7 @@ export interface PerfilFiscal {
 }
 
 export interface PerfilFiscalEfetivo {
-  variante_id: number;
-  produto_id: number | null;
+  produto_id: number;
   produto: PerfilFiscal | null;
   variante: PerfilFiscal | null;
   efetivo: {
@@ -2330,7 +2329,7 @@ export interface SaldoItem {
 
 export interface MovimentoPayload {
   deposito_id: number;
-  variante_id: number;
+  produto_id: number;
   tipo: "entrada" | "saida" | "ajuste" | "transferencia" | "inventario";
   quantidade: number;
   documento?: string;
@@ -2367,7 +2366,7 @@ export interface MovimentoItem {
 export interface TransferenciaPayload {
   origem_id: number;
   destino_id: number;
-  variante_id: number;
+  produto_id: number;
   quantidade: number;
   observacao?: string;
   usuario_id?: number;
@@ -2390,7 +2389,7 @@ export interface LoteItem {
 
 export interface LotePayload {
   deposito_id: number;
-  variante_id: number;
+  produto_id: number;
   codigo: string;
   quantidade?: number;
   data_fabricacao?: string;
@@ -2622,7 +2621,7 @@ export interface TabelaPrecoItem {
 }
 
 export interface TabelaPrecoItemPayload {
-  variante_id: number;
+  produto_id: number;
   preco: number;
   margem?: number;
 }
@@ -2688,7 +2687,7 @@ export interface PromocaoItem {
 }
 
 export interface PromocaoItemPayload {
-  variante_id: number;
+  produto_id: number;
   preco_promocional: number;
 }
 
@@ -3321,7 +3320,7 @@ export interface GarantiaPayload {
   dias?: number;
   cliente_id?: number;
   orcamento_id?: number;
-  variante_id?: number;
+  produto_id?: number;
   descricao?: string;
   observacao?: string;
   data_venda?: string;

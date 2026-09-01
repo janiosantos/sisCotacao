@@ -1,4 +1,4 @@
-﻿// pages/estoque/movimentos.tsx - módulo Estoque (Movimentos).
+// pages/estoque/movimentos.tsx - módulo Estoque (Movimentos).
 
 import { useEffect, useState } from "react";
 import { api, type Deposito, type MovimentoItem, type MovimentoPayload } from "../../api/client";
@@ -12,7 +12,7 @@ export function Movimentos({ depositos }: { depositos: Deposito[] }) {
   const [dep, setDep] = useState("");
   const [tipo, setTipo] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState({ deposito_id: "", tipo: "entrada", variante_id: "", quantidade: "", documento: "", observacao: "" });
+  const [form, setForm] = useState({ deposito_id: "", tipo: "entrada", produto_id: "", quantidade: "", documento: "", observacao: "" });
 
   const carregar = async () => {
     try {
@@ -33,12 +33,12 @@ export function Movimentos({ depositos }: { depositos: Deposito[] }) {
     const payload: MovimentoPayload = {
       deposito_id: Number(form.deposito_id),
       tipo: form.tipo as MovimentoPayload["tipo"],
-      variante_id: Number(form.variante_id),
+      produto_id: Number(form.produto_id),
       quantidade: parseFloat(form.quantidade.replace(",", ".")),
       documento: form.documento.trim() || undefined,
       observacao: form.observacao.trim() || undefined,
     };
-    if (!payload.deposito_id || !payload.variante_id || payload.quantidade <= 0) {
+    if (!payload.deposito_id || !payload.produto_id || payload.quantidade <= 0) {
       toast("Preencha depósito, produto e quantidade", "error");
       return;
     }
@@ -141,7 +141,7 @@ export function Movimentos({ depositos }: { depositos: Deposito[] }) {
             </Select>
           </Field>
           <Field label="Produto (ID)">
-            <Input type="number" min={1} value={form.variante_id} onChange={(e) => setForm({ ...form, variante_id: e.target.value })} />
+            <Input type="number" min={1} value={form.produto_id} onChange={(e) => setForm({ ...form, produto_id: e.target.value })} />
           </Field>
           <Field label="Quantidade">
             <Input type="number" min="0.01" step="any" value={form.quantidade} onChange={(e) => setForm({ ...form, quantidade: e.target.value })} />

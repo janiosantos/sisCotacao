@@ -19,7 +19,7 @@ repo = ProdutoRepository()
 
 
 @pytest.fixture()
-def variante_id(system_db):
+def produto_id(system_db):
     fid = criar_familia(repo, ncm_padrao="85444900")
     pid = repo.create_product(
         familia_id=fid,
@@ -36,35 +36,35 @@ def variante_id(system_db):
     return pid
 
 
-def test_fiscal_config_upsert_eh_1para1(variante_id):
+def test_fiscal_config_upsert_eh_1para1(produto_id):
     fiscal_config_repo.upsert(
-        variante_id,
+        produto_id,
         ncm="85444900",
         cfop="5.102",
         cst_icms="00",
         aliquota_icms=18.0,
     )
-    cfg = fiscal_config_repo.get(variante_id)
+    cfg = fiscal_config_repo.get(produto_id)
     assert cfg["cfop"] == "5.102"
     assert cfg["cst_icms"] == "00"
     assert cfg["aliquota_icms"] == 18.0
     with system_conn() as conn:
         n = conn.execute(
-            "SELECT COUNT(*) FROM fiscal_config WHERE produto_id=?", (variante_id,)
+            "SELECT COUNT(*) FROM fiscal_config WHERE produto_id=?", (produto_id,)
         ).fetchone()[0]
     assert n == 1  # upsert não duplica a linha
 
 
-def test_registrar_historico_config(variante_id):
-    hid = fiscal_config_repo.registrar_historico_config(variante_id, "atualizado")
+def test_registrar_historico_config(produto_id):
+    hid = fiscal_config_repo.registrar_historico_config(produto_id, "atualizado")
     assert hid > 0
-    hist = fiscal_config_repo.list_historico(variante_id=variante_id)
+    hist = fiscal_config_repo.list_historico(produto_id=produto_id)
     assert len(hist) == 1
     assert hist[0]["tipo"] == "atualizado"
     assert hist[0]["ncm"] == "85444900"
 
 
-def test_gerar_config_padrao(variante_id):
+def test_gerar_config_padrao(produto_id):
     # já existe config criada no fixture; gerar deve ignorar (1:1 preservado)
     count = fiscal_config_repo.gerar_config_padrao()
     assert count == 0

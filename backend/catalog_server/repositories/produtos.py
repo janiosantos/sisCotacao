@@ -379,7 +379,7 @@ class ProdutoRepository:
             )
             produto_id = cur.lastrowid
             sku, _aviso = reservar_sku(
-                dados.get("sku") or "", produto_id, produto_id,
+                dados.get("sku") or "", produto_id,
                 base=nome, ignorar_id=produto_id, conn=conn,
             )
             if sku:
@@ -417,7 +417,7 @@ class ProdutoRepository:
                         normalizar_sku(novo_sku) != normalizar_sku(sku_atual):
                     novo_sku = sku_atual
             sku, _aviso = reservar_sku(
-                novo_sku, produto_id, produto_id,
+                novo_sku, produto_id,
                 base=nome, ignorar_id=produto_id, conn=conn,
             )
             cur = conn.execute(

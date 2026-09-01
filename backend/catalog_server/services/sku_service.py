@@ -56,22 +56,21 @@ def _ocupado(conn, sku: str, ignorar_id: int | None = None) -> bool:
     return row is not None
 
 
-def gerar(produto_id: int, variante_id: int, base: str | None = None) -> str:
-    """Gera um SKU determinístico e único: `base-produto_id-variante_id`.
+def gerar(produto_id: int, base: str | None = None) -> str:
+    """Gera um SKU determinístico e único: `base-produto_id-produto_id`.
 
     `base` pode ser um nome/atributo (ex.: "ILU") para humanizar o SKU.
     """
     prefixo = normalizar(base or "")
     prefixo = prefixo.replace(" ", "-")[:24]
     if prefixo:
-        return f"{prefixo}-{produto_id}-{variante_id}"
-    return f"SKU-{produto_id}-{variante_id}"
+        return f"{prefixo}-{produto_id}-{produto_id}"
+    return f"SKU-{produto_id}-{produto_id}"
 
 
 def reservar(
     sku: str | None,
     produto_id: int,
-    variante_id: int,
     base: str | None = None,
     ignorar_id: int | None = None,
     resolver_conflito: bool = True,
@@ -89,7 +88,7 @@ def reservar(
 
     # Vazio → gera.
     if not sku:
-        gerado = gerar(produto_id, variante_id, base)
+        gerado = gerar(produto_id, base)
         while _ocupado(conn, gerado, ignorar_id):
             gerado += "-X"
         return gerado, "SKU vazio; gerado automaticamente"
@@ -233,7 +232,7 @@ def _tabelas_com_produto_id(conn) -> list[str]:
 def sku_emitido(conn, produto_id: int) -> bool:
     """True se o produto já foi usado em operação comercial (SKU imutável).
 
-    Verifica todas as tabelas que possuem `produto_id` (antiga `variante_id`):
+    Verifica todas as tabelas que possuem `produto_id` (antiga `produto_id`):
     venda (orcamentos), compra (solicitacoes), estoque (saldo/movimento/lotes),
     nota fiscal (fiscal_config/orcamento_itens_fiscal), integrações
     (fornecedor_*), histórico (preco_historico) etc. Tabelas ausentes no

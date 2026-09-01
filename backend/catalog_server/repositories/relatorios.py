@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from catalog_server.db import system_conn
 from catalog_server.services import custo_engine
@@ -66,7 +66,7 @@ class RelatorioRepository:
         (Motor Fiscal → Custo). Receita = preço de venda × quantidade."""
         with system_conn() as conn:
             rows = conn.execute("""
-                SELECT p.id AS variante_id, p.nome AS produto_nome, p.sku,
+                SELECT p.id AS produto_id, p.nome AS produto_nome, p.sku,
                        COUNT(*) AS n_itens,
                        SUM(oi.quantidade) AS qtd_total,
                        SUM(oi.preco_unitario * oi.quantidade) AS receita
@@ -82,7 +82,7 @@ class RelatorioRepository:
             for r in rows:
                 receita = float(r["receita"] or 0)
                 qtd = float(r["qtd_total"] or 0)
-                calc = custo_engine.calcular_custo(r["variante_id"])
+                calc = custo_engine.calcular_custo(r["produto_id"])
                 custo_unit = calc.get("custo_liquido")
                 if custo_unit is None:
                     custo_unit = calc.get("custo_base") or 0

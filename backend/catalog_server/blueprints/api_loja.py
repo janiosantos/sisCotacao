@@ -24,24 +24,24 @@ def put_config():
     return jsonify(loja.set_config(out))
 
 
-@api_loja_bp.get("/api/loja/saldo/<int:variante_id>")
-def saldo(variante_id: int):
-    return jsonify({"saldos": loja.saldo_variante(variante_id),
-                    "disponivel": sum(s["disponivel"] for s in loja.saldo_variante(variante_id))})
+@api_loja_bp.get("/api/loja/saldo/<int:produto_id>")
+def saldo(produto_id: int):
+    return jsonify({"saldos": loja.saldo_variante(produto_id),
+                    "disponivel": sum(s["disponivel"] for s in loja.saldo_variante(produto_id))})
 
 
-@api_loja_bp.patch("/api/loja/variante/<int:variante_id>")
-def atualizar_variante(variante_id: int):
+@api_loja_bp.patch("/api/loja/variante/<int:produto_id>")
+def atualizar_variante(produto_id: int):
     data = request.get_json(silent=True) or {}
-    if not loja.atualizar_variante_logistica(variante_id, data):
+    if not loja.atualizar_variante_logistica(produto_id, data):
         return jsonify({"error": "Nenhum campo válido ou variante não encontrada"}), 400
     return jsonify({"ok": True})
 
 
-@api_loja_bp.patch("/api/loja/estoque/<int:variante_id>/<int:deposito_id>")
-def atualizar_estoque(variante_id: int, deposito_id: int):
+@api_loja_bp.patch("/api/loja/estoque/<int:produto_id>/<int:deposito_id>")
+def atualizar_estoque(produto_id: int, deposito_id: int):
     data = request.get_json(silent=True) or {}
-    if not loja.atualizar_estoque_localizacao(variante_id, deposito_id, data):
+    if not loja.atualizar_estoque_localizacao(produto_id, deposito_id, data):
         return jsonify({"error": "Nenhum campo válido"}), 400
     return jsonify({"ok": True})
 
@@ -96,11 +96,11 @@ def listar_devolucoes():
 @api_loja_bp.post("/api/loja/devolucoes")
 def registrar_devolucao():
     data = request.get_json(silent=True) or {}
-    if not data.get("variante_id") or not data.get("quantidade"):
-        return jsonify({"error": "variante_id e quantidade obrigatórios"}), 400
+    if not data.get("produto_id") or not data.get("quantidade"):
+        return jsonify({"error": "produto_id e quantidade obrigatórios"}), 400
     dev_id = loja.registrar_devolucao(
         orcamento_id=data.get("orcamento_id"),
-        variante_id=int(data["variante_id"]),
+        produto_id=int(data["produto_id"]),
         quantidade=float(data["quantidade"]),
         motivo=data.get("motivo", ""),
         tipo=data.get("tipo", "devolucao"),

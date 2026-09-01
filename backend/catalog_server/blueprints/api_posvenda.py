@@ -61,7 +61,7 @@ def criar_garantia():
         dias=int(data.get("dias", 90)),
         cliente_id=data.get("cliente_id"),
         orcamento_id=data.get("orcamento_id"),
-        variante_id=data.get("variante_id"),
+        produto_id=data.get("produto_id"),
         descricao=data.get("descricao", ""),
         observacao=data.get("observacao", ""),
         data_venda=data.get("data_venda"),

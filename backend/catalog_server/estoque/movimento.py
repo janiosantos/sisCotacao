@@ -10,7 +10,7 @@ class MovimentoEstoque:
     """Fato imutável de estoque com idempotência e origem rastreável."""
 
     deposito_id: int
-    variante_id: int
+    produto_id: int
     tipo: str  # entrada|saida|ajuste|transferencia|inventario|reserva|liberacao
     quantidade: str  # Decimal serializado (NUMERIC(14,3))
     idempotency_key: str  # UNIQUE — retrida ignora

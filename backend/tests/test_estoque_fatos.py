@@ -48,7 +48,7 @@ def test_movimento_idempotente_retrida_ignora(dep_var):
     assert r1["duplicado"] is False
     assert r2["duplicado"] is True
     assert r1["movimento_id"] == r2["movimento_id"]
-    saldo = estoque_repo.saldo(deposito_id=did, variante_id=vid)[0]
+    saldo = estoque_repo.saldo(deposito_id=did, produto_id=vid)[0]
     assert float(saldo["quantidade"]) == 10.0  # não somou duas vezes
 
 
@@ -56,11 +56,11 @@ def test_reserva_e_liberacao_afetam_reserva(dep_var):
     did, vid = dep_var
     estoque_repo.movimentar_fato(did, vid, "entrada", 20)
     estoque_repo.movimentar_fato(did, vid, "reserva", 5)
-    saldo = estoque_repo.saldo(deposito_id=did, variante_id=vid)[0]
+    saldo = estoque_repo.saldo(deposito_id=did, produto_id=vid)[0]
     assert float(saldo["reserva"]) == 5.0
     assert float(saldo["quantidade"]) == 20.0
     estoque_repo.movimentar_fato(did, vid, "liberacao", 5)
-    saldo = estoque_repo.saldo(deposito_id=did, variante_id=vid)[0]
+    saldo = estoque_repo.saldo(deposito_id=did, produto_id=vid)[0]
     assert float(saldo["reserva"]) == 0.0
 
 
@@ -79,7 +79,7 @@ def test_api_movimentos_fato(system_db, app_client_token, dep_var):
     r1 = c.post(
         "/api/estoque/movimentos",
         headers=H,
-        json={"deposito_id": did, "variante_id": vid, "tipo": "entrada",
+        json={"deposito_id": did, "produto_id": vid, "tipo": "entrada",
               "quantidade": 7, "idempotency_key": key,
               "origem_tipo": "teste-api"},
     )
@@ -87,7 +87,7 @@ def test_api_movimentos_fato(system_db, app_client_token, dep_var):
     r2 = c.post(
         "/api/estoque/movimentos",
         headers=H,
-        json={"deposito_id": did, "variante_id": vid, "tipo": "entrada",
+        json={"deposito_id": did, "produto_id": vid, "tipo": "entrada",
               "quantidade": 7, "idempotency_key": key},
     )
     assert r2.status_code == 200 and r2.get_json()["duplicado"] is True

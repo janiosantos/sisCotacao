@@ -28,7 +28,7 @@ def _capturar_snapshot(orcamento_id: int, tipo_doc: str) -> None:
             persistir_snapshot(
                 documento_tipo=tipo_doc,
                 documento_id=orcamento_id,
-                variante_id=vid,
+                produto_id=vid,
                 operation_date=data_op or None,
                 result=result,
             )

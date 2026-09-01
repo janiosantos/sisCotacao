@@ -146,7 +146,7 @@ def test_solicitacao_detalhe_com_itens(system_db):
         conn.commit()
     r = c.post("/api/solicitacoes-compra", headers=h, json={"codigo": "SOL-001", "descricao": "Repor estoque"})
     sc_id = r.get_json()["id"]
-    c.post(f"/api/solicitacoes-compra/{sc_id}/itens", headers=h, json={"variante_id": pid, "quantidade": 10})
+    c.post(f"/api/solicitacoes-compra/{sc_id}/itens", headers=h, json={"produto_id": pid, "quantidade": 10})
 
     d = c.get(f"/api/solicitacoes-compra/{sc_id}", headers=h)
     assert d.status_code == 200

@@ -11,7 +11,7 @@ from catalog_server.db import system_conn
 
 
 @pytest.fixture()
-def variante_id():
+def produto_id():
     """Cria produto mínimo para o perfil (SKU único por execução)."""
     sufixo = uuid.uuid4().hex[:8]
     with system_conn() as conn:
@@ -23,14 +23,14 @@ def variante_id():
     return int(vid)
 
 
-def test_perfil_ausente_retorna_vazio(variante_id):
-    p = fiscal_perfil.obter(variante_id)
+def test_perfil_ausente_retorna_vazio(produto_id):
+    p = fiscal_perfil.obter(produto_id)
     assert p is None
 
 
-def test_salvar_e_obter_perfil(variante_id):
+def test_salvar_e_obter_perfil(produto_id):
     salvo = fiscal_perfil.salvar(
-        variante_id,
+        produto_id,
         {"ncm": "8544.42.00", "cest": "28.001.00", "origem": 2,
          "regime_st": "", "fonte_url": "https://portalnfe/example"},
     )
@@ -38,8 +38,8 @@ def test_salvar_e_obter_perfil(variante_id):
     assert salvo["origem"] == 2
 
     # Atualização (upsert)
-    fiscal_perfil.salvar(variante_id, {"ncm": "8544.42.00", "cest": "", "origem": 1})
-    p = fiscal_perfil.obter(variante_id)
+    fiscal_perfil.salvar(produto_id, {"ncm": "8544.42.00", "cest": "", "origem": 1})
+    p = fiscal_perfil.obter(produto_id)
     assert p["origem"] == 1
     assert p["cest"] == ""
 
@@ -61,12 +61,12 @@ def test_buscar_ncm_registrada():
     assert outra != novo
 
 
-def test_api_perfil_protegida_e_funcional(app_client_token, variante_id):
+def test_api_perfil_protegida_e_funcional(app_client_token, produto_id):
     c, H = app_client_token
-    r = c.get(f"/api/fiscal/perfil/{variante_id}", headers=H)
+    r = c.get(f"/api/fiscal/perfil/{produto_id}", headers=H)
     assert r.status_code == 200
     r2 = c.put(
-        f"/api/fiscal/perfil/{variante_id}",
+        f"/api/fiscal/perfil/{produto_id}",
         headers=H,
         json={"ncm": "1234.56.78", "origem": 0},
     )

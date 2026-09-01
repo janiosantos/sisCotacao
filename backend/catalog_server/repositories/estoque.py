@@ -11,12 +11,11 @@ class EstoqueRepository:
     def saldo(
         self,
         deposito_id: int | None = None,
-        variante_id: int | None = None,
+        produto_id: int | None = None,
         termo: str | None = None,
         familia_id: int | None = None,
-        produto_id: int | None = None,
     ) -> list[dict]:
-        produto_id = produto_id if produto_id is not None else variante_id
+        produto_id = produto_id if produto_id is not None else produto_id
         sql = (
             "SELECT s.id, s.deposito_id, s.produto_id,"
             " s.quantidade, s.quantidade AS fisico,"
@@ -62,7 +61,7 @@ class EstoqueRepository:
     def movimentar(
         self,
         deposito_id: int,
-        variante_id: int,
+        produto_id: int,
         tipo: str,
         quantidade: float,
         documento: str | None = None,
@@ -71,7 +70,7 @@ class EstoqueRepository:
         usuario_id: int | None = None,
         _conn=None,
     ) -> dict:
-        produto_id = variante_id
+        produto_id = produto_id
         ctx = system_conn() if _conn is None else None
         conn = _conn or ctx.__enter__()
         closed = False
@@ -147,7 +146,7 @@ class EstoqueRepository:
     def movimentar_fato(
         self,
         deposito_id: int,
-        variante_id: int,
+        produto_id: int,
         tipo: str,
         quantidade: float,
         *,
@@ -163,7 +162,7 @@ class EstoqueRepository:
         """Fato de estoque idempotente (ADR 0003): retrida com a mesma
         `idempotency_key` devolve o movimento original sem reprocessar.
         Tipos reserva/liberacao movem a coluna RESERVA, não o saldo."""
-        produto_id = variante_id
+        produto_id = produto_id
         if not idempotency_key:
             idempotency_key = f"auto-{uuid.uuid4().hex}"
 
@@ -317,8 +316,8 @@ class EstoqueRepository:
             if ctx is not None and not closed:
                 ctx.__exit__(None, None, None)
 
-    def reconciliar(self, deposito_id: int, variante_id: int) -> dict:
-        produto_id = variante_id
+    def reconciliar(self, deposito_id: int, produto_id: int) -> dict:
+        produto_id = produto_id
         with system_conn() as conn:
             row = conn.execute(
                 "SELECT * FROM reconciliar_estoque(?, ?)",
@@ -355,7 +354,7 @@ class EstoqueRepository:
     def lancar_inventario(
         self,
         deposito_id: int,
-        variante_id: int,
+        produto_id: int,
         quantidade_contada: float,
         *,
         justificativa: str,
@@ -364,7 +363,7 @@ class EstoqueRepository:
     ) -> dict:
         """Ajuste por inventário: cria um FATO tipo 'inventario' que leva o
         saldo à quantidade contada (motivo registrado)."""
-        produto_id = variante_id
+        produto_id = produto_id
         with system_conn() as conn:
             atual = conn.execute(
                 "SELECT quantidade FROM estoque_saldo"
@@ -400,11 +399,11 @@ class EstoqueRepository:
     def movimentos(
         self,
         deposito_id: int | None = None,
-        variante_id: int | None = None,
+        produto_id: int | None = None,
         tipo: str | None = None,
         limit: int = 100,
     ) -> list[dict]:
-        produto_id = variante_id
+        produto_id = produto_id
         sql = (
             "SELECT m.*, d.nome AS deposito_nome,"
             " p.sku, p.nome AS produto_nome, p.marca"
@@ -434,21 +433,21 @@ class EstoqueRepository:
         self,
         origem_id: int,
         destino_id: int,
-        variante_id: int,
+        produto_id: int,
         quantidade: float,
         observacao: str | None = None,
         usuario_id: int | None = None,
     ) -> dict:
         with system_conn() as conn:
-            self.movimentar(origem_id, variante_id, "transferencia", quantidade, "Transferência", observacao, None, usuario_id, _conn=conn)
-            self.movimentar(destino_id, variante_id, "entrada", quantidade, "Transferência", observacao, None, usuario_id, _conn=conn)
+            self.movimentar(origem_id, produto_id, "transferencia", quantidade, "Transferência", observacao, None, usuario_id, _conn=conn)
+            self.movimentar(destino_id, produto_id, "entrada", quantidade, "Transferência", observacao, None, usuario_id, _conn=conn)
         return {"ok": True}
 
 
 class LoteRepository:
 
-    def list(self, deposito_id: int | None = None, variante_id: int | None = None) -> list[dict]:
-        produto_id = variante_id
+    def list(self, deposito_id: int | None = None, produto_id: int | None = None) -> list[dict]:
+        produto_id = produto_id
         sql = (
             "SELECT l.*, d.nome AS deposito_nome,"
             " p.sku, p.nome AS produto_nome, p.marca"
@@ -478,7 +477,7 @@ class LoteRepository:
     def create(
         self,
         deposito_id: int,
-        variante_id: int,
+        produto_id: int,
         codigo: str,
         quantidade: float = 0,
         data_fabricacao: str | None = None,
@@ -488,7 +487,7 @@ class LoteRepository:
             cur = conn.execute(
                 "INSERT INTO lotes (deposito_id, produto_id, codigo, quantidade, data_fabricacao, data_validade)"
                 " VALUES (?,?,?,?,?,?)",
-                (deposito_id, variante_id, codigo.strip(), quantidade, data_fabricacao, data_validade),
+                (deposito_id, produto_id, codigo.strip(), quantidade, data_fabricacao, data_validade),
             )
             return cur.lastrowid
 

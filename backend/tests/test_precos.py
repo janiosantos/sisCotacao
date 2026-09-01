@@ -22,7 +22,7 @@ def tabela(system_db):
 
 
 @pytest.fixture()
-def variante_id(system_db):
+def produto_id(system_db):
     fid = criar_familia(repo)
     pid = repo.create_product(
         familia_id=fid,
@@ -49,27 +49,27 @@ def test_tabela_crud(tabela):
     assert tabela not in [t["id"] for t in ativos]
 
 
-def test_upsert_item(tabela, variante_id):
-    assert tabela_preco_repo.upsert_item(tabela, variante_id, 12.5, margem=20)
+def test_upsert_item(tabela, produto_id):
+    assert tabela_preco_repo.upsert_item(tabela, produto_id, 12.5, margem=20)
     itens = tabela_preco_repo.list_itens(tabela)
     assert len(itens) == 1
     assert itens[0]["preco"] == 12.5
     assert itens[0]["sku"] == "SKU-PRECO"
     # upsert de novo preço
-    assert tabela_preco_repo.upsert_item(tabela, variante_id, 13.0)
+    assert tabela_preco_repo.upsert_item(tabela, produto_id, 13.0)
     itens = tabela_preco_repo.list_itens(tabela)
     assert len(itens) == 1
     assert itens[0]["preco"] == 13.0
 
 
-def test_gerar_precos_markup(tabela, variante_id):
+def test_gerar_precos_markup(tabela, produto_id):
     assert tabela_preco_repo.gerar_precos(tabela, markup=25) == 1
     itens = tabela_preco_repo.list_itens(tabela)
     # custo 8.0 * 1.25 = 10.0
     assert itens[0]["preco"] == 10.0
 
 
-def test_gerar_precos_margem(tabela, variante_id):
+def test_gerar_precos_margem(tabela, produto_id):
     assert tabela_preco_repo.gerar_precos(tabela, margem=20) == 1
     itens = tabela_preco_repo.list_itens(tabela)
     # 8.0 / (1 - 0.20) = 10.0
@@ -77,23 +77,23 @@ def test_gerar_precos_margem(tabela, variante_id):
     assert itens[0]["margem"] == 20.0
 
 
-def test_delete_item(tabela, variante_id):
-    tabela_preco_repo.upsert_item(tabela, variante_id, 12.5)
-    assert tabela_preco_repo.delete_item(tabela, variante_id)
+def test_delete_item(tabela, produto_id):
+    tabela_preco_repo.upsert_item(tabela, produto_id, 12.5)
+    assert tabela_preco_repo.delete_item(tabela, produto_id)
     assert tabela_preco_repo.list_itens(tabela) == []
 
 
-def test_promocao_percentual(variante_id):
+def test_promocao_percentual(produto_id):
     pid = promocao_repo.create("Liquida", "percentual", 10)
-    assert promocao_repo.aplicar_promocao(pid, [variante_id], "percentual", 10) == 1
+    assert promocao_repo.aplicar_promocao(pid, [produto_id], "percentual", 10) == 1
     itens = promocao_repo.list_itens(pid)
     assert len(itens) == 1
     assert itens[0]["preco_promocional"] == 9.0  # 10.0 - 10%
 
 
-def test_promocao_valor_fixo(variante_id):
+def test_promocao_valor_fixo(produto_id):
     pid = promocao_repo.create("Liquida", "valor_fixo", 8.5)
-    assert promocao_repo.aplicar_promocao(pid, [variante_id], "valor_fixo", 8.5) == 1
+    assert promocao_repo.aplicar_promocao(pid, [produto_id], "valor_fixo", 8.5) == 1
     itens = promocao_repo.list_itens(pid)
     assert itens[0]["preco_promocional"] == 8.5
 

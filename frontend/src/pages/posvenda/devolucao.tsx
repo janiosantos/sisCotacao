@@ -34,16 +34,16 @@ export function Devolucao() {
   }, []);
 
   const registrar = async () => {
-    const variante_id = parseInt(form.var, 10);
+    const produto_id = parseInt(form.var, 10);
     const quantidade = parseFloat(form.qtd);
-    if (!variante_id || quantidade <= 0) {
+    if (!produto_id || quantidade <= 0) {
       toast("Informe produto e quantidade", "error");
       return;
     }
     try {
       await api.registrarDevolucao({
         orcamento_id: parseInt(form.orc, 10) || undefined,
-        variante_id,
+        produto_id,
         quantidade,
         tipo: form.tipo,
         motivo: form.motivo.trim(),

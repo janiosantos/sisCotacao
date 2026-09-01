@@ -61,21 +61,21 @@ class TabelaPrecoRepository:
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
-    def upsert_item(self, tabela_id: int, variante_id: int, preco: float, margem: float | None = None) -> bool:
+    def upsert_item(self, tabela_id: int, produto_id: int, preco: float, margem: float | None = None) -> bool:
         with system_conn() as conn:
             cur = conn.execute(
                 "INSERT INTO tabela_preco_itens (tabela_id, produto_id, preco, margem)"
                 " VALUES (?,?,?,?)"
                 " ON CONFLICT(tabela_id, produto_id) DO UPDATE SET preco=excluded.preco, margem=excluded.margem",
-                (tabela_id, variante_id, preco, margem),
+                (tabela_id, produto_id, preco, margem),
             )
             return cur.rowcount > 0
 
-    def delete_item(self, tabela_id: int, variante_id: int) -> bool:
+    def delete_item(self, tabela_id: int, produto_id: int) -> bool:
         with system_conn() as conn:
             cur = conn.execute(
                 "DELETE FROM tabela_preco_itens WHERE tabela_id=? AND produto_id=?",
-                (tabela_id, variante_id),
+                (tabela_id, produto_id),
             )
             return cur.rowcount > 0
 
@@ -167,30 +167,30 @@ class PromocaoRepository:
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
-    def upsert_item(self, promocao_id: int, variante_id: int, preco_promocional: float) -> bool:
+    def upsert_item(self, promocao_id: int, produto_id: int, preco_promocional: float) -> bool:
         with system_conn() as conn:
             cur = conn.execute(
                 "INSERT INTO promocao_itens (promocao_id, produto_id, preco_promocional)"
                 " VALUES (?,?,?)"
                 " ON CONFLICT(promocao_id, produto_id) DO UPDATE SET preco_promocional=excluded.preco_promocional",
-                (promocao_id, variante_id, preco_promocional),
+                (promocao_id, produto_id, preco_promocional),
             )
             return cur.rowcount > 0
 
-    def delete_item(self, promocao_id: int, variante_id: int) -> bool:
+    def delete_item(self, promocao_id: int, produto_id: int) -> bool:
         with system_conn() as conn:
             cur = conn.execute(
                 "DELETE FROM promocao_itens WHERE promocao_id=? AND produto_id=?",
-                (promocao_id, variante_id),
+                (promocao_id, produto_id),
             )
             return cur.rowcount > 0
 
     def aplicar_promocao(
-        self, promocao_id: int, variante_ids: list[int],
+        self, promocao_id: int, produto_ids: list[int],
         tipo: str, valor: float,
     ) -> int:
         count = 0
-        for vid in variante_ids:
+        for vid in produto_ids:
             preco_prom = None
             if tipo == "valor_fixo":
                 preco_prom = valor
@@ -283,7 +283,7 @@ class PrecoHistoricoRepository:
     def list(
         self,
         tabela_id: int | None = None,
-        variante_id: int | None = None,
+        produto_id: int | None = None,
         termo: str | None = None,
         limit: int = 200,
     ) -> list[dict]:
@@ -299,9 +299,9 @@ class PrecoHistoricoRepository:
         if tabela_id:
             conds.append("h.tabela_id=?")
             args.append(tabela_id)
-        if variante_id:
+        if produto_id:
             conds.append("h.produto_id=?")
-            args.append(variante_id)
+            args.append(produto_id)
         if termo:
             like = f"%{termo}%"
             conds.append("(p.nome LIKE ? OR p.sku LIKE ? OR t.nome LIKE ?)")

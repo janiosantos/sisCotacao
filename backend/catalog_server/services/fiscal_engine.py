@@ -47,7 +47,7 @@ def _pct(valor, default: float) -> float:
 
 
 def calculate(
-    variante_id: int,
+    produto_id: int,
     operacao: str = "compra",
     uf_dest: str | None = None,
     tipo_cliente: str | None = None,
@@ -58,7 +58,7 @@ def calculate(
 
     with system_conn() as conn:
         row = conn.execute(
-            "SELECT * FROM fiscal_config WHERE produto_id=?", (variante_id,)
+            "SELECT * FROM fiscal_config WHERE produto_id=?", (produto_id,)
         ).fetchone()
         if row is None:
             return None
@@ -167,7 +167,7 @@ def calculate(
     carga_venda_pct = round(carga_icms + carga_pis + carga_cofins + carga_ipi, 4)
 
     resultado = {
-        "variante_id": variante_id,
+        "produto_id": produto_id,
         "operacao": operacao,
         "regime": regime,
         "uf_origem": uf_origem,

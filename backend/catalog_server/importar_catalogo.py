@@ -201,7 +201,7 @@ def importar_catalogo(produtos: list[dict]) -> dict:
                     categoria_id, subcategoria_id = categorias.resolve(conn, cat, sub)
                     marca_id = marcas_repo.resolver(conn, marca)
                     sku, _aviso = reservar_sku(
-                        p.get("sku") or "", produto_id, produto_id,
+                        p.get("sku") or "", produto_id,
                         base=rep_p.get("name") or "", ignorar_id=produto_id, conn=conn,
                     )
                     conn.execute(
@@ -231,7 +231,7 @@ def importar_catalogo(produtos: list[dict]) -> dict:
                          json.dumps(attrs, ensure_ascii=False)),
                     ).lastrowid
                     sku, _aviso = reservar_sku(
-                        p.get("sku") or "", produto_id, 0,
+                        p.get("sku") or "", produto_id,
                         base=rep_p.get("name") or "", conn=conn,
                     )
                     conn.execute(

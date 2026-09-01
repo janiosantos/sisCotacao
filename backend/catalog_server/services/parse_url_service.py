@@ -315,7 +315,7 @@ def criar_produto_por_url(
             if label:
                 attrs_json[label] = str(val)
         sku, _aviso = reservar_sku(
-            data.get("sku") or "", produto_id, vid, base=base, conn=conn,
+            data.get("sku") or "", produto_id, base=base, conn=conn,
         )
         conn.execute(
             "UPDATE produtos_cadastro SET sku=?, atributos=? WHERE id=?",

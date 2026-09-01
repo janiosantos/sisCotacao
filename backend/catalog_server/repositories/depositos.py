@@ -71,11 +71,11 @@ class ExpedicaoRepository:
         with system_conn() as conn:
             return conn.execute("UPDATE expedicao SET status=? WHERE id=?", (status, exp_id)).rowcount > 0
 
-    def add_item(self, exp_id: int, variante_id: int, quantidade: float, orcamento_id: int | None = None) -> int:
+    def add_item(self, exp_id: int, produto_id: int, quantidade: float, orcamento_id: int | None = None) -> int:
         with system_conn() as conn:
             return conn.execute(
                 "INSERT INTO expedicao_itens (expedicao_id, produto_id, quantidade, orcamento_id) VALUES (?,?,?,?)",
-                (exp_id, variante_id, quantidade, orcamento_id),
+                (exp_id, produto_id, quantidade, orcamento_id),
             ).lastrowid
 
 

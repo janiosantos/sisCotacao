@@ -1,4 +1,4 @@
-﻿// pages/estoque/lotes.tsx - módulo Estoque (Lotes).
+// pages/estoque/lotes.tsx - módulo Estoque (Lotes).
 
 import { useEffect, useState } from "react";
 import { api, type Deposito, type LoteItem, type LotePayload } from "../../api/client";
@@ -10,7 +10,7 @@ export function Lotes({ depositos }: { depositos: Deposito[] }) {
   const [rows, setRows] = useState<LoteItem[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState({ deposito_id: "", variante_id: "", codigo: "", quantidade: "", fabricacao: "", validade: "" });
+  const [form, setForm] = useState({ deposito_id: "", produto_id: "", codigo: "", quantidade: "", fabricacao: "", validade: "" });
 
   const carregar = async () => {
     try {
@@ -29,13 +29,13 @@ export function Lotes({ depositos }: { depositos: Deposito[] }) {
   const salvar = async () => {
     const payload: LotePayload = {
       deposito_id: Number(form.deposito_id),
-      variante_id: Number(form.variante_id),
+      produto_id: Number(form.produto_id),
       codigo: form.codigo.trim(),
       quantidade: parseFloat(form.quantidade.replace(",", ".")),
       data_fabricacao: form.fabricacao || undefined,
       data_validade: form.validade || undefined,
     };
-    if (!payload.deposito_id || !payload.variante_id || !payload.codigo) {
+    if (!payload.deposito_id || !payload.produto_id || !payload.codigo) {
       toast("Preencha depósito, produto e código do lote", "error");
       return;
     }
@@ -107,7 +107,7 @@ export function Lotes({ depositos }: { depositos: Deposito[] }) {
             </Select>
           </Field>
           <Field label="Produto (ID)">
-            <Input type="number" min={1} value={form.variante_id} onChange={(e) => setForm({ ...form, variante_id: e.target.value })} />
+            <Input type="number" min={1} value={form.produto_id} onChange={(e) => setForm({ ...form, produto_id: e.target.value })} />
           </Field>
           <Field label="Código do lote">
             <Input value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} />

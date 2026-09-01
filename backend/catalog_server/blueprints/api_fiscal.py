@@ -64,22 +64,22 @@ def listar_config():
     return jsonify(fiscal_config_repo.list(page=page, limit=limit, termo=q))
 
 
-@api_fiscal_bp.get("/api/fiscal/config/<int:variante_id>")
-def get_config(variante_id: int):
-    cfg = fiscal_config_repo.get(variante_id)
+@api_fiscal_bp.get("/api/fiscal/config/<int:produto_id>")
+def get_config(produto_id: int):
+    cfg = fiscal_config_repo.get(produto_id)
     if not cfg:
         return jsonify({"error": "Config não encontrada"}), 404
     return jsonify(cfg)
 
 
-@api_fiscal_bp.put("/api/fiscal/config/<int:variante_id>")
+@api_fiscal_bp.put("/api/fiscal/config/<int:produto_id>")
 @permissao.exige_permissao("fiscal", "configurar")
-def upsert_config(variante_id: int):
+def upsert_config(produto_id: int):
     data = request.get_json(silent=True) or {}
     num = lambda k: float(data[k]) if k in data and data[k] is not None else None
-    tipo = "atualizado" if fiscal_config_repo.get(variante_id) else "criado"
+    tipo = "atualizado" if fiscal_config_repo.get(produto_id) else "criado"
     fiscal_config_repo.upsert(
-        variante_id,
+        produto_id,
         ncm=data.get("ncm"),
         cfop=data.get("cfop"),
         cst_icms=data.get("cst_icms"),
@@ -102,7 +102,7 @@ def upsert_config(variante_id: int):
         vigencia_inicio=data.get("vigencia_inicio"),
         vigencia_fim=data.get("vigencia_fim"),
     )
-    fiscal_config_repo.registrar_historico_config(variante_id, tipo, usuario_id_requisicao())
+    fiscal_config_repo.registrar_historico_config(produto_id, tipo, usuario_id_requisicao())
     return jsonify({"ok": True})
 
 
@@ -118,11 +118,11 @@ def gerar_config():
 
 # ─── Motor Fiscal (cálculo) ────────────────────────────────
 
-@api_fiscal_bp.get("/api/fiscal/calcular/<int:variante_id>")
-def calcular(variante_id: int):
+@api_fiscal_bp.get("/api/fiscal/calcular/<int:produto_id>")
+def calcular(produto_id: int):
     operacao = request.args.get("operacao", "compra")
     uf_dest = request.args.get("uf_dest") or None
-    resultado = fiscal_calcular(variante_id, operacao=operacao, uf_dest=uf_dest)
+    resultado = fiscal_calcular(produto_id, operacao=operacao, uf_dest=uf_dest)
     if resultado is None:
         return jsonify({"error": "Config fiscal não encontrada para esta variante"}), 404
     return jsonify(resultado)
@@ -132,7 +132,7 @@ def calcular(variante_id: int):
 def listar_historico_fiscal():
     return jsonify(fiscal_config_repo.list_historico(
         termo=request.args.get("q"),
-        variante_id=request.args.get("variante_id", type=int),
+        produto_id=request.args.get("produto_id", type=int),
         limit=request.args.get("limit", 200, type=int),
     ))
 
@@ -153,23 +153,23 @@ def simular_operacao():
 
 # ─── Perfil fiscal do produto (classificação) ──────────────
 
-@api_fiscal_bp.get("/api/fiscal/perfil/<int:variante_id>")
-def obter_perfil_fiscal(variante_id: int):
-    perfil = fiscal_perfil.obter(variante_id)
-    return jsonify(perfil or {"variante_id": variante_id, "ncm": "", "cest": "", "origem": 0, "regime_st": "", "fonte_url": None})
+@api_fiscal_bp.get("/api/fiscal/perfil/<int:produto_id>")
+def obter_perfil_fiscal(produto_id: int):
+    perfil = fiscal_perfil.obter(produto_id)
+    return jsonify(perfil or {"produto_id": produto_id, "ncm": "", "cest": "", "origem": 0, "regime_st": "", "fonte_url": None})
 
 
-@api_fiscal_bp.get("/api/fiscal/perfil-efetivo/<int:variante_id>")
-def obter_perfil_fiscal_efetivo(variante_id: int):
+@api_fiscal_bp.get("/api/fiscal/perfil-efetivo/<int:produto_id>")
+def obter_perfil_fiscal_efetivo(produto_id: int):
     """Perfil fiscal efetivo (hierarquia Produto→Variação) com marcação de override."""
-    return jsonify(fiscal_perfil.obter_efetivo(variante_id))
+    return jsonify(fiscal_perfil.obter_efetivo(produto_id))
 
 
-@api_fiscal_bp.put("/api/fiscal/perfil/<int:variante_id>")
-def salvar_perfil_fiscal(variante_id: int):
+@api_fiscal_bp.put("/api/fiscal/perfil/<int:produto_id>")
+def salvar_perfil_fiscal(produto_id: int):
     dados = request.get_json(silent=True) or {}
     try:
-        return jsonify(fiscal_perfil.salvar(variante_id, dados)), 200
+        return jsonify(fiscal_perfil.salvar(produto_id, dados)), 200
     except (ValueError, TypeError) as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -208,14 +208,14 @@ def salvar_perfil_produto(produto_id: int):
     return jsonify(fiscal_perfil.salvar_produto(produto_id, request.get_json(silent=True) or {}))
 
 
-@api_fiscal_bp.put("/api/fiscal/perfil-variante/<int:variante_id>")
-def salvar_perfil_variante(variante_id: int):
+@api_fiscal_bp.put("/api/fiscal/perfil-variante/<int:produto_id>")
+def salvar_perfil_variante(produto_id: int):
     from catalog_server.repositories.produtos import ProdutoRepository
 
     dados = request.get_json(silent=True) or {}
-    produto_id = variante_id
+    produto_id = produto_id
     prod = ProdutoRepository()
     produto = prod.get_product(produto_id)
     return jsonify(fiscal_perfil.salvar_override_variante(
-        variante_id, dados, fiscal_perfil.obter_produto(produto_id) if produto else None
+        produto_id, dados, fiscal_perfil.obter_produto(produto_id) if produto else None
     ))

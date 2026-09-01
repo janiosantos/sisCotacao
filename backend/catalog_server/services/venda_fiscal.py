@@ -68,7 +68,7 @@ def snapshot_orcamento(orcamento_id: int) -> dict | None:
             desc_r = round(preco * qtd * desc_pct / 100, 2)
             ctx = {
                 **dados,
-                "variante_id": it.get("produto_id"),
+                "produto_id": it.get("produto_id"),
                 "quantidade": qtd,
                 "valor_unitario": preco,
                 "desconto": desc_r,

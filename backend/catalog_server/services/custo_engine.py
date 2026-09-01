@@ -23,25 +23,25 @@ from catalog_server.db import system_conn
 from catalog_server.services import fiscal_engine
 
 
-def preco_compra(variante_id: int, fornecedor_id: int | None = None) -> float | None:
+def preco_compra(produto_id: int, fornecedor_id: int | None = None) -> float | None:
     """Melhor preço de compra da variante (R$)."""
     with system_conn() as conn:
         if fornecedor_id:
             row = conn.execute(
                 "SELECT preco FROM fornecedor_preco"
                 " WHERE produto_id=? AND fornecedor_id=? AND ativo=1",
-                (variante_id, fornecedor_id),
+                (produto_id, fornecedor_id),
             ).fetchone()
         else:
             row = conn.execute(
                 "SELECT preco FROM fornecedor_preco"
                 " WHERE produto_id=? AND ativo=1 ORDER BY preco ASC LIMIT 1",
-                (variante_id,),
+                (produto_id,),
             ).fetchone()
         if row:
             return float(row["preco"])
         row = conn.execute(
-            "SELECT custo_unitario FROM produtos_cadastro WHERE id=?", (variante_id,)
+            "SELECT custo_unitario FROM produtos_cadastro WHERE id=?", (produto_id,)
         ).fetchone()
         if row and row["custo_unitario"]:
             return float(row["custo_unitario"])
@@ -49,13 +49,13 @@ def preco_compra(variante_id: int, fornecedor_id: int | None = None) -> float | 
 
 
 def calcular_custo(
-    variante_id: int,
+    produto_id: int,
     fornecedor_id: int | None = None,
 ) -> dict:
-    base = preco_compra(variante_id, fornecedor_id)
+    base = preco_compra(produto_id, fornecedor_id)
     if base is None:
         return {
-            "variante_id": variante_id,
+            "produto_id": produto_id,
             "fornecedor_id": fornecedor_id,
             "regime": None,
             "custo_base": None,
@@ -67,7 +67,7 @@ def calcular_custo(
             "fiscal": None,
         }
 
-    fiscal = fiscal_engine.calculate(variante_id, "compra")
+    fiscal = fiscal_engine.calculate(produto_id, "compra")
     credito_pct = float((fiscal or {}).get("creditos", {}).get("total_pct") or 0)
     credito_valor = round(base * credito_pct / 100, 2)
 
@@ -78,7 +78,7 @@ def calcular_custo(
 
     custo_liquido = round(base - credito_valor + st_nao_recuperavel, 2)
     return {
-        "variante_id": variante_id,
+        "produto_id": produto_id,
         "fornecedor_id": fornecedor_id,
         "regime": (fiscal or {}).get("regime"),
         "custo_base": round(base, 2),

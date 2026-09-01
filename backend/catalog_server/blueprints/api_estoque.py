@@ -60,14 +60,13 @@ def alternar_ativo_deposito(deposito_id: int):
 @api_estoque_bp.get("/api/estoque/saldo")
 def consultar_saldo():
     deposito_id = request.args.get("deposito_id", type=int)
-    variante_id = request.args.get("variante_id", type=int)
-    familia_id = request.args.get("familia_id", type=int)
     produto_id = request.args.get("produto_id", type=int)
+    familia_id = request.args.get("familia_id", type=int)
     q = request.args.get("q", "").strip()
     termo = q if q else None
     return jsonify(estoque_repo.saldo(
-        deposito_id=deposito_id, variante_id=variante_id, termo=termo,
-        familia_id=familia_id, produto_id=produto_id,
+        deposito_id=deposito_id, produto_id=produto_id, termo=termo,
+        familia_id=familia_id,
     ))
 
 
@@ -84,15 +83,15 @@ def consultar_disponibilidade(produto_id: int):
 def registrar_movimento():
     data = request.get_json(silent=True) or {}
     deposito_id = data.get("deposito_id")
-    variante_id = data.get("variante_id")
+    produto_id = data.get("produto_id")
     tipo = (data.get("tipo") or "").strip()
     quantidade = float(data.get("quantidade") or 0)
 
     erros = []
     if not deposito_id:
         erros.append("deposito_id")
-    if not variante_id:
-        erros.append("variante_id")
+    if not produto_id:
+        erros.append("produto_id")
     if tipo not in ("entrada", "saida", "ajuste", "transferencia", "inventario"):
         erros.append("tipo inválido")
     if quantidade <= 0:
@@ -102,14 +101,14 @@ def registrar_movimento():
 
     # Valida se o produto existe
     with system_conn() as conn:
-        if not conn.execute("SELECT 1 FROM produtos_cadastro WHERE id=?", (variante_id,)).fetchone():
-            return jsonify({"error": f"Produto {variante_id} não encontrado"}), 404
+        if not conn.execute("SELECT 1 FROM produtos_cadastro WHERE id=?", (produto_id,)).fetchone():
+            return jsonify({"error": f"Produto {produto_id} não encontrado"}), 404
         if not conn.execute("SELECT 1 FROM depositos WHERE id=?", (deposito_id,)).fetchone():
             return jsonify({"error": f"Depósito {deposito_id} não encontrado"}), 404
 
     result = estoque_repo.movimentar(
         deposito_id=deposito_id,
-        variante_id=variante_id,
+        produto_id=produto_id,
         tipo=tipo,
         quantidade=quantidade,
         documento=data.get("documento"),
@@ -123,9 +122,9 @@ def registrar_movimento():
         try:
             contabil_gatilhos.disparar(
                 "ajuste",
-                evento_id=int(result.get("movimento_id") or variante_id),
+                evento_id=int(result.get("movimento_id") or produto_id),
                 valor=quantidade,
-                historico=f"Ajuste estoque var {variante_id}",
+                historico=f"Ajuste estoque var {produto_id}",
                 origem_tipo="estoque",
             )
         except Exception:
@@ -136,10 +135,10 @@ def registrar_movimento():
 @api_estoque_bp.get("/api/estoque/movimento")
 def listar_movimentos():
     deposito_id = request.args.get("deposito_id", type=int)
-    variante_id = request.args.get("variante_id", type=int)
+    produto_id = request.args.get("produto_id", type=int)
     tipo = request.args.get("tipo") or None
     limit = request.args.get("limit", 100, type=int)
-    return jsonify(estoque_repo.movimentos(deposito_id=deposito_id, variante_id=variante_id, tipo=tipo, limit=limit))
+    return jsonify(estoque_repo.movimentos(deposito_id=deposito_id, produto_id=produto_id, tipo=tipo, limit=limit))
 
 
 # ─── Transferência ─────────────────────────────────────────
@@ -150,20 +149,20 @@ def transferir():
     erros = []
     origem_id = data.get("origem_id")
     destino_id = data.get("destino_id")
-    variante_id = data.get("variante_id")
+    produto_id = data.get("produto_id")
     quantidade = float(data.get("quantidade") or 0)
     if not origem_id:
         erros.append("origem_id")
     if not destino_id:
         erros.append("destino_id")
-    if not variante_id:
-        erros.append("variante_id")
+    if not produto_id:
+        erros.append("produto_id")
     if quantidade <= 0:
         erros.append("quantidade deve ser positiva")
     if erros:
         return jsonify({"error": "Campos inválidos: " + ", ".join(erros)}), 400
     result = estoque_repo.transferir(
-        origem_id, destino_id, variante_id, quantidade, data.get("observacao"), data.get("usuario_id")
+        origem_id, destino_id, produto_id, quantidade, data.get("observacao"), data.get("usuario_id")
     )
     return jsonify(result), 201
 
@@ -173,8 +172,8 @@ def transferir():
 @api_estoque_bp.get("/api/estoque/lotes")
 def listar_lotes():
     deposito_id = request.args.get("deposito_id", type=int)
-    variante_id = request.args.get("variante_id", type=int)
-    return jsonify(lote_repo.list(deposito_id=deposito_id, variante_id=variante_id))
+    produto_id = request.args.get("produto_id", type=int)
+    return jsonify(lote_repo.list(deposito_id=deposito_id, produto_id=produto_id))
 
 
 @api_estoque_bp.get("/api/estoque/lotes/<int:lote_id>")
@@ -201,18 +200,18 @@ def criar_lote():
     data = request.get_json(silent=True) or {}
     erros = []
     deposito_id = data.get("deposito_id")
-    variante_id = data.get("variante_id")
+    produto_id = data.get("produto_id")
     codigo = (data.get("codigo") or "").strip()
     if not deposito_id:
         erros.append("deposito_id")
-    if not variante_id:
-        erros.append("variante_id")
+    if not produto_id:
+        erros.append("produto_id")
     if not codigo:
         erros.append("codigo")
     if erros:
         return jsonify({"error": "Campos inválidos: " + ", ".join(erros)}), 400
     lote_id = lote_repo.create(
-        deposito_id, variante_id, codigo,
+        deposito_id, produto_id, codigo,
         quantidade=float(data.get("quantidade") or 0),
         data_fabricacao=data.get("data_fabricacao"),
         data_validade=data.get("data_validade"),
@@ -256,7 +255,7 @@ def criar_movimento_fato():
     dados = request.get_json(silent=True) or {}
     try:
         r = estoque_repo.movimentar_fato(
-            int(dados['deposito_id']), int(dados['variante_id']),
+            int(dados['deposito_id']), int(dados['produto_id']),
             dados.get('tipo', 'entrada'), float(dados.get('quantidade') or 0),
             idempotency_key=dados.get('idempotency_key'),
             origem_tipo=dados.get('origem_tipo', ''),
@@ -271,9 +270,9 @@ def criar_movimento_fato():
         try:
             contabil_gatilhos.disparar(
                 'ajuste',
-                evento_id=int(r.get('movimento_id') or int(dados['variante_id'])),
+                evento_id=int(r.get('movimento_id') or int(dados['produto_id'])),
                 valor=float(dados.get('quantidade') or 0),
-                historico=f"Ajuste estoque var {dados['variante_id']} ({dados.get('tipo')})",
+                historico=f"Ajuste estoque var {dados['produto_id']} ({dados.get('tipo')})",
                 origem_tipo=dados.get('origem_tipo', 'estoque'),
             )
         except Exception:
@@ -286,7 +285,7 @@ def reservar_estoque():
     dados = request.get_json(silent=True) or {}
     try:
         r = estoque_repo.movimentar_fato(
-            int(dados['deposito_id']), int(dados['variante_id']),
+            int(dados['deposito_id']), int(dados['produto_id']),
             'reserva', float(dados.get('quantidade') or 0),
             idempotency_key=dados.get('idempotency_key'),
             origem_tipo=dados.get('origem_tipo', 'orcamento'),
@@ -303,7 +302,7 @@ def liberar_reserva():
     dados = request.get_json(silent=True) or {}
     try:
         r = estoque_repo.movimentar_fato(
-            int(dados['deposito_id']), int(dados['variante_id']),
+            int(dados['deposito_id']), int(dados['produto_id']),
             'liberacao', float(dados.get('quantidade') or 0),
             idempotency_key=dados.get('idempotency_key'),
             origem_tipo=dados.get('origem_tipo', ''),
@@ -318,10 +317,10 @@ def liberar_reserva():
 @api_estoque_bp.get('/api/estoque/reconciliacao')
 def reconciliar_estoque_api():
     deposito_id = int(request.args.get('deposito_id', 0))
-    variante_id = int(request.args.get('variante_id', 0))
-    if not deposito_id or not variante_id:
-        return jsonify({'error': 'informe deposito_id e variante_id'}), 400
-    return jsonify(estoque_repo.reconciliar(deposito_id, variante_id))
+    produto_id = int(request.args.get('produto_id', 0))
+    if not deposito_id or not produto_id:
+        return jsonify({'error': 'informe deposito_id e produto_id'}), 400
+    return jsonify(estoque_repo.reconciliar(deposito_id, produto_id))
 
 
 @api_estoque_bp.get('/api/estoque/reconciliacao/tudo')
@@ -335,7 +334,7 @@ def lancar_inventario_api():
     dados = request.get_json(silent=True) or {}
     try:
         r = estoque_repo.lancar_inventario(
-            int(dados['deposito_id']), int(dados['variante_id']),
+            int(dados['deposito_id']), int(dados['produto_id']),
             float(dados.get('quantidade_contada') or 0),
             justificativa=dados.get('justificativa', ''),
             idempotency_key=dados.get('idempotency_key'),

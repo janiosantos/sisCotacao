@@ -31,7 +31,7 @@ def test_inventario_corrige_saldo_com_fato():
         idempotency_key=f"inv-{uuid.uuid4().hex[:8]}",
     )
     assert r["duplicado"] is False and r["tipo"] == "inventario"
-    saldo = estoque_repo.saldo(deposito_id=did, variante_id=vid)[0]
+    saldo = estoque_repo.saldo(deposito_id=did, produto_id=vid)[0]
     assert float(saldo["quantidade"]) == 12.0
 
 
@@ -68,7 +68,7 @@ def test_api_inventario(system_db):
     r = c.post(
         "/api/estoque/inventarios",
         headers=H,
-        json={"deposito_id": did, "variante_id": vid,
+        json={"deposito_id": did, "produto_id": vid,
               "quantidade_contada": 9, "justificativa": "conferência",
               "idempotency_key": f"api-inv-{uuid.uuid4().hex[:8]}"},
     )

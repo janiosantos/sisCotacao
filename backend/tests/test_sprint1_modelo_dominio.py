@@ -1,4 +1,4 @@
-﻿"""Testes do Sprint 1: SKUService, importação JSON e atributos JSONB.
+"""Testes do Sprint 1: SKUService, importação JSON e atributos JSONB.
 
 No modelo unificado cada item importado vira um produto independente (não há
 mais `variantes`/EAV); os atributos vivem no JSONB `produtos_cadastro.atributos`.
@@ -38,14 +38,14 @@ def test_validar_tamanho_maximo():
 
 
 def test_gerar_deterministico():
-    assert sku_service.gerar(10, 3) == "SKU-10-3"
-    assert sku_service.gerar(10, 3, base="cabo azul") == "CABO-AZUL-10-3"
+    assert sku_service.gerar(10) == "SKU-10-10"
+    assert sku_service.gerar(10, base="cabo azul") == "CABO-AZUL-10-10"
 
 
 def test_reservar_vazio_gera_sku(system_db):
     with system_conn() as conn:
-        sku, aviso = sku_service.reservar("", produto_id=1, variante_id=5, conn=conn)
-    assert sku == "SKU-1-5" and aviso
+        sku, aviso = sku_service.reservar("", produto_id=1, conn=conn)
+    assert sku == "SKU-1-1" and aviso
 
 
 def test_reservar_duplicado_sufixa(system_db):
@@ -54,14 +54,14 @@ def test_reservar_duplicado_sufixa(system_db):
             "INSERT INTO produtos_cadastro (nome, marca, sku) VALUES ('Teste','X','ELE-CAB-25')"
         )
         pid = conn.execute("SELECT MAX(id) FROM produtos_cadastro").fetchone()[0]
-        sku2, aviso2 = sku_service.reservar("ELE-CAB-25", pid, pid, conn=conn)
+        sku2, aviso2 = sku_service.reservar("ELE-CAB-25", pid, conn=conn)
         assert sku2 == "ELE-CAB-25-2" and "duplicado" in aviso2
         # Persiste o reservado para simular o fluxo real antes da próxima reserva.
         conn.execute(
             "INSERT INTO produtos_cadastro (nome, marca, sku) VALUES ('Teste','X',?)",
             (sku2,),
         )
-        sku3, aviso3 = sku_service.reservar("ELE-CAB-25", pid, pid, conn=conn)
+        sku3, aviso3 = sku_service.reservar("ELE-CAB-25", pid, conn=conn)
         assert sku3 == "ELE-CAB-25-3"
 
 
@@ -71,7 +71,7 @@ def test_reservar_duplicado_sem_resolver(system_db):
             "INSERT INTO produtos_cadastro (nome, marca, sku) VALUES ('Teste','X','ELE-CAB-25')"
         )
         sku, aviso = sku_service.reservar(
-            "ELE-CAB-25", 1, 999, conn=conn, resolver_conflito=False
+            "ELE-CAB-25", 1, conn=conn, resolver_conflito=False
         )
     assert sku == "" and "já existe" in aviso
 
@@ -186,5 +186,5 @@ def test_sku_duplicado_ajustado_pelo_servico(system_db):
             "INSERT INTO produtos_cadastro (nome, marca, sku) VALUES ('Teste','X','SKU-A')"
         )
         pid = conn.execute("SELECT MAX(id) FROM produtos_cadastro").fetchone()[0]
-        sku, aviso = sku_service.reservar("SKU-A", pid, pid, conn=conn)
+        sku, aviso = sku_service.reservar("SKU-A", pid, conn=conn)
     assert sku == "SKU-A-2" and "duplicado" in aviso

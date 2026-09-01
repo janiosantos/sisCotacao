@@ -150,7 +150,7 @@ def gerar_nfe(orcamento_id: int, c_municipio_emit: str = "", c_municipio_dest: s
         det = ET.SubElement(inf, "det", {"nItem": str(i)})
         prod = ET.SubElement(det, "prod")
         for tag, val in (
-            ("cProd", str(snap.get("variante_id") or it.get("produto_id") or f"ITEM{i}")),
+            ("cProd", str(snap.get("produto_id") or it.get("produto_id") or f"ITEM{i}")),
             ("cEAN", "SEM GTIN"),
             ("xProd", (it.get("nome") or "Item").strip()),
             ("NCM", snap.get("ncm") or "00000000"),

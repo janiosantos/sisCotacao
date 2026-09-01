@@ -9,17 +9,17 @@ api_compras_avancado_bp = Blueprint("api_compras_avancado", __name__)
 
 # ─── Custo líquido (Motor Fiscal → Custo) ──────────────────
 
-@api_compras_avancado_bp.get("/api/custos/calcular/<int:variante_id>")
-def calcular_custo(variante_id: int):
+@api_compras_avancado_bp.get("/api/custos/calcular/<int:produto_id>")
+def calcular_custo(produto_id: int):
     fornecedor_id = request.args.get("fornecedor_id", type=int)
-    return jsonify(custo_engine.calcular_custo(variante_id, fornecedor_id=fornecedor_id))
+    return jsonify(custo_engine.calcular_custo(produto_id, fornecedor_id=fornecedor_id))
 
 
 @api_compras_avancado_bp.get("/api/fornecedor-preco")
 def listar_precos():
     return jsonify(fornecedor_preco_repo.list(
         fornecedor_id=request.args.get("fornecedor_id", type=int),
-        variante_id=request.args.get("variante_id", type=int),
+        produto_id=request.args.get("produto_id", type=int),
     ))
 
 
@@ -27,10 +27,10 @@ def listar_precos():
 def upsert_preco():
     data = request.get_json(silent=True) or {}
     f_id = data.get("fornecedor_id")
-    v_id = data.get("variante_id")
+    v_id = data.get("produto_id")
     preco = data.get("preco")
     if not f_id or not v_id or preco is None:
-        return jsonify({"error": "fornecedor_id, variante_id e preco obrigatórios"}), 400
+        return jsonify({"error": "fornecedor_id, produto_id e preco obrigatórios"}), 400
     return jsonify({"id": fornecedor_preco_repo.upsert(
         f_id, v_id, float(preco),
         data.get("prazo_entrega"), float(data.get("icms") or 0), float(data.get("ipi") or 0),
@@ -63,10 +63,10 @@ def criar_solicitacao():
 @api_compras_avancado_bp.post("/api/solicitacoes-compra/<int:sc_id>/itens")
 def add_item_solicitacao(sc_id: int):
     data = request.get_json(silent=True) or {}
-    v_id = data.get("variante_id")
+    v_id = data.get("produto_id")
     qtd = data.get("quantidade")
     if not v_id or not qtd:
-        return jsonify({"error": "variante_id e quantidade obrigatórios"}), 400
+        return jsonify({"error": "produto_id e quantidade obrigatórios"}), 400
     return jsonify({"id": solicitacao_repo.add_item(
         sc_id, v_id, float(qtd), data.get("justificativa", ""),
     )}), 201
@@ -74,16 +74,16 @@ def add_item_solicitacao(sc_id: int):
 
 @api_compras_avancado_bp.get("/api/fornecedor-preferencial")
 def listar_preferenciais():
-    return jsonify(fornecedor_preferencial_repo.list(variante_id=request.args.get("variante_id", type=int)))
+    return jsonify(fornecedor_preferencial_repo.list(produto_id=request.args.get("produto_id", type=int)))
 
 
 @api_compras_avancado_bp.post("/api/fornecedor-preferencial")
 def upsert_preferencial():
     data = request.get_json(silent=True) or {}
-    v_id = data.get("variante_id")
+    v_id = data.get("produto_id")
     f_id = data.get("fornecedor_id")
     if not v_id or not f_id:
-        return jsonify({"error": "variante_id e fornecedor_id obrigatórios"}), 400
+        return jsonify({"error": "produto_id e fornecedor_id obrigatórios"}), 400
     return jsonify({"id": fornecedor_preferencial_repo.upsert(
         v_id, f_id, int(data.get("ranking", 1)),
         float(data["ultimo_preco"]) if data.get("ultimo_preco") else None,

@@ -11,13 +11,13 @@ api_precos_bp = Blueprint("api_precos", __name__)
 
 # ─── Simulação de preço (Motor Fiscal → Custo → Precificação) ──
 
-@api_precos_bp.get("/api/precos/calcular/<int:variante_id>")
-def calcular_preco(variante_id: int):
+@api_precos_bp.get("/api/precos/calcular/<int:produto_id>")
+def calcular_preco(produto_id: int):
     args = request.args
     margem = float(args["margem"]) if args.get("margem") else None
     markup = float(args["markup"]) if args.get("markup") else None
     return jsonify(pricing_engine.calcular_preco(
-        variante_id,
+        produto_id,
         canal=args.get("canal"),
         margem=margem,
         markup=markup,
@@ -29,11 +29,11 @@ def calcular_preco(variante_id: int):
     ))
 
 
-@api_precos_bp.get("/api/precos/efetivo/<int:variante_id>")
-def preco_efetivo(variante_id: int):
+@api_precos_bp.get("/api/precos/efetivo/<int:produto_id>")
+def preco_efetivo(produto_id: int):
     args = request.args
     return jsonify(pricing_engine.preco_efetivo(
-        variante_id,
+        produto_id,
         canal=args.get("canal") or "varejo",
         cliente_id=args.get("cliente_id", type=int),
         segmento=args.get("segmento"),
@@ -142,12 +142,12 @@ def listar_itens_tabela(tabela_id: int):
 @api_precos_bp.post("/api/tabelas-preco/<int:tabela_id>/itens")
 def upsert_item_tabela(tabela_id: int):
     data = request.get_json(silent=True) or {}
-    variante_id = data.get("variante_id")
+    produto_id = data.get("produto_id")
     preco = float(data.get("preco") or 0)
-    if not variante_id or preco <= 0:
-        return jsonify({"error": "variante_id e preco obrigatórios"}), 400
+    if not produto_id or preco <= 0:
+        return jsonify({"error": "produto_id e preco obrigatórios"}), 400
     tabela_preco_repo.upsert_item(
-        tabela_id, variante_id, preco,
+        tabela_id, produto_id, preco,
         float(data.get("margem")) if data.get("margem") is not None else None,
     )
     return jsonify({"ok": True}), 201
@@ -155,10 +155,10 @@ def upsert_item_tabela(tabela_id: int):
 
 @api_precos_bp.delete("/api/tabelas-preco/<int:tabela_id>/itens")
 def remover_item_tabela(tabela_id: int):
-    variante_id = request.args.get("variante_id", type=int)
-    if not variante_id:
-        return jsonify({"error": "variante_id obrigatório"}), 400
-    if not tabela_preco_repo.delete_item(tabela_id, variante_id):
+    produto_id = request.args.get("produto_id", type=int)
+    if not produto_id:
+        return jsonify({"error": "produto_id obrigatório"}), 400
+    if not tabela_preco_repo.delete_item(tabela_id, produto_id):
         return jsonify({"error": "Item não encontrado"}), 404
     return jsonify({"ok": True})
 
@@ -265,33 +265,33 @@ def listar_itens_promocao(promocao_id: int):
 @api_precos_bp.post("/api/promocoes/<int:promocao_id>/itens")
 def upsert_item_promocao(promocao_id: int):
     data = request.get_json(silent=True) or {}
-    variante_id = data.get("variante_id")
+    produto_id = data.get("produto_id")
     preco = float(data.get("preco_promocional") or 0)
-    if not variante_id or preco <= 0:
-        return jsonify({"error": "variante_id e preco_promocional obrigatórios"}), 400
-    promocao_repo.upsert_item(promocao_id, variante_id, preco)
+    if not produto_id or preco <= 0:
+        return jsonify({"error": "produto_id e preco_promocional obrigatórios"}), 400
+    promocao_repo.upsert_item(promocao_id, produto_id, preco)
     return jsonify({"ok": True}), 201
 
 
 @api_precos_bp.post("/api/promocoes/<int:promocao_id>/aplicar")
 def aplicar_promocao(promocao_id: int):
     data = request.get_json(silent=True) or {}
-    variante_ids = data.get("variante_ids") or []
-    if not variante_ids:
-        return jsonify({"error": "Lista de variante_ids vazia"}), 400
+    produto_ids = data.get("produto_ids") or []
+    if not produto_ids:
+        return jsonify({"error": "Lista de produto_ids vazia"}), 400
     prom = promocao_repo.get(promocao_id)
     if not prom:
         return jsonify({"error": "Promoção não encontrada"}), 404
-    count = promocao_repo.aplicar_promocao(promocao_id, variante_ids, prom["tipo"], prom["valor"])
+    count = promocao_repo.aplicar_promocao(promocao_id, produto_ids, prom["tipo"], prom["valor"])
     return jsonify({"aplicados": count})
 
 
 @api_precos_bp.delete("/api/promocoes/<int:promocao_id>/itens")
 def remover_item_promocao(promocao_id: int):
-    variante_id = request.args.get("variante_id", type=int)
-    if not variante_id:
-        return jsonify({"error": "variante_id obrigatório"}), 400
-    if not promocao_repo.delete_item(promocao_id, variante_id):
+    produto_id = request.args.get("produto_id", type=int)
+    if not produto_id:
+        return jsonify({"error": "produto_id obrigatório"}), 400
+    if not promocao_repo.delete_item(promocao_id, produto_id):
         return jsonify({"error": "Item não encontrado"}), 404
     return jsonify({"ok": True})
 
@@ -337,7 +337,7 @@ def listar_itens_margem(tabela_id: int):
 def listar_historico_precos():
     return jsonify(preco_historico_repo.list(
         tabela_id=request.args.get("tabela_id", type=int),
-        variante_id=request.args.get("variante_id", type=int),
+        produto_id=request.args.get("produto_id", type=int),
         termo=request.args.get("q"),
         limit=request.args.get("limit", 200, type=int),
     ))

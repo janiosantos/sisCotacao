@@ -60,7 +60,7 @@ def _explicacao_regra(regra: dict) -> str:
 
 
 def calcular_preco(
-    variante_id: int,
+    produto_id: int,
     canal: str | None = None,
     margem: float | None = None,
     markup: float | None = None,
@@ -76,10 +76,10 @@ def calcular_preco(
     taxas = max(0.0, float(taxas or 0))
     despesas_total = round(comissao + despesas + taxas, 4)
 
-    custo = custo_engine.calcular_custo(variante_id, fornecedor_id=fornecedor_id)
+    custo = custo_engine.calcular_custo(produto_id, fornecedor_id=fornecedor_id)
     tabela = _tabela_do_canal(canal, tabela_id)
     base = {
-        "variante_id": variante_id,
+        "produto_id": produto_id,
         "canal": canal,
         "tabela_id": tabela["id"] if tabela else (tabela_id or None),
         "tabela_nome": (tabela.get("nome") if tabela else None),
@@ -135,7 +135,7 @@ def calcular_preco(
 
 
 def preco_efetivo(
-    variante_id: int,
+    produto_id: int,
     canal: str = "varejo",
     cliente_id: int | None = None,
     segmento: str | None = None,
@@ -147,7 +147,7 @@ def preco_efetivo(
     from catalog_server.services import preco_regra as preco_regra_svc
 
     regra = preco_regra_svc.resolver(
-        variante_id, canal=canal, cliente_id=cliente_id, segmento=segmento, quantidade=quantidade
+        produto_id, canal=canal, cliente_id=cliente_id, segmento=segmento, quantidade=quantidade
     )
     if regra:
         base = 0.0
@@ -156,20 +156,20 @@ def preco_efetivo(
         else:
             with system_conn() as conn:
                 row = conn.execute(
-                    "SELECT preco FROM produtos_cadastro WHERE id=?", (variante_id,)
+                    "SELECT preco FROM produtos_cadastro WHERE id=?", (produto_id,)
                 ).fetchone()
             base = float(row["preco"]) if row and row["preco"] else 0.0
             desconto = float(regra.get("desconto_pct") or 0)
             base = round(base * (1 - desconto / 100), 2)
         resp = {
-            "variante_id": variante_id, "canal": canal,
+            "produto_id": produto_id, "canal": canal,
             "preco": base, "origem": "regra",
             "regra_id": regra["id"],
             "prioridade": regra.get("prioridade"),
             "explicacao": _explicacao_regra(regra),
         }
         if regra.get("margem_minima_pct") is not None:
-            custo = custo_engine.calcular_custo(variante_id)
+            custo = custo_engine.calcular_custo(produto_id)
             custo_liq = float(custo.get("custo_liquido") or 0)
             resp["custo_liquido"] = custo_liq
             if custo_liq > 0:
@@ -187,26 +187,26 @@ def preco_efetivo(
             row = conn.execute(
                 "SELECT preco FROM tabela_preco_itens"
                 " WHERE tabela_id=? AND produto_id=? AND ativo=1",
-                (tabela["id"], variante_id),
+                (tabela["id"], produto_id),
             ).fetchone()
         if row and row["preco"]:
             return {
-                "variante_id": variante_id, "canal": canal,
+                "produto_id": produto_id, "canal": canal,
                 "preco": float(row["preco"]), "origem": "tabela",
                 "tabela_id": tabela["id"],
             }
-    calc = calcular_preco(variante_id, canal=canal)
+    calc = calcular_preco(produto_id, canal=canal)
     if calc.get("preco_sugerido") is not None:
         return {
-            "variante_id": variante_id, "canal": canal,
+            "produto_id": produto_id, "canal": canal,
             "preco": calc["preco_sugerido"], "origem": "motor",
             "tabela_id": calc.get("tabela_id"),
             "custo_liquido": calc.get("custo_liquido"),
         }
     with system_conn() as conn:
-        row = conn.execute("SELECT preco FROM produtos_cadastro WHERE id=?", (variante_id,)).fetchone()
+        row = conn.execute("SELECT preco FROM produtos_cadastro WHERE id=?", (produto_id,)).fetchone()
     preco = float(row["preco"]) if row and row["preco"] else 0.0
-    return {"variante_id": variante_id, "canal": canal, "preco": preco, "origem": "base"}
+    return {"produto_id": produto_id, "canal": canal, "preco": preco, "origem": "base"}
 
 
 def previa_reajuste(
@@ -244,7 +244,7 @@ def previa_reajuste(
     for r in rows:
         calc = calcular_preco(r["id"], margem=m, markup=mk, tabela_id=tabela_id)
         itens.append({
-            "variante_id": r["id"],
+            "produto_id": r["id"],
             "sku": r["sku"],
             "produto_nome": r["produto_nome"],
             "marca": r["marca"],
@@ -277,7 +277,7 @@ def aplicar_reajuste(
                 continue
             row = conn.execute(
                 "SELECT preco FROM tabela_preco_itens WHERE tabela_id=? AND produto_id=?",
-                (tabela_id, it["variante_id"]),
+                (tabela_id, it["produto_id"]),
             ).fetchone()
             preco_ant = float(row["preco"]) if row else 0.0
             conn.execute(
@@ -285,7 +285,7 @@ def aplicar_reajuste(
                 " VALUES (?,?,?,?)"
                 " ON CONFLICT(tabela_id, produto_id) DO UPDATE SET"
                 " preco=excluded.preco, margem=excluded.margem",
-                (tabela_id, it["variante_id"], it["preco_sugerido"], it["margem_efetiva_pct"]),
+                (tabela_id, it["produto_id"], it["preco_sugerido"], it["margem_efetiva_pct"]),
             )
             conn.execute(
                 "INSERT INTO preco_historico"
@@ -294,7 +294,7 @@ def aplicar_reajuste(
                 " VALUES (?,?,?,?,?,?,'reajuste',?,?)",
                 (
                     tabela_id,
-                    it["variante_id"],
+                    it["produto_id"],
                     round(preco_ant, 2),
                     it["preco_sugerido"],
                     it["margem_efetiva_pct"],

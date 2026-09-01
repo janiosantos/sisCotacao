@@ -33,7 +33,7 @@ def test_fato_rejeita_saida_acima_do_disponivel(system_db):
     with pytest.raises(ValueError, match="insuficiente"):
         estoque_repo.movimentar_fato(deposito, produto, "saida", 3)
 
-    saldo = estoque_repo.saldo(deposito_id=deposito, variante_id=produto)[0]
+    saldo = estoque_repo.saldo(deposito_id=deposito, produto_id=produto)[0]
     assert float(saldo["quantidade"]) == 2
 
 

@@ -1,4 +1,4 @@
-﻿// pages/fiscal/simulador.tsx - módulo Fiscal (Simulador).
+// pages/fiscal/simulador.tsx - módulo Fiscal (Simulador).
 import { ResultadoFiscal } from "./resultado";
 
 import { useEffect, useRef, useState } from "react";
@@ -67,7 +67,7 @@ export function Simulador() {
       return;
     }
     const payload: Record<string, unknown> = {
-      variante_id: selecionada.id,
+      produto_id: selecionada.id,
       operacao,
       data: data || undefined,
       quantidade: parseFloat(qtd || "1"),

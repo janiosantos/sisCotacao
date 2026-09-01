@@ -261,13 +261,13 @@ def atualizar(orcamento_id: int):
                     qtd = float(item.get("quantidade") or 0)
                     if qtd <= 0:
                         continue
-                    vid = item.get("produto_id") or item.get("variante_id")
+                    vid = item.get("produto_id")
                     if not vid:
                         raise ValueError("item sem produto")
                     if loja.bloquear_sem_estoque():
                         estoque_repo.movimentar_fato(
                             deposito_id=1,
-                            variante_id=vid,
+                            produto_id=vid,
                             tipo="saida",
                             quantidade=qtd,
                             idempotency_key=f"venda:{orcamento_id}:item:{item.get('id') or vid}",
@@ -281,7 +281,7 @@ def atualizar(orcamento_id: int):
                         # venda sem saldo: ainda registra a baixa na transação.
                         estoque_repo.movimentar(
                             deposito_id=1,
-                            variante_id=vid,
+                            produto_id=vid,
                             tipo="saida",
                             quantidade=qtd,
                             documento=orc.get("numero", ""),
@@ -359,7 +359,7 @@ def reabrir(orcamento_id: int):
             for movimento in movimentos:
                 estoque_repo.movimentar_fato(
                     deposito_id=movimento["deposito_id"],
-                    variante_id=movimento["produto_id"],
+                    produto_id=movimento["produto_id"],
                     tipo="entrada",
                     quantidade=float(movimento["quantidade"] or 0),
                     idempotency_key=f"reabertura:{orcamento_id}:movimento:{movimento['id']}",
@@ -566,12 +566,12 @@ def devolver(orcamento_id: int):
         qtd = float(item.get("quantidade") or 0)
         if qtd <= 0:
             continue
-        vid = item.get("produto_id") or item.get("variante_id")
+        vid = item.get("produto_id")
         if not vid:
             continue
         try:
             estoque_repo.movimentar(
-                deposito_id=1, variante_id=vid,
+                deposito_id=1, produto_id=vid,
                 tipo="entrada", quantidade=qtd,
                 documento=f"DEV {orc.get('numero', '')}",
             )

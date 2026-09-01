@@ -1,4 +1,4 @@
-﻿"""FASE 10 — Suíte de regressão fiscal (FASE 3..9).
+"""FASE 10 — Suíte de regressão fiscal (FASE 3..9).
 
 Roda todos os cenários-chave do motor fiscal e emite PASS/FAIL. Uso:
     python -m catalog_server.testar_fiscal  (na raiz do projeto)
@@ -62,25 +62,25 @@ def main() -> int:
            "modelo_documento": "55", "data": "2026-06-01", "quantidade": 1, "valor_unitario": 100}
 
     print("== FASE 3/4 — motor + composição + validação ==")
-    r = fiscal_motor.simular({**ctx, "variante_id": vid_st})
+    r = fiscal_motor.simular({**ctx, "produto_id": vid_st})
     ok("matriz interestadual CFOP", r["cfop"] == "6.102", r["cfop"])
     ok("CSOSN matriz", r["csosn"] == "102", r["csosn"])
     ok("memoria versao simulada", r["memoria"]["versao"] == "1.0-SIMULADO")
-    r = fiscal_motor.simular({**ctx, "variante_id": vid_ok})
+    r = fiscal_motor.simular({**ctx, "produto_id": vid_ok})
     ok("composicao ST+CFOP", r["cfop"] == "6.102" and r["csosn"] == "106", f"{r['cfop']}/{r['csosn']}")
     ok("ICMS-ST valor", abs(r["valor_icms_st"] - 25.20) < 0.01, r["valor_icms_st"])
-    r = fiscal_motor.simular({**ctx, "variante_id": 999999999})
+    r = fiscal_motor.simular({**ctx, "produto_id": 999999999})
     ok("FISCAL_RULE_NOT_FOUND", r["status"] == "FISCAL_RULE_NOT_FOUND")
 
     print("== FASE 5 — PIS/COFINS ==")
-    r = fiscal_motor.simular({**ctx, "uf_destino": "MG", "variante_id": vid_st})
+    r = fiscal_motor.simular({**ctx, "uf_destino": "MG", "produto_id": vid_st})
     ok("Simples PIS/COFINS nao destacado", r["valor_pis"] == 0 and r["valor_cofins"] == 0)
 
     print("== FASE 6 — IBS/CBS ==")
-    r = fiscal_motor.simular({**ctx, "variante_id": vid_st, "data": "2026-06-01"})
+    r = fiscal_motor.simular({**ctx, "produto_id": vid_st, "data": "2026-06-01"})
     ok("IBS 2026", abs(r["valor_ibs"] - 0.10) < 0.01, r["valor_ibs"])
     ok("CBS 2026", abs(r["valor_cbs"] - 0.90) < 0.01, r["valor_cbs"])
-    r = fiscal_motor.simular({**ctx, "variante_id": vid_st, "data": "2027-06-01"})
+    r = fiscal_motor.simular({**ctx, "produto_id": vid_st, "data": "2027-06-01"})
     ok("IBS fora vigencia", r["valor_ibs"] == 0 and r["valor_cbs"] == 0)
 
     print("== FASE 8 — snapshot + bloqueio na venda ==")

@@ -42,7 +42,7 @@ def test_roundtrip_persistir_explicar():
         documento_tipo="nfce-teste",
         documento_id=424242,
         document_number="NFCe-424242",
-        variante_id=vid,
+        produto_id=vid,
         produto_nome="Cabo Flexível 2,5mm",
         operation_date="2026-08-23",
         result=result,

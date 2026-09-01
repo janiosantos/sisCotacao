@@ -96,16 +96,16 @@ def gerar_sugestoes(limite: int | None = None, confianca_min: float | None = Non
     return {"sugestoes": len(sugestoes), "confianca_min": conf_min, "total_produtos": len(produtos)}
 
 
-def _aplicar_uma(conn, variante_id: int, ncm: str) -> None:
+def _aplicar_uma(conn, produto_id: int, ncm: str) -> None:
     conn.execute(
         "UPDATE produtos_cadastro SET ncm=COALESCE(NULLIF(?, ''), ncm) WHERE id=?",
-        (ncm, variante_id),
+        (ncm, produto_id),
     )
     # propaga para fiscal_config (mesma conexão, sem aninhar)
-    if conn.execute("SELECT 1 FROM fiscal_config WHERE produto_id=?", (variante_id,)).fetchone():
-        conn.execute("UPDATE fiscal_config SET ncm=? WHERE produto_id=?", (ncm, variante_id))
+    if conn.execute("SELECT 1 FROM fiscal_config WHERE produto_id=?", (produto_id,)).fetchone():
+        conn.execute("UPDATE fiscal_config SET ncm=? WHERE produto_id=?", (ncm, produto_id))
     else:
-        conn.execute("INSERT INTO fiscal_config (produto_id, ncm) VALUES (?,?)", (variante_id, ncm))
+        conn.execute("INSERT INTO fiscal_config (produto_id, ncm) VALUES (?,?)", (produto_id, ncm))
 
 
 def aplicar(confianca_min: float | None = None) -> dict:

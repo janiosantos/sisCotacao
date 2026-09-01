@@ -53,7 +53,7 @@ class GarantiaRepository:
     def create(
         self, cliente_nome: str, produto_nome: str, data_inicio: str, data_fim: str,
         dias: int = 90, cliente_id: int | None = None,
-        orcamento_id: int | None = None, variante_id: int | None = None,
+        orcamento_id: int | None = None, produto_id: int | None = None,
         descricao: str = "", observacao: str = "",
         data_venda: str | None = None,
     ) -> int:
@@ -62,7 +62,7 @@ class GarantiaRepository:
                 "INSERT INTO garantia (cliente_nome, cliente_id, orcamento_id, produto_id,"
                 " produto_nome, data_venda, data_inicio, data_fim, dias, descricao, observacao)"
                 " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (cliente_nome.strip(), cliente_id, orcamento_id, variante_id,
+                (cliente_nome.strip(), cliente_id, orcamento_id, produto_id,
                  produto_nome.strip(), data_venda, data_inicio, data_fim, dias,
                  descricao, observacao),
             )

@@ -110,7 +110,7 @@ def calcular_ibs_cbs(
 @dataclass
 class FiscalContext:
     operacao: str = "venda"
-    variante_id: int | None = None
+    produto_id: int | None = None
     cliente_id: int | None = None
     uf_destino: str | None = None
     tipo_cliente: str | None = None      # PF | PJ
@@ -143,7 +143,7 @@ def montar_contexto(dados: dict) -> FiscalContext:
     """Constrói o contexto a partir de um dict; completa dados do cliente se informado."""
     ctx = FiscalContext(
         operacao=dados.get("operacao", "venda"),
-        variante_id=dados.get("variante_id") or dados.get("produto_id"),
+        produto_id=dados.get("produto_id"),
         cliente_id=dados.get("cliente_id"),
         uf_destino=(dados.get("uf_destino") or "").strip().upper() or None,
         tipo_cliente=dados.get("tipo_cliente"),
@@ -188,7 +188,7 @@ def resolver(contexto: FiscalContext) -> dict:
         "uf_destino": contexto.uf_destino,
         "finalidade": contexto.finalidade,
         "modelo_documento": contexto.modelo_documento,
-        "variante_id": contexto.variante_id,
+        "produto_id": contexto.produto_id,
         "quantidade": contexto.quantidade,
         "valor_unitario": contexto.valor_unitario,
         # Classificação (preenchido abaixo)
@@ -217,12 +217,12 @@ def resolver(contexto: FiscalContext) -> dict:
 
     # Fiscal base (parametrização do produto)
     fiscal = fiscal_engine.calculate(
-        contexto.variante_id,
+        contexto.produto_id,
         operacao=contexto.operacao,
         uf_dest=contexto.uf_destino,
         tipo_cliente=contexto.tipo_cliente,
         contribuinte=contexto.contribuinte,
-    ) if contexto.variante_id else None
+    ) if contexto.produto_id else None
 
     if fiscal is None:
         resultado["status"] = "FISCAL_RULE_NOT_FOUND"

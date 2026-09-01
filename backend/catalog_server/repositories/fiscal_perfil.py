@@ -6,34 +6,34 @@ from catalog_server.db import system_conn
 _CAMPOS = ("ncm", "cest", "origem", "regime_st", "fonte_url")
 
 
-def obter(variante_id: int) -> dict | None:
+def obter(produto_id: int) -> dict | None:
     with system_conn() as conn:
         row = conn.execute(
             "SELECT produto_id, ncm, cest, origem, regime_st, fonte_url,"
             " atualizado_em FROM product_fiscal_profile WHERE produto_id=?",
-            (variante_id,),
+            (produto_id,),
         ).fetchone()
         return dict(row) if row else None
 
 
-def _produto_id_da_variante(variante_id: int) -> int | None:
+def _produto_id_da_variante(produto_id: int) -> int | None:
     """No modelo unificado cada produto é a antiga variante — o próprio id."""
     with system_conn() as conn:
         row = conn.execute(
-            "SELECT id FROM produtos_cadastro WHERE id=?", (variante_id,)
+            "SELECT id FROM produtos_cadastro WHERE id=?", (produto_id,)
         ).fetchone()
         return int(row["id"]) if row else None
 
 
-def obter_efetivo(variante_id: int) -> dict:
+def obter_efetivo(produto_id: int) -> dict:
     """Perfil fiscal EFETIVO da variante (hierarquia v2.5.0).
 
     Retorna o perfil do produto como padrão herdado e o da variação como
     override (quando existir), mais o perfil efetivo mesclado — para a UI
     mostrar "herdado do produto" vs "override da variação".
     """
-    variante = obter(variante_id)
-    produto_id = _produto_id_da_variante(variante_id)
+    variante = obter(produto_id)
+    produto_id = _produto_id_da_variante(produto_id)
     produto = obter_produto(produto_id) if produto_id else None
     padrao = produto or {}
     efetivo = {
@@ -48,7 +48,6 @@ def obter_efetivo(variante_id: int) -> dict:
         for k in ("ncm", "cest", "origem", "regime_st")
     }
     return {
-        "variante_id": variante_id,
         "produto_id": produto_id,
         "produto": produto,
         "variante": variante,
@@ -57,7 +56,7 @@ def obter_efetivo(variante_id: int) -> dict:
     }
 
 
-def salvar(variante_id: int, dados: dict) -> dict:
+def salvar(produto_id: int, dados: dict) -> dict:
     """Cria/atualiza o perfil validando campos conhecidos."""
     limpo = {k: dados.get(k) for k in _CAMPOS if k in dados}
     limpo["origem"] = int(limpo.get("origem") or 0)
@@ -69,25 +68,25 @@ def salvar(variante_id: int, dados: dict) -> dict:
     with system_conn() as conn:
         existe = conn.execute(
             "SELECT 1 FROM product_fiscal_profile WHERE produto_id=?",
-            (variante_id,),
+            (produto_id,),
         ).fetchone()
         if existe:
             sets = ", ".join(f"{k}=?" for k in limpo)
             conn.execute(
                 f"UPDATE product_fiscal_profile SET {sets},"
                 " atualizado_em=now() WHERE produto_id=?",
-                (*limpo.values(), variante_id),
+                (*limpo.values(), produto_id),
             )
         else:
             cols = ["produto_id", *limpo.keys()]
             conn.execute(
                 f"INSERT INTO product_fiscal_profile ({', '.join(cols)})"
                 f" VALUES ({', '.join('?' for _ in cols)})",
-                (variante_id, *limpo.values()),
+                (produto_id, *limpo.values()),
             )
         conn.commit()
 
-    return {"produto_id": variante_id, **limpo}
+    return {"produto_id": produto_id, **limpo}
 
 
 def buscar_ncm(prefixo: str, limite: int = 20) -> list[dict]:
@@ -172,7 +171,7 @@ def salvar_produto(produto_id: int, dados: dict) -> dict:
 
 
 def salvar_override_variante(
-    variante_id: int, dados: dict, perfil_produto: dict | None
+    produto_id: int, dados: dict, perfil_produto: dict | None
 ) -> dict:
     """Override por variação EXIGE justificativa quando diverge do padrão."""
     justificativa = (dados.get("justificativa_override") or "").strip()
@@ -186,4 +185,4 @@ def salvar_override_variante(
             "override de NCM/CEST na variação exige justificativa_override "
             "(diretiva AGENT-produtos #4)"
         )
-    return salvar(variante_id, {**dados, "justificativa_override": justificativa})
+    return salvar(produto_id, {**dados, "justificativa_override": justificativa})

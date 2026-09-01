@@ -26,20 +26,20 @@ class CstRepository:
 
 class FiscalConfigRepository:
 
-    def get(self, variante_id: int) -> dict | None:
+    def get(self, produto_id: int) -> dict | None:
         with system_conn() as conn:
             row = conn.execute(
                 "SELECT f.*, p.sku, p.nome AS produto_nome, p.marca"
                 " FROM fiscal_config f"
                 " JOIN produtos_cadastro p ON p.id = f.produto_id"
                 " WHERE f.produto_id = ?",
-                (variante_id,),
+                (produto_id,),
             ).fetchone()
             return dict(row) if row else None
 
     def upsert(
         self,
-        variante_id: int,
+        produto_id: int,
         ncm: str | None = None,
         cfop: str | None = None,
         cst_icms: str | None = None,
@@ -81,9 +81,9 @@ class FiscalConfigRepository:
                 f"INSERT INTO fiscal_config (produto_id, {', '.join(cols)}) VALUES (?, {', '.join('?' for _ in cols)})"
                 f" ON CONFLICT(produto_id) DO UPDATE SET"
                 f" {', '.join(f'{c}=COALESCE(excluded.{c}, fiscal_config.{c})' for c in cols)}",
-                [variante_id] + vals,
+                [produto_id] + vals,
             )
-            return cur.lastrowid if cur.lastrowid else variante_id
+            return cur.lastrowid if cur.lastrowid else produto_id
 
     def list(self, page: int = 0, limit: int = 100, termo: str | None = None) -> list[dict]:
         sql = (
@@ -124,11 +124,11 @@ class FiscalConfigRepository:
 
     # ------------------------------------------------------------------
 
-    def registrar_historico_config(self, variante_id: int, tipo: str, usuario_id: int | None = None) -> int:
+    def registrar_historico_config(self, produto_id: int, tipo: str, usuario_id: int | None = None) -> int:
         """Snapshot atual da fiscal_config em fiscal_config_historico (auditoria)."""
         with system_conn() as conn:
             cfg = conn.execute(
-                "SELECT * FROM fiscal_config WHERE produto_id=?", (variante_id,)
+                "SELECT * FROM fiscal_config WHERE produto_id=?", (produto_id,)
             ).fetchone()
             if cfg is None:
                 return 0
@@ -142,11 +142,11 @@ class FiscalConfigRepository:
                 f"INSERT INTO fiscal_config_historico"
                 f" (produto_id, tipo, {cols}, usuario_id)"
                 f" VALUES (?,?,{', '.join('?' for _ in cols.split(','))},?)",
-                [variante_id, tipo] + [cfg[c.strip()] for c in cols.split(",")] + [usuario_id],
+                [produto_id, tipo] + [cfg[c.strip()] for c in cols.split(",")] + [usuario_id],
             )
             return cur.lastrowid
 
-    def list_historico(self, termo: str | None = None, variante_id: int | None = None, limit: int = 200) -> list[dict]:
+    def list_historico(self, termo: str | None = None, produto_id: int | None = None, limit: int = 200) -> list[dict]:
         sql = (
             "SELECT h.*, p.sku, p.nome AS produto_nome, p.marca, u.nome AS usuario_nome"
             " FROM fiscal_config_historico h"
@@ -154,9 +154,9 @@ class FiscalConfigRepository:
             " LEFT JOIN usuarios u ON u.id = h.usuario_id"
         )
         conds, args = [], []
-        if variante_id:
+        if produto_id:
             conds.append("h.produto_id=?")
-            args.append(variante_id)
+            args.append(produto_id)
         if termo:
             like = f"%{termo}%"
             conds.append("(p.nome LIKE ? OR p.sku LIKE ? OR h.ncm LIKE ?)")

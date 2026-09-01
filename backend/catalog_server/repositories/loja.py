@@ -1,4 +1,4 @@
-﻿"""Operações da loja de material (balcão + depósito).
+"""Operações da loja de material (balcão + depósito).
 
 Agrupa: config da loja, saldo/endereçamento, inventário, devolução/troca,
 reposição sugerida, comissão de vendedores e dados de etiqueta — evoluindo as
@@ -80,7 +80,7 @@ def bloquear_com_atraso() -> bool:
 _CAMPOS_LOGISTICA = ("peso", "dimensoes", "unidade_venda", "embalagem", "fator_conversao", "localizacao")
 
 
-def atualizar_variante_logistica(variante_id: int, dados: dict) -> bool:
+def atualizar_variante_logistica(produto_id: int, dados: dict) -> bool:
     campos = {k: dados[k] for k in _CAMPOS_LOGISTICA if k in dados}
     if not campos:
         return False
@@ -88,35 +88,35 @@ def atualizar_variante_logistica(variante_id: int, dados: dict) -> bool:
         sets = ", ".join(f"{k}=?" for k in campos)
         cur = conn.execute(
             f"UPDATE produtos_cadastro SET {sets} WHERE id=?",
-            list(campos.values()) + [variante_id],
+            list(campos.values()) + [produto_id],
         )
         return cur.rowcount > 0
 
 
-def atualizar_estoque_localizacao(variante_id: int, deposito_id: int, dados: dict) -> bool:
+def atualizar_estoque_localizacao(produto_id: int, deposito_id: int, dados: dict) -> bool:
     campos = {k: dados[k] for k in ("localizacao", "estoque_minimo", "estoque_maximo") if k in dados}
     if not campos:
         return False
     with system_conn() as conn:
         row = conn.execute(
             "SELECT 1 FROM estoque_saldo WHERE produto_id=? AND deposito_id=?",
-            (variante_id, deposito_id),
+            (produto_id, deposito_id),
         ).fetchone()
         if row is None:
             conn.execute(
                 "INSERT INTO estoque_saldo (produto_id, deposito_id, quantidade) VALUES (?,?,0)",
-                (variante_id, deposito_id),
+                (produto_id, deposito_id),
             )
         sets = ", ".join(f"{k}=?" for k in campos)
         conn.execute(
             f"UPDATE estoque_saldo SET {sets}, atualizado_em=datetime('now')"
             " WHERE produto_id=? AND deposito_id=?",
-            list(campos.values()) + [variante_id, deposito_id],
+            list(campos.values()) + [produto_id, deposito_id],
         )
         return True
 
 
-def saldo_variante(variante_id: int) -> list[dict]:
+def saldo_variante(produto_id: int) -> list[dict]:
     with system_conn() as conn:
         return [dict(r) for r in conn.execute(
             "SELECT s.deposito_id, d.nome AS deposito, s.quantidade AS fisico,"
@@ -125,11 +125,11 @@ def saldo_variante(variante_id: int) -> list[dict]:
             " s.localizacao, s.estoque_minimo, s.estoque_maximo"
             " FROM estoque_saldo s JOIN depositos d ON d.id=s.deposito_id"
             " WHERE s.produto_id=? ORDER BY d.nome",
-            (variante_id,),
+            (produto_id,),
         ).fetchall()]
 
 
-def disponibilidade(variante_id: int, deposito_id: int | None = None) -> list[dict]:
+def disponibilidade(produto_id: int, deposito_id: int | None = None) -> list[dict]:
     """Fórmula única de disponibilidade (EST-001): físico − reservado − bloqueado − separação.
 
     `transito` é saldo próprio (entre depósitos) e não compõe o disponível local.
@@ -145,7 +145,7 @@ def disponibilidade(variante_id: int, deposito_id: int | None = None) -> list[di
             " FROM estoque_saldo s JOIN depositos d ON d.id=s.deposito_id"
             " WHERE s.produto_id=?"
         )
-        params: list = [variante_id]
+        params: list = [produto_id]
         if deposito_id:
             sql += " AND s.deposito_id=?"
             params.append(deposito_id)
@@ -153,12 +153,12 @@ def disponibilidade(variante_id: int, deposito_id: int | None = None) -> list[di
         return [dict(r) for r in conn.execute(sql, tuple(params)).fetchall()]
 
 
-def saldo_disponivel(variante_id: int, deposito_id: int = 1) -> float:
+def saldo_disponivel(produto_id: int, deposito_id: int = 1) -> float:
     with system_conn() as conn:
         row = conn.execute(
             "SELECT (quantidade - reserva - COALESCE(bloqueado,0) - COALESCE(separacao,0)) AS d"
             " FROM estoque_saldo WHERE produto_id=? AND deposito_id=?",
-            (variante_id, deposito_id),
+            (produto_id, deposito_id),
         ).fetchone()
     return float(row["d"] or 0) if row else 0.0
 
@@ -269,7 +269,7 @@ def reposicao(limit: int = 100) -> list[dict]:
 
 def registrar_devolucao(
     orcamento_id: int,
-    variante_id: int,
+    produto_id: int,
     quantidade: float,
     motivo: str = "",
     tipo: str = "devolucao",
@@ -280,24 +280,24 @@ def registrar_devolucao(
         cur = conn.execute(
             "INSERT INTO devolucoes (orcamento_id, produto_id, quantidade, motivo, tipo, deposito_id, usuario_id)"
             " VALUES (?,?,?,?,?,?,?)",
-            (orcamento_id, variante_id, quantidade, motivo.strip(), tipo, deposito_id, usuario_id),
+            (orcamento_id, produto_id, quantidade, motivo.strip(), tipo, deposito_id, usuario_id),
         )
         dev_id = cur.lastrowid
         # devolução/troca retorna ao estoque (entrada)
         row = conn.execute(
             "SELECT quantidade FROM estoque_saldo WHERE produto_id=? AND deposito_id=?",
-            (variante_id, deposito_id),
+            (produto_id, deposito_id),
         ).fetchone()
         if row:
             conn.execute(
                 "UPDATE estoque_saldo SET quantidade=quantidade+?, atualizado_em=datetime('now')"
                 " WHERE produto_id=? AND deposito_id=?",
-                (quantidade, variante_id, deposito_id),
+                (quantidade, produto_id, deposito_id),
             )
         else:
             conn.execute(
                 "INSERT INTO estoque_saldo (produto_id, deposito_id, quantidade) VALUES (?,?,?)",
-                (variante_id, deposito_id, quantidade),
+                (produto_id, deposito_id, quantidade),
             )
         return dev_id
 
@@ -344,12 +344,12 @@ def comissoes(inicio: str | None = None, fim: str | None = None) -> list[dict]:
 
 # ─── Etiquetas ────────────────────────────────────────────
 
-def dados_etiquetas(variante_ids: list[int]) -> list[dict]:
-    ph = ", ".join("?" for _ in variante_ids)
+def dados_etiquetas(produto_ids: list[int]) -> list[dict]:
+    ph = ", ".join("?" for _ in produto_ids)
     with system_conn() as conn:
         return [dict(r) for r in conn.execute(
             f"SELECT p.id, p.sku, p.ean, p.preco, p.nome, p.unidade_venda, p.localizacao"
             f" FROM produtos_cadastro p"
             f" WHERE p.id IN ({ph})",
-            variante_ids,
+            produto_ids,
         ).fetchall()]
