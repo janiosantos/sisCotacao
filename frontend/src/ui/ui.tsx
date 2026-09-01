@@ -155,18 +155,44 @@ export function Table({ children }: { children: ReactNode }) {
   );
 }
 
-export function THead({ cols }: { cols: ReactNode[] }) {
+export function THead({
+  cols,
+  onSort,
+  sortState,
+}: {
+  cols: ReactNode[];
+  onSort?: (i: number) => void;
+  sortState?: { index: number; dir: "asc" | "desc" };
+}) {
   return (
     <thead className="hidden bg-slate-50/90 lg:table-header-group">
       <tr>
-        {cols.map((c, i) => (
-          <th
-            key={i}
-            className="sticky top-0 z-10 border-b border-slate-200 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500"
-          >
-            {c}
-          </th>
-        ))}
+        {cols.map((c, i) => {
+          const ordenavel = onSort !== undefined;
+          const active = sortState?.index === i;
+          const ariaSort = active ? (sortState!.dir === "asc" ? "ascending" : "descending") : ordenavel ? "none" : undefined;
+          return (
+            <th
+              key={i}
+              aria-sort={ariaSort}
+              className="sticky top-0 z-10 border-b border-slate-200 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500"
+            >
+              {ordenavel ? (
+                <button
+                  type="button"
+                  className="flex items-center gap-1 hover:text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                  onClick={() => onSort(i)}
+                  aria-label={`ordenar por ${typeof c === "string" ? c : `coluna ${i + 1}`}`}
+                >
+                  {c}
+                  <span aria-hidden="true" className="text-[9px]">{active ? (sortState!.dir === "asc" ? "▲" : "▼") : "⇅"}</span>
+                </button>
+              ) : (
+                c
+              )}
+            </th>
+          );
+        })}
       </tr>
     </thead>
   );

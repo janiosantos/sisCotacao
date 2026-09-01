@@ -112,6 +112,12 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 9. Registro da sessão atual
 
+- **2026-09-01 (Onda 10 — UX):** (feita por último, como instruído — layout será reajustado em conjunto)
+  - **UX-001** shell/navegação: menu reorganizado nos grupos do plano — **Operação / Comercial / Compras / Financeiro / Fiscal / Relatórios / Administração**.
+  - **UX-002** tabela padrão: `THead` ganhou **ordenação clicável** (botão com `aria-label`, `aria-sort`, indicador ▲▼) sem quebrar o `data-label` do mobile card.
+  - **UX-005/007** estados e acessibilidade: testes de `aria-sort`, rótulos e preservação de `data-label` (renderToStaticMarkup).
+  - Testes frontend **34 → 37** (ux.test.tsx). Sem deploy.
+
 - **2026-09-01 (INT-003/005 + ADM-004 + ARC-001):**
   - **INT-003** impressão: `reenfileirar` (reimpressão/retry **auditada** via `auditoria_evento`; falha não perde a venda) + `POST /api/impressao/fila/<id>/reimprimir`.
   - **INT-005** transporte/entrega (migração **0142**): `transportadora` (nome/CNPJ/telefone/prazo médio), `expedicao_evento` (eventos logísticos), `expedicao` + transportadora_id/sla_data/data_envio/data_entrega/rastreio; status logístico (`pendente/planejada/separada/enviada/parcialmente_entregue/entregue/cancelada`) **separado do fiscal/financeiro**; SLA = hoje + prazo da transportadora; entrega parcial possível. API `/api/estoque/transportadoras`, `/expedicao/<id>/transporte|status|eventos`.

@@ -54,29 +54,32 @@ interface NavGroup {
 
 const NAV: NavGroup[] = [
   {
-    label: "Vendas",
+    label: "Operação",
     items: [
       { href: "#/dashboard", label: "Painel", icon: LayoutDashboard, recurso: "dashboard" },
-      { href: "#/catalogo", label: "Catálogo", icon: Package, recurso: "catalogo" },
       { href: "#/pre-venda", label: "Pré-venda", icon: ShoppingCart, recurso: "pre-venda" },
       { href: "#/orcamentos", label: "Orçamentos", icon: FileText, recurso: "orcamentos" },
+      { href: "#/caixa", label: "Caixa", icon: Banknote, recurso: "caixa" },
+      { href: "#/posvenda", label: "Pós-venda", icon: RotateCcw, recurso: "posvenda" },
+    ],
+  },
+  {
+    label: "Comercial",
+    items: [
+      { href: "#/catalogo", label: "Catálogo", icon: Package, recurso: "catalogo" },
+      { href: "#/produtos", label: "Produtos", icon: Boxes, recurso: "produtos" },
+      { href: "#/clientes", label: "Clientes", icon: Users, recurso: "clientes" },
+      { href: "#/vendedores", label: "Vendedores", icon: UserCheck, recurso: "vendedores" },
+      { href: "#/categorias", label: "Categorias", icon: Tags, recurso: "categorias" },
+      { href: "#/unidades", label: "Unidades", icon: Scale, recurso: "unidades" },
     ],
   },
   {
     label: "Compras",
     items: [
       { href: "#/compras", label: "Compras", icon: ShoppingBag, recurso: "compras" },
-    ],
-  },
-  {
-    label: "Cadastros",
-    items: [
-      { href: "#/clientes", label: "Clientes", icon: Users, recurso: "clientes" },
       { href: "#/fornecedores", label: "Fornecedores", icon: Truck, recurso: "fornecedores" },
-      { href: "#/produtos", label: "Produtos", icon: Boxes, recurso: "produtos" },
-      { href: "#/vendedores", label: "Vendedores", icon: UserCheck, recurso: "vendedores" },
-      { href: "#/categorias", label: "Categorias", icon: Tags, recurso: "categorias" },
-      { href: "#/unidades", label: "Unidades", icon: Scale, recurso: "unidades" },
+      { href: "#/estoque", label: "Estoque", icon: Warehouse, recurso: "estoque" },
       { href: "#/diagnostico-variacoes", label: "Qualidade", icon: SearchCheck, recurso: "qualidade" },
     ],
   },
@@ -84,26 +87,28 @@ const NAV: NavGroup[] = [
     label: "Financeiro",
     items: [
       { href: "#/financeiro", label: "Financeiro", icon: Wallet, recurso: "financeiro" },
-      { href: "#/caixa", label: "Caixa", icon: Banknote, recurso: "caixa" },
       { href: "#/precos", label: "Preços", icon: DollarSign, recurso: "precos" },
+      { href: "#/historico", label: "Hist. preços", icon: History, recurso: "historico" },
       { href: "#/bancos", label: "Bancos", icon: Landmark, recurso: "bancos" },
       { href: "#/plano-contas", label: "Plano de contas", icon: BookOpen, recurso: "plano_contas" },
       { href: "#/webhooks", label: "Webhooks", icon: Webhook, recurso: "financeiro" },
     ],
   },
   {
-    label: "Logística",
+    label: "Fiscal",
     items: [
-      { href: "#/estoque", label: "Estoque", icon: Warehouse, recurso: "estoque" },
-      { href: "#/relatorios", label: "Relatórios", icon: BarChart3, recurso: "relatorios" },
       { href: "#/fiscal", label: "Fiscal", icon: Receipt, recurso: "fiscal" },
     ],
   },
   {
-    label: "Admin",
+    label: "Relatórios",
     items: [
-      { href: "#/posvenda", label: "Pós-venda", icon: RotateCcw, recurso: "posvenda" },
-      { href: "#/historico", label: "Hist. preços", icon: History, recurso: "historico" },
+      { href: "#/relatorios", label: "Relatórios", icon: BarChart3, recurso: "relatorios" },
+    ],
+  },
+  {
+    label: "Administração",
+    items: [
       { href: "#/usuarios", label: "Usuários", icon: ShieldCheck, recurso: "usuarios" },
       { href: "#/perfis", label: "Perfis e permissões", icon: ShieldCheck, recurso: "perfis" },
       { href: "#/configuracoes", label: "Configurações", icon: Settings, recurso: "configuracoes" },
