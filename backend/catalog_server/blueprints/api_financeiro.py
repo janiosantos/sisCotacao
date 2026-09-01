@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request
 
 from catalog_server.repositories import adiantamento_repo, caixa_repo, centro_custo_repo, condicao_repo, contas_repo
-from catalog_server.services import caixa_sessao
+from catalog_server.services import caixa_sessao, cobranca
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 
 api_financeiro_bp = Blueprint("api_financeiro", __name__)
@@ -83,6 +83,49 @@ def detalhe_sessao_caixa(sessao_id: int):
     if not s:
         return jsonify({"error": "Sessão não encontrada", "code": "sessao_nao_encontrada"}), 404
     return jsonify(s)
+
+
+# ─── Cobrança e renegociação (VEN-006) ─────────────────────
+
+
+@api_financeiro_bp.get("/api/financeiro/cobranca/vencidas")
+def listar_vencidas():
+    return jsonify({"contas": cobranca.listar_vencidas(request.args.get("cliente_id", type=int))})
+
+
+@api_financeiro_bp.post("/api/financeiro/cobranca/<int:conta_id>/recalcular")
+def recalcular_cobranca(conta_id: int):
+    try:
+        return jsonify(cobranca.calcular_cobranca(conta_id))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "conta_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "cobranca_invalida"}), 400
+
+
+@api_financeiro_bp.post("/api/financeiro/cobranca/<int:conta_id>/renegociar")
+def renegociar_conta(conta_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(cobranca.renegociar(conta_id, data.get("novas_parcelas") or [], data.get("motivo")))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "conta_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "renegociacao_invalida"}), 400
+
+
+@api_financeiro_bp.get("/api/financeiro/cobranca/config")
+def obter_cobranca_config():
+    return jsonify({"config": cobranca._config()})
+
+
+@api_financeiro_bp.put("/api/financeiro/cobranca/config")
+def atualizar_cobranca_config():
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify({"config": cobranca.atualizar_config(float(data["juros_dia_pct"]), float(data["multa_pct"]))})
+    except (KeyError, ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "cobranca_config_invalida"}), 400
 
 
 # ─── Caixa ─────────────────────────────────────────────────
