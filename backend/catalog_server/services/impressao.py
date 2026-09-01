@@ -257,6 +257,28 @@ class ImpressaoService:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def reenfileirar(self, job_id: int, usuario_id: int | None = None) -> int:
+        """Reimpressão/retry auditado (INT-003): reenfileira o payload original
+        sem perder o documento; falha de impressão não perde a venda."""
+        from catalog_server.services import infra
+
+        with system_conn() as conn:
+            row = conn.execute(
+                "SELECT tipo, referencia, payload FROM impressao_fila WHERE id=?", (job_id,)
+            ).fetchone()
+            if not row:
+                raise LookupError("Job de impressão não encontrado")
+            cur = conn.execute(
+                "INSERT INTO impressao_fila (tipo, referencia, payload, status)"
+                " VALUES (?,?,?, 'pendente')",
+                (row["tipo"], row["referencia"], row["payload"]),
+            )
+            novo_id = cur.lastrowid
+            infra.registrar("reimpressao", "impressao_fila", job_id,
+                            depois={"novo_job": novo_id, "referencia": row["referencia"]},
+                            ator_id=usuario_id, motivo="reimpressão autorizada", conn=conn)
+        return novo_id
+
     # ------------------------------------------------------------------
 
     def _drenar_fila(self) -> None:

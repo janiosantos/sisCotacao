@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
+from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
+
 from catalog_server.repositories.orcamentos import orcamento_repo
 from catalog_server.services.impressao import impressao_service
 from catalog_server import permissao
@@ -63,3 +65,13 @@ def imprimir_teste():
 @api_impressao_bp.get("/api/impressao/fila")
 def fila():
     return jsonify(impressao_service.status())
+
+
+@api_impressao_bp.post("/api/impressao/fila/<int:job_id>/reimprimir")
+@permissao.exige_permissao("impressao", "imprimir")
+def reimprimir(job_id: int):
+    try:
+        novo_id = impressao_service.reenfileirar(job_id, usuario_id_requisicao())
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "job_nao_encontrado"}), 404
+    return jsonify({"ok": True, "novo_job_id": novo_id}), 202

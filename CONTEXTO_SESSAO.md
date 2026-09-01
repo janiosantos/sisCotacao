@@ -112,6 +112,13 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 9. Registro da sessão atual
 
+- **2026-09-01 (INT-003/005 + ADM-004 + ARC-001):**
+  - **INT-003** impressão: `reenfileirar` (reimpressão/retry **auditada** via `auditoria_evento`; falha não perde a venda) + `POST /api/impressao/fila/<id>/reimprimir`.
+  - **INT-005** transporte/entrega (migração **0142**): `transportadora` (nome/CNPJ/telefone/prazo médio), `expedicao_evento` (eventos logísticos), `expedicao` + transportadora_id/sla_data/data_envio/data_entrega/rastreio; status logístico (`pendente/planejada/separada/enviada/parcialmente_entregue/entregue/cancelada`) **separado do fiscal/financeiro**; SLA = hoje + prazo da transportadora; entrega parcial possível. API `/api/estoque/transportadoras`, `/expedicao/<id>/transporte|status|eventos`.
+  - **ADM-004** backup: `scripts/backup.py` (pg_dump schema+data + imagens + manifest SHA-256 + retenção N) + `docs/erp/backup.md` (RPO/RTO, restauração isolada, evidência).
+  - **ARC-001** services/use cases: teste de que as regras importam e rodam **sem Flask** + ponto transacional único (finalizar do recebimento).
+  - Testes `test_transporte_impressao.py` (6) + `test_arc_001_backup.py` (4). Schema DEV **142**. Sem deploy. Próximo: **Onda 10 — UX** (por último, pois o layout será reajustado).
+
 - **2026-09-01 (Ondas 10/11 restantes + Piloto):**
   - **ARC-002** validação de schema (`services/validacao.py`): tipos/enum/decimal/datas/limites/campos desconhecidos; aplicado ao `importar_extrato`.
   - **ARC-004** concorrência real: testes de **último saldo serializado** (advisory lock — saldo nunca negativo) e idempotência concorrente (`test_arc.py`).

@@ -14,6 +14,7 @@ from catalog_server.services import xyz as xyz_svc
 from catalog_server.services import demanda as demanda_svc
 from catalog_server.services import motor_reposicao
 from catalog_server.services import fornecedor_desempenho
+from catalog_server.services import expedicao_avancada
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server import contabil_gatilhos
 
@@ -743,8 +744,57 @@ def reconciliar_estoque_api():
 
 @api_estoque_bp.get('/api/estoque/reconciliacao/tudo')
 def reconciliar_tudo_api():
-    dep = request.args.get('deposito_id', type=int)
+    dep = request.args.get("deposito_id", type=int)
     return jsonify({'divergencias': estoque_repo.reconciliar_tudo(dep)})
+
+
+# ─── Transporte e entrega (INT-005) ────────────────────────
+
+
+@api_estoque_bp.get("/api/estoque/transportadoras")
+def listar_transportadoras():
+    return jsonify({"transportadoras": expedicao_avancada.listar_transportadoras()})
+
+
+@api_estoque_bp.post("/api/estoque/transportadoras")
+def criar_transportadora():
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify({"id": expedicao_avancada.criar_transportadora(
+            data.get("nome") or "", data.get("cnpj"), data.get("telefone"),
+            data.get("prazo_medio_dias") and int(data["prazo_medio_dias"]),
+        )}), 201
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "transportadora_invalida"}), 400
+
+
+@api_estoque_bp.post("/api/estoque/expedicao/<int:expedicao_id>/transporte")
+def definir_transporte(expedicao_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(expedicao_avancada.definir_transporte(
+            expedicao_id, data.get("transportadora_id"), data.get("sla_dias"), data.get("rastreio"),
+        ))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "expedicao_nao_encontrada"}), 404
+
+
+@api_estoque_bp.post("/api/estoque/expedicao/<int:expedicao_id>/status")
+def transicionar_expedicao(expedicao_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(expedicao_avancada.transicionar(
+            expedicao_id, data.get("status") or "", data.get("usuario_id"), data.get("rastreio"),
+        ))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "expedicao_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "transicao_invalida"}), 400
+
+
+@api_estoque_bp.get("/api/estoque/expedicao/<int:expedicao_id>/eventos")
+def listar_eventos_expedicao(expedicao_id: int):
+    return jsonify({"eventos": expedicao_avancada.listar_eventos(expedicao_id)})
 
 
 @api_estoque_bp.post('/api/estoque/inventarios')
