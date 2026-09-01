@@ -1627,6 +1627,17 @@ export const api = {
     ),
   recallLote: (produtoId: number, loteId?: number) =>
     request<{ itens: RecallItem[] }>("GET", "/api/estoque/lotes/recall" + qs({ produto_id: produtoId, lote_id: loteId })),
+  calcularAbcHistorica: (data: { criterio: string; data_inicio: string; data_fim: string; deposito_id?: number }) =>
+    request<{ calculo: AbcCalculo }>("POST", "/api/estoque/abc/calcular", data),
+  aplicarAbcHistorica: (id: number) =>
+    request<{ resultado: { aplicados: number; criterio: string; periodo: string } }>("POST", `/api/estoque/abc/${id}/aplicar`),
+  listarAbcHistorica: (depositoId?: number) =>
+    request<{ calculos: { id: number; criterio: string; data_inicio: string; data_fim: string; origem: string; total: number; itens: number; criado_em: string }[] }>(
+      "GET",
+      "/api/estoque/abc" + qs({ deposito_id: depositoId })
+    ),
+  detalheAbcHistorica: (id: number) =>
+    request<{ calculo: AbcCalculo }>("GET", `/api/estoque/abc/${id}`),
   listarExpedicao: (params: Record<string, unknown> = {}) =>
     request<Expedicao[]>("GET", "/api/expedicao" + qs(params)),
   criarExpedicao: (data: { codigo: string; deposito_id: number; transportadora?: string; observacao?: string }) =>
@@ -2435,6 +2446,30 @@ export interface EnderecoEstoqueItem {
   primaria: boolean;
   sku: string;
   produto_nome: string;
+}
+
+export interface AbcItem {
+  produto_id: number;
+  valor: number;
+  acumulado: number;
+  pct_acumulado: number;
+  classe: string;
+  ordem: number;
+  sku?: string;
+  produto_nome?: string;
+}
+
+export interface AbcCalculo {
+  id: number;
+  criterio: string;
+  data_inicio: string;
+  data_fim: string;
+  origem?: string;
+  total: number;
+  total_itens?: number;
+  sem_venda?: number;
+  resumo: Record<string, { produtos: number; valor: number; pct: number }>;
+  itens: AbcItem[];
 }
 
 export interface SaldoItem {

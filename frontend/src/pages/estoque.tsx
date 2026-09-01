@@ -10,8 +10,9 @@ import { Lotes } from "./estoque/lotes";
 import { Expedicao } from "./estoque/expedicao";
 import { Inventario } from "./estoque/inventario";
 import { Enderecos } from "./estoque/enderecos";
+import { AbcHistorica } from "./estoque/abc";
 
-type Aba = "saldo" | "depositos" | "movimentos" | "lotes" | "expedicao" | "inventario" | "enderecos";
+type Aba = "saldo" | "depositos" | "movimentos" | "lotes" | "expedicao" | "inventario" | "enderecos" | "abc";
 
 export default function Estoque() {
   const [aba, setAba] = useState<Aba>("saldo");
@@ -37,6 +38,7 @@ export default function Estoque() {
     { key: "expedicao", label: "Expedição" },
     { key: "inventario", label: "Inventário" },
   { key: "enderecos", label: "Endereços" },
+  { key: "abc", label: "ABC" },
   ];
 
   return (
@@ -62,6 +64,7 @@ export default function Estoque() {
       {aba === "expedicao" && <Expedicao />}
       {aba === "inventario" && <Inventario depositos={depositos} />}
       {aba === "enderecos" && <Enderecos depositos={depositos} />}
+      {aba === "abc" && <AbcHistorica />}
     </div>
   );
 }

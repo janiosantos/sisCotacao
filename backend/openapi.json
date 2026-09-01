@@ -4011,6 +4011,126 @@
           }
         }
       }
+    },
+    "/api/estoque/abc/calcular": {
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Calcula ABC hist?rica por per?odo/crit?rio (consumo|receita|margem|quantidade|frequencia) ? versionada",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "criterio": {
+                    "type": "string",
+                    "enum": [
+                      "consumo",
+                      "receita",
+                      "margem",
+                      "quantidade",
+                      "frequencia"
+                    ]
+                  },
+                  "data_inicio": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "data_fim": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "deposito_id": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "C?lculo ABC (vers?o)"
+          },
+          "400": {
+            "description": "Par?metros inv?lidos"
+          }
+        }
+      }
+    },
+    "/api/estoque/abc/{calculo_id}/aplicar": {
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Aplica a classe/ordem da vers?o nos produtos (abc_origem=historico)",
+        "parameters": [
+          {
+            "name": "calculo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aplicado"
+          },
+          "404": {
+            "description": "N?o encontrado"
+          }
+        }
+      }
+    },
+    "/api/estoque/abc": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Lista vers?es de c?lculo ABC",
+        "parameters": [
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vers?es"
+          }
+        }
+      }
+    },
+    "/api/estoque/abc/{calculo_id}": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Detalhe da vers?o com itens e classes",
+        "parameters": [
+          {
+            "name": "calculo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vers?o com itens"
+          }
+        }
+      }
     }
   },
   "components": {

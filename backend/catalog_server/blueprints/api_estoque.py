@@ -9,6 +9,7 @@ from catalog_server.services import estoque_parametro as parametro_svc
 from catalog_server.services import inventario_ciclo as inventario_svc
 from catalog_server.services import endereco as endereco_svc
 from catalog_server.services import lote_rastreabilidade
+from catalog_server.services import abc_historica
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server import contabil_gatilhos
 
@@ -466,6 +467,49 @@ def recall_lote():
     if not produto_id:
         return jsonify({"error": "produto_id é obrigatório", "code": "recall_obrigatorio"}), 400
     return jsonify({"itens": lote_rastreabilidade.recall(produto_id, lote_id)})
+
+
+# ─── ABC histórica (COM-001) ───────────────────────────────
+
+
+@api_estoque_bp.post("/api/estoque/abc/calcular")
+def calcular_abc_historica():
+    data = request.get_json(silent=True) or {}
+    criterio = data.get("criterio") or "consumo"
+    data_inicio = data.get("data_inicio")
+    data_fim = data.get("data_fim")
+    if not data_inicio or not data_fim:
+        return jsonify({"error": "data_inicio e data_fim são obrigatórios", "code": "abc_periodo_obrigatorio"}), 400
+    try:
+        return jsonify({"calculo": abc_historica.calcular(
+            criterio, data_inicio, data_fim,
+            int(data["deposito_id"]) if data.get("deposito_id") else None,
+            usuario_id_requisicao(),
+        )})
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "abc_invalido"}), 400
+
+
+@api_estoque_bp.post("/api/estoque/abc/<int:calculo_id>/aplicar")
+def aplicar_abc_historica(calculo_id: int):
+    try:
+        return jsonify({"resultado": abc_historica.aplicar(calculo_id)})
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "abc_nao_encontrado"}), 404
+
+
+@api_estoque_bp.get("/api/estoque/abc")
+def listar_abc_historica():
+    deposito_id = request.args.get("deposito_id", type=int)
+    return jsonify({"calculos": abc_historica.listar(deposito_id)})
+
+
+@api_estoque_bp.get("/api/estoque/abc/<int:calculo_id>")
+def detalhe_abc_historica(calculo_id: int):
+    calc = abc_historica.detalhe(calculo_id)
+    if not calc:
+        return jsonify({"error": "Cálculo ABC não encontrado", "code": "abc_nao_encontrado"}), 404
+    return jsonify({"calculo": calc})
 
 
 # ─── Expedição ─────────────────────────────────────────────
