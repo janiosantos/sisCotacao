@@ -4131,6 +4131,264 @@
           }
         }
       }
+    },
+    "/api/estoque/xyz/calcular": {
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Calcula classe XYZ (variabilidade/intermitencia) por produto ou para todos",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "produto_id": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado XYZ"
+          }
+        }
+      }
+    },
+    "/api/estoque/xyz/config": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Obtem limiares XYZ configuraveis",
+        "responses": {
+          "200": {
+            "description": "Config"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Atualiza limiares XYZ",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cv_x": {
+                    "type": "number"
+                  },
+                  "cv_y": {
+                    "type": "number"
+                  },
+                  "meses_historico": {
+                    "type": "integer"
+                  },
+                  "intermitente_zeros_pct": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Config atualizada"
+          }
+        }
+      }
+    },
+    "/api/estoque/xyz/matriz": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Matriz ABC x XYZ por celula (contagem de produtos)",
+        "responses": {
+          "200": {
+            "description": "Celulas"
+          }
+        }
+      }
+    },
+    "/api/estoque/demanda/consolidar": {
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Consolida demanda real (vendas finalizadas) - idempotente (COM-003)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "deposito_id": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inseridas"
+          }
+        }
+      }
+    },
+    "/api/estoque/demanda": {
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Registra demanda manual (consumo/projetada)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "produto_id": {
+                    "type": "integer"
+                  },
+                  "data": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "quantidade": {
+                    "type": "number"
+                  },
+                  "observacao": {
+                    "type": "string"
+                  },
+                  "chave_manual": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Demanda registrada"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Lista registros de demanda",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "data_inicio",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "data_fim",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Registros"
+          }
+        }
+      }
+    },
+    "/api/estoque/demanda/auditar/{produto_id}": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Audita demanda do produto (atendida/perdida/aberta + documentos)",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Auditoria"
+          }
+        }
+      }
+    },
+    "/api/estoque/demanda/{demanda_id}/perdida": {
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Marca demanda como perdida por ruptura (motivo obrigatorio)",
+        "parameters": [
+          {
+            "name": "demanda_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "motivo": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Marcada"
+          },
+          "400": {
+            "description": "Motivo obrigatorio"
+          }
+        }
+      }
     }
   },
   "components": {

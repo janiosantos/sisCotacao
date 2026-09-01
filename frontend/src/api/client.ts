@@ -1638,6 +1638,23 @@ export const api = {
     ),
   detalheAbcHistorica: (id: number) =>
     request<{ calculo: AbcCalculo }>("GET", `/api/estoque/abc/${id}`),
+  calcularXyz: (produtoId?: number) =>
+    request<{ resultado: { produto_id?: number; classe_xyz: string; cv: number; intermitente: boolean; media_mensal?: number; por_classe?: Record<string, number> } }>(
+      "POST",
+      "/api/estoque/xyz/calcular",
+      produtoId ? { produto_id: produtoId } : {}
+    ),
+  obterXyzConfig: () => request<{ config: { cv_x: number; cv_y: number; meses_historico: number; intermitente_zeros_pct: number } }>("GET", "/api/estoque/xyz/config"),
+  atualizarXyzConfig: (config: { cv_x: number; cv_y: number; meses_historico: number; intermitente_zeros_pct: number }) =>
+    request<{ config: unknown }>("PUT", "/api/estoque/xyz/config", config),
+  consolidarDemanda: () => request<{ resultado: { inseridas: number } }>("POST", "/api/estoque/demanda/consolidar", {}),
+  registrarDemanda: (data: { produto_id: number; data: string; quantidade: number; observacao?: string; chave_manual?: string }) =>
+    request<{ demanda: { id: number } }>("POST", "/api/estoque/demanda", data),
+  listarDemanda: (produtoId?: number) =>
+    request<{ itens: { id: number; produto_id: number; data: string; quantidade: number; tipo: string; origem: string; status: string; motivo_ruptura?: string | null; sku: string; produto_nome: string }[] }>(
+      "GET",
+      "/api/estoque/demanda" + qs({ produto_id: produtoId })
+    ),
   listarExpedicao: (params: Record<string, unknown> = {}) =>
     request<Expedicao[]>("GET", "/api/expedicao" + qs(params)),
   criarExpedicao: (data: { codigo: string; deposito_id: number; transportadora?: string; observacao?: string }) =>

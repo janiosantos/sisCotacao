@@ -10,6 +10,8 @@ from catalog_server.services import inventario_ciclo as inventario_svc
 from catalog_server.services import endereco as endereco_svc
 from catalog_server.services import lote_rastreabilidade
 from catalog_server.services import abc_historica
+from catalog_server.services import xyz as xyz_svc
+from catalog_server.services import demanda as demanda_svc
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server import contabil_gatilhos
 
@@ -510,6 +512,90 @@ def detalhe_abc_historica(calculo_id: int):
     if not calc:
         return jsonify({"error": "Cálculo ABC não encontrado", "code": "abc_nao_encontrado"}), 404
     return jsonify({"calculo": calc})
+
+
+# ─── XYZ e matriz de política (COM-002) ────────────────────
+
+
+@api_estoque_bp.post("/api/estoque/xyz/calcular")
+def calcular_xyz():
+    data = request.get_json(silent=True) or {}
+    try:
+        if data.get("produto_id"):
+            return jsonify({"resultado": xyz_svc.classificar(int(data["produto_id"]))})
+        return jsonify({"resultado": xyz_svc.calcular_todos()})
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "xyz_invalido"}), 400
+
+
+@api_estoque_bp.get("/api/estoque/xyz/config")
+def obter_xyz_config():
+    return jsonify({"config": xyz_svc._config()})
+
+
+@api_estoque_bp.put("/api/estoque/xyz/config")
+def atualizar_xyz_config():
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify({"config": xyz_svc.atualizar_config(
+            float(data["cv_x"]), float(data["cv_y"]), int(data["meses_historico"]),
+            float(data["intermitente_zeros_pct"]), usuario_id_requisicao(),
+        )})
+    except (KeyError, ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "xyz_config_invalido"}), 400
+
+
+@api_estoque_bp.get("/api/estoque/xyz/matriz")
+def resumo_matriz_xyz():
+    return jsonify({"celulas": xyz_svc.resumo_matriz()})
+
+
+# ─── Base de demanda (COM-003) ─────────────────────────────
+
+
+@api_estoque_bp.post("/api/estoque/demanda/consolidar")
+def consolidar_demanda():
+    data = request.get_json(silent=True) or {}
+    deposito_id = data.get("deposito_id")
+    return jsonify({"resultado": demanda_svc.consolidar(
+        int(deposito_id) if deposito_id else None, usuario_id_requisicao(),
+    )})
+
+
+@api_estoque_bp.post("/api/estoque/demanda")
+def registrar_demanda_manual():
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify({"demanda": demanda_svc.registrar_manual(
+            int(data["produto_id"]), data["data"], float(data["quantidade"]),
+            data.get("observacao"), usuario_id_requisicao(), data.get("chave_manual"),
+        )})
+    except (KeyError, ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "demanda_invalida"}), 400
+
+
+@api_estoque_bp.get("/api/estoque/demanda")
+def listar_demanda():
+    produto_id = request.args.get("produto_id", type=int)
+    data_inicio = request.args.get("data_inicio")
+    data_fim = request.args.get("data_fim")
+    return jsonify({"itens": demanda_svc.listar(produto_id, data_inicio, data_fim)})
+
+
+@api_estoque_bp.get("/api/estoque/demanda/auditar/<int:produto_id>")
+def auditar_demanda(produto_id: int):
+    return jsonify(demanda_svc.auditar(produto_id))
+
+
+@api_estoque_bp.post("/api/estoque/demanda/<int:demanda_id>/perdida")
+def marcar_demanda_perdida(demanda_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        if not demanda_svc.marcar_perdida(demanda_id, data.get("motivo") or ""):
+            return jsonify({"error": "Demanda não encontrada", "code": "demanda_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "demanda_invalida"}), 400
+    return jsonify({"ok": True})
 
 
 # ─── Expedição ─────────────────────────────────────────────
