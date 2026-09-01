@@ -418,20 +418,70 @@ export function Modal({
 export function PageHeader({
   title,
   subtitle,
+  contexto,
   actions,
 }: {
   title: string;
   subtitle?: string;
+  contexto?: string;
   actions?: ReactNode;
 }) {
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
+        {contexto ? (
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{contexto}</p>
+        ) : null}
         <h1 className="text-[1.4rem] font-bold tracking-[-0.025em] text-slate-900 sm:text-2xl">{title}</h1>
         {subtitle ? <p className="mt-1.5 max-w-3xl text-sm leading-5 text-slate-500">{subtitle}</p> : null}
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
     </div>
+  );
+}
+
+// ------------------------------------------------------------------
+// Paginacao (UX-002/006): paginação acessível e reutilizável.
+// ------------------------------------------------------------------
+
+export function Paginacao({
+  total,
+  pagina,
+  porPagina,
+  onChange,
+}: {
+  total: number;
+  pagina: number;
+  porPagina: number;
+  onChange: (p: number) => void;
+}) {
+  const paginas = Math.max(1, Math.ceil(total / porPagina));
+  return (
+    <nav aria-label="Paginação" className="flex items-center justify-between gap-3 pt-3 text-sm">
+      <p className="text-xs text-slate-500" role="status">
+        {total} registro(s) · página {Math.min(pagina, paginas)} de {paginas}
+      </p>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          disabled={pagina <= 1}
+          onClick={() => onChange(pagina - 1)}
+          aria-label="Página anterior"
+          className="rounded-md border border-slate-200 px-2.5 py-1 text-xs hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          ←
+        </button>
+        <button
+          type="button"
+          disabled={pagina >= paginas}
+          onClick={() => onChange(pagina + 1)}
+          aria-label="Próxima página"
+          className="rounded-md border border-slate-200 px-2.5 py-1 text-xs hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          →
+        </button>
+      </div>
+    </nav>
   );
 }
 

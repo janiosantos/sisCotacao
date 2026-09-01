@@ -112,6 +112,13 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 9. Registro da sessão atual
 
+- **2026-09-01 (Onda 10 — UX, continuação autônoma):**
+  - **UX-001** `PageHeader` ganhou `contexto` (rótulo do grupo do shell); aplicado em Clientes.
+  - **UX-002/006** novo componente `Paginacao` (total + nav acessível com `aria-label`, anterior/próxima) aplicado no **Saldo de Estoque** (50/página).
+  - **UX-007** `aria-sort`/`aria-label` na ordenação da tabela; foco-visible e `prefers-reduced-motion` já presentes no CSS.
+  - Modal já cobria UX-003 (Escape, trap, aria-modal, restauração de foco).
+  - Testes frontend **37 → 39** (ux.test.tsx: PageHeader.contexto + Paginacao). Sem deploy.
+
 - **2026-09-01 (Onda 10 — UX):** (feita por último, como instruído — layout será reajustado em conjunto)
   - **UX-001** shell/navegação: menu reorganizado nos grupos do plano — **Operação / Comercial / Compras / Financeiro / Fiscal / Relatórios / Administração**.
   - **UX-002** tabela padrão: `THead` ganhou **ordenação clicável** (botão com `aria-label`, `aria-sort`, indicador ▲▼) sem quebrar o `data-label` do mobile card.

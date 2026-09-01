@@ -72,6 +72,7 @@ export default function Clientes() {
     <div>
       <PageHeader
         title="Clientes"
+        contexto="Comercial · Cadastros"
         subtitle="Cadastro completo: dados, endereços, contatos, apoio comercial/fiscal e histórico de interações."
         actions={
           <Button variant="primary" onClick={() => void abrir(null)}>

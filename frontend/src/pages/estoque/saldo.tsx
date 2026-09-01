@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api, type Deposito, type SaldoItem } from "../../api/client";
 import { fmtDate, fmtMoney } from "../../ui/format";
 import { toast } from "../../ui/dom";
-import { Badge, Button, Cell, EmptyRow, Field, Input, Loading, Select, Table, TBody, THead } from "../../ui/ui";
+import { Badge, Button, Cell, EmptyRow, Field, Input, Loading, Paginacao, Select, Table, TBody, THead } from "../../ui/ui";
 
 export function Saldo({ depositos }: { depositos: Deposito[] }) {
   const [rows, setRows] = useState<SaldoItem[]>([]);
@@ -12,6 +12,8 @@ export function Saldo({ depositos }: { depositos: Deposito[] }) {
   const [dep, setDep] = useState("");
   const [q, setQ] = useState("");
   const [familia, setFamilia] = useState("");
+  const [pagina, setPagina] = useState(1);
+  const POR_PAGINA = 50;
 
 const [familias, setFamilias] = useState<{ id: number; nome: string }[]>([]);
   const [valorizacao, setValorizacao] = useState<{ total: number; data_corte?: string | null } | null>(null);
@@ -87,15 +89,16 @@ const [familias, setFamilias] = useState<{ id: number; nome: string }[]>([]);
       ) : null}
 
       {carregando ? (
-        <Loading />
+<Loading />
       ) : (
+        <>
         <Table>
 <THead cols={["Produto", "SKU", "Família", "Depósito", "Unid.", "Emb.", "Físico", "Reservado", "Disponível", "Custo médio", "Situação", "Preço", "NCM", "Localização", "Atualizado"]} />
           <TBody>
             {rows.length === 0 ? (
               <EmptyRow colSpan={15} message="Nenhum saldo encontrado" />
             ) : (
-              rows.map((s) => (
+              rows.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA).map((s) => (
                 <tr key={s.id} className="hover:bg-gray-50">
                   <Cell>
                     <span className="font-medium">{s.produto_nome}</span>
@@ -120,8 +123,10 @@ const [familias, setFamilias] = useState<{ id: number; nome: string }[]>([]);
                 </tr>
               ))
             )}
-          </TBody>
+</TBody>
         </Table>
+        <Paginacao total={rows.length} pagina={pagina} porPagina={POR_PAGINA} onChange={setPagina} />
+        </>
       )}
     </div>
   );
