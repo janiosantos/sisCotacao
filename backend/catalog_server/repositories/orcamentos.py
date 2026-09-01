@@ -323,12 +323,28 @@ class OrcamentoRepository:
                 )
             conn.execute("DELETE FROM orcamento_itens WHERE orcamento_id=?", (orcamento_id,))
             for it in itens:
+                quantidade = float(it.get("quantidade") or 1)
+                unidade = (it.get("unidade") or "").strip().upper() or "UN"
+                fator = 1.0
+                if unidade != "UN":
+                    try:
+                        from catalog_server.services import unidade_conversao
+
+                        base = unidade_conversao.unidade_base(int(it.get("produto_id") or 0))
+                        conv = unidade_conversao.converter(int(it.get("produto_id") or 0), quantidade, unidade, base)
+                        quantidade = float(conv["resultado"])
+                        fator = float(conv["fator"])
+                        unidade = unidade
+                    except Exception:  # noqa: BLE001 (sem conversão → assume UN)
+                        unidade = "UN"
+                        fator = 1.0
                 conn.execute(
                     """
                     INSERT INTO orcamento_itens
                         (orcamento_id, produto_id, nome, sku, marca, especificacao,
-                         quantidade, preco_unitario, desconto_percentual, subtotal)
-                    VALUES (?,?,?,?,?,?,?,?,?,?)
+                         quantidade, preco_unitario, desconto_percentual, subtotal,
+                         unidade_vendida, fator_venda)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         orcamento_id,
@@ -337,7 +353,7 @@ class OrcamentoRepository:
                         (it.get("sku") or "").strip(),
                         (it.get("marca") or "").strip(),
                         (it.get("especificacao") or "").strip(),
-                        float(it.get("quantidade") or 1),
+                        quantidade,
                         float(it.get("preco_unitario") or 0),
                         float(it.get("desconto_percentual") or 0),
                         _calc_item(
@@ -345,6 +361,8 @@ class OrcamentoRepository:
                             float(it.get("quantidade") or 1),
                             float(it.get("desconto_percentual") or 0),
                         ),
+                        unidade,
+                        fator,
                     ),
                 )
             self._recalc_totals(conn, orcamento_id)

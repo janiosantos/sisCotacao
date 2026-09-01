@@ -6,6 +6,7 @@ from werkzeug.security import check_password_hash
 
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.repositories.orcamentos import orcamento_repo, resumo_desconto
+from catalog_server.services import venda_entrega
 from catalog_server.orcamento_status import (
     STATUS_LIST,
     aplicar_transicao,
@@ -397,6 +398,47 @@ def excluir(orcamento_id: int):
     if not orcamento_repo.excluir(orcamento_id):
         return jsonify({"error": "Orçamento não encontrado"}), 404
     return jsonify({"ok": True})
+
+
+# ─── Retirada e entrega (VEN-005) ──────────────────────────
+
+
+@api_orcamentos_bp.post("/api/orcamentos/<int:orcamento_id>/entrega")
+def configurar_entrega(orcamento_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(venda_entrega.configurar_entrega(
+            orcamento_id, data.get("tipo_entrega") or "balcao",
+            data.get("endereco"), data.get("data_entrega"),
+        ))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "orcamento_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "entrega_invalida"}), 400
+
+
+@api_orcamentos_bp.post("/api/orcamentos/<int:orcamento_id>/entrega/status")
+def transicionar_entrega(orcamento_id: int):
+    data = request.get_json(silent=True) or {}
+    status = data.get("status")
+    if status == "retirar":
+        try:
+            return jsonify(venda_entrega.retirar(orcamento_id))
+        except LookupError as exc:
+            return jsonify({"error": str(exc), "code": "orcamento_nao_encontrado"}), 404
+        except ValueError as exc:
+            return jsonify({"error": str(exc), "code": "entrega_invalida"}), 400
+    try:
+        return jsonify(venda_entrega.transicionar(orcamento_id, status or ""))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "orcamento_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "entrega_invalida"}), 400
+
+
+@api_orcamentos_bp.get("/api/orcamentos/entregas")
+def listar_entregas():
+    return jsonify({"entregas": venda_entrega.listar(request.args.get("status"))})
 
 
 # ─── Recebimento de vendas (caixa) ────────────────────────
