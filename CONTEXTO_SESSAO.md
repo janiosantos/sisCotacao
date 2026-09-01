@@ -112,6 +112,17 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 9. Registro da sessão atual
 
+- **2026-09-01 (Ondas 10/11 restantes + Piloto):**
+  - **ARC-002** validação de schema (`services/validacao.py`): tipos/enum/decimal/datas/limites/campos desconhecidos; aplicado ao `importar_extrato`.
+  - **ARC-004** concorrência real: testes de **último saldo serializado** (advisory lock — saldo nunca negativo) e idempotência concorrente (`test_arc.py`).
+  - **ARC-007** migrações: teste do guard idempotente + schema aplicado.
+  - **INT-002** cobrança/adquirentes: `status_canonico` + `reconciliar_pendentes` (cobranças pendentes/erro com provider e ação p/ sem-provider).
+  - **ADM-001** carga inicial (`services/operacao.py`): importa clientes/fornecedores **idempotente por doc**, rejeições listadas.
+  - **ADM-002** deduplicação: `candidatos` (SKU/EAN/CPF/CNPJ duplicados) + `merge` assistido (**redireciona referências**, **não destrói documento**, auditado).
+  - **ADM-005** monitoramento: `GET /api/sistema/readiness` (banco, migrações pendentes, outbox morta; 503 se não pronto).
+  - **PIL-001..004**: `docs/erp/piloto.md` com checklist P0, evidências, ações pré-publicação e aprovação explícita.
+  - Testes `test_arc.py` (6) + `test_operacao.py` (8). Sem deploy.
+
 - **2026-09-01 (Ondas 10/11 — ARC-003/005/006 + INT-001/006 + ADM-003):** migração **0141** (`idempotencia`, `auditoria_evento`, `conta_bancaria`, `extrato_bancario`).
   - **ARC-003** idempotência central (`services/infra.py`): `executar(chave, escopo, payload, fn)` — retry devolve resultado anterior; **chave com payload diferente é rejeitada**.
   - **ARC-005** reconciliação (`services/reconciliacao.py`): divergências com severidade/origem/ação (pedido sem movimento, movimento sem origem, **saldo inconsistente** vs ledger, reserva órfã, outbox morta).

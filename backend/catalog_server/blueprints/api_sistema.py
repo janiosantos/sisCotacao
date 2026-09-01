@@ -41,6 +41,36 @@ def status():
         return jsonify({"error": str(exc)}), 500
 
 
+@api_sistema_bp.get("/api/sistema/readiness")
+def readiness():
+    """Readiness (ADM-005): banco ok, sem migrações pendentes, outbox saudável."""
+    from catalog_server.services import outbox
+
+    try:
+        with system_conn() as conn:
+            conn.execute("SELECT 1")
+        banco = "ok"
+    except Exception:  # noqa: BLE001
+        banco = "erro"
+    status_info = system_status()
+    pendentes = len(status_info.get("pending", []) or [])
+    outbox_mortas = 0
+    try:
+        outbox_mortas = len([e for e in outbox.listar(status="morta", limite=100)])
+    except Exception:  # noqa: BLE001
+        pass
+    pronto = banco == "ok" and pendentes == 0
+    return jsonify({
+        "ready": pronto,
+        "checks": {
+            "banco": banco,
+            "migrations_pendentes": pendentes,
+            "outbox_morta": outbox_mortas,
+        },
+        "schema": status_info.get("schema_version"),
+    }), (200 if pronto else 503)
+
+
 # Nível escolhido no painel -> riscos aplicados. Críticas sempre entram (não se
 # pode pular a ordem de migração); "melhoria" engloba tudo.
 _RISCO_MAP = {

@@ -5,7 +5,7 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request
 
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
-from catalog_server.services import conciliacao, infra, reconciliacao, comunicacao
+from catalog_server.services import conciliacao, infra, reconciliacao, comunicacao, operacao
 
 api_infra_bp = Blueprint("api_infra", __name__)
 
@@ -78,3 +78,37 @@ def listar_comunicacao():
     return jsonify({"envios": comunicacao.listar_envios(
         request.args.get("status"), int(request.args.get("limite") or 50),
     )})
+
+
+# ─── Cobrança/adquirentes (INT-002) ────────────────────────
+
+@api_infra_bp.get("/api/infra/cobrancas/pendentes")
+def cobrancas_pendentes():
+    return jsonify(operacao.reconciliar_pendentes(int(request.args.get("limite") or 100)))
+
+
+# ─── Carga inicial (ADM-001) ───────────────────────────────
+
+@api_infra_bp.post("/api/infra/carga")
+def importar_carga():
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(operacao.importar_carga(data.get("tipo") or "", data.get("itens") or []))
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "carga_invalida"}), 400
+
+
+# ─── Deduplicação (ADM-002) ────────────────────────────────
+
+@api_infra_bp.get("/api/infra/deduplicacao/candidatos")
+def candidatos_duplicidade():
+    return jsonify({"candidatos": operacao.candidatos(request.args.get("tipo") or "sku")})
+
+
+@api_infra_bp.post("/api/infra/deduplicacao/merge")
+def merge_duplicados():
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(operacao.merge(int(data["primario"]), int(data["duplicado"]), data.get("tipo") or "produto"))
+    except (KeyError, ValueError) as exc:
+        return jsonify({"error": str(exc), "code": "merge_invalido"}), 400

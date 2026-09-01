@@ -20,11 +20,21 @@ def criar_conta(banco: str, agencia: str | None = None, conta: str | None = None
 def importar_extrato(conta_id: int, movimentos: list[dict]) -> dict:
     """Importa movimentos do extrato (data, descricao, valor, documento).
     Idempotente por idempotencia_key; extrato não cria baixa automática."""
+    from catalog_server.services.validacao import validar
+
     if not movimentos:
         raise ValueError("movimentos é obrigatório")
+    schema_mov = {"data": {"tipo": "string", "requerido": True},
+                  "valor": {"tipo": "float", "requerido": True},
+                  "descricao": {"tipo": "string"},
+                  "documento": {"tipo": "string"},
+                  "idempotencia_key": {"tipo": "string"}}
     importados = 0
     with system_conn() as conn:
         for m in movimentos:
+            erros, _ = validar(m or {}, schema_mov)
+            if erros:
+                raise ValueError(f"movimento inválido: {erros}")
             valor = float(m.get("valor") or 0)
             chave = m.get("idempotencia_key") or f"extrato-{conta_id}-{m.get('data')}-{m.get('documento') or m.get('descricao')}-{valor}"
             cur = conn.execute(
