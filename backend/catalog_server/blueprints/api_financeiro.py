@@ -3,8 +3,86 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request
 
 from catalog_server.repositories import adiantamento_repo, caixa_repo, centro_custo_repo, condicao_repo, contas_repo
+from catalog_server.services import caixa_sessao
+from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 
 api_financeiro_bp = Blueprint("api_financeiro", __name__)
+
+
+# ─── Sessão de caixa e terminal (VEN-004) ──────────────────
+
+
+@api_financeiro_bp.post("/api/financeiro/caixa/sessao/abrir")
+def abrir_sessao_caixa():
+    data = request.get_json(silent=True) or {}
+    operador_id = data.get("operador_id") or usuario_id_requisicao()
+    if not operador_id:
+        return jsonify({"error": "operador_id é obrigatório", "code": "operador_obrigatorio"}), 400
+    try:
+        return jsonify(caixa_sessao.abrir(
+            int(operador_id), float(data.get("saldo_inicial") or 0),
+            int(data.get("deposito_id") or 1), data.get("terminal"),
+        ))
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "sessao_invalida"}), 400
+
+
+@api_financeiro_bp.post("/api/financeiro/caixa/sessao/<int:sessao_id>/suprimento")
+def suprimento_sessao(sessao_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(caixa_sessao.suprimento(sessao_id, float(data.get("valor") or 0), data.get("descricao") or "", data.get("usuario_id")))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "sessao_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "sessao_invalida"}), 400
+
+
+@api_financeiro_bp.post("/api/financeiro/caixa/sessao/<int:sessao_id>/sangria")
+def sangria_sessao(sessao_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(caixa_sessao.sangria(sessao_id, float(data.get("valor") or 0), data.get("descricao") or "", data.get("usuario_id")))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "sessao_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "sessao_invalida"}), 400
+
+
+@api_financeiro_bp.post("/api/financeiro/caixa/sessao/<int:sessao_id>/fechar")
+def fechar_sessao_caixa(sessao_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(caixa_sessao.fechar(sessao_id, float(data.get("saldo_contado") or 0), data.get("justificativa")))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "sessao_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "sessao_invalida"}), 400
+
+
+@api_financeiro_bp.post("/api/financeiro/caixa/sessao/<int:sessao_id>/aprovar")
+def aprovar_sessao_caixa(sessao_id: int):
+    data = request.get_json(silent=True) or {}
+    aprovador_id = data.get("aprovador_id") or usuario_id_requisicao()
+    try:
+        return jsonify(caixa_sessao.aprovar(sessao_id, int(aprovador_id)))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "sessao_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "sessao_invalida"}), 400
+
+
+@api_financeiro_bp.get("/api/financeiro/caixa/sessao")
+def listar_sessoes_caixa():
+    return jsonify({"sessoes": caixa_sessao.listar(request.args.get("status"), request.args.get("operador_id", type=int))})
+
+
+@api_financeiro_bp.get("/api/financeiro/caixa/sessao/<int:sessao_id>")
+def detalhe_sessao_caixa(sessao_id: int):
+    s = caixa_sessao.detalhe(sessao_id)
+    if not s:
+        return jsonify({"error": "Sessão não encontrada", "code": "sessao_nao_encontrada"}), 404
+    return jsonify(s)
 
 
 # ─── Caixa ─────────────────────────────────────────────────

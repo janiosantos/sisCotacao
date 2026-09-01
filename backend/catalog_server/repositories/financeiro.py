@@ -38,6 +38,7 @@ class CaixaRepository:
         usuario_id: int | None = None,
         bandeira: str | None = None,
         codigo_autorizacao: str | None = None,
+        sessao_id: int | None = None,
         _conn=None,
     ) -> dict:
         if valor <= 0:
@@ -47,8 +48,26 @@ class CaixaRepository:
                 return self.movimentar(
                     tipo, descricao, valor, forma_pagamento, plano_conta_id,
                     documento, orcamento_id, usuario_id, bandeira,
-                    codigo_autorizacao, _conn=conn,
+                    codigo_autorizacao, sessao_id, _conn=conn,
                 )
+
+        # Vincula à sessão de caixa aberta do operador (se houver) e bloqueia
+        # movimentos quando a sessão já foi fechada (VEN-004).
+        if sessao_id is None and tipo != "abertura":
+            sess = _conn.execute(
+                "SELECT id, status FROM caixa_sessao WHERE operador_id=? ORDER BY id DESC LIMIT 1",
+                (usuario_id,),
+            ).fetchone()
+            if sess:
+                if sess["status"] == "fechada":
+                    raise ValueError("Sessão de caixa fechada — abra uma nova sessão para registrar movimentos")
+                sessao_id = sess["id"]
+        if sessao_id is not None and tipo != "abertura":
+            sess = _conn.execute(
+                "SELECT status FROM caixa_sessao WHERE id=?", (sessao_id,)
+            ).fetchone()
+            if sess and sess["status"] == "fechada":
+                raise ValueError("Sessão de caixa fechada — não é possível registrar movimentos")
 
         # Serializa o ledger mesmo quando ainda não existe uma linha para
         # bloquear. O lock transacional termina automaticamente no commit.
@@ -66,11 +85,11 @@ class CaixaRepository:
         cur = _conn.execute(
             "INSERT INTO caixa_movimento (tipo, descricao, valor, saldo_anterior, saldo_posterior,"
             " forma_pagamento, plano_conta_id, documento, orcamento_id, usuario_id,"
-            " bandeira, codigo_autorizacao)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            " bandeira, codigo_autorizacao, sessao_id)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (tipo, descricao, valor, saldo_ant, saldo_novo,
              forma_pagamento, plano_conta_id, documento, orcamento_id, usuario_id,
-             bandeira, codigo_autorizacao),
+             bandeira, codigo_autorizacao, sessao_id),
         )
         return {"id": cur.lastrowid, "saldo_anterior": saldo_ant, "saldo_posterior": saldo_novo}
 
