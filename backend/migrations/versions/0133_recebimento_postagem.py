@@ -35,7 +35,7 @@ def forward(conn) -> None:
             estoque_itens INTEGER NOT NULL DEFAULT 0,
             contas_criadas INTEGER NOT NULL DEFAULT 0,
             total NUMERIC(16,4) NOT NULL DEFAULT 0,
-            pedido_status VARCHAR(20) NOT NULL DEFAULT '',
+            pedido_status VARCHAR(30) NOT NULL DEFAULT '',
             contabil_ok BOOLEAN NOT NULL DEFAULT FALSE,
             postado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             CONSTRAINT uq_receb_postagem UNIQUE (recebimento_id)
