@@ -10,10 +10,8 @@ from catalog_server.services import inventario_ciclo as inv
 
 def _setup(system_db) -> tuple[int, int, int]:
     with system_conn() as conn:
-        conn.execute("INSERT INTO produtos_cadastro (nome, ativo, sku, preco) VALUES (%s,%s,%s,%s)", ("P A", 1, "A", 10.0))
-        p1 = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
-        conn.execute("INSERT INTO produtos_cadastro (nome, ativo, sku, preco) VALUES (%s,%s,%s,%s)", ("P B", 1, "B", 20.0))
-        p2 = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
+        p1 = int(conn.execute("INSERT INTO produtos_cadastro (nome, ativo, sku, preco) VALUES (%s,%s,%s,%s) RETURNING id", ("P A", 1, "A", 10.0)).fetchone()["id"])
+        p2 = int(conn.execute("INSERT INTO produtos_cadastro (nome, ativo, sku, preco) VALUES (%s,%s,%s,%s) RETURNING id", ("P B", 1, "B", 20.0)).fetchone()["id"])
         did = int(conn.execute("SELECT id FROM depositos ORDER BY id LIMIT 1").fetchone()["id"])
         conn.commit()
     estoque_repo.movimentar_fato(did, p1, "entrada", 10, custo_unitario=5.0, origem_tipo="teste")

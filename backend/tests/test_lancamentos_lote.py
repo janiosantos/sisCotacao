@@ -208,11 +208,10 @@ def test_receber_pedido_parcelado_com_origem(system_db):
 
     fid = supplier_repo.create({"nome": "Fornecedor Pedido"})
     with system_conn() as conn:
-        conn.execute(
+        pid = int(conn.execute(
             "INSERT INTO produtos_cadastro (nome, sku, ean, preco, unidade_venda, ativo)"
-            " VALUES ('Tijolo','TIJ-01','7891000000009',1.0,'UN',1)"
-        )
-        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
+            " VALUES ('Tijolo','TIJ-01','7891000000009',1.0,'UN',1) RETURNING id"
+        ).fetchone()["id"])
         conn.commit()
     r = c.post("/api/compras/cotacoes", headers=h, json={
         "apelido": "Cotação Tijolos",

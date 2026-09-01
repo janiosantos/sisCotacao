@@ -54,12 +54,11 @@ def _setup_pedido(system_db, c, h) -> tuple[int, int]:
     from catalog_server.repositories import supplier_repo
 
     with system_conn() as conn:
-        conn.execute(
+        pid = int(conn.execute(
             "INSERT INTO produtos_cadastro (nome, ativo, sku, ean, preco, unidade_venda, fator_conversao)"
-            " VALUES (%s,%s,%s,%s,%s,%s,%s)",
+            " VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
             ('Argamassa', 1, 'ARG-20', '7891000000002', 10, 'SC', 20),
-        )
-        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
+        ).fetchone()["id"])
         conn.commit()
 
     fid = supplier_repo.create({"nome": "Argamassas BR", "whatsapp": "5511998887777"})
@@ -137,12 +136,11 @@ def test_receber_pedido_ja_recebido_bloqueia(system_db):
 def test_solicitacao_detalhe_com_itens(system_db):
     c, h = _admin_client(system_db)
     with system_conn() as conn:
-        conn.execute(
+        pid = int(conn.execute(
             "INSERT INTO produtos_cadastro (nome, ativo, sku, ean, preco, unidade_venda)"
-            " VALUES (%s,%s,%s,%s,%s,%s)",
+            " VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
             ('Cimento', 1, 'CIM-50', '7891000000003', 32, 'SC'),
-        )
-        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
+        ).fetchone()["id"])
         conn.commit()
     r = c.post("/api/solicitacoes-compra", headers=h, json={"codigo": "SOL-001", "descricao": "Repor estoque"})
     sc_id = r.get_json()["id"]
@@ -161,12 +159,11 @@ def test_editar_quantidade_item_cotacao_compras(system_db):
     (tela 'aguardando respostas') usa o PATCH de itens da cotação."""
     c, h = _admin_client(system_db)
     with system_conn() as conn:
-        conn.execute(
+        pid = int(conn.execute(
             "INSERT INTO produtos_cadastro (nome, ativo, sku, ean, preco, unidade_venda)"
-            " VALUES (%s,%s,%s,%s,%s,%s)",
+            " VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
             ('Cimento', 1, 'CIM-50', '7891000000003', 32, 'SC'),
-        )
-        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
+        ).fetchone()["id"])
         conn.commit()
     from catalog_server.repositories import supplier_repo
 

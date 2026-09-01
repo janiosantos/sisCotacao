@@ -44,12 +44,11 @@ def _cliente_admin(system_db):
 
 def _produto(system_db, sku: str = "PR-1", preco: float = 10.0, custo: float = 5.0) -> int:
     with system_conn() as conn:
-        conn.execute(
+        pid = int(conn.execute(
             "INSERT INTO produtos_cadastro (nome, ativo, sku, ean, preco, custo_unitario) "
-            "VALUES (%s,%s,%s,%s,%s,%s)",
+            "VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
             ("Produto", 1, sku, "7891000000007", preco, custo),
-        )
-        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
+        ).fetchone()["id"])
         conn.commit()
         return pid
 

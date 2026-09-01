@@ -7,8 +7,7 @@ from catalog_server.repositories import estoque_repo
 
 def _setup(system_db) -> tuple[int, int]:
     with system_conn() as conn:
-        conn.execute("INSERT INTO produtos_cadastro (nome, ativo, sku, preco, custo_unitario) VALUES (%s,%s,%s,%s,%s)", ("Prod", 1, "P-1", 10.0, 5.0))
-        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
+        pid = int(conn.execute("INSERT INTO produtos_cadastro (nome, ativo, sku, preco, custo_unitario) VALUES (%s,%s,%s,%s,%s) RETURNING id", ("Prod", 1, "P-1", 10.0, 5.0)).fetchone()["id"])
         did = int(conn.execute("SELECT id FROM depositos ORDER BY id LIMIT 1").fetchone()["id"])
         conn.commit()
         return pid, did

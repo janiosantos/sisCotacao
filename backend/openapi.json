@@ -3691,6 +3691,209 @@
           }
         }
       }
+    },
+    "/api/estoque/enderecos": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Lista posi??es de armazenagem (rua-m?dulo-posi??o-n?vel)",
+        "parameters": [
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Posi??es ativas"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Cria posi??o de armazenagem",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "deposito_id": {
+                    "type": "integer"
+                  },
+                  "codigo": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Posi??o criada"
+          },
+          "400": {
+            "description": "C?digo duplicado"
+          }
+        }
+      }
+    },
+    "/api/estoque/enderecos/{posicao_id}": {
+      "delete": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Desativa posi??o (vazia)",
+        "parameters": [
+          {
+            "name": "posicao_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Desativada"
+          },
+          "400": {
+            "description": "Posi??o ocupada"
+          }
+        }
+      }
+    },
+    "/api/estoque/enderecos/{posicao_id}/estoque": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Saldo por posi??o",
+        "parameters": [
+          {
+            "name": "posicao_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Itens na posi??o"
+          }
+        }
+      }
+    },
+    "/api/estoque/enderecos/movimentar": {
+      "post": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Movimenta produto entre posi??es (logada)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "de_posicao_id": {
+                    "type": "integer"
+                  },
+                  "para_posicao_id": {
+                    "type": "integer"
+                  },
+                  "produto_id": {
+                    "type": "integer"
+                  },
+                  "quantidade": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Movimentado"
+          },
+          "400": {
+            "description": "Saldo insuficiente"
+          }
+        }
+      }
+    },
+    "/api/estoque/enderecos/primaria/{produto_id}": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "Posi??o prim?ria do produto no dep?sito",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Posi??o prim?ria"
+          }
+        }
+      }
+    },
+    "/api/estoque/enderecos/movimentos": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "?ltimas movimenta??es de endere?o",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Movimenta??es"
+          }
+        }
+      }
     }
   },
   "components": {

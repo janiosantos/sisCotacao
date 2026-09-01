@@ -1594,6 +1594,20 @@ export const api = {
     request<{ resultado: { ajustes: number; duplicado?: boolean } }>("POST", `/api/estoque/inventario/ciclos/${id}/aprovar`),
   cancelarCicloInventario: (id: number) =>
     request("POST", `/api/estoque/inventario/ciclos/${id}/cancelar`),
+  listarEnderecos: (params: { deposito_id?: number; q?: string } = {}) =>
+    request<{ posicoes: EnderecoPosicao[] }>("GET", "/api/estoque/enderecos" + qs(params)),
+  criarEndereco: (data: { deposito_id: number; codigo: string }) =>
+    request<{ posicao: EnderecoPosicao }>("POST", "/api/estoque/enderecos", data),
+  excluirEndereco: (id: number) => request("DELETE", `/api/estoque/enderecos/${id}`),
+  estoqueEndereco: (id: number) =>
+    request<{ itens: EnderecoEstoqueItem[] }>("GET", `/api/estoque/enderecos/${id}/estoque`),
+  movimentarEndereco: (data: { de_posicao_id?: number | null; para_posicao_id?: number | null; produto_id: number; quantidade: number }) =>
+    request<{ movimento: unknown }>("POST", "/api/estoque/enderecos/movimentar", data),
+  posicaoPrimaria: (produtoId: number, depositoId: number) =>
+    request<{ posicao: { posicao_id: number; codigo: string; quantidade: number } | null }>(
+      "GET",
+      `/api/estoque/enderecos/primaria/${produtoId}` + qs({ deposito_id: depositoId })
+    ),
   registrarMovimento: (data: MovimentoPayload) =>
     request<MovimentoResult>("POST", "/api/estoque/movimento", data),
   listarMovimentos: (params: Record<string, unknown> = {}) =>
@@ -2393,6 +2407,25 @@ export interface InventarioCicloDetalhe {
   criado_em: string;
   fechado_em?: string | null;
   contagens: InventarioContagem[];
+}
+
+export interface EnderecoPosicao {
+  id: number;
+  deposito_id: number;
+  deposito_nome: string;
+  codigo: string;
+  ativo: boolean;
+  criado_em: string;
+  posicoes_ocupadas: number;
+}
+
+export interface EnderecoEstoqueItem {
+  posicao_id: number;
+  produto_id: number;
+  quantidade: number;
+  primaria: boolean;
+  sku: string;
+  produto_nome: string;
 }
 
 export interface SaldoItem {

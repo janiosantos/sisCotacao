@@ -7,6 +7,7 @@ from catalog_server.repositories import deposito_repo, estoque_repo, expedicao_r
 from catalog_server.repositories import loja as loja_repo
 from catalog_server.services import estoque_parametro as parametro_svc
 from catalog_server.services import inventario_ciclo as inventario_svc
+from catalog_server.services import endereco as endereco_svc
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server import contabil_gatilhos
 
@@ -208,6 +209,79 @@ def cancelar_ciclo(ciclo_id: int):
     if not inventario_svc.cancelar_ciclo(ciclo_id):
         return jsonify({"error": "Ciclo não encontrado ou já encerrado", "code": "ciclo_nao_cancelavel"}), 400
     return jsonify({"ok": True})
+
+
+# ─── Endereçamento (EST-007) ───────────────────────────────
+
+
+@api_estoque_bp.get("/api/estoque/enderecos")
+def listar_enderecos():
+    deposito_id = request.args.get("deposito_id", type=int)
+    busca = request.args.get("q") or None
+    return jsonify({"posicoes": endereco_svc.listar_posicoes(deposito_id or 0, busca)})
+
+
+@api_estoque_bp.post("/api/estoque/enderecos")
+def criar_endereco():
+    data = request.get_json(silent=True) or {}
+    deposito_id = data.get("deposito_id")
+    codigo = data.get("codigo")
+    if not deposito_id or not codigo:
+        return jsonify({"error": "deposito_id e codigo são obrigatórios", "code": "endereco_obrigatorio"}), 400
+    try:
+        return jsonify({"posicao": endereco_svc.criar_posicao(int(deposito_id), codigo)})
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "endereco_invalido"}), 400
+
+
+@api_estoque_bp.delete("/api/estoque/enderecos/<int:posicao_id>")
+def excluir_endereco(posicao_id: int):
+    try:
+        if not endereco_svc.excluir_posicao(posicao_id):
+            return jsonify({"error": "Posição não encontrada", "code": "endereco_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "endereco_ocupado"}), 400
+    return jsonify({"ok": True})
+
+
+@api_estoque_bp.get("/api/estoque/enderecos/<int:posicao_id>/estoque")
+def estoque_endereco(posicao_id: int):
+    return jsonify({"itens": endereco_svc.estoque_na_posicao(posicao_id)})
+
+
+@api_estoque_bp.post("/api/estoque/enderecos/movimentar")
+def movimentar_endereco():
+    data = request.get_json(silent=True) or {}
+    produto_id = data.get("produto_id")
+    quantidade = data.get("quantidade")
+    de_posicao = data.get("de_posicao_id")
+    para_posicao = data.get("para_posicao_id")
+    if not produto_id or quantidade is None or (de_posicao is None and para_posicao is None):
+        return jsonify({"error": "produto_id, quantidade e ao menos uma posição são obrigatórios", "code": "movimento_endereco_invalido"}), 400
+    try:
+        return jsonify({"movimento": endereco_svc.movimentar(
+            int(de_posicao) if de_posicao else None,
+            int(para_posicao) if para_posicao else None,
+            int(produto_id),
+            float(quantidade),
+            usuario_id_requisicao(),
+        )})
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "movimento_endereco_invalido"}), 400
+
+
+@api_estoque_bp.get("/api/estoque/enderecos/primaria/<int:produto_id>")
+def endereco_primario(produto_id: int):
+    deposito_id = request.args.get("deposito_id", type=int)
+    if not deposito_id:
+        return jsonify({"error": "deposito_id é obrigatório", "code": "deposito_obrigatorio"}), 400
+    return jsonify({"posicao": endereco_svc.posicao_primaria(produto_id, deposito_id)})
+
+
+@api_estoque_bp.get("/api/estoque/enderecos/movimentos")
+def ultimos_movimentos_endereco():
+    limit = request.args.get("limit", type=int) or 20
+    return jsonify({"movimentos": endereco_svc.ultimos_movimentos(limit)})
 
 
 # ─── Movimento ─────────────────────────────────────────────

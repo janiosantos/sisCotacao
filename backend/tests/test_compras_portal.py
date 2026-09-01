@@ -59,12 +59,11 @@ def _cliente_comprador(system_db):
 def _produto_com_unidade(system_db) -> int:
     """Cria um produto (unidade_venda=CX, fator=12)."""
     with system_conn() as conn:
-        conn.execute(
+        pid = int(conn.execute(
             "INSERT INTO produtos_cadastro (nome, ativo, sku, ean, preco, unidade_venda, fator_conversao)"
-            " VALUES (%s,%s,%s,%s,%s,%s,%s)",
+            " VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
             ('Parafuso Zincado', 1, 'PAR-ZIN-12', '7891000000001', 0.5, 'CX', 12),
-        )
-        pid = int(conn.execute("SELECT lastval()").fetchone()["lastval"])
+        ).fetchone()["id"])
         conn.commit()
         return pid
 

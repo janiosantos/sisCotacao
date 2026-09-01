@@ -23,7 +23,8 @@ idiomas conhecidos para o dialeto Postgres antes de executar:
 - `LIKE ? COLLATE NOCASE`/`LIKE ?` -> `ILIKE ?`
 - `expr COLLATE NOCASE` (ORDER BY) -> `LOWER(expr)`
 - `GROUP_CONCAT(x, 'sep')` -> `string_agg(x, 'sep')`
-- `last_insert_rowid()` -> `lastval()`
+- INSERT sem `RETURNING`: executa com `RETURNING id` em SAVEPOINT para obter
+  `cursor.lastrowid` sem depender de `lastval()` (que falha fora de sessão).
 """
 from __future__ import annotations
 
@@ -113,7 +114,6 @@ def translate_sql(sql: str) -> str:
     masked = re.sub(r"(\w+(?:\.\w+)?)\s+COLLATE\s+NOCASE", r"LOWER(\1)", masked, flags=re.IGNORECASE)
     masked = re.sub(r"\bCOLLATE\s+NOCASE\b", "", masked, flags=re.IGNORECASE)
     masked = re.sub(r"GROUP_CONCAT\(", "string_agg(", masked, flags=re.IGNORECASE)
-    masked = masked.replace("last_insert_rowid()", "lastval()")
 
     if upsert:
         masked = masked.rstrip().rstrip(";") + f" {upsert};"
@@ -181,6 +181,31 @@ class PgRow:
         return f"<PgRow {dict(self.items())}>"
 
 
+_INSERT_TABLE_RE = re.compile(r"INSERT\s+INTO\s+([\"\w\.]+)", re.IGNORECASE)
+_HAS_ID_CACHE: dict[str, bool] = {}
+
+
+def _target_table(translated: str) -> str | None:
+    m = _INSERT_TABLE_RE.match(translated.lstrip())
+    if not m:
+        return None
+    return m.group(1).strip('"').split(".")[-1]
+
+
+def _table_has_id(conn, table: str) -> bool:
+    if table not in _HAS_ID_CACHE:
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM information_schema.columns"
+                " WHERE table_name=%s AND column_name='id' LIMIT 1",
+                (table,),
+            ).fetchone()
+            _HAS_ID_CACHE[table] = bool(row)
+        except Exception:  # noqa: BLE001
+            _HAS_ID_CACHE[table] = False
+    return _HAS_ID_CACHE[table]
+
+
 class PgCursor:
     """Cursor compatível com o `sqlite3.Cursor` usado nos repositórios."""
 
@@ -195,6 +220,40 @@ class PgCursor:
 
     def _execute(self, sql: str, params) -> None:
         translated = translate_sql(sql)
+        is_insert = re.match(r"\s*INSERT\b", sql, re.IGNORECASE)
+        has_returning = re.search(r"\bRETURNING\b", sql, re.IGNORECASE)
+        if is_insert and not has_returning:
+            table = _target_table(translated)
+            # Só tenta `RETURNING id` se a tabela realmente tiver a coluna id —
+            # evita erro "column id does not exist" no log (ex.: usuário_perfis).
+            if table and _table_has_id(self._conn._conn, table):
+                self._conn._conn.execute("SAVEPOINT pgsql_lastrowid")
+                try:
+                    raw = self._conn._conn.execute(
+                        translated.rstrip().rstrip(";") + " RETURNING id", params or ()
+                    )
+                except Exception:  # noqa: BLE001 (safety net)
+                    try:
+                        self._conn._conn.execute("ROLLBACK TO SAVEPOINT pgsql_lastrowid")
+                    except Exception:  # noqa: BLE001
+                        pass
+                    raw = self._conn._conn.execute(translated, params or ())
+                    self.rowcount = raw.rowcount
+                    self.lastrowid = None
+                    return
+                else:
+                    try:
+                        self._conn._conn.execute("RELEASE SAVEPOINT pgsql_lastrowid")
+                    except Exception:  # noqa: BLE001
+                        pass
+                    row = raw.fetchone()
+                    self.lastrowid = int(row[0]) if row else None
+                    self.rowcount = raw.rowcount
+                    return
+            raw = self._conn._conn.execute(translated, params or ())
+            self.rowcount = raw.rowcount
+            self.lastrowid = None
+            return
         raw = self._conn._conn.execute(translated, params or ())
         if raw.description is not None:
             self._description = [d[0] for d in raw.description]
@@ -202,24 +261,6 @@ class PgCursor:
             self._rows = [PgRow(self._description, r) for r in rows]
         else:
             self.rowcount = raw.rowcount
-        if re.match(r"\s*INSERT\b", sql, re.IGNORECASE) and not re.search(r"\bRETURNING\b", sql, re.IGNORECASE):
-            self._set_lastrowid()
-
-    def _set_lastrowid(self) -> None:
-        # SAVEPOINT: se a tabela não tiver sequence, lastval() falha e abortaria
-        # a transação; o rollback para o savepoint a mantém utilizável.
-        try:
-            self._conn._conn.execute("SAVEPOINT pgsql_lastrowid")
-            row = self._conn._conn.execute("SELECT lastval()").fetchone()
-            self.lastrowid = int(row[0]) if row else None
-            self._conn._conn.execute("RELEASE SAVEPOINT pgsql_lastrowid")
-        except Exception:  # noqa: BLE001 (tabela sem sequence)
-            try:
-                self._conn._conn.execute("ROLLBACK TO SAVEPOINT pgsql_lastrowid")
-                self._conn._conn.execute("RELEASE SAVEPOINT pgsql_lastrowid")
-            except Exception:  # noqa: BLE001
-                pass
-            self.lastrowid = None
 
     def fetchone(self) -> PgRow | None:
         if self._pos >= len(self._rows):
