@@ -3276,6 +3276,36 @@
           }
         }
       }
+    },
+    "/api/estoque/disponibilidade/{produto_id}": {
+      "get": {
+        "tags": [
+          "estoque"
+        ],
+        "summary": "F?rmula ?nica de disponibilidade por dep?sito (f?sico ? reservado ? bloqueado ? separa??o; tr?nsito pr?prio)",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balan?os por dep?sito"
+          }
+        }
+      }
     }
   },
   "components": {

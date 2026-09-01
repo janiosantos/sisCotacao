@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request
 
 from catalog_server.db import system_conn
 from catalog_server.repositories import deposito_repo, estoque_repo, expedicao_repo, lote_repo
+from catalog_server.repositories import loja as loja_repo
 from catalog_server import contabil_gatilhos
 
 api_estoque_bp = Blueprint("api_estoque", __name__)
@@ -68,6 +69,13 @@ def consultar_saldo():
         deposito_id=deposito_id, variante_id=variante_id, termo=termo,
         familia_id=familia_id, produto_id=produto_id,
     ))
+
+
+@api_estoque_bp.get("/api/estoque/disponibilidade/<int:produto_id>")
+def consultar_disponibilidade(produto_id: int):
+    """Fórmula única de disponibilidade (EST-001): físico − reservado − bloqueado − separação, por depósito."""
+    deposito_id = request.args.get("deposito_id", type=int)
+    return jsonify({"produto_id": produto_id, "depositos": loja_repo.disponibilidade(produto_id, deposito_id)})
 
 
 # ─── Movimento ─────────────────────────────────────────────

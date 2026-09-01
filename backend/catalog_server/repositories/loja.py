@@ -119,20 +119,45 @@ def atualizar_estoque_localizacao(variante_id: int, deposito_id: int, dados: dic
 def saldo_variante(variante_id: int) -> list[dict]:
     with system_conn() as conn:
         return [dict(r) for r in conn.execute(
-            "SELECT s.deposito_id, d.nome AS deposito, s.quantidade, s.reserva,"
-            " (s.quantidade - s.reserva) AS disponivel, s.localizacao,"
-            " s.estoque_minimo, s.estoque_maximo"
+            "SELECT s.deposito_id, d.nome AS deposito, s.quantidade AS fisico,"
+            " s.reserva AS reservado, s.bloqueado, s.separacao, s.transito,"
+            " (s.quantidade - s.reserva - COALESCE(s.bloqueado,0) - COALESCE(s.separacao,0)) AS disponivel,"
+            " s.localizacao, s.estoque_minimo, s.estoque_maximo"
             " FROM estoque_saldo s JOIN depositos d ON d.id=s.deposito_id"
             " WHERE s.produto_id=? ORDER BY d.nome",
             (variante_id,),
         ).fetchall()]
 
 
+def disponibilidade(variante_id: int, deposito_id: int | None = None) -> list[dict]:
+    """Fórmula única de disponibilidade (EST-001): físico − reservado − bloqueado − separação.
+
+    `transito` é saldo próprio (entre depósitos) e não compõe o disponível local.
+    """
+    with system_conn() as conn:
+        sql = (
+            "SELECT s.deposito_id, d.nome AS deposito,"
+            " s.quantidade AS fisico, s.reserva AS reservado,"
+            " COALESCE(s.bloqueado,0) AS bloqueado, COALESCE(s.separacao,0) AS separacao,"
+            " COALESCE(s.transito,0) AS transito,"
+            " (s.quantidade - s.reserva - COALESCE(s.bloqueado,0) - COALESCE(s.separacao,0)) AS disponivel,"
+            " s.localizacao"
+            " FROM estoque_saldo s JOIN depositos d ON d.id=s.deposito_id"
+            " WHERE s.produto_id=?"
+        )
+        params: list = [variante_id]
+        if deposito_id:
+            sql += " AND s.deposito_id=?"
+            params.append(deposito_id)
+        sql += " ORDER BY d.nome"
+        return [dict(r) for r in conn.execute(sql, tuple(params)).fetchall()]
+
+
 def saldo_disponivel(variante_id: int, deposito_id: int = 1) -> float:
     with system_conn() as conn:
         row = conn.execute(
-            "SELECT (quantidade - reserva) AS d FROM estoque_saldo"
-            " WHERE produto_id=? AND deposito_id=?",
+            "SELECT (quantidade - reserva - COALESCE(bloqueado,0) - COALESCE(separacao,0)) AS d"
+            " FROM estoque_saldo WHERE produto_id=? AND deposito_id=?",
             (variante_id, deposito_id),
         ).fetchone()
     return float(row["d"] or 0) if row else 0.0

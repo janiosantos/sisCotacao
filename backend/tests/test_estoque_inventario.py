@@ -56,7 +56,7 @@ def test_reconciliar_tudo_identifica_divergencia():
     assert any(d["produto_id"] == vid for d in div)
 
 
-def test_api_inventario():
+def test_api_inventario(system_db):
     from catalog_server.app_factory import create_app
 
     app = create_app()

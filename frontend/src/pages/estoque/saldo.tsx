@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api, type Deposito, type SaldoItem } from "../../api/client";
 import { fmtDate, fmtMoney } from "../../ui/format";
 import { toast } from "../../ui/dom";
-import { Button, Cell, EmptyRow, Field, Input, Loading, Select, Table, TBody, THead } from "../../ui/ui";
+import { Badge, Button, Cell, EmptyRow, Field, Input, Loading, Select, Table, TBody, THead } from "../../ui/ui";
 
 export function Saldo({ depositos }: { depositos: Deposito[] }) {
   const [rows, setRows] = useState<SaldoItem[]>([]);
@@ -70,10 +70,10 @@ export function Saldo({ depositos }: { depositos: Deposito[] }) {
         <Loading />
       ) : (
         <Table>
-          <THead cols={["Produto", "SKU", "Família", "Depósito", "Unid.", "Emb.", "Qtd.", "Preço", "NCM", "Localização", "Atualizado"]} />
+<THead cols={["Produto", "SKU", "Família", "Depósito", "Unid.", "Emb.", "Físico", "Reservado", "Disponível", "Situação", "Preço", "NCM", "Localização", "Atualizado"]} />
           <TBody>
             {rows.length === 0 ? (
-              <EmptyRow colSpan={11} message="Nenhum saldo encontrado" />
+              <EmptyRow colSpan={14} message="Nenhum saldo encontrado" />
             ) : (
               rows.map((s) => (
                 <tr key={s.id} className="hover:bg-gray-50">
@@ -87,6 +87,11 @@ export function Saldo({ depositos }: { depositos: Deposito[] }) {
                   <Cell className="text-xs">{s.unidade_venda || "UN"}</Cell>
                   <Cell className="text-xs">{s.embalagem ? `${s.embalagem}/cx` : "—"}</Cell>
                   <Cell className="font-medium">{s.quantidade}</Cell>
+                  <Cell className="text-xs">{s.reserva > 0 ? s.reserva : "—"}</Cell>
+                  <Cell className="font-medium text-emerald-700">{s.disponivel ?? s.quantidade - s.reserva}</Cell>
+                  <Cell>
+                    {s.situacao === "ruptura" ? <Badge tone="red">ruptura</Badge> : s.situacao === "excesso" ? <Badge tone="amber">excesso</Badge> : <span className="text-xs text-gray-400">ok</span>}
+                  </Cell>
                   <Cell>{fmtMoney(s.preco)}</Cell>
                   <Cell className="font-mono text-xs">{s.ncm || "—"}</Cell>
                   <Cell className="text-xs text-gray-500">{s.localizacao || "—"}</Cell>

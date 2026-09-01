@@ -18,14 +18,19 @@ class EstoqueRepository:
     ) -> list[dict]:
         produto_id = produto_id if produto_id is not None else variante_id
         sql = (
-            "SELECT s.id, s.deposito_id, s.produto_id, s.quantidade, s.reserva,"
+            "SELECT s.id, s.deposito_id, s.produto_id,"
+            " s.quantidade, s.quantidade AS fisico,"
+            " s.reserva, s.reserva AS reservado,"
+            " COALESCE(s.bloqueado,0) AS bloqueado, COALESCE(s.separacao,0) AS separacao,"
+            " COALESCE(s.transito,0) AS transito,"
+            " (s.quantidade - s.reserva - COALESCE(s.bloqueado,0) - COALESCE(s.separacao,0)) AS disponivel,"
             " s.atualizado_em, d.nome AS deposito_nome,"
             " p.sku, p.preco, p.nome AS produto_nome, p.marca,"
             " p.familia_id, f.nome AS familia_nome,"
             " p.unidade_venda, p.embalagem, p.fator_conversao, p.ncm,"
             " p.unidade_tributavel, p.localizacao,"
             " s.estoque_minimo, s.estoque_maximo,"
-            " CASE WHEN s.estoque_minimo > 0 AND s.quantidade < s.estoque_minimo THEN 'ruptura'"
+            " CASE WHEN s.estoque_minimo > 0 AND (s.quantidade - s.reserva - COALESCE(s.bloqueado,0) - COALESCE(s.separacao,0)) < s.estoque_minimo THEN 'ruptura'"
             "  WHEN s.estoque_maximo > 0 AND s.quantidade > s.estoque_maximo THEN 'excesso'"
             "  ELSE 'ok' END AS situacao"
             " FROM estoque_saldo s"

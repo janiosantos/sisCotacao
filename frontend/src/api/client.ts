@@ -2305,6 +2305,10 @@ export interface SaldoItem {
   produto_id: number;
   quantidade: number;
   reserva: number;
+  bloqueado?: number;
+  separacao?: number;
+  transito?: number;
+  disponivel?: number;
   atualizado_em: string;
   deposito_nome: string;
   sku: string;

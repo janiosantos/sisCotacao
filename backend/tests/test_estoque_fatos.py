@@ -72,7 +72,7 @@ def test_reconciliacao_ok_apos_fatos(dep_var):
     assert rec is not None
 
 
-def test_api_movimentos_fato(app_client_token, dep_var):
+def test_api_movimentos_fato(system_db, app_client_token, dep_var):
     did, vid = dep_var
     c, H = app_client_token
     key = f"api-{uuid.uuid4().hex[:8]}"
