@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 from catalog_server.repositories import fornecedor_preco_repo, fornecedor_preferencial_repo, solicitacao_repo, tolerancia_repo
-from catalog_server.services import custo_engine, cotacao_necessidade, comparacao, alcada_compra, pedido_compra, recebimento as recebimento_svc
+from catalog_server.services import custo_engine, cotacao_necessidade, comparacao, alcada_compra, pedido_compra, recebimento as recebimento_svc, conferencia
 
 api_compras_avancado_bp = Blueprint("api_compras_avancado", __name__)
 
@@ -300,6 +300,35 @@ def finalizar_recebimento(recebimento_id: int):
         return jsonify({"error": str(exc), "code": "recebimento_nao_encontrado"}), 404
     except ValueError as exc:
         return jsonify({"error": str(exc), "code": "recebimento_invalido"}), 400
+
+
+# ─── Conferência por código/unidade (REC-002) ──────────────
+
+
+@api_compras_avancado_bp.post("/api/compras/recebimentos/<int:recebimento_id>/itens/scanner")
+def conferir_por_codigo(recebimento_id: int):
+    data = request.get_json(silent=True) or {}
+    codigo = data.get("codigo")
+    quantidade = data.get("quantidade")
+    if not codigo or quantidade is None:
+        return jsonify({"error": "codigo e quantidade são obrigatórios", "code": "scanner_invalido"}), 400
+    try:
+        return jsonify({"conferencia": conferencia.conferir_por_codigo(
+            recebimento_id, codigo, float(quantidade), data.get("unidade"), data.get("operador_id"),
+        )})
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "recebimento_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "conferencia_invalida"}), 400
+
+
+@api_compras_avancado_bp.get("/api/compras/conferencia/resolver")
+def resolver_codigo_conferencia():
+    codigo = request.args.get("codigo") or request.args.get("q") or ""
+    r = conferencia.resolver_codigo(codigo)
+    if not r:
+        return jsonify({"error": f"Produto desconhecido: {codigo}", "code": "produto_desconhecido"}), 404
+    return jsonify(r)
 
 
 @api_compras_avancado_bp.get("/api/fornecedor-preferencial")
