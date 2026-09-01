@@ -112,6 +112,15 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 9. Registro da sessão atual
 
+- **2026-09-01 (Ondas 10/11 — ARC-003/005/006 + INT-001/006 + ADM-003):** migração **0141** (`idempotencia`, `auditoria_evento`, `conta_bancaria`, `extrato_bancario`).
+  - **ARC-003** idempotência central (`services/infra.py`): `executar(chave, escopo, payload, fn)` — retry devolve resultado anterior; **chave com payload diferente é rejeitada**.
+  - **ARC-005** reconciliação (`services/reconciliacao.py`): divergências com severidade/origem/ação (pedido sem movimento, movimento sem origem, **saldo inconsistente** vs ledger, reserva órfã, outbox morta).
+  - **ARC-006** auditoria (`infra.registrar`): ator/acação/alvo/antes-depois **mascarados (LGPD)**/motivo/IP/correlation_id.
+  - **INT-001** conciliação bancária (`services/conciliacao.py`): importa extrato **idempotente**, **sugere matching** por valor/documento, **aprova baixa a conta** (nunca automática sem regra), rejeita — auditado.
+  - **INT-006** comunicação (`services/comunicacao.py`): agenda e-mail/whatsapp no **outbox** (retry/backoff/dead-letter; envio não bloqueia o fluxo; destinatário mascarado).
+  - **ADM-003 LGPD** (`services/lgpd.py`): máscara de CPF/CNPJ/e-mail/telefone/senhas em logs e auditoria.
+  - API `/api/infra/{reconciliacao, auditoria, contas-bancarias, movimentos..., comunicacao}` (RBAC configuracoes). Testes `test_infra.py` (10). Schema DEV **141**. Sem deploy. Suíte completa (~505) a validar em background.
+
 - **2026-09-01 (Onda 9 — POS-001..005):** migrações **0139** e **0140**.
   - **POS-001/002** (`services/posvenda.py`): `rma` (estados solicitada→autorizada→recebida→analisada→concluída/rejeitada; **devolução acima do vendido bloqueada**; prazo/motivo/condição/lote), `troca` (item substituto + **diferença** → crédito/estorno), `credito_cliente` (origem única — **não duplica**). `_concluir_efeitos` repõe estoque + gera crédito do cliente.
   - **POS-003**: `garantia` + fornecedor_id/n_serie/laudo/custo/responsabilidade/sla_data.

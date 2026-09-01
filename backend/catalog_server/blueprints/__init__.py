@@ -31,3 +31,5 @@ from catalog_server.blueprints.api_payments import api_payments_bp
 from catalog_server.blueprints.api_precos import api_precos_bp
 from catalog_server.blueprints.pages import pages_bp
 from catalog_server.blueprints.portal import portal_bp
+
+from catalog_server.blueprints.api_infra import api_infra_bp

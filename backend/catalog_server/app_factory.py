@@ -12,6 +12,7 @@ from catalog_server import auth_token, config
 from catalog_server.blueprints import (
     api_bancos_bp,
     api_compras_avancado_bp,
+    api_infra_bp,
     api_posvenda_bp,
     api_catalog_bp,
     api_dashboard_bp,
@@ -108,6 +109,7 @@ _RECURSO_POR_PREFIXO: list[tuple[str, str]] = [
     ("/api/solicitacoes", "solicitacoes"),
     ("/api/solicitacoes-compra", "solicitacoes"),
     ("/api/alcada-compra", "compras"),
+    ("/api/infra", "configuracoes"),
     # Preços / financeiro
     ("/api/tabelas-preco", "precos"),
     ("/api/precos", "precos"),
@@ -283,6 +285,7 @@ def create_app() -> Flask:
     app.register_blueprint(api_bancos_bp)
     app.register_blueprint(api_compras_avancado_bp)
     app.register_blueprint(api_posvenda_bp)
+    app.register_blueprint(api_infra_bp)
     app.register_blueprint(api_estoque_bp)
     app.register_blueprint(api_financeiro_bp)
     app.register_blueprint(api_fiscal_avancado_bp)
