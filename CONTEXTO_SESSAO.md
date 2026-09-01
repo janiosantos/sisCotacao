@@ -112,6 +112,13 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 9. Registro da sessão atual
 
+- **2026-09-01 (Onda 9 — POS-001..005):** migrações **0139** e **0140**.
+  - **POS-001/002** (`services/posvenda.py`): `rma` (estados solicitada→autorizada→recebida→analisada→concluída/rejeitada; **devolução acima do vendido bloqueada**; prazo/motivo/condição/lote), `troca` (item substituto + **diferença** → crédito/estorno), `credito_cliente` (origem única — **não duplica**). `_concluir_efeitos` repõe estoque + gera crédito do cliente.
+  - **POS-003**: `garantia` + fornecedor_id/n_serie/laudo/custo/responsabilidade/sla_data.
+  - **POS-004** (`services/crm_comissao.py`): `oportunidade` (etapas, próxima ação/contato, **motivo de perda obrigatório**, carteira filtrável).
+  - **POS-005**: `comissao` + `comissao_politica` (política **versionada**); `apurar_venda` (base = venda líquida, % congelado — DECISAO-006), `reverter` (**estorno/devolução gera reversão, não edição retroativa**), `listar`.
+  - API `/api/posvenda/{rma, rma/<id>/status, rma/<id>/trocar, credito/<cliente>, oportunidades, comissoes/apurar/<orc>, comissoes/reverter/<orc>, comissoes}` (endpoints legados interações/garantia preservados). Testes `test_posvenda.py` (6) + `test_crm_comissao.py` (5). Schema DEV **140**. **Onda 9 concluída.** Sem deploy. Suíte completa (~495) a validar em background. Próximo: Onda 10 (UX/ARC) + Onda 11 (INT/ADM) + Onda 12 (Piloto).
+
 - **2026-09-01 (Onda 8 — BI-001..007 relatórios/indicadores):** `services/relatorios.py` (camada de consultas analíticas separada da operacional):
   - **BI-002 dashboard executivo**: pedidos, receita bruta/líquida, desconto, **CMV** (custo histórico do ledger), **margem**, ticket médio, caixa, **inadimplência**, estoque valorizado, compras em aberto.
   - **BI-003 vendas**: agrupável (produto/marca/grupo/vendedor/cliente/depósito/canal/forma), **cancelados/devolvidos separados**, receita bruta/líquida + CMV.
