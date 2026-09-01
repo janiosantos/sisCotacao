@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 from catalog_server.repositories import fornecedor_preco_repo, fornecedor_preferencial_repo, solicitacao_repo, tolerancia_repo
-from catalog_server.services import custo_engine, cotacao_necessidade, comparacao, alcada_compra, pedido_compra, recebimento as recebimento_svc, conferencia
+from catalog_server.services import custo_engine, cotacao_necessidade, comparacao, alcada_compra, pedido_compra, recebimento as recebimento_svc, conferencia, tres_vias
 
 api_compras_avancado_bp = Blueprint("api_compras_avancado", __name__)
 
@@ -329,6 +329,48 @@ def resolver_codigo_conferencia():
     if not r:
         return jsonify({"error": f"Produto desconhecido: {codigo}", "code": "produto_desconhecido"}), 404
     return jsonify(r)
+
+
+# ─── Três vias: pedido × recebimento × NF (REC-003) ────────
+
+
+@api_compras_avancado_bp.post("/api/compras/recebimentos/<int:recebimento_id>/tres-vias")
+def conferir_tres_vias(recebimento_id: int):
+    data = request.get_json(silent=True) or {}
+    itens_nf = data.get("itens_nf") or []
+    if not itens_nf:
+        return jsonify({"error": "itens_nf é obrigatório", "code": "tres_vias_invalido"}), 400
+    try:
+        return jsonify(tres_vias.conferir(recebimento_id, itens_nf))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "recebimento_nao_encontrado"}), 404
+
+
+@api_compras_avancado_bp.get("/api/compras/recebimentos/<int:recebimento_id>/divergencias")
+def listar_divergencias(recebimento_id: int):
+    return jsonify({"divergencias": tres_vias.divergencias(recebimento_id)})
+
+
+@api_compras_avancado_bp.post("/api/compras/recebimentos/<int:recebimento_id>/tres-vias/aprovar")
+def aprovar_tres_vias(recebimento_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(tres_vias.aprovar(recebimento_id, data.get("usuario_id")))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "recebimento_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "aprovacao_invalida"}), 400
+
+
+@api_compras_avancado_bp.post("/api/compras/recebimentos/<int:recebimento_id>/tres-vias/rejeitar")
+def rejeitar_tres_vias(recebimento_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(tres_vias.rejeitar(recebimento_id, data.get("motivo") or ""))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "recebimento_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "rejeicao_invalida"}), 400
 
 
 @api_compras_avancado_bp.get("/api/fornecedor-preferencial")

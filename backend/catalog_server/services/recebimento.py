@@ -114,6 +114,11 @@ def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usu
             raise LookupError("Recebimento não encontrado")
         if rec["status"] != "conferido":
             raise ValueError(f"Recebimento {rec['status']} deve estar conferido para finalizar")
+        # REC-003: divergência de três vias precisa de aprovação para efeitos definitivos
+        if (rec["status_tres_vias"] or "aguardando_conferencia") == "divergente":
+            raise ValueError("Divergência de três vias precisa de aprovação antes de finalizar")
+        if (rec["status_tres_vias"] or "") == "rejeitado":
+            raise ValueError("Recebimento rejeitado não pode ser finalizado")
         itens = conn.execute(
             "SELECT * FROM recebimento_item WHERE recebimento_id=? AND qtd_aceita > 0",
             (recebimento_id,),
