@@ -30,6 +30,7 @@ import {
   LogOut,
   Menu,
   X,
+  BarChart3,
   type LucideIcon,
 } from "lucide-react";
 import { ROUTES } from "./routes";
@@ -94,6 +95,7 @@ const NAV: NavGroup[] = [
     label: "Logística",
     items: [
       { href: "#/estoque", label: "Estoque", icon: Warehouse, recurso: "estoque" },
+      { href: "#/relatorios", label: "Relatórios", icon: BarChart3, recurso: "relatorios" },
       { href: "#/fiscal", label: "Fiscal", icon: Receipt, recurso: "fiscal" },
     ],
   },

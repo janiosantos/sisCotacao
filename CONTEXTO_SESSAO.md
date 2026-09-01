@@ -112,6 +112,16 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 9. Registro da sessão atual
 
+- **2026-09-01 (Onda 8 — BI-001..007 relatórios/indicadores):** `services/relatorios.py` (camada de consultas analíticas separada da operacional):
+  - **BI-002 dashboard executivo**: pedidos, receita bruta/líquida, desconto, **CMV** (custo histórico do ledger), **margem**, ticket médio, caixa, **inadimplência**, estoque valorizado, compras em aberto.
+  - **BI-003 vendas**: agrupável (produto/marca/grupo/vendedor/cliente/depósito/canal/forma), **cancelados/devolvidos separados**, receita bruta/líquida + CMV.
+  - **BI-004 compras**: pedidos/recebidos/cancelados, **lead time médio**, comprado.
+  - **BI-005 estoque**: saldo/kardex por depósito, valorização (custo médio), **ruptura**, ABC/XYZ.
+  - **BI-006 financeiro/DRE**: fluxo de caixa, **aging receber**, DRE (receita−CMV=lucro bruto).
+  - **BI-007 central**: `#/relatorios` (App+rota+sidebar) com dashboard + abas Vendas/Compras/Estoque/Financeiro.
+  - **BI-001**: agregações a partir do ledger/documentos (sem gravar em transação operacional); snapshot de período explícito.
+  - API `/api/relatorios/{central,dashboard,vendas,compras,estoque,financeiro}` (endpoints legados vendas-periodo/aging/dre/margem-vendas preservados). Testes `test_relatorios.py` (7). Frontend: client + página. **Onda 8 concluída.** Sem deploy. Próximo: **Onda 9 — POS-001..005** (RMA, troca/crédito, garantia, CRM, comissões).
+
 - **2026-09-01 (Onda 6 — VEN-006 cobrança e renegociação):** migração **0138** (`contas_receber` + juros_multa/cobranca_recalculada_em/renegociada_de; `config_cobranca` (juros_dia_pct, multa_pct); status + 'renegociada'). Service `services/cobranca.py`: `calcular_cobranca` (juros/multa de parcela **vencida** com política configurável — juros 0,033%/dia + multa 2%; registrado na conta), `renegociar` (cancela original → **novas parcelas** com vencimentos e juros/multa incorporados, origem renegociacao, vínculo renegociada_de, parcela i/N), `listar_vencidas` (cobrança), `atualizar_config`. API `/api/financeiro/cobranca/vencidas`, `/<conta>/recalcular`, `/renegociar`, `/config`. Testes `test_cobranca.py` (6). Schema DEV **138**. **Onda 6 (VEN) concluída e adequada ao documento.** Sem deploy. Próximo: **Onda 8 — BI-001..007** (relatórios/dashboard).
 
 - **2026-09-01 (Onda 6 — VEN-003 pagamentos por pedido com entidade):** migração **0137** (`orcamento_pagamento`: forma, valor, taxa, provedor, bandeira, código de autorização, status pendente/confirmado/estornado, idempotency_key única por orçamento). Service `services/pagamento_venda.py`: `registrar` (valida soma ≤ total; **troco só em dinheiro**; **cartão/PIX ficam pendentes** — pagamento pendente não marca venda como paga; **retry não duplica** via idempotency_key), `confirmar` (confirma pendentes + lança caixa; troco em dinheiro; marca `recebido` quando soma fecha o total), `estornar` (**reverte caixa** e volta a venda para `finalizado` se ficou sem quitação), `listar`. API `/api/orcamentos/<id>/pagamentos` POST/GET, `/pagamentos/confirmar`, `/api/orcamentos/pagamentos/<id>/estornar`. Testes `test_pagamento_venda.py` (7). Schema DEV **137**. Sem deploy. Próximo: VEN-006 (renegociação/juros/multa) + Onda 8 BI + Onda 9 POS.

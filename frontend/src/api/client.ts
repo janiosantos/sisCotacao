@@ -1573,6 +1573,23 @@ export const api = {
     request<SaldoItem[]>("GET", "/api/estoque/saldo" + qs(params)),
   buscaRapida: (q: string, depositoId?: number, limite = 20) =>
     request<{ produtos: BuscaRapidaItem[] }>("GET", "/api/produtos/busca-rapida" + qs({ q, deposito_id: depositoId, limite })),
+  centralRelatorios: () =>
+    request<{ relatorios: { key: string; nome: string; grupo: string; permissao: string }[] }>("GET", "/api/relatorios/central"),
+  dashboardExecutivo: (dataInicio?: string, dataFim?: string) =>
+    request<DashboardExecutivo>("GET", "/api/relatorios/dashboard" + qs({ data_inicio: dataInicio, data_fim: dataFim })),
+  relatorioVendas: (agrupamento?: string) =>
+    request<{ agrupamento: string; itens: { chave: number | string; receita_bruta: number; receita_liquida: number; pedidos: number }[]; cmv: number; cancelados: { valor: number; pedidos: number } }>(
+      "GET",
+      "/api/relatorios/vendas" + qs({ agrupamento })
+    ),
+  relatorioCompras: () => request<{ pedidos: number; recebidos: number; cancelados: number; lead_time_medio_dias: number; comprado: number }>("GET", "/api/relatorios/compras"),
+  relatorioEstoque: (depositoId?: number) =>
+    request<{ itens: { id: number; sku: string; nome: string; quantidade: number; custo_medio: number; valor: number }[]; totais: { produtos: number; unidades: number; valor: number; ruptura: number } }>(
+      "GET",
+      "/api/relatorios/estoque" + qs({ deposito_id: depositoId })
+    ),
+  relatorioFinanceiro: () =>
+    request<{ fluxo_caixa: { entradas: number; saidas: number }; aging: { a_vencer: number; vencido: number; total: number }; dre: { receita_liquida: number; cmv: number; lucro_bruto: number } }>("GET", "/api/relatorios/financeiro"),
   valorizacaoEstoque: (depositoId: number, dataCorte?: string) =>
     request<{ deposito_id: number; data_corte?: string | null; total: number; itens: { produto_id: number; sku: string; nome: string; quantidade: number; custo_medio: number; valor: number }[] }>(
       "GET",
@@ -2568,6 +2585,22 @@ export interface BuscaRapidaItem {
   tem_promocao?: boolean;
   disponivel: number;
   disponibilidade?: { fisico: number; reservado: number; disponivel: number } | null;
+}
+
+export interface DashboardExecutivo {
+  kpis: {
+    pedidos: number;
+    receita_bruta: number;
+    desconto: number;
+    receita_liquida: number;
+    cmv: number;
+    margem_pct: number;
+    ticket_medio: number;
+    caixa: number;
+    inadimplencia: number;
+    estoque_valorizado: number;
+    compras_abertas: number;
+  };
 }
 
 export interface SaldoItem {
