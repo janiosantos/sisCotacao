@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 from catalog_server.repositories import fornecedor_preco_repo, fornecedor_preferencial_repo, solicitacao_repo, tolerancia_repo
-from catalog_server.services import custo_engine, cotacao_necessidade, comparacao, alcada_compra, pedido_compra, recebimento as recebimento_svc, conferencia, tres_vias, nfe_entrada
+from catalog_server.services import custo_engine, cotacao_necessidade, comparacao, alcada_compra, pedido_compra, recebimento as recebimento_svc, conferencia, tres_vias, nfe_entrada, devolucao
 
 api_compras_avancado_bp = Blueprint("api_compras_avancado", __name__)
 
@@ -432,6 +432,55 @@ def rejeitar_nfe_entrada(nfe_id: int):
         return jsonify({"error": str(exc), "code": "nfe_nao_encontrada"}), 404
     except ValueError as exc:
         return jsonify({"error": str(exc), "code": "rejeicao_invalida"}), 400
+
+
+# ─── Devolução ao fornecedor (REC-006) ─────────────────────
+
+
+@api_compras_avancado_bp.post("/api/compras/recebimentos/<int:recebimento_id>/devolucoes")
+def criar_devolucao(recebimento_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(devolucao.criar(
+            recebimento_id, data.get("motivo") or "", data.get("estado") or "avariado",
+            data.get("documento_fiscal"), data.get("observacao"), data.get("usuario_id"),
+            data.get("itens") or [],
+        )), 201
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "recebimento_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "devolucao_invalida"}), 400
+
+
+@api_compras_avancado_bp.get("/api/compras/devolucoes")
+def listar_devolucoes():
+    return jsonify({"devolucoes": devolucao.listar(request.args.get("pedido_id", type=int))})
+
+
+@api_compras_avancado_bp.get("/api/compras/devolucoes/<int:devolucao_id>")
+def detalhe_devolucao(devolucao_id: int):
+    d = devolucao.detalhe(devolucao_id)
+    if not d:
+        return jsonify({"error": "Devolução não encontrada", "code": "devolucao_nao_encontrada"}), 404
+    return jsonify(d)
+
+
+@api_compras_avancado_bp.post("/api/compras/devolucoes/<int:devolucao_id>/concluir")
+def concluir_devolucao(devolucao_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(devolucao.concluir(devolucao_id, data.get("usuario_id")))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "devolucao_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "devolucao_invalida"}), 400
+
+
+@api_compras_avancado_bp.post("/api/compras/devolucoes/<int:devolucao_id>/cancelar")
+def cancelar_devolucao(devolucao_id: int):
+    if not devolucao.cancelar(devolucao_id):
+        return jsonify({"error": "Devolução não encontrada ou já encerrada", "code": "devolucao_nao_cancelavel"}), 400
+    return jsonify({"ok": True})
 
 
 @api_compras_avancado_bp.get("/api/fornecedor-preferencial")

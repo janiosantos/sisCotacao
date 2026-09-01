@@ -105,10 +105,20 @@ def conferir_item(recebimento_id: int, item_id: int, qtd_aceita: float, qtd_recu
 
 
 def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usuario_id: int | None = None) -> dict:
-    """Aplica estoque + contas a pagar dos aceitos e atualiza o status do pedido."""
+    """Postagem transacional (REC-005): estoque + custo + contas a pagar + contábil
+    em UMA transação, com lock no pedido e idempotência (reprocessar é seguro)."""
     from catalog_server.repositories import compras_repo
 
     with system_conn() as conn:
+        # Idempotência: já postado → devolve o resultado gravado
+        ja_postado = conn.execute(
+            "SELECT * FROM recebimento_postagem WHERE recebimento_id=?",
+            (recebimento_id,),
+        ).fetchone()
+        if ja_postado:
+            return {"recebimento_id": recebimento_id, "duplicado": True,
+                    "pedido_status": ja_postado["pedido_status"], "total": float(ja_postado["total"])}
+
         rec = conn.execute("SELECT * FROM recebimento WHERE id=?", (recebimento_id,)).fetchone()
         if not rec:
             raise LookupError("Recebimento não encontrado")
@@ -119,6 +129,15 @@ def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usu
             raise ValueError("Divergência de três vias precisa de aprovação antes de finalizar")
         if (rec["status_tres_vias"] or "") == "rejeitado":
             raise ValueError("Recebimento rejeitado não pode ser finalizado")
+
+        # Lock no pedido (evita postagem concorrente duplicada)
+        pedido = conn.execute(
+            "SELECT * FROM pedidos_compra WHERE id=? FOR UPDATE",
+            (rec["pedido_id"],),
+        ).fetchone()
+        if not pedido:
+            raise LookupError("Pedido não encontrado")
+
         itens = conn.execute(
             "SELECT * FROM recebimento_item WHERE recebimento_id=? AND qtd_aceita > 0",
             (recebimento_id,),
@@ -127,6 +146,7 @@ def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usu
             raise ValueError("Nenhum item aceito para receber")
 
         total = 0.0
+        estoque_itens = 0
         for it in itens:
             qa = float(it["qtd_aceita"])
             preco = conn.execute(
@@ -141,12 +161,13 @@ def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usu
                 observacao=f"recebimento #{recebimento_id}",
                 usuario_id=usuario_id, _conn=conn,
             )
+            estoque_itens += 1
             conn.execute(
                 "UPDATE recebimento_item SET status='recebido' WHERE id=? AND status='aceito'",
                 (it["id"],),
             )
 
-        # contas a pagar (simplificado: 1 conta em 30 dias; condição via compras_repo quando aplicável)
+        # contas a pagar (simplificado: 1 conta em 30 dias)
         from catalog_server.repositories.financeiro import contas_repo
         from datetime import datetime, timedelta
 
@@ -158,6 +179,19 @@ def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usu
             (f"Recebimento #{recebimento_id} — {fornecedor['nome'] if fornecedor else ''}", rec["fornecedor_id"],
              round(total, 2), round(total, 2), venc, rec["pedido_id"]),
         )
+        contas = 1
+
+        # contábil (gatilho configurável; False quando sem gatilho ativo)
+        contabil_ok = False
+        try:
+            from catalog_server import contabil_gatilhos
+
+            contabil_ok = contabil_gatilhos.disparar(
+                "recebimento_compra", evento_id=recebimento_id, valor=round(total, 2),
+                historico=f"Recebimento #{recebimento_id}", origem_tipo="pedido_compra", _conn=conn,
+            )
+        except Exception:  # noqa: BLE001 (contábil não pode travar a postagem)
+            contabil_ok = False
 
         # atualiza status do pedido (recebido se não resta nada; senão parcialmente_recebido)
         pedido_total = conn.execute(
@@ -174,8 +208,13 @@ def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usu
         novo_status = "recebido" if float(recebido_total or 0) >= float(pedido_total or 0) else "parcialmente_recebido"
         conn.execute("UPDATE pedidos_compra SET status=? WHERE id=?", (novo_status, rec["pedido_id"]))
         conn.execute("UPDATE recebimento SET status='finalizado' WHERE id=?", (recebimento_id,))
-    return {"recebimento_id": recebimento_id, "pedido_status": novo_status, "total": round(total, 2),
-            "itens_aceitos": len(itens)}
+        conn.execute(
+            "INSERT INTO recebimento_postagem (recebimento_id, pedido_id, estoque_itens, contas_criadas,"
+            " total, pedido_status, contabil_ok) VALUES (?,?,?,?,?,?,?)",
+            (recebimento_id, rec["pedido_id"], estoque_itens, contas, round(total, 2), novo_status, contabil_ok),
+        )
+    return {"recebimento_id": recebimento_id, "duplicado": False, "pedido_status": novo_status, "total": round(total, 2),
+            "itens_aceitos": len(itens), "contabil_ok": contabil_ok}
 
 
 def detalhe(recebimento_id: int) -> dict | None:
