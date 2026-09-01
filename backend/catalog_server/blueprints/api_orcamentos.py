@@ -6,7 +6,7 @@ from werkzeug.security import check_password_hash
 
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.repositories.orcamentos import orcamento_repo, resumo_desconto
-from catalog_server.services import venda_entrega
+from catalog_server.services import venda_entrega, pagamento_venda
 from catalog_server.orcamento_status import (
     STATUS_LIST,
     aplicar_transicao,
@@ -439,6 +439,47 @@ def transicionar_entrega(orcamento_id: int):
 @api_orcamentos_bp.get("/api/orcamentos/entregas")
 def listar_entregas():
     return jsonify({"entregas": venda_entrega.listar(request.args.get("status"))})
+
+
+# ─── Pagamentos por pedido (VEN-003) ───────────────────────
+
+
+@api_orcamentos_bp.post("/api/orcamentos/<int:orcamento_id>/pagamentos")
+def registrar_pagamentos(orcamento_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(pagamento_venda.registrar(
+            orcamento_id, data.get("pagamentos") or [], data.get("idempotency_key"),
+            usuario_id_requisicao(),
+        ))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "orcamento_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "pagamento_invalido"}), 400
+
+
+@api_orcamentos_bp.post("/api/orcamentos/<int:orcamento_id>/pagamentos/confirmar")
+def confirmar_pagamentos(orcamento_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(pagamento_venda.confirmar(orcamento_id, data.get("idempotency_key"), usuario_id_requisicao()))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "orcamento_nao_encontrado"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "pagamento_invalido"}), 400
+
+
+@api_orcamentos_bp.post("/api/orcamentos/pagamentos/<int:pagamento_id>/estornar")
+def estornar_pagamento(pagamento_id: int):
+    try:
+        return jsonify(pagamento_venda.estornar(pagamento_id, usuario_id_requisicao()))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "pagamento_nao_encontrado"}), 404
+
+
+@api_orcamentos_bp.get("/api/orcamentos/<int:orcamento_id>/pagamentos")
+def listar_pagamentos(orcamento_id: int):
+    return jsonify({"pagamentos": pagamento_venda.listar(orcamento_id)})
 
 
 # ─── Recebimento de vendas (caixa) ────────────────────────
