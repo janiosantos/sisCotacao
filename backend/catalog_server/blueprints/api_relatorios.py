@@ -115,7 +115,7 @@ def exportar_relatorio_registrado():
     except (KeyError, ValueError, TypeError) as exc:
         return jsonify({"error": str(exc), "code": "filtro_relatorio_invalido"}), 400
     ext = "csv" if formato == "csv" else "xlsx"
-    mimetype = "text/csv; charset=utf-8" if ext == "csv" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    mimetype = "text/csv" if ext == "csv" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     return send_file(BytesIO(content), mimetype=mimetype, as_attachment=True, download_name=f"relatorio-{chave}.{ext}")
 
 
@@ -181,7 +181,7 @@ def exportar_clientes():
         data = relatorios_clientes.clientes(filtros)
         if formato == "csv":
             content = exportacao_relatorios.csv_bytes("clientes", data, actor_id=actor, filtros=filtros, ip=request.remote_addr)
-            return send_file(BytesIO(content), mimetype="text/csv; charset=utf-8", as_attachment=True, download_name="clientes.csv")
+            return send_file(BytesIO(content), mimetype="text/csv", as_attachment=True, download_name="clientes.csv")
         if formato == "xlsx":
             content = exportacao_relatorios.xlsx_bytes("clientes", data, actor_id=actor, filtros=filtros, ip=request.remote_addr)
             return send_file(BytesIO(content), mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", as_attachment=True, download_name="clientes.xlsx")
@@ -205,7 +205,7 @@ def exportar_compras_cliente():
         if formato == "csv":
             content = exportacao_relatorios.csv_bytes("clientes.compras", data, actor_id=actor, filtros=filtros, ip=request.remote_addr)
             name = f"cliente-{cliente_id}-compras.csv"
-            return send_file(BytesIO(content), mimetype="text/csv; charset=utf-8", as_attachment=True, download_name=name)
+            return send_file(BytesIO(content), mimetype="text/csv", as_attachment=True, download_name=name)
         if formato == "xlsx":
             content = exportacao_relatorios.xlsx_bytes("clientes.compras", data, actor_id=actor, filtros=filtros, ip=request.remote_addr)
             name = f"cliente-{cliente_id}-compras.xlsx"
