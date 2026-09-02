@@ -112,6 +112,8 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 9. Registro da sessão atual
 
+- **2026-09-01 (infra — timezone America/Sao_Paulo):** `TZ=America/Sao_Paulo` em db/backend/worker/scheduler/vite/frontend no `docker-compose.yml`; `backend/Dockerfile` + `tzdata` + `ENV TZ`; PostgreSQL com `command: postgres -c timezone=America/Sao_Paulo` (o `TZ` do SO não muda o GUC do PG). Confirmado: `SHOW timezone` → `America/Sao_Paulo`; `date` → `-03` nos containers. Stack healthy (health 200). Commit `3e2871c`. Sem deploy.
+
 - **2026-09-01 (Onda 10 — UX, continuação autônoma):**
   - **UX-001** `PageHeader` ganhou `contexto` (rótulo do grupo do shell); aplicado em Clientes.
   - **UX-002/006** novo componente `Paginacao` (total + nav acessível com `aria-label`, anterior/próxima) aplicado no **Saldo de Estoque** (50/página).
