@@ -7,6 +7,18 @@ ferragens e ferramentas. Use a busca **Ajuda** no topo do sistema para consultar
 uma tela sem sair da operação. A regra do backend sempre prevalece sobre um
 texto, botão ou atalho apresentado nesta wiki.
 
+## Manual HTML integrado
+
+O manual oficial para o usuário final é a página HTML integrada em `#/manual`.
+Cada módulo abre seu conteúdo, passo a passo e as capturas de tela diretamente
+na página, incluindo ações, consultas, abas, modais e estados contextuais. As
+imagens são empacotadas em `frontend/public/manual/capturas/`, portanto não
+dependem de links relativos para `docs/wiki/` nem de outro servidor de arquivos.
+
+Os capítulos Markdown abaixo permanecem como fonte editorial e referência de
+governança; para consulta operacional, treinamento e suporte, utilize o manual
+HTML dentro do ERP.
+
 ![Central de ajuda no DEV](capturas/manual-central-dev.png)
 
 *Figura 1 — Central de ajuda em DEV, estado de consulta, versão de desenvolvimento.*

@@ -25,4 +25,4 @@ ação abrem formulários, abas ou modais sem confirmar operações destrutivas.
 - [Central de ajuda desktop](manual-central-dev.png) e [mobile](manual-central-mobile-dev.png).
 - [PDV sem cliente selecionado](pre-venda-dados-desktop-dev.png) e [Caixa sem pedido selecionado](caixa-acoes-desktop-dev.png) documentam ações corretamente desabilitadas por falta de contexto.
 - As capturas devem ser regeneradas sempre que houver mudança estrutural de tela, fluxo, contrato visual, permissão ou atalho.
-- A captura de [Relatórios](relatorios-desktop-dev.png) registra um bloqueio observado no DEV: “Sem acesso” para o administrador. Isso é pendência de RBAC/funcionalidade, não deve ser tratado apenas com mudança visual.
+- A captura de [Relatórios](relatorios-desktop-dev.png) registra a central analítica disponível para o administrador após a correção do catálogo RBAC `relatorios`.

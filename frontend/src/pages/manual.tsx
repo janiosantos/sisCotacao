@@ -1,38 +1,72 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, ChevronRight, CircleHelp, Keyboard, Search } from "lucide-react";
+import { BookOpen, ChevronRight, CircleHelp, Images, Keyboard, Search } from "lucide-react";
 import { Badge, Button, Card } from "../ui/ui";
 import { buscarManual, type ManualQuickEntry } from "../manual-content";
+import { capturasDoManual, type ManualCapture } from "../manual-capturas";
 
-function EntryDetail({ entry }: { entry: ManualQuickEntry }) {
+function CaptureGallery({ captures }: { captures: ManualCapture[] }) {
+  if (!captures.length) return null;
+  return (
+    <section aria-labelledby="manual-capturas-titulo" className="border-b border-slate-200 bg-slate-50/50 px-4 py-5 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 id="manual-capturas-titulo" className="flex items-center gap-2 text-sm font-bold text-slate-900"><Images size={16} className="text-brand-600" /> Visão visual da tela</h3>
+          <p className="mt-1 text-xs text-slate-500">As imagens abaixo fazem parte deste manual. Clique em uma captura para ampliar.</p>
+        </div>
+        <Badge tone="gray">{captures.length} captura{captures.length === 1 ? "" : "s"}</Badge>
+      </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        {captures.map((capture) => (
+          <figure key={capture.src} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <a href={capture.src} target="_blank" rel="noreferrer" aria-label={`Ampliar captura: ${capture.title}`} className="block bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500">
+              <img src={capture.src} alt={capture.alt} loading="lazy" decoding="async" className="block aspect-[16/10] w-full object-contain object-top" />
+            </a>
+            <figcaption className="space-y-1 px-3 py-3">
+              <div className="flex flex-wrap items-center gap-2"><Badge tone={capture.kind === "Tela principal" ? "blue" : capture.kind === "Estado contextual" ? "amber" : "gray"}>{capture.kind}</Badge><span className="text-sm font-semibold text-slate-800">{capture.title}</span></div>
+              <p className="text-xs leading-5 text-slate-500">{capture.caption}</p>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function EntryDetail({ entry, onBack }: { entry: ManualQuickEntry; onBack: () => void }) {
+  const captures = capturasDoManual(entry.id);
   return (
     <div id={entry.id}>
       <Card className="overflow-hidden">
-      <div className="border-b border-slate-200 bg-slate-50/80 px-4 py-4 sm:px-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="blue">{entry.group}</Badge>
-          <span className="font-mono text-xs text-slate-500">{entry.route}</span>
+        <div className="border-b border-slate-200 bg-slate-50/80 px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="blue">{entry.group}</Badge>
+            <span className="font-mono text-xs text-slate-500">{entry.route}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">{entry.title}</h2>
+            <Button type="button" size="sm" variant="ghost" onClick={onBack}>Voltar para módulos</Button>
+          </div>
         </div>
-        <h2 className="mt-2 text-xl font-bold tracking-tight text-slate-900">{entry.title}</h2>
-      </div>
-      <div className="grid gap-5 px-4 py-5 sm:px-5 lg:grid-cols-[1.1fr_1fr]">
-        <div className="space-y-4 text-sm leading-6 text-slate-700">
-          <section><h3 className="font-semibold text-slate-900">O que é?</h3><p>{entry.what}</p></section>
-          <section><h3 className="font-semibold text-slate-900">Para que serve?</h3><p>{entry.purpose}</p></section>
-          <section><h3 className="font-semibold text-slate-900">Qual é o papel no sistema?</h3><p>{entry.role}</p></section>
-          <section><h3 className="font-semibold text-slate-900">Quem pode usar?</h3><p>{entry.access}</p></section>
-          <section><h3 className="font-semibold text-slate-900">Pré-requisitos</h3><p>{entry.prerequisites}</p></section>
+        <CaptureGallery captures={captures} />
+        <div className="grid gap-5 px-4 py-5 sm:px-5 lg:grid-cols-[1.1fr_1fr]">
+          <div className="space-y-4 text-sm leading-6 text-slate-700">
+            <section><h3 className="font-semibold text-slate-900">O que é?</h3><p>{entry.what}</p></section>
+            <section><h3 className="font-semibold text-slate-900">Para que serve?</h3><p>{entry.purpose}</p></section>
+            <section><h3 className="font-semibold text-slate-900">Qual é o papel no sistema?</h3><p>{entry.role}</p></section>
+            <section><h3 className="font-semibold text-slate-900">Quem pode usar?</h3><p>{entry.access}</p></section>
+            <section><h3 className="font-semibold text-slate-900">Pré-requisitos</h3><p>{entry.prerequisites}</p></section>
+          </div>
+          <div className="space-y-4 text-sm leading-6 text-slate-700">
+            <section>
+              <h3 className="font-semibold text-slate-900">Passo a passo</h3>
+              <ol className="mt-1 list-decimal space-y-1 pl-5">{entry.steps.map((step) => <li key={step}>{step}</li>)}</ol>
+            </section>
+            {entry.shortcuts ? <section><h3 className="flex items-center gap-1.5 font-semibold text-slate-900"><Keyboard size={15} /> Atalhos</h3><p>{entry.shortcuts}</p></section> : null}
+            <section className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2"><h3 className="font-semibold text-amber-900">Atenção</h3><p className="text-amber-900/90">{entry.cautions}</p></section>
+            <section><h3 className="font-semibold text-slate-900">Auditoria</h3><p>{entry.audit}</p></section>
+            <a className="inline-flex items-center gap-1 font-semibold text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50" href={entry.route}>Abrir tela <ChevronRight size={15} /></a>
+          </div>
         </div>
-        <div className="space-y-4 text-sm leading-6 text-slate-700">
-          <section>
-            <h3 className="font-semibold text-slate-900">Passo a passo</h3>
-            <ol className="mt-1 list-decimal space-y-1 pl-5">{entry.steps.map((step) => <li key={step}>{step}</li>)}</ol>
-          </section>
-          {entry.shortcuts ? <section><h3 className="flex items-center gap-1.5 font-semibold text-slate-900"><Keyboard size={15} /> Atalhos</h3><p>{entry.shortcuts}</p></section> : null}
-          <section className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2"><h3 className="font-semibold text-amber-900">Atenção</h3><p className="text-amber-900/90">{entry.cautions}</p></section>
-          <section><h3 className="font-semibold text-slate-900">Auditoria</h3><p>{entry.audit}</p></section>
-          <a className="inline-flex items-center gap-1 font-semibold text-brand-700 hover:underline" href={entry.route}>Abrir tela <ChevronRight size={15} /></a>
-        </div>
-      </div>
       </Card>
     </div>
   );
@@ -73,12 +107,22 @@ export default function Manual() {
         </div>
       </div>
 
+      <details className="group rounded-xl border border-slate-200 bg-white shadow-sm">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 sm:px-5">
+          <span className="flex items-center justify-between gap-3">Como usar esta central <ChevronRight size={16} className="transition-transform group-open:rotate-90" /></span>
+        </summary>
+        <div className="grid gap-4 border-t border-slate-200 p-4 sm:grid-cols-2 sm:p-5">
+          <figure><img src="/manual/capturas/manual-central-dev.png" alt="Central de ajuda do ERP no desktop" loading="lazy" decoding="async" className="w-full rounded-lg border border-slate-200" /><figcaption className="mt-2 text-xs text-slate-500">Desktop: pesquise um módulo e selecione o cartão para ver o manual completo.</figcaption></figure>
+          <figure><img src="/manual/capturas/manual-central-mobile-dev.png" alt="Central de ajuda do ERP no celular" loading="lazy" decoding="async" className="w-full rounded-lg border border-slate-200" /><figcaption className="mt-2 text-xs text-slate-500">Mobile: a consulta permanece disponível em telas menores.</figcaption></figure>
+        </div>
+      </details>
+
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
         <span>{entries.length} módulo(s) encontrado(s)</span>
         {term ? <Button size="sm" variant="ghost" onClick={() => { setTerm(""); setSelectedId(null); }}>Limpar pesquisa</Button> : <span>Atualizado para a versão em desenvolvimento</span>}
       </div>
 
-      {selected ? <EntryDetail entry={selected} /> : (
+      {selected ? <EntryDetail entry={selected} onBack={() => setSelectedId(null)} /> : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {entries.map((entry) => (
             <button key={entry.id} type="button" onClick={() => setSelectedId(entry.id)} className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-500/40">
@@ -92,7 +136,7 @@ export default function Manual() {
       )}
 
       {entries.length === 0 ? <Card className="py-12 text-center"><p className="font-medium text-slate-800">Nenhum módulo encontrado</p><p className="mt-1 text-sm text-slate-500">Tente buscar por venda, estoque, crédito, compra ou relatório.</p></Card> : null}
-      <p className="text-xs leading-5 text-slate-500">A documentação operacional completa, com screenshots anonimizados, fica em <code>docs/wiki/</code>. Se uma regra desta página divergir da API, o backend é a autoridade.</p>
+      <p className="text-xs leading-5 text-slate-500">Este manual é exibido em HTML dentro do ERP e contém as capturas anonimizadas de cada tela, ação e subtela. Se uma regra desta página divergir da API, o backend é a autoridade.</p>
     </div>
   );
 }

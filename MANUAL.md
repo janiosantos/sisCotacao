@@ -1,6 +1,6 @@
 # Manual do Sistema ERP Comercial
 
-> **Versão vigente:** consulte a [wiki do usuário em `docs/wiki/README.md`](docs/wiki/README.md), que contém o manual operacional, capturas autenticadas e a central de ajuda integrada em `#/manual`. Este arquivo permanece como referência técnica legada.
+> **Versão vigente:** o manual oficial para o usuário final é a central HTML integrada em `#/manual`, acessível pelo botão **Ajuda** do ERP. A [wiki editorial em `docs/wiki/README.md`](docs/wiki/README.md) mantém capítulos e governança; este arquivo permanece como referência técnica legada.
 
 ## Índice
 
