@@ -313,8 +313,8 @@ export default function App() {
   const grupoAtual = NAV.find((g) => g.items.some((item) => item.recurso === route?.def.recurso));
 
   const SidebarNav = (
-    <nav className="erp-scrollbar flex-1 space-y-5 overflow-y-auto px-3 py-4" aria-label="Navegação principal">
-      <div className="sticky top-0 z-10 bg-white pb-1">
+    <nav className="erp-sidebar-nav erp-scrollbar flex-1 space-y-5 overflow-y-auto px-3 py-4" aria-label="Navegação principal">
+      <div className="sticky top-0 z-10 pb-1">
         <div className="relative">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
           <input
@@ -322,7 +322,7 @@ export default function App() {
             value={buscaModulo}
             onChange={(e) => setBuscaModulo(e.target.value)}
             placeholder="Buscar módulo..."
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs text-slate-800 outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
+            className="erp-nav-search w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs text-slate-800 outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
           />
         </div>
       </div>
@@ -336,7 +336,7 @@ export default function App() {
           <div key={g.label}>
             <button
               type="button"
-              className="flex w-full items-center justify-between rounded px-2 pb-1.5 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+              className="erp-nav-group flex w-full items-center justify-between rounded px-2 pb-1.5 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
               aria-expanded={aberto}
               aria-controls={grupoId}
               onClick={() => setGruposAbertos((atual) => ({ ...atual, [g.label]: !aberto }))}
@@ -354,9 +354,9 @@ export default function App() {
                       key={it.href}
                       href={it.href}
                       aria-current={active ? "page" : undefined}
-                      className={`group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
+                      className={`erp-nav-link group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
                         active
-                          ? "bg-brand-50 text-brand-800 shadow-sm ring-1 ring-brand-100"
+                          ? "is-active bg-brand-50 text-brand-800 shadow-sm ring-1 ring-brand-100"
                           : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                       }`}
                     >
@@ -374,13 +374,13 @@ export default function App() {
   );
 
   const SidebarBrand = (
-    <div className="flex h-16 items-center gap-2.5 border-b border-slate-200 px-4">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm shadow-brand-600/25">
+    <div className="erp-sidebar-brand flex h-16 items-center gap-2.5 border-b border-slate-200 px-4">
+      <div className="erp-brand-mark flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm shadow-brand-600/25">
         <ShoppingBag size={18} />
       </div>
       <div className="min-w-0">
-        <div className="truncate text-sm font-semibold leading-tight text-gray-900">ERP Comercial</div>
-        <div className="text-[11px] text-gray-400">Gestão de varejo</div>
+        <div className="erp-brand-title truncate text-sm font-semibold leading-tight text-gray-900">ERP Comercial</div>
+        <div className="erp-brand-subtitle text-[11px] text-gray-400">Gestão de varejo</div>
       </div>
     </div>
   );
@@ -388,9 +388,9 @@ export default function App() {
   return (
     <>
       <Manutencao />
-      <div className="flex h-dvh overflow-hidden bg-slate-100">
+      <div className="erp-shell flex h-dvh overflow-hidden bg-slate-100">
       {/* Sidebar — desktop/tablet: fixa; mobile: drawer (off-canvas) */}
-      <aside className="hidden md:flex md:w-64 md:flex-none md:flex-col md:border-r md:border-slate-200 md:bg-white">
+      <aside className="erp-sidebar hidden md:flex md:w-64 md:flex-none md:flex-col md:border-r md:border-slate-200 md:bg-white">
         {SidebarBrand}
         {SidebarNav}
       </aside>
@@ -399,7 +399,7 @@ export default function App() {
       {menuAberto && (
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMenuAberto(false)} />
-          <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-xl">
+          <aside className="erp-sidebar absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-xl">
             <div className="flex items-center justify-between pr-2">
               {SidebarBrand}
               <button className="p-2 text-gray-500 hover:text-gray-800" onClick={() => setMenuAberto(false)} title="Fechar menu">
@@ -413,7 +413,7 @@ export default function App() {
 
       {/* Conteúdo */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="z-20 flex h-16 flex-none items-center gap-2 border-b border-slate-200 bg-white/95 px-3 shadow-[0_1px_3px_rgb(16_24_40/4%)] backdrop-blur sm:gap-4 sm:px-6">
+        <header className="erp-topbar z-20 flex h-16 flex-none items-center gap-2 border-b border-slate-200 bg-white/95 px-3 shadow-[0_1px_3px_rgb(16_24_40/4%)] backdrop-blur sm:gap-4 sm:px-6">
           <button
             className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
             onClick={() => setMenuAberto(true)}
@@ -469,9 +469,10 @@ export default function App() {
           </div>
         </header>
 
-        <main id="main-content" className="erp-scrollbar flex-1 overflow-auto p-3 sm:p-4 md:p-5 lg:p-6">
+        <main id="main-content" className="erp-main erp-scrollbar flex-1 overflow-auto p-3 sm:p-4 md:p-5 lg:p-6">
+          <div className="erp-main-inner">
           {route ? (
-            <nav aria-label="Caminho da página" className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+            <nav aria-label="Caminho da página" className="erp-breadcrumb mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
               <span>ERP</span>
               <span aria-hidden="true">/</span>
               <span>{grupoAtual?.label ?? "Módulo"}</span>
@@ -494,6 +495,7 @@ export default function App() {
               </Suspense>
             </RouteErrorBoundary>
           )}
+          </div>
         </main>
       </div>
     </div>

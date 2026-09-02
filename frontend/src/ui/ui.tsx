@@ -58,7 +58,7 @@ export const Button = forwardRef<
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgb(16_24_40/4%)] ${className}`}>
+    <div className={`erp-card rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgb(16_24_40/4%)] ${className}`}>
       {children}
     </div>
   );
@@ -86,9 +86,9 @@ export function StatCard({
   const valueCls =
     tone === "danger" ? "text-red-600" : tone === "success" ? "text-emerald-600" : "text-gray-900";
   return (
-    <Card className={`border-l-4 p-4 ${toneCls}`}>
+    <Card className={`erp-stat-card border-l-4 p-4 ${toneCls}`}>
       <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">{label}</div>
-      <div className={`mt-1.5 text-[1.65rem] font-semibold leading-none tracking-[-0.03em] ${valueCls}`}>{value}</div>
+      <div className={`erp-stat-value mt-1.5 text-[clamp(1.25rem,2vw,1.65rem)] font-semibold leading-none tracking-[-0.03em] ${valueCls}`}>{value}</div>
       {sub ? <div className="mt-2 text-xs text-slate-500">{sub}</div> : null}
     </Card>
   );
@@ -147,7 +147,7 @@ export function Table({ children }: { children: ReactNode }) {
     return child;
   });
   return (
-    <div className="erp-scrollbar overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgb(16_24_40/4%)]">
+    <div className="erp-table erp-scrollbar overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgb(16_24_40/4%)]">
       <table className="mob-card w-full text-[13px] lg:min-w-full lg:table-fixed lg:divide-y lg:divide-slate-200">
         {rows}
       </table>
@@ -464,7 +464,7 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+    <div className="erp-page-header mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
         {contexto ? (
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{contexto}</p>

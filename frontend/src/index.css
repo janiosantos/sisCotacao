@@ -79,6 +79,299 @@ textarea:focus-visible {
   scrollbar-width: thin;
 }
 
+/* Shell corporativo: navegação escura e área de trabalho clara deixam a
+   localização do operador evidente sem reduzir a densidade das telas. */
+.erp-shell {
+  background: #edf2f7;
+}
+
+.erp-sidebar {
+  background: linear-gradient(180deg, #10243f 0%, #132d4d 58%, #0d2038 100%) !important;
+  border-color: rgb(255 255 255 / 10%) !important;
+  color: #dbe7f5;
+}
+
+.erp-sidebar-brand {
+  border-color: rgb(255 255 255 / 10%) !important;
+  background: rgb(4 15 30 / 16%);
+}
+
+.erp-brand-mark {
+  background: #3b82f6 !important;
+  box-shadow: 0 8px 20px rgb(59 130 246 / 28%) !important;
+}
+
+.erp-brand-title {
+  color: #f8fafc !important;
+  letter-spacing: -0.02em;
+}
+
+.erp-brand-subtitle {
+  color: #9fb2ca !important;
+}
+
+.erp-sidebar-nav {
+  scrollbar-color: #496987 transparent;
+}
+
+.erp-sidebar .erp-nav-search {
+  border-color: rgb(255 255 255 / 14%);
+  background: rgb(255 255 255 / 8%);
+  color: #f8fafc;
+}
+
+.erp-sidebar .erp-nav-search::placeholder {
+  color: #9fb2ca;
+}
+
+.erp-sidebar .erp-nav-search:focus {
+  border-color: #7db2ff;
+  background: rgb(255 255 255 / 12%);
+}
+
+.erp-sidebar .erp-nav-group {
+  color: #88a2bf;
+}
+
+.erp-sidebar .erp-nav-group:hover {
+  color: #dbe7f5;
+}
+
+.erp-sidebar .erp-nav-link {
+  color: #c4d3e5 !important;
+}
+
+.erp-sidebar .erp-nav-link:hover {
+  background: rgb(255 255 255 / 9%) !important;
+  color: #ffffff !important;
+}
+
+.erp-sidebar .erp-nav-link.is-active {
+  background: #e4efff !important;
+  color: #173f75 !important;
+  box-shadow: 0 8px 18px rgb(1 18 42 / 18%), inset 3px 0 #60a5fa;
+}
+
+.erp-sidebar .erp-nav-link svg {
+  color: #8ba6c4;
+}
+
+.erp-sidebar .erp-nav-link.is-active svg {
+  color: #2563eb;
+}
+
+.erp-topbar {
+  background: rgb(255 255 255 / 92%) !important;
+}
+
+.erp-main {
+  background:
+    radial-gradient(circle at 92% 0%, rgb(219 234 254 / 42%), transparent 28rem),
+    #edf2f7;
+}
+
+.erp-main-inner {
+  width: 100%;
+  max-width: 1680px;
+  margin: 0 auto;
+}
+
+.erp-breadcrumb {
+  color: #8493a7;
+}
+
+.erp-breadcrumb span:last-child {
+  color: #334155;
+}
+
+.erp-page-header {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgb(148 163 184 / 22%);
+}
+
+.erp-card {
+  box-shadow: 0 1px 2px rgb(15 23 42 / 4%), 0 8px 24px rgb(15 23 42 / 3%);
+}
+
+.erp-stat-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 106px;
+  background: linear-gradient(145deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.erp-stat-value {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.erp-stat-card::after {
+  position: absolute;
+  right: -22px;
+  bottom: -34px;
+  width: 92px;
+  height: 92px;
+  border-radius: 999px;
+  background: rgb(59 130 246 / 7%);
+  content: "";
+}
+
+.erp-table {
+  box-shadow: 0 1px 2px rgb(15 23 42 / 4%), 0 8px 24px rgb(15 23 42 / 3%);
+}
+
+.erp-dashboard-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 300px);
+  gap: 1.25rem;
+  margin: 0 0 1.25rem;
+  padding: 1.35rem 1.5rem;
+  border: 1px solid #21466e;
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 15% 0%, rgb(96 165 250 / 28%), transparent 16rem),
+    linear-gradient(115deg, #102844 0%, #1a4670 100%);
+  color: #ffffff;
+  box-shadow: 0 14px 30px rgb(15 52 88 / 16%);
+}
+
+.erp-eyebrow {
+  color: #a9cdf7;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.erp-dashboard-hero h2 {
+  margin: 0.35rem 0 0;
+  font-size: clamp(1.2rem, 2vw, 1.65rem);
+  letter-spacing: -0.035em;
+}
+
+.erp-dashboard-hero p {
+  max-width: 42rem;
+  margin: 0.45rem 0 0;
+  color: #c3d7ed;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.erp-dashboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.erp-dashboard-hero .erp-dashboard-actions a:last-child button {
+  color: #e0edff;
+}
+
+.erp-dashboard-summary {
+  align-self: stretch;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgb(191 219 254 / 22%);
+  border-radius: 0.75rem;
+  background: rgb(3 20 40 / 25%);
+}
+
+.erp-dashboard-summary > span,
+.erp-dashboard-summary div span {
+  color: #a9c4e1;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.erp-dashboard-summary > strong {
+  display: block;
+  margin: 0.2rem 0 0.85rem;
+  font-size: 1.25rem;
+}
+
+.erp-dashboard-summary div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgb(191 219 254 / 16%);
+}
+
+.erp-dashboard-summary b {
+  color: #ffffff;
+  font-size: 0.9rem;
+}
+
+.erp-dashboard-summary b.is-alert {
+  color: #fbbf24;
+}
+
+.erp-kpi-grid {
+  margin-bottom: 0.25rem;
+}
+
+.erp-dashboard-section {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid rgb(148 163 184 / 22%);
+  border-radius: 0.9rem;
+  background: rgb(255 255 255 / 62%);
+}
+
+.erp-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+}
+
+.erp-section-heading h3 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.erp-section-heading span {
+  color: #94a3b8;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 767px) {
+  .erp-dashboard-hero {
+    grid-template-columns: 1fr;
+    padding: 1.1rem;
+  }
+
+  .erp-dashboard-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.55rem 1rem;
+  }
+
+  .erp-dashboard-summary > span,
+  .erp-dashboard-summary > strong {
+    grid-column: 1 / -1;
+  }
+
+  .erp-dashboard-summary > strong {
+    margin-bottom: 0.2rem;
+  }
+
+  .erp-dashboard-summary div {
+    padding-top: 0.55rem;
+  }
+}
+
 /* Garante que a sidebar desktop/tablet sempre apareça em telas >= 768px,
    mesmo que CSS legado defina `.hidden` com !important. */
 @media (min-width: 768px) {

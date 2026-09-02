@@ -90,7 +90,25 @@ export default function Dashboard() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+      <section className="erp-dashboard-hero" aria-labelledby="dashboard-foco">
+        <div>
+          <div className="erp-eyebrow">Visão operacional</div>
+          <h2 id="dashboard-foco">Decida o próximo movimento da loja</h2>
+          <p>Use os alertas de estoque, vendas e financeiro para priorizar a operação sem abrir vários módulos.</p>
+          <div className="erp-dashboard-actions">
+            <a href="#/relatorios"><Button variant="primary" size="sm">Abrir relatórios</Button></a>
+            <a href="#/compras"><Button variant="ghost" size="sm">Planejar compras</Button></a>
+          </div>
+        </div>
+        <div className="erp-dashboard-summary" aria-label="Resumo da operação">
+          <span>Hoje</span>
+          <strong>{r.vendas_hoje.n} pedido(s)</strong>
+          <div><span>Estoque baixo</span><b className={r.estoque_baixo ? "is-alert" : ""}>{r.estoque_baixo}</b></div>
+          <div><span>Vencido a receber</span><b className={r.receber_vencidas ? "is-alert" : ""}>{fmtMoney(r.receber_vencidas)}</b></div>
+        </div>
+      </section>
+
+      <div className="erp-kpi-grid grid grid-cols-2 gap-4 lg:grid-cols-3 2xl:grid-cols-6">
         <StatCard label="Vendas hoje" value={fmtMoney(r.vendas_hoje.total)} sub={`${r.vendas_hoje.n} pedido(s)`} />
         <StatCard label="Vendas no mês" value={fmtMoney(r.vendas_mes.total)} sub={`${r.vendas_mes.n} pedido(s)`} tone="highlight" />
         <StatCard label="A receber (a vencer)" value={fmtMoney(r.receber_a_vencer)} />
