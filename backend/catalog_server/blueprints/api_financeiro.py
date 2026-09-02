@@ -287,7 +287,12 @@ def pagar_conta(conta_id: int):
 
 @api_financeiro_bp.get("/api/condicoes-pagamento")
 def listar_condicoes():
-    return jsonify(condicao_repo.list())
+    condicoes = condicao_repo.list()
+    # O PDV distingue à vista de prazo pelos dados estruturados, nunca pelo
+    # texto da condição. O mesmo contrato serve aos demais consumidores.
+    for condicao in condicoes:
+        condicao["parcelas"] = condicao_repo.list_parcelas(condicao["id"])
+    return jsonify(condicoes)
 
 
 @api_financeiro_bp.get("/api/condicoes-pagamento/<int:c_id>")

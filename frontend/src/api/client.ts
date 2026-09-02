@@ -209,6 +209,32 @@ export interface ClienteSituacao {
   excede_por_atraso?: boolean;
 }
 
+export interface ClienteCredito extends ClienteSituacao {
+  cliente_id: number;
+  cliente: string;
+  status: "nao_solicitado" | "em_analise" | "aprovado" | "suspenso" | "reprovado" | "expirado" | "bloqueado" | string;
+  aprovado: boolean;
+  limite_cadastrado: number;
+  limite_aprovado: number;
+  prazo_maximo_dias: number;
+  condicoes_permitidas?: string[];
+  vigencia_inicio: string | null;
+  vigencia_fim: string | null;
+  versao: number;
+}
+
+export interface CreditoEvento {
+  id: number;
+  tipo_evento: string;
+  status_anterior: string | null;
+  status_novo: string | null;
+  limite_anterior: number | null;
+  limite_novo: number | null;
+  motivo: string | null;
+  usuario_nome: string | null;
+  criado_em: string;
+}
+
 export interface ClientePayload {
   nome: string;
   tipo_pessoa?: string;
@@ -955,6 +981,7 @@ const TIMEOUT_PADRAO_MS = 45000;
 
 interface RequestOpts {
   timeoutMs?: number;
+  idempotencyKey?: string;
 }
 
 function validarObjeto<T>(value: unknown, endpoint: string, campos: string[]): T {
@@ -992,6 +1019,9 @@ async function request<T>(
   const opts2: RequestInit = { method, headers: {} as Record<string, string> };
   const tk = getToken();
   if (tk) (opts2.headers as Record<string, string>)["Authorization"] = `Bearer ${tk}`;
+  if (opts?.idempotencyKey) {
+    (opts2.headers as Record<string, string>)["Idempotency-Key"] = opts.idempotencyKey;
+  }
   const ctrl = new AbortController();
   const t = window.setTimeout(
     () => ctrl.abort(),
@@ -1423,6 +1453,19 @@ export const api = {
   detalharCliente: (id: number) => request<Cliente>("GET", `/api/clientes/${id}`),
   situacaoCliente: (id: number, total?: number) =>
     request<ClienteSituacao>("GET", `/api/clientes/${id}/situacao` + qs({ total })),
+  consultarCreditoCliente: (id: number) => request<ClienteCredito>("GET", `/api/clientes/${id}/credito`),
+  solicitarCreditoCliente: (id: number, motivo: string) =>
+    request<ClienteCredito>("POST", `/api/clientes/${id}/credito/solicitar`, { motivo }),
+  aprovarCreditoCliente: (id: number, data: { limite_aprovado: number; prazo_maximo_dias: number; vigencia_inicio: string; vigencia_fim: string; motivo: string; condicoes_permitidas?: string[] }) =>
+    request<ClienteCredito>("POST", `/api/clientes/${id}/credito/aprovar`, data),
+  bloquearCreditoCliente: (id: number, motivo: string) =>
+    request<ClienteCredito>("POST", `/api/clientes/${id}/credito/bloquear`, { motivo }),
+  suspenderCreditoCliente: (id: number, motivo: string) =>
+    request<ClienteCredito>("POST", `/api/clientes/${id}/credito/suspender`, { motivo }),
+  revisarCreditoCliente: (id: number, motivo: string) =>
+    request<ClienteCredito>("POST", `/api/clientes/${id}/credito/revisar`, { motivo }),
+  historicoCreditoCliente: (id: number) =>
+    request<{ eventos: CreditoEvento[] }>("GET", `/api/clientes/${id}/credito/historico`),
   criarCliente: (data: ClientePayload) => request<{ id: number }>("POST", "/api/clientes", data),
   atualizarCliente: (id: number, data: ClientePayload) =>
     request<{ ok: boolean }>("PUT", `/api/clientes/${id}`, data),
@@ -1534,8 +1577,8 @@ export const api = {
       "/api/orcamentos/pendentes-aprovacao"
     ),
   reabrirOrcamento: (id: number) => request<{ ok: boolean }>("POST", `/api/orcamentos/${id}/reabrir`),
-  receberOrcamento: (id: number, data: { forma_pagamento?: string; valor_recebido?: number; bandeira?: string; codigo_autorizacao?: string; pagamentos?: { forma_pagamento: string; valor: number; bandeira?: string; codigo_autorizacao?: string }[] }) =>
-    request<RecebimentoResultado>("POST", `/api/orcamentos/${id}/receber`, data),
+  receberOrcamento: (id: number, data: { forma_pagamento?: string; valor_recebido?: number; bandeira?: string; codigo_autorizacao?: string; pagamentos?: { forma_pagamento: string; valor: number; bandeira?: string; codigo_autorizacao?: string }[] }, idempotencyKey?: string) =>
+    request<RecebimentoResultado>("POST", `/api/orcamentos/${id}/receber`, data, { idempotencyKey }),
   cancelarOrcamento: (id: number) => request<{ ok: boolean }>("POST", `/api/orcamentos/${id}/cancelar`),
   devolverOrcamento: (id: number) => request<{ ok: boolean; itens_devolvidos: number }>("POST", `/api/orcamentos/${id}/devolver`),
   formasPagamento: () => request<string[]>("GET", "/api/orcamentos/receber/formas"),

@@ -6,7 +6,7 @@ from werkzeug.security import check_password_hash
 
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.repositories.orcamentos import orcamento_repo, resumo_desconto
-from catalog_server.services import venda_entrega, pagamento_venda
+from catalog_server.services import venda_entrega, pagamento_venda, infra
 from catalog_server.orcamento_status import (
     STATUS_LIST,
     aplicar_transicao,
@@ -14,7 +14,7 @@ from catalog_server.orcamento_status import (
     pode_editar_conteudo,
     transicao_valida,
 )
-from catalog_server.repositories import cliente_repo, usuario_repo
+from catalog_server.repositories import cliente_repo, usuario_repo, condicao_repo
 from catalog_server.repositories.pdv_frete import desconto_repo, frete_repo
 from catalog_server.repositories.financeiro import caixa_repo, contas_repo
 from catalog_server.repositories.estoque import estoque_repo
@@ -23,6 +23,8 @@ from catalog_server.repositories import loja
 from catalog_server import contabil_gatilhos
 from catalog_server import permissao
 from catalog_server.db import system_conn
+from catalog_server.services.parcelas_venda import eh_a_prazo
+from catalog_server.services import credito
 
 api_orcamentos_bp = Blueprint("api_orcamentos", __name__)
 
@@ -47,6 +49,8 @@ def listar():
 @api_orcamentos_bp.post("/api/orcamentos")
 def criar():
     data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Payload deve ser um objeto JSON", "code": "payload_invalido"}), 400
     itens = data.get("itens") or []
     if not itens:
         return jsonify({"error": "O orçamento precisa de ao menos 1 item"}), 400
@@ -74,6 +78,11 @@ def criar():
                 contribuinte = cli.get("contribuinte")
             if not ie:
                 ie = cli.get("ie")
+    if cliente_id == credito.CLIENTE_PADRAO_ID and eh_a_prazo(data.get("condicao_pagamento_id")):
+        return jsonify({
+            "error": "O cliente padrão só pode comprar à vista",
+            "code": "cliente_padrao_somente_avista",
+        }), 403
     # Status "protegidos" (finalizado) só podem ser aplicados pelo PATCH, que
     # passa pelo gate de alçada/estoque/fiscal. Criar já direto como
     # finalizado pulava todas essas checagens — força rascunho aqui, e quem
@@ -115,6 +124,8 @@ def buscar(orcamento_id: int):
 @api_orcamentos_bp.patch("/api/orcamentos/<int:orcamento_id>")
 def atualizar(orcamento_id: int):
     data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Payload deve ser um objeto JSON", "code": "payload_invalido"}), 400
     status = data.get("status")
     if status is not None and status not in STATUS_LIST:
         return jsonify({"error": "Status inválido"}), 400
@@ -123,6 +134,13 @@ def atualizar(orcamento_id: int):
     if atual is None:
         return jsonify({"error": "Orçamento não encontrado"}), 404
     status_atual = atual.get("status")
+
+    condicao_alvo = data.get("condicao_pagamento_id") if "condicao_pagamento_id" in data else atual.get("condicao_pagamento_id")
+    if atual.get("cliente_id") == credito.CLIENTE_PADRAO_ID and eh_a_prazo(condicao_alvo):
+        return jsonify({
+            "error": "O cliente padrão só pode comprar à vista",
+            "code": "cliente_padrao_somente_avista",
+        }), 403
 
     # Conteúdo (cliente/itens/desconto/condição) — editável só até `liberado`.
     # O repositório levanta PermissionError se o status atual bloquear.
@@ -161,30 +179,22 @@ def atualizar(orcamento_id: int):
                 _conn.commit()
             return jsonify(bloqueio), 403
 
-        # Crédito: bloqueia venda quando o total excede o limite disponível
-        # ou quando o cliente tem conta em atraso (configurável). Cliente
-        # padrão (CONSUMIDOR, id 1) nunca é bloqueado.
-        if orc.get("cliente_id") and orc["cliente_id"] != 1:
-            total = float(orc.get("total") or 0)
-            situacao = cliente_repo.situacao_credito(orc["cliente_id"], total=total)
-            if situacao is not None:
-                if loja.bloquear_com_atraso() and situacao.get("excede_por_atraso"):
-                    return jsonify({
-                        "error": "Cliente possui conta em atraso. Regularize antes de finalizar.",
-                        "code": "cliente_atraso",
-                        "detalhes": {"saldo_em_atraso": situacao.get("saldo_em_atraso")},
-                    }), 403
-                if loja.bloquear_sem_credito() and situacao.get("excede_limite"):
-                    return jsonify({
-                        "error": "Venda acima do limite de crédito disponível.",
-                        "code": "sem_credito",
-                        "detalhes": {
-                            "limite_credito": situacao.get("limite_credito"),
-                            "limite_utilizado": situacao.get("limite_utilizado"),
-                            "limite_disponivel": situacao.get("limite_disponivel"),
-                            "total": total,
-                        },
-                    }), 403
+        # Crediário é obrigatório para qualquer condição a prazo. O limite
+        # legado de clientes não pode liberar a venda sem aprovação explícita.
+        if eh_a_prazo(orc.get("condicao_pagamento_id")):
+            parcelas = condicao_repo.list_parcelas(int(orc["condicao_pagamento_id"]))
+            prazo_dias = max((int(p.get("dias") or 0) for p in parcelas), default=0)
+            decisao = credito.validar_venda_a_prazo(
+                orc.get("cliente_id"), float(orc.get("total") or 0), prazo_dias,
+                bloquear_atraso=loja.bloquear_com_atraso(),
+                condicao_id=orc.get("condicao_pagamento_id"),
+            )
+            if not decisao.get("permitido"):
+                return jsonify({
+                    "error": "Venda a prazo não autorizada pelo crediário",
+                    "code": decisao.get("code"),
+                    "detalhes": decisao.get("situacao") or {"motivos": decisao.get("motivos", [])},
+                }), 403
 
         # Estoque: bloqueia venda sem estoque (configurável)
         if loja.bloquear_sem_estoque():
@@ -243,6 +253,38 @@ def atualizar(orcamento_id: int):
                 orc = orcamento_repo.buscar(orcamento_id, _conn=conn)
                 if not orc:
                     return jsonify({"error": "Orçamento não encontrado"}), 404
+
+                # Revalida o crediário dentro da mesma unidade transacional
+                # que cria as parcelas e baixa o estoque. O lock do crédito
+                # impede duas vendas simultâneas de consumirem o mesmo limite.
+                if eh_a_prazo(orc.get("condicao_pagamento_id"), _conn=conn):
+                    prazo_dias = max(
+                        (int(p.get("dias") or 0) for p in condicao_repo.list_parcelas(
+                            int(orc["condicao_pagamento_id"]), _conn=conn
+                        )),
+                        default=0,
+                    )
+                    decisao = credito.validar_venda_a_prazo(
+                        orc.get("cliente_id"), float(orc.get("total") or 0), prazo_dias,
+                        bloquear_atraso=loja.bloquear_com_atraso(),
+                        condicao_id=orc.get("condicao_pagamento_id"), _conn=conn,
+                    )
+                    if not decisao.get("permitido"):
+                        return jsonify({
+                            "error": "Venda a prazo não autorizada pelo crediário",
+                            "code": decisao.get("code"),
+                            "detalhes": decisao.get("situacao") or {"motivos": decisao.get("motivos", [])},
+                        }), 403
+
+                # O snapshot e sua decisão fiscal também precisam estar na
+                # mesma transação da conversão do pedido.
+                snap = venda_fiscal.snapshot_orcamento(orcamento_id, _conn=conn)
+                if loja.bloquear_sem_fiscal() and snap and not snap.get("pode_finalizar"):
+                    return jsonify({
+                        "error": "Validação fiscal bloqueou a finalização. Corrija os erros abaixo.",
+                        "code": "fiscal_error",
+                        "detalhes": snap.get("erros", []),
+                    }), 403
 
                 # A prazo gera parcelas; à vista/balcão mantém uma conta única.
                 parcelas = gerar_contas_receber(orc, _conn=conn)
@@ -546,61 +588,114 @@ def receber(orcamento_id: int):
     quitar a venda, o status muda para `recebido`.
     """
     data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Payload deve ser um objeto JSON", "code": "payload_invalido"}), 400
     pagamentos, erro = _normalizar_pagamentos(data)
     if erro:
         return jsonify({"error": erro}), 400
 
-    orc = orcamento_repo.buscar(orcamento_id)
-    if orc is None:
-        return jsonify({"error": "Orçamento não encontrado"}), 404
-    if orc.get("status") != "finalizado":
-        return jsonify({"error": "Apenas pedidos finalizados podem ser recebidos"}), 400
+    actor_id = usuario_id_requisicao()
+    if not actor_id or not permissao.tem_permissao(actor_id, "caixa", "cadastrar"):
+        return jsonify({"error": "Somente o Caixa pode receber pagamentos", "code": "recebimento_permissao_negada"}), 403
 
-    total = round(float(orc.get("total") or 0), 2)
-    total_recebido = round(sum(v for _, v, _, _ in pagamentos), 2)
-    troco = round(max(0.0, total_recebido - total), 2)
+    class _RecebimentoErro(Exception):
+        def __init__(self, message: str, status: int = 400, code: str = "recebimento_invalido"):
+            super().__init__(message)
+            self.status = status
+            self.code = code
 
-    # O excedente é devolvido como troco (sempre em dinheiro); subtrai do 1º
-    # pagamento em dinheiro antes de lançar no caixa.
-    restante_troco = troco
-    descricao = f"Venda {orc.get('numero', '')} — {orc.get('cliente', '') or 'cliente'}"
-    for forma, valor, bandeira, codigo in pagamentos:
-        entrada = valor
-        if forma == "dinheiro" and restante_troco > 0:
-            abatido = min(entrada, restante_troco)
-            entrada = round(entrada - abatido, 2)
-            restante_troco = round(restante_troco - abatido, 2)
-        if entrada <= 0:
-            continue
-        try:
-            caixa_repo.movimentar(
-                "entrada",
-                descricao,
-                entrada,
-                forma_pagamento=forma,
-                documento=orc.get("numero", ""),
-                orcamento_id=orcamento_id,
-                usuario_id=usuario_id_requisicao(),
-                bandeira=bandeira,
-                codigo_autorizacao=codigo,
+    def efetivar(conn):
+        # O lock do pedido vem antes de qualquer leitura de saldo. Com isso,
+        # duas baixas simultâneas jamais podem observar o mesmo saldo aberto.
+        orc = orcamento_repo.buscar(orcamento_id, _conn=conn)
+        if orc is None:
+            raise _RecebimentoErro("Orçamento não encontrado", 404, "orcamento_nao_encontrado")
+        if orc.get("status") != "finalizado":
+            raise _RecebimentoErro("Apenas pedidos finalizados podem ser recebidos")
+        if eh_a_prazo(orc.get("condicao_pagamento_id"), _conn=conn):
+            raise _RecebimentoErro(
+                "Venda a prazo deve ser recebida em Contas a Receber",
+                400,
+                "recebimento_a_prazo_financeiro",
             )
-        except ValueError as e:
-            return jsonify({"error": str(e)}), 400
+        if orc.get("usuario_id") == actor_id and not permissao.usuario_e_superuser(actor_id):
+            raise _RecebimentoErro(
+                "O vendedor do pedido não pode receber o próprio pedido",
+                403,
+                "vendedor_nao_recebe",
+            )
 
-    entrada_total = round(total_recebido - troco, 2)
-    contas_repo.receber_por_documento(orc.get("numero", ""), entrada_total)
+        conn.execute("SELECT id FROM orcamentos WHERE id=? FOR UPDATE", (orcamento_id,)).fetchone()
+        total = round(float(orc.get("total") or 0), 2)
+        aberto = conn.execute(
+            "SELECT COALESCE(SUM(saldo),0) AS saldo FROM contas_receber "
+            "WHERE documento=? AND status IN ('aberto','parcial')",
+            (orc.get("numero", ""),),
+        ).fetchone()
+        saldo_aberto = round(float(aberto["saldo"] or 0), 2)
+        if saldo_aberto <= 0.005:
+            raise _RecebimentoErro("Pedido já está quitado", 400, "pedido_ja_recebido")
+        total_recebido = round(sum(v for _, v, _, _ in pagamentos), 2)
+        troco = round(max(0.0, total_recebido - saldo_aberto), 2)
+        restante_troco = troco
+        descricao = f"Venda {orc.get('numero', '')} — {orc.get('cliente', '') or 'cliente'}"
+        for forma, valor, bandeira, codigo in pagamentos:
+            entrada = valor
+            if forma == "dinheiro" and restante_troco > 0:
+                abatido = min(entrada, restante_troco)
+                entrada = round(entrada - abatido, 2)
+                restante_troco = round(restante_troco - abatido, 2)
+            if entrada <= 0:
+                continue
+            caixa_repo.movimentar(
+                "entrada", descricao, entrada, forma_pagamento=forma,
+                documento=orc.get("numero", ""), orcamento_id=orcamento_id,
+                usuario_id=actor_id, bandeira=bandeira,
+                codigo_autorizacao=codigo, _conn=conn,
+            )
 
-    recebido = total_recebido >= total - 1e-9
-    if recebido:
-        orcamento_repo.atualizar_cabecalho(orcamento_id, status="recebido")
+        entrada_total = round(total_recebido - troco, 2)
+        contas_repo.receber_por_documento(orc.get("numero", ""), entrada_total, _conn=conn)
+        restante = conn.execute(
+            "SELECT COALESCE(SUM(saldo),0) AS saldo FROM contas_receber "
+            "WHERE documento=? AND status IN ('aberto','parcial')",
+            (orc.get("numero", ""),),
+        ).fetchone()
+        recebido = float(restante["saldo"] or 0) <= 0.005
+        if recebido and not aplicar_transicao(orcamento_id, "recebido", _conn=conn):
+            raise _RecebimentoErro("Não foi possível concluir o recebimento", 409, "transicao_invalida")
+        return {
+            "ok": True,
+            "total": total,
+            "valor_recebido": total_recebido,
+            "troco": troco,
+            "recebido": recebido,
+        }
 
-    return jsonify({
-        "ok": True,
-        "total": total,
-        "valor_recebido": total_recebido,
-        "troco": troco,
-        "recebido": recebido,
-    })
+    try:
+        chave = (request.headers.get("Idempotency-Key") or "").strip()
+        if chave and len(chave) > 100:
+            raise _RecebimentoErro("Idempotency-Key excede 100 caracteres")
+        payload = {
+            "orcamento_id": orcamento_id,
+            "pagamentos": pagamentos,
+        }
+        with system_conn() as conn:
+            if chave:
+                resultado = infra.executar(
+                    chave,
+                    "recebimento_orcamento",
+                    payload,
+                    efetivar,
+                    conn=conn,
+                )["resultado"]
+            else:
+                resultado = efetivar(conn)
+        return jsonify(resultado)
+    except _RecebimentoErro as exc:
+        return jsonify({"error": str(exc), "code": exc.code}), exc.status
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "recebimento_invalido"}), 400
 
 
 # ─── Boleto de venda a prazo ───────────────────────────────

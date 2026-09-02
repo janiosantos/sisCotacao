@@ -26,6 +26,7 @@ export function ModalPedidoCaixa({ d, onSair }: { d: OrcamentoDetalhe; onSair: (
   const imprimirRef = useRef<HTMLButtonElement>(null);
   const retryRef = useRef<HTMLButtonElement>(null);
   const confirmarRef = useRef<HTMLButtonElement>(null);
+  const idempotencyKey = useRef(crypto.randomUUID()).current;
 
   const valorNum = parseNum(valor);
   const troco = forma === "dinheiro" ? Math.max(0, valorNum - total) : 0;
@@ -71,7 +72,7 @@ export function ModalPedidoCaixa({ d, onSair }: { d: OrcamentoDetalhe; onSair: (
         valor_recebido: valorNum,
         bandeira: ehCartao ? bandeira.trim() || undefined : undefined,
         codigo_autorizacao: ehCartao ? codigoAutorizacao.trim() || undefined : undefined,
-      });
+      }, idempotencyKey);
       setEnviando(false);
       if (res.recebido) toast(res.troco > 0 ? `Recebido · troco ${fmtMoney(res.troco)}` : "Recebimento registrado", "success");
       else toast(`Recebimento parcial de ${fmtMoney(res.valor_recebido)}`, "success");

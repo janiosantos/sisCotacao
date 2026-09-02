@@ -11,6 +11,8 @@ Cobre (modelo TOTVS/desdobramento):
 """
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from catalog_server import auth_token
 from catalog_server.db import system_conn
 from catalog_server.app_factory import create_app
@@ -70,6 +72,17 @@ def _condicao(parcelas: list[tuple[int, float]]) -> int:
 
 def _condicao_30_60_90() -> int:
     return _condicao([(30, 33.33), (60, 33.33), (90, 33.34)])
+
+
+def _aprovar_credito(client, header, cliente_id: int) -> None:
+    r = client.post(f"/api/clientes/{cliente_id}/credito/aprovar", headers=header, json={
+        "limite_aprovado": 9000,
+        "prazo_maximo_dias": 120,
+        "vigencia_inicio": date.today().isoformat(),
+        "vigencia_fim": (date.today() + timedelta(days=365)).isoformat(),
+        "motivo": "Aprovado para teste",
+    })
+    assert r.status_code == 200, r.get_json()
 
 
 def test_parcelamento_por_condicao(system_db):
@@ -253,6 +266,7 @@ def test_venda_a_prazo_com_grupo_e_origem(system_db):
         conn.execute("SELECT setval('clientes_id_seq', GREATEST((SELECT COALESCE(MAX(id),1) FROM clientes), 1))")
         conn.commit()
     cid = cliente_repo.create({"nome": "Cliente Grupo", "tipo_pessoa": "f", "limite_credito": 9000})
+    _aprovar_credito(c, h, cid)
     r = c.post("/api/orcamentos", headers=h, json={
         "cliente": "Cliente Grupo",
         "cliente_id": cid,

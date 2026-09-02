@@ -11,6 +11,8 @@ Cobre o gate de crédito que roda na conversão orçamento→pedido
 """
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from catalog_server import auth_token
 from catalog_server.db import system_conn
 from catalog_server.app_factory import create_app
@@ -59,14 +61,50 @@ def _cliente(nome: str, limite: float, tipo: str = "f") -> int:
     })
 
 
-def _orcamento(client, header, cliente_id: int, cliente_nome: str, total: float) -> int:
+def _orcamento(client, header, cliente_id: int, cliente_nome: str, total: float, condicao_id: int | None = None) -> int:
     r = client.post("/api/orcamentos", headers=header, json={
         "cliente": cliente_nome,
         "cliente_id": cliente_id,
+        "condicao_pagamento_id": condicao_id,
         "itens": [{"produto_id": 1, "nome": "Produto", "quantidade": 1, "preco_unitario": total}],
     })
     assert r.status_code == 201, r.get_json()
     return r.get_json()["id"]
+
+
+def _condicao_prazo() -> int:
+    with system_conn() as conn:
+        cid = int(conn.execute(
+            "INSERT INTO condicoes_pagamento (nome, descricao, ativo) VALUES (%s,%s,1) RETURNING id",
+            ("30 dias", "teste"),
+        ).fetchone()["id"])
+        conn.execute(
+            "INSERT INTO condicao_parcelas (condicao_id, sequencia, dias, percentual) VALUES (%s,1,30,100)",
+            (cid,),
+        )
+        conn.commit()
+    return cid
+
+
+def _aprovar_credito(client, cliente_id: int, limite: float = 5000) -> None:
+    admin_id = _usuario("adminfinanceiro")
+    with system_conn() as conn:
+        conn.execute(
+            "INSERT INTO usuario_perfis (usuario_id, perfil_id) VALUES (%s,%s)",
+            (admin_id, _perfil_id("Administrador")),
+        )
+        conn.commit()
+    from catalog_server import permissao
+    permissao.invalidar(admin_id)
+    header = _token(admin_id, "adminfinanceiro")
+    r = client.post(f"/api/clientes/{cliente_id}/credito/aprovar", headers=header, json={
+        "limite_aprovado": limite,
+        "prazo_maximo_dias": 60,
+        "vigencia_inicio": date.today().isoformat(),
+        "vigencia_fim": (date.today() + timedelta(days=365)).isoformat(),
+        "motivo": "Aprovado para teste",
+    })
+    assert r.status_code == 200, r.get_json()
 
 
 def _set_config(chave: str, valor: bool) -> None:
@@ -96,7 +134,9 @@ def test_credito_dentro_do_limite_finaliza(system_db):
     c, vid = _client_com_vendedor()
     h = _token(vid, "vendc")
     cid = _cliente("Maria Construtora", limite=5000.0)
-    oid = _orcamento(c, h, cid, "Maria Construtora", 3000.0)
+    cond = _condicao_prazo()
+    _aprovar_credito(c, cid)
+    oid = _orcamento(c, h, cid, "Maria Construtora", 3000.0, cond)
     r = c.patch(f"/api/orcamentos/{oid}", headers=h, json={"status": "finalizado"})
     assert r.status_code == 200, r.get_json()
 
@@ -106,7 +146,9 @@ def test_credito_acima_do_limite_bloqueia(system_db):
     c, vid = _client_com_vendedor()
     h = _token(vid, "vendc")
     cid = _cliente("Pedro Obra", limite=1000.0)
-    oid = _orcamento(c, h, cid, "Pedro Obra", 5000.0)
+    cond = _condicao_prazo()
+    _aprovar_credito(c, cid, limite=1000)
+    oid = _orcamento(c, h, cid, "Pedro Obra", 5000.0, cond)
     r = c.patch(f"/api/orcamentos/{oid}", headers=h, json={"status": "finalizado"})
     assert r.status_code == 403
     body = r.get_json()
@@ -126,14 +168,16 @@ def test_credito_consumidor_nunca_bloqueia(system_db):
     assert r.status_code == 200, r.get_json()
 
 
-def test_credito_config_desligada_nao_bloqueia(system_db):
+def test_credito_aprovacao_obrigatoria_independe_config(system_db):
     _set_config("bloquear_venda_sem_credito", False)
     c, vid = _client_com_vendedor()
     h = _token(vid, "vendc")
     cid = _cliente("Fulano", limite=100.0)
-    oid = _orcamento(c, h, cid, "Fulano", 9999.0)
+    cond = _condicao_prazo()
+    oid = _orcamento(c, h, cid, "Fulano", 9999.0, cond)
     r = c.patch(f"/api/orcamentos/{oid}", headers=h, json={"status": "finalizado"})
-    assert r.status_code == 200, r.get_json()
+    assert r.status_code == 403, r.get_json()
+    assert r.get_json()["code"] == "crediario_nao_aprovado"
 
 
 def test_credito_atraso_bloqueia(system_db):
@@ -141,6 +185,8 @@ def test_credito_atraso_bloqueia(system_db):
     c, vid = _client_com_vendedor()
     h = _token(vid, "vendc")
     cid = _cliente("Cliente Atrasado", limite=5000.0)
+    cond = _condicao_prazo()
+    _aprovar_credito(c, cid)
     with system_conn() as conn:
         conn.execute(
             "INSERT INTO contas_receber (cliente_id, cliente, descricao, valor, saldo,"
@@ -149,7 +195,7 @@ def test_credito_atraso_bloqueia(system_db):
             (cid,),
         )
         conn.commit()
-    oid = _orcamento(c, h, cid, "Cliente Atrasado", 100.0)
+    oid = _orcamento(c, h, cid, "Cliente Atrasado", 100.0, cond)
     r = c.patch(f"/api/orcamentos/{oid}", headers=h, json={"status": "finalizado"})
     assert r.status_code == 403
     assert r.get_json()["code"] == "cliente_atraso"

@@ -30,8 +30,12 @@ _COLS = (
 )
 
 
-def snapshot_orcamento(orcamento_id: int) -> dict | None:
-    orc = orcamento_repo.buscar(orcamento_id)
+def snapshot_orcamento(orcamento_id: int, _conn=None) -> dict | None:
+    if _conn is None:
+        with system_conn() as conn:
+            return snapshot_orcamento(orcamento_id, _conn=conn)
+    conn = _conn
+    orc = orcamento_repo.buscar(orcamento_id, _conn=conn)
     if orc is None:
         return None
 
@@ -45,11 +49,10 @@ def snapshot_orcamento(orcamento_id: int) -> dict | None:
     }
     # Contexto do destino: completa a partir do cliente vinculado (se faltar)
     if orc.get("cliente_id"):
-        with system_conn() as conn:
-            cli = conn.execute(
-                "SELECT tipo_pessoa, uf, contribuinte, ie FROM clientes WHERE id=?",
-                (orc["cliente_id"],),
-            ).fetchone()
+        cli = conn.execute(
+            "SELECT tipo_pessoa, uf, contribuinte, ie FROM clientes WHERE id=?",
+            (orc["cliente_id"],),
+        ).fetchone()
         if cli:
             if not dados["uf_destino"]:
                 dados["uf_destino"] = (cli["uf"] or "").strip().upper() or None
@@ -60,51 +63,54 @@ def snapshot_orcamento(orcamento_id: int) -> dict | None:
 
     erros: list[dict] = []
     gravados = 0
-    with system_conn() as conn:
-        for it in (orc.get("itens") or []):
-            qtd = float(it.get("quantidade") or 1)
-            preco = float(it.get("preco_unitario") or 0)
-            desc_pct = float(it.get("desconto_percentual") or 0)
-            desc_r = round(preco * qtd * desc_pct / 100, 2)
-            ctx = {
-                **dados,
-                "produto_id": it.get("produto_id"),
-                "quantidade": qtd,
-                "valor_unitario": preco,
-                "desconto": desc_r,
-            }
-            res = fiscal_motor.simular(ctx)
-            res["data"] = dados["data"]
+    # Um pedido pode ser reaberto e finalizado novamente. O documento fiscal
+    # consome o snapshot vigente; manter versões antigas nessa mesma relação
+    # faria o gerador duplicar itens.
+    conn.execute("DELETE FROM orcamento_itens_fiscal WHERE orcamento_id=?", (orcamento_id,))
+    for it in (orc.get("itens") or []):
+        qtd = float(it.get("quantidade") or 1)
+        preco = float(it.get("preco_unitario") or 0)
+        desc_pct = float(it.get("desconto_percentual") or 0)
+        desc_r = round(preco * qtd * desc_pct / 100, 2)
+        ctx = {
+            **dados,
+            "produto_id": it.get("produto_id"),
+            "quantidade": qtd,
+            "valor_unitario": preco,
+            "desconto": desc_r,
+        }
+        res = fiscal_motor.simular(ctx)
+        res["data"] = dados["data"]
 
-            memoria = res.get("memoria") or {}
-            mem_prod = res.get("memoria_produto") or {}
-            valores = {k: res.get(k) for k in _COLS}
-            conn.execute(
-                f"INSERT INTO orcamento_itens_fiscal"
-                f" (orcamento_id, item_id, produto_id, resultado_json, status_validacao,"
-                f"  regra_id, regra_nome, regra_versao, regra_fonte, regra_origem,"
-                f"  regra_produto_id, regra_produto_nome, regra_produto_versao, {', '.join(_COLS)})"
-                f" VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,{', '.join('?' for _ in _COLS)})",
-                (
-                    orcamento_id, it.get("id"), it.get("produto_id"),
-                    json.dumps(res, ensure_ascii=False),
-                    res.get("status_validacao"),
-                    memoria.get("regra_id"), memoria.get("regra_nome"),
-                    memoria.get("versao"), memoria.get("fonte"), memoria.get("origem"),
-                    mem_prod.get("regra_id"), mem_prod.get("regra_nome"),
-                    mem_prod.get("versao"),
-                    *(valores[c] for c in _COLS),
-                ),
-            )
-            gravados += 1
-            bloqueia = any(
-                p.get("tipo") == "ERROR" and p.get("campo") in CAMPOS_BLOQUEANTES
-                for p in res.get("problemas", [])
-            )
-            if bloqueia:
-                erros.append({
-                    "item": it.get("nome"),
-                    "problemas": [p for p in res.get("problemas", [])
-                                  if p.get("tipo") == "ERROR" and p.get("campo") in CAMPOS_BLOQUEANTES],
-                })
+        memoria = res.get("memoria") or {}
+        mem_prod = res.get("memoria_produto") or {}
+        valores = {k: res.get(k) for k in _COLS}
+        conn.execute(
+            f"INSERT INTO orcamento_itens_fiscal"
+            f" (orcamento_id, item_id, produto_id, resultado_json, status_validacao,"
+            f"  regra_id, regra_nome, regra_versao, regra_fonte, regra_origem,"
+            f"  regra_produto_id, regra_produto_nome, regra_produto_versao, {', '.join(_COLS)})"
+            f" VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,{', '.join('?' for _ in _COLS)})",
+            (
+                orcamento_id, it.get("id"), it.get("produto_id"),
+                json.dumps(res, ensure_ascii=False),
+                res.get("status_validacao"),
+                memoria.get("regra_id"), memoria.get("regra_nome"),
+                memoria.get("versao"), memoria.get("fonte"), memoria.get("origem"),
+                mem_prod.get("regra_id"), mem_prod.get("regra_nome"),
+                mem_prod.get("versao"),
+                *(valores[c] for c in _COLS),
+            ),
+        )
+        gravados += 1
+        bloqueia = any(
+            p.get("tipo") == "ERROR" and p.get("campo") in CAMPOS_BLOQUEANTES
+            for p in res.get("problemas", [])
+        )
+        if bloqueia:
+            erros.append({
+                "item": it.get("nome"),
+                "problemas": [p for p in res.get("problemas", [])
+                              if p.get("tipo") == "ERROR" and p.get("campo") in CAMPOS_BLOQUEANTES],
+            })
     return {"itens": gravados, "erros": erros, "pode_finalizar": not erros}

@@ -1612,7 +1612,16 @@ export function ProdutoEditor() {
 
       {tab === "estoque" && (
         <div>
-          {id ? <ParametrosEstoque produtoId={id} /> : <p className="py-8 text-center text-sm text-gray-400">Salve o produto para configurar parâmetros de estoque.</p>}
+          {id ? (
+            <div className="space-y-4">
+              <section className="rounded-lg border border-gray-200 bg-white p-4">
+                <h4 className="mb-1 text-sm font-semibold text-gray-900">Saldo por depósito</h4>
+                <p className="mb-3 text-xs text-gray-500">Saldo físico, reservado, disponível, custo médio e situação operacional.</p>
+                <EstoqueDeposito produtoId={id} />
+              </section>
+              <ParametrosEstoque produtoId={id} />
+            </div>
+          ) : <p className="py-8 text-center text-sm text-gray-400">Salve o produto para consultar o estoque e configurar parâmetros.</p>}
         </div>
       )}
 

@@ -1290,6 +1290,74 @@
         }
       }
     },
+    "/api/clientes/{cliente_id}/credito": {
+      "get": {
+        "tags": ["clientes", "credito"],
+        "summary": "Consulta situacao completa do crediario",
+        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "responses": {"200": {"description": "Situacao do crediario", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ClienteCredito"}}}}, "404": {"description": "Cliente nao encontrado"}}
+      }
+    },
+    "/api/clientes/{cliente_id}/credito/solicitar": {
+      "post": {
+        "tags": ["credito"],
+        "summary": "Solicita analise de crediario",
+        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["motivo"], "properties": {"motivo": {"type": "string", "minLength": 1}}}}}},
+        "responses": {"201": {"description": "Solicitacao criada"}, "403": {"description": "Sem permissao"}}
+      }
+    },
+    "/api/clientes/{cliente_id}/credito/aprovar": {
+      "post": {
+        "tags": ["credito"],
+        "summary": "Aprova limite e prazo do crediario",
+        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditoAprovacaoInput"}}}},
+        "responses": {"200": {"description": "Crediario aprovado"}, "403": {"description": "Sem permissao"}}
+      }
+    },
+    "/api/clientes/{cliente_id}/credito/bloquear": {
+      "post": {
+        "tags": ["credito"],
+        "summary": "Bloqueia o crediario do cliente",
+        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditoMotivoInput"}}}},
+        "responses": {"200": {"description": "Crediario bloqueado"}}
+      }
+    },
+    "/api/clientes/{cliente_id}/credito/suspender": {
+      "post": {
+        "tags": ["credito"],
+        "summary": "Suspende o crediario do cliente",
+        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditoMotivoInput"}}}},
+        "responses": {"200": {"description": "Crediario suspenso"}}
+      }
+    },
+    "/api/clientes/{cliente_id}/credito/revisar": {
+      "post": {
+        "tags": ["credito"],
+        "summary": "Retorna o crediario para nova analise",
+        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditoMotivoInput"}}}},
+        "responses": {"200": {"description": "Crediario em analise"}, "403": {"description": "Sem permissao"}}
+      }
+    },
+    "/api/clientes/{cliente_id}/credito/historico": {
+      "get": {
+        "tags": ["credito"],
+        "summary": "Consulta historico auditavel do crediario",
+        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "responses": {"200": {"description": "Eventos do crediario"}}
+      }
+    },
+    "/api/credito/pendentes": {
+      "get": {
+        "tags": ["credito"],
+        "summary": "Lista solicitacoes de crediario pendentes",
+        "responses": {"200": {"description": "Fila financeira"}}
+      }
+    },
     "/api/clientes/{cliente_id}/apoio-comercial": {
       "get": {
         "tags": [
@@ -5370,6 +5438,42 @@
           "excede_por_atraso": {
             "type": "boolean"
           }
+        }
+      },
+      "ClienteCredito": {
+        "type": "object",
+        "properties": {
+          "cliente_id": {"type": "integer"},
+          "cliente": {"type": "string"},
+          "status": {"type": "string", "enum": ["nao_solicitado", "em_analise", "aprovado", "suspenso", "reprovado", "expirado", "bloqueado"]},
+          "aprovado": {"type": "boolean"},
+          "limite_cadastrado": {"type": "number"},
+          "limite_aprovado": {"type": "number"},
+          "limite_utilizado": {"type": "number"},
+          "limite_disponivel": {"type": "number"},
+          "saldo_em_atraso": {"type": "number"},
+          "tem_atraso": {"type": "boolean"},
+          "prazo_maximo_dias": {"type": "integer"},
+          "vigencia_inicio": {"type": "string", "format": "date", "nullable": true},
+          "vigencia_fim": {"type": "string", "format": "date", "nullable": true},
+          "versao": {"type": "integer"}
+        }
+      },
+      "CreditoMotivoInput": {
+        "type": "object",
+        "required": ["motivo"],
+        "properties": {"motivo": {"type": "string", "minLength": 1}}
+      },
+      "CreditoAprovacaoInput": {
+        "type": "object",
+        "required": ["limite_aprovado", "prazo_maximo_dias", "vigencia_inicio", "vigencia_fim", "motivo"],
+        "properties": {
+          "limite_aprovado": {"type": "number", "exclusiveMinimum": 0},
+          "prazo_maximo_dias": {"type": "integer", "minimum": 0},
+          "vigencia_inicio": {"type": "string", "format": "date"},
+          "vigencia_fim": {"type": "string", "format": "date"},
+          "motivo": {"type": "string", "minLength": 1},
+          "condicoes_permitidas": {"type": "array", "items": {"type": "string"}}
         }
       },
       "ClienteApoioComercial": {

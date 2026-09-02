@@ -23,18 +23,18 @@ def eh_cliente_identificado(cliente_id: int | None) -> bool:
     return cliente_id is not None and int(cliente_id) != CLIENTE_PADRAO_ID
 
 
-def condicao_ativa(condicao_id: int | None) -> bool:
+def condicao_ativa(condicao_id: int | None, _conn=None) -> bool:
     if not condicao_id:
         return False
-    cond = condicao_repo.get(int(condicao_id))
+    cond = condicao_repo.get(int(condicao_id), _conn=_conn)
     return bool(cond and cond.get("ativo"))
 
 
-def eh_a_prazo(condicao_id: int | None) -> bool:
+def eh_a_prazo(condicao_id: int | None, _conn=None) -> bool:
     """True quando a condição tem parcelas além de 'à vista' (>=2 ou 1 com dias)."""
-    if not condicao_ativa(condicao_id):
+    if not condicao_ativa(condicao_id, _conn=_conn):
         return False
-    parcelas = condicao_repo.list_parcelas(int(condicao_id))
+    parcelas = condicao_repo.list_parcelas(int(condicao_id), _conn=_conn)
     if not parcelas:
         return False
     if len(parcelas) >= 2:
@@ -50,9 +50,9 @@ def gerar_contas_receber(orcamento: dict, _conn=None) -> list[dict]:
     if not eh_cliente_identificado(orcamento.get("cliente_id")):
         return []
     condicao_id = orcamento.get("condicao_pagamento_id")
-    if not condicao_ativa(condicao_id):
+    if not condicao_ativa(condicao_id, _conn=_conn):
         return []
-    parcelas = condicao_repo.list_parcelas(int(condicao_id))
+    parcelas = condicao_repo.list_parcelas(int(condicao_id), _conn=_conn)
     if not parcelas:
         return []
 

@@ -21,6 +21,12 @@ def executar(chave: str, escopo: str, payload, fn, conn=None) -> dict:
     ctx = None if conn_externo else system_conn()
     conn2 = conn or ctx.__enter__()
     try:
+        # Serializa a ausência/presença da chave para impedir efeitos
+        # duplicados quando duas requisições chegam ao mesmo tempo.
+        conn2.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(?))",
+            (f"idempotencia:{escopo}:{chave}",),
+        )
         existente = conn2.execute(
             "SELECT payload_hash, resultado FROM idempotencia WHERE chave=? AND escopo=?",
             (chave, escopo),
@@ -28,7 +34,10 @@ def executar(chave: str, escopo: str, payload, fn, conn=None) -> dict:
         if existente:
             if existente["payload_hash"] != payload_hash:
                 raise ValueError(f"Chave idempotente {chave} reutilizada com payload diferente")
-            return {"duplicado": True, "resultado": existente["resultado"]}
+            resultado = existente["resultado"]
+            if isinstance(resultado, str):
+                resultado = json.loads(resultado)
+            return {"duplicado": True, "resultado": resultado}
         resultado = fn(conn2)
         conn2.execute(
             "INSERT INTO idempotencia (chave, escopo, payload_hash, resultado)"

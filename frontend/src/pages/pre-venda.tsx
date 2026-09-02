@@ -61,6 +61,11 @@ function calculosPdv(linhas: LinhaPdv[], vDescModo: "pct" | "valor", vDesconto: 
   return { base, subtotal, descontoItens, descontoGeral, descontoTotal, pct, total: Math.max(0, subtotal - descontoGeral) };
 }
 
+function condicaoEhPrazo(condicao: CondicaoPagamento): boolean {
+  const parcelas = condicao.parcelas || [];
+  return parcelas.length >= 2 || (parcelas.length === 1 && Number(parcelas[0].dias || 0) > 0);
+}
+
 
 export default function PreVenda() {
   const [linhas, setLinhas] = useState<LinhaPdv[]>([]);
@@ -116,6 +121,19 @@ export default function PreVenda() {
   }, []);
 
   const c = useMemo(() => calculosPdv(linhas, descModo, desconto), [linhas, descModo, desconto]);
+  const condicoesVisiveis = useMemo(
+    () => clienteId === CLIENTE_PADRAO.id ? condicoes.filter((cd) => !condicaoEhPrazo(cd)) : condicoes,
+    [clienteId, condicoes]
+  );
+
+  // O cliente padrão só pode operar à vista. Além de filtrar as opções,
+  // corrige uma condição a prazo que tenha vindo de uma edição antiga.
+  useEffect(() => {
+    if (clienteId !== CLIENTE_PADRAO.id || !condicoes.length) return;
+    if (!condicoesVisiveis.some((cd) => String(cd.id) === condicaoId)) {
+      setCondicaoId(String(condicoesVisiveis[0]?.id || ""));
+    }
+  }, [clienteId, condicoes, condicoesVisiveis, condicaoId]);
 
   // Reavalia o aviso de crédito quando o total da venda muda.
   useEffect(() => {
@@ -240,6 +258,10 @@ export default function PreVenda() {
     setClienteId(cli.id);
     sessionStorage.setItem("pdv_cliente", cli.nome);
     sessionStorage.setItem("pdv_cliente_id", String(cli.id));
+    if (cli.id === CLIENTE_PADRAO.id) {
+      const vista = condicoes.find((cd) => !condicaoEhPrazo(cd));
+      setCondicaoId(vista ? String(vista.id) : "");
+    }
     buscaRef.current?.focus();
     void carregarAvisoCredito(cli.id, cli.nome);
   };
@@ -901,7 +923,7 @@ export default function PreVenda() {
             className="w-40 rounded border border-gray-300 px-2 py-1 text-sm sm:w-44"
           >
             <option value="">Selecione</option>
-            {condicoes.map((cd) => (
+            {condicoesVisiveis.map((cd) => (
               <option key={cd.id} value={cd.id}>
                 {cd.nome}
               </option>

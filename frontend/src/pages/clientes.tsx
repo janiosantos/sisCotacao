@@ -13,6 +13,7 @@ import { fmtMoney, maskDoc } from "../ui/format";
 import { toast } from "../ui/dom";
 import { Badge, Button, Cell, Input, Loading, PageHeader, Table, TBody, THead } from "../ui/ui";
 import { ModalClienteForm } from "./clientes/modal-form";
+import { ModalCredito } from "./clientes/modal-credito";
 
 export default function Clientes() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -22,6 +23,7 @@ export default function Clientes() {
   const [carregando, setCarregando] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState<Cliente | null>(null);
+  const [creditoDe, setCreditoDe] = useState<Cliente | null>(null);
 
   const carregar = async () => {
     try {
@@ -118,6 +120,9 @@ export default function Clientes() {
                     </Cell>
                     <Cell>
                       <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setCreditoDe(c)}>
+                          Crediário
+                        </Button>
                         <Button size="sm" onClick={() => void abrir(c)}>
                           Editar
                         </Button>
@@ -143,6 +148,7 @@ export default function Clientes() {
           onSaved={carregar}
         />
       )}
+      {creditoDe && <ModalCredito cliente={creditoDe} onClose={() => setCreditoDe(null)} onSaved={carregar} />}
     </div>
   );
 }

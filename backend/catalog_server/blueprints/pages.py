@@ -38,8 +38,15 @@ _ORC_STATUS_LABEL = {
 
 @pages_bp.get("/etiquetas/imprimir")
 def etiquetas_imprimir():
-    ids = [int(x) for x in (request.args.get("ids") or "").split(",") if x.strip().isdigit()]
+    raw_ids = (request.args.get("ids") or "").split(",")
+    if not request.args.get("ids") or any(not x.strip().isdigit() for x in raw_ids):
+        abort(400, description="Informe ids de produtos válidos para imprimir etiquetas")
+    ids = list(dict.fromkeys(int(x) for x in raw_ids))
+    if any(pid <= 0 for pid in ids):
+        abort(400, description="Informe ids de produtos válidos para imprimir etiquetas")
     etiquetas = loja.dados_etiquetas(ids)
+    if not etiquetas:
+        abort(404, description="Nenhum produto encontrado para impressão")
     return render_template("etiquetas.html", etiquetas=etiquetas)
 
 

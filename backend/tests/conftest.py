@@ -191,6 +191,7 @@ def _seed_rbac_pg(conn) -> None:
         ("atualizacoes", "Atualizações", "Admin"),
         ("contabil", "Contábil (gatilhos)", "Admin"),
         ("impressao", "Impressão", "Admin"),
+        ("credito", "Crediário", "Financeiro"),
     ]
     for codigo, nome, grupo in recursos:
         conn.exec_driver_sql(
@@ -208,6 +209,7 @@ def _seed_rbac_pg(conn) -> None:
             "clientes": ["visualizar", "cadastrar", "editar"],
             "precos": ["visualizar"],
             "impressao": ["imprimir"],
+            "credito": ["visualizar", "cadastrar"],
         },
         "Estoquista": {
             "dashboard": ["visualizar"],

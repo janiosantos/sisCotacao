@@ -11,6 +11,7 @@ import { STATUS_LABELS, DESCONTO_LABELS, statusTone, descontoTone } from "./orca
 import { ModalDetalhe } from "./orcamentos/modal-detalhe";
 import { ModalAutorizar } from "./orcamentos/modal-autorizar";
 import { ModalRejeitar } from "./orcamentos/modal-rejeitar";
+import { temPermissao } from "../perm";
 
 export default function Orcamentos() {
   const [filtro, setFiltro] = useState("");
@@ -179,11 +180,11 @@ export default function Orcamentos() {
                             Contas
                           </a>
                         </>
-                      ) : (
+                      ) : temPermissao("caixa", "cadastrar") ? (
                         <Button size="sm" variant="primary" onClick={() => setReceberDe({ id: o.id, numero: o.numero, total: o.total })}>
                           Receber
                         </Button>
-                      ))}
+                      ) : null)}
                     <a
                       aria-label={`Imprimir PDF do orçamento ${o.numero}`}
                       className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"

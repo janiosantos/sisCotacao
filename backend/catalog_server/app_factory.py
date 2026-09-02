@@ -169,6 +169,18 @@ _ROTAS_SEM_RBAC = {"/api/usuarios/atual"}
 
 
 def _recurso_da_rota(path: str) -> str | None:
+    # Crediário é um domínio financeiro separado do cadastro de clientes.
+    partes = path.strip("/").split("/")
+    if path.startswith("/api/credito/"):
+        return "credito"
+    if len(partes) >= 4 and partes[:2] == ["api", "clientes"] and partes[2].isdigit() and partes[3] == "credito":
+        return "credito"
+    # Receber é uma operação de caixa, mesmo quando a URL histórica fica sob
+    # orçamentos/financeiro. O backend ainda valida sessão e documento.
+    if path.startswith("/api/orcamentos/") and path.endswith("/receber"):
+        return "caixa"
+    if path.startswith("/api/financeiro/receber/") and path.endswith("/receber"):
+        return "caixa"
     for prefixo, recurso in _RECURSO_POR_PREFIXO:
         if path.startswith(prefixo):
             return recurso
@@ -187,6 +199,15 @@ def _rota_emissao_fiscal(path: str, method: str) -> bool:
 
 def _acao_da_rota(path: str, method: str) -> str | None:
     """Ação da rota: específica (config/impressão) ou derivada do método."""
+    partes = path.strip("/").split("/")
+    if len(partes) >= 4 and partes[:2] == ["api", "clientes"] and partes[2].isdigit() and partes[3] == "credito":
+        if len(partes) >= 5 and partes[4] in ("aprovar", "bloquear", "suspender", "revisar"):
+            return "aprovar"
+        return "cadastrar" if method == "POST" else "visualizar"
+    if path.startswith("/api/credito/"):
+        return "visualizar" if method == "GET" else "aprovar"
+    if (path.startswith("/api/orcamentos/") or path.startswith("/api/financeiro/receber/")) and path.endswith("/receber"):
+        return "cadastrar"
     especifica = _ACAO_ESPECIFICA.get((method, path))
     if especifica:
         return especifica

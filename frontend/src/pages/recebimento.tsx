@@ -1,6 +1,6 @@
 // pages/recebimento.tsx — modal compartilhado de recebimento (PDV / balcão).
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "../api/client";
 import { fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
@@ -39,6 +39,7 @@ export function ModalRecebimento({
   const [forma, setForma] = useState("dinheiro");
   const [valor, setValor] = useState(fmtNum2(dados.total));
   const [enviando, setEnviando] = useState(false);
+  const idempotencyKey = useRef(crypto.randomUUID()).current;
 
   const valorNum = parseNum(valor);
   const troco = forma === "dinheiro" ? Math.max(0, valorNum - dados.total) : 0;
@@ -51,7 +52,7 @@ export function ModalRecebimento({
     }
     setEnviando(true);
     try {
-      const res = await api.receberOrcamento(dados.id, { forma_pagamento: forma, valor_recebido: valorNum });
+      const res = await api.receberOrcamento(dados.id, { forma_pagamento: forma, valor_recebido: valorNum }, idempotencyKey);
       toast(res.troco > 0 ? `Recebido · troco ${fmtMoney(res.troco)}` : "Recebimento registrado", "success");
       onRecebido();
       if (imprimir) void api.imprimirOrcamento(dados.id).catch(() => toast("Venda recebida, mas a impressão falhou", "error"));

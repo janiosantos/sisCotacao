@@ -345,6 +345,9 @@ def comissoes(inicio: str | None = None, fim: str | None = None) -> list[dict]:
 # ─── Etiquetas ────────────────────────────────────────────
 
 def dados_etiquetas(produto_ids: list[int]) -> list[dict]:
+    produto_ids = list(dict.fromkeys(int(pid) for pid in produto_ids if int(pid) > 0))
+    if not produto_ids:
+        return []
     ph = ", ".join("?" for _ in produto_ids)
     with system_conn() as conn:
         return [dict(r) for r in conn.execute(

@@ -238,11 +238,12 @@ def test_finalizado_recebido_nao_revoga(system_db):
     h = _token(vid, "vende")
     oid = _criar_orcamento(c, h, [_item(qtd=10, preco=4.0)], desconto=1.632)  # 4%
     c.patch(f"/api/orcamentos/{oid}", headers=h, json={"status": "finalizado"})
-    # Receber muda status mas NÃO revoga (transição de status, não conteúdo)
-    c.post(f"/api/orcamentos/{oid}/receber", headers=h, json={
+    # O vendedor pode finalizar, mas não pode receber o próprio pedido.
+    r = c.post(f"/api/orcamentos/{oid}/receber", headers=h, json={
         "forma_pagamento": "dinheiro", "valor_recebido": 40.8,
     })
+    assert r.status_code == 403
     with system_conn() as conn:
         st = conn.execute("SELECT status, desconto_status FROM orcamentos WHERE id=%s", (oid,)).fetchone()
-    assert st["status"] == "recebido"
+    assert st["status"] == "finalizado"
     assert st["desconto_status"] == "ok"

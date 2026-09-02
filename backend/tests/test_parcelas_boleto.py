@@ -39,6 +39,25 @@ def _token(usuario_id: int, login: str) -> dict:
     return {"Authorization": f"Bearer {auth_token.criar_token({'id': usuario_id, 'login': login})}"}
 
 
+def _aprovar_credito(client, cliente_id: int) -> None:
+    uid = _usuario("financeiro", autoriza=True)
+    with system_conn() as conn:
+        conn.execute(
+            "INSERT INTO usuario_perfis (usuario_id, perfil_id) VALUES (%s,%s)",
+            (uid, _perfil_id("Administrador")),
+        )
+        conn.commit()
+    header = _token(uid, "financeiro")
+    r = client.post(f"/api/clientes/{cliente_id}/credito/aprovar", headers=header, json={
+        "limite_aprovado": 5000,
+        "prazo_maximo_dias": 120,
+        "vigencia_inicio": "2026-01-01",
+        "vigencia_fim": "2027-12-31",
+        "motivo": "Teste aprovado",
+    })
+    assert r.status_code == 200, r.get_json()
+
+
 def _client_com_vendedor(system_db, autoriza: bool = False):
     vid = _usuario("vendedor", autoriza=autoriza)
     from catalog_server import permissao
@@ -106,6 +125,7 @@ def test_finalizar_a_prazo_gera_parcelas(system_db):
     h = _token(vid, "vendedor")
     cond = _condicao_a_prazo()
     cid = _cliente("Maria Construtora")
+    _aprovar_credito(c, cid)
     oid = _orcamento(c, h, cid, "Maria Construtora", 3000.0, cond)  # 30/60/90
     r = c.patch(f"/api/orcamentos/{oid}", headers=h, json={"status": "finalizado"})
     assert r.status_code == 200, r.get_json()
@@ -123,15 +143,14 @@ def test_finalizar_consumidor_nao_gera_parcelas(system_db):
     c, vid = _client_com_vendedor(system_db)
     h = _token(vid, "vendedor")
     cond = _condicao_a_prazo()
-    oid = _orcamento(c, h, 1, "CONSUMIDOR", 200.0, cond)  # cliente padrão id 1
-    r = c.patch(f"/api/orcamentos/{oid}", headers=h, json={"status": "finalizado"})
-    assert r.status_code == 200, r.get_json()
-    with system_conn() as conn:
-        contas = conn.execute(
-            "SELECT * FROM contas_receber WHERE documento=(SELECT numero FROM orcamentos WHERE id=%s)",
-            (oid,),
-        ).fetchall()
-    assert len(contas) == 1  # à vista/balcão: 1 conta
+    r = c.post("/api/orcamentos", headers=h, json={
+        "cliente_id": 1,
+        "cliente": "CONSUMIDOR",
+        "condicao_pagamento_id": cond,
+        "itens": [{"produto_id": 1, "nome": "Produto", "quantidade": 1, "preco_unitario": 200}],
+    })
+    assert r.status_code == 403
+    assert r.get_json()["code"] == "cliente_padrao_somente_avista"
 
 
 def test_gerar_boleto_marca_parcelas(system_db):
@@ -139,6 +158,7 @@ def test_gerar_boleto_marca_parcelas(system_db):
     h = _token(vid, "vendedor")
     cond = _condicao_a_prazo()
     cid = _cliente("Pedro Obra")
+    _aprovar_credito(c, cid)
     oid = _orcamento(c, h, cid, "Pedro Obra", 1200.0, cond)
     c.patch(f"/api/orcamentos/{oid}", headers=h, json={"status": "finalizado"})
 
@@ -157,6 +177,7 @@ def test_reabrir_com_boleto_bloqueia(system_db):
     h = _token(vid, "vendedor")
     cond = _condicao_2_parcelas()
     cid = _cliente("Cliente Boleto")
+    _aprovar_credito(c, cid)
     oid = _orcamento(c, h, cid, "Cliente Boleto", 500.0, cond)
     c.patch(f"/api/orcamentos/{oid}", headers=h, json={"status": "finalizado"})
     c.post(f"/api/orcamentos/{oid}/boleto", headers=h)
@@ -171,6 +192,7 @@ def test_reabrir_sem_boleto_estorna_contas(system_db):
     h = _token(vid, "vendedor")
     cond = _condicao_2_parcelas()
     cid = _cliente("Cliente Correcao")
+    _aprovar_credito(c, cid)
     oid = _orcamento(c, h, cid, "Cliente Correcao", 900.0, cond)
     c.patch(f"/api/orcamentos/{oid}", headers=h, json={"status": "finalizado"})
 

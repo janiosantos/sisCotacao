@@ -176,7 +176,7 @@ class ContasRepository:
         )
         return {"saldo_anterior": saldo_atual, "saldo_posterior": novo_saldo, "status": novo_status}
 
-    def receber_por_documento(self, documento: str, valor_recebido: float, data_recebimento: str | None = None) -> dict:
+    def receber_por_documento(self, documento: str, valor_recebido: float, data_recebimento: str | None = None, _conn=None) -> dict:
         """Baixa as contas a receber associadas a um documento (nº do orçamento).
 
         Aplica o valor recebido nas contas em aberto/parcial na ordem, retornando
@@ -184,28 +184,39 @@ class ContasRepository:
         """
         if valor_recebido <= 0:
             raise ValueError("Valor recebido deve ser positivo")
-        with system_conn() as conn:
-            contas = conn.execute(
+        if _conn is None:
+            with system_conn() as conn:
+                return self.receber_por_documento(documento, valor_recebido, data_recebimento, _conn=conn)
+        conn = _conn
+        contas = conn.execute(
                 "SELECT * FROM contas_receber WHERE documento=? AND status IN ('aberto','parcial')"
                 " ORDER BY id FOR UPDATE",
                 (documento,),
             ).fetchall()
-            restante = valor_recebido
-            baixadas = 0
-            for conta in contas:
-                if restante <= 0:
-                    break
-                saldo = float(conta["saldo"] or 0)
-                abatido = min(restante, saldo)
-                novo_saldo = max(0.0, saldo - abatido)
-                novo_status = "pago" if novo_saldo <= 0 else "parcial"
-                conn.execute(
-                    "UPDATE contas_receber SET saldo=?, status=?, data_recebimento=COALESCE(?, data_recebimento) WHERE id=?",
-                    (novo_saldo, novo_status, data_recebimento or "", conta["id"]),
-                )
-                restante -= abatido
-                baixadas += 1
-            return {"contas": baixadas, "excedente": round(max(0.0, restante), 2)}
+        restante = valor_recebido
+        baixadas = 0
+        for conta in contas:
+            if restante <= 0:
+                break
+            saldo = float(conta["saldo"] or 0)
+            abatido = min(restante, saldo)
+            novo_saldo = max(0.0, saldo - abatido)
+            novo_status = "pago" if novo_saldo <= 0 else "parcial"
+            conn.execute(
+                "UPDATE contas_receber SET saldo=?, status=?, data_recebimento=COALESCE(?, data_recebimento) WHERE id=?",
+                (novo_saldo, novo_status, data_recebimento or "", conta["id"]),
+            )
+            restante -= abatido
+            baixadas += 1
+        saldo_restante = conn.execute(
+            "SELECT COALESCE(SUM(saldo),0) AS saldo FROM contas_receber WHERE documento=? AND status IN ('aberto','parcial')",
+            (documento,),
+        ).fetchone()
+        return {
+            "contas": baixadas,
+            "excedente": round(max(0.0, restante), 2),
+            "saldo_restante": round(float(saldo_restante["saldo"] or 0), 2),
+        }
 
     def cancelar_por_documento(self, documento: str) -> int:
         """Cancela as contas a receber ainda em aberto/parcial de um documento."""
@@ -294,10 +305,12 @@ class CondicaoRepository:
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
-    def get(self, condicao_id: int) -> dict | None:
-        with system_conn() as conn:
-            row = conn.execute("SELECT * FROM condicoes_pagamento WHERE id=?", (condicao_id,)).fetchone()
-            return dict(row) if row else None
+    def get(self, condicao_id: int, _conn=None) -> dict | None:
+        if _conn is None:
+            with system_conn() as conn:
+                return self.get(condicao_id, _conn=conn)
+        row = _conn.execute("SELECT * FROM condicoes_pagamento WHERE id=?", (condicao_id,)).fetchone()
+        return dict(row) if row else None
 
     def create(self, nome: str, descricao: str = "") -> int:
         with system_conn() as conn:
@@ -312,11 +325,13 @@ class CondicaoRepository:
         with system_conn() as conn:
             return conn.execute("UPDATE condicoes_pagamento SET ativo=? WHERE id=?", (int(ativo), condicao_id)).rowcount > 0
 
-    def list_parcelas(self, condicao_id: int) -> list[dict]:
-        with system_conn() as conn:
-            return [dict(r) for r in conn.execute(
-                "SELECT * FROM condicao_parcelas WHERE condicao_id=? ORDER BY sequencia", (condicao_id,)
-            ).fetchall()]
+    def list_parcelas(self, condicao_id: int, _conn=None) -> list[dict]:
+        if _conn is None:
+            with system_conn() as conn:
+                return self.list_parcelas(condicao_id, _conn=conn)
+        return [dict(r) for r in _conn.execute(
+            "SELECT * FROM condicao_parcelas WHERE condicao_id=? ORDER BY sequencia", (condicao_id,)
+        ).fetchall()]
 
     def upsert_parcela(self, condicao_id: int, sequencia: int, dias: int, percentual: float) -> int:
         with system_conn() as conn:

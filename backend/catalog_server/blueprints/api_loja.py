@@ -131,5 +131,10 @@ def comissoes():
 
 @api_loja_bp.get("/api/loja/etiquetas")
 def dados_etiquetas():
-    ids = [int(x) for x in (request.args.get("ids") or "").split(",") if x.strip().isdigit()]
+    raw_ids = (request.args.get("ids") or "").split(",")
+    if not request.args.get("ids") or any(not x.strip().isdigit() for x in raw_ids):
+        return jsonify({"error": "Informe ids de produtos válidos", "code": "ids_invalidos"}), 400
+    ids = list(dict.fromkeys(int(x) for x in raw_ids))
+    if any(pid <= 0 for pid in ids):
+        return jsonify({"error": "Informe ids de produtos válidos", "code": "ids_invalidos"}), 400
     return jsonify(loja.dados_etiquetas(ids))

@@ -13,6 +13,8 @@ from catalog_server.repositories import (
     tabela_preco_repo,
     vendedor_repo,
 )
+from catalog_server.services import credito
+from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 
 api_clientes_bp = Blueprint("api_clientes", __name__)
 
@@ -43,7 +45,7 @@ def detalhar(cliente_id: int):
 @api_clientes_bp.get("/api/clientes/<int:cliente_id>/situacao")
 def situacao(cliente_id: int):
     total = request.args.get("total", type=float)
-    s = cliente_repo.situacao_credito(cliente_id, total=total)
+    s = credito.consultar(cliente_id, total=total)
     if s is None:
         return jsonify({"error": "Cliente não encontrado"}), 404
     return jsonify(s)
@@ -52,9 +54,22 @@ def situacao(cliente_id: int):
 @api_clientes_bp.post("/api/clientes")
 def criar():
     data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Payload deve ser um objeto JSON", "code": "payload_invalido"}), 400
     nome = (data.get("nome") or "").strip()
     if not nome:
         return jsonify({"error": "Informe o nome do cliente"}), 400
+    if "limite_credito" in data:
+        actor = usuario_id_requisicao()
+        from catalog_server import permissao
+        limite = data.get("limite_credito")
+        # O formulário comercial envia zero quando o limite ainda não foi
+        # definido. Isso não é uma tentativa de aprovação e não deve bloquear
+        # o cadastro feito pelo vendedor.
+        if limite not in (None, "", 0, 0.0, "0", "0.00") and not permissao.tem_permissao(actor, "credito", "aprovar"):
+            return jsonify({"error": "Limite de crédito é gerenciado pelo Financeiro", "code": "credito_permissao_negada"}), 403
+        if limite in (None, "", 0, 0.0, "0", "0.00"):
+            data = {k: v for k, v in data.items() if k != "limite_credito"}
     cliente_id = cliente_repo.create(data)
     return jsonify({"id": cliente_id}), 201
 
@@ -62,12 +77,122 @@ def criar():
 @api_clientes_bp.put("/api/clientes/<int:cliente_id>")
 def atualizar(cliente_id: int):
     data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Payload deve ser um objeto JSON", "code": "payload_invalido"}), 400
     if not (data.get("nome") or "").strip():
         return jsonify({"error": "Informe o nome do cliente"}), 400
+    if "limite_credito" in data:
+        actor = usuario_id_requisicao()
+        from catalog_server import permissao
+        atual = cliente_repo.get(cliente_id)
+        if atual is None:
+            return jsonify({"error": "Cliente não encontrado"}), 404
+        if float(data.get("limite_credito") or 0) != float(atual.get("limite_credito") or 0) and not permissao.tem_permissao(actor, "credito", "aprovar"):
+            return jsonify({"error": "Limite de crédito é gerenciado pelo Financeiro", "code": "credito_permissao_negada"}), 403
     ok = cliente_repo.update(cliente_id, data)
     if not ok:
         return jsonify({"error": "Cliente não encontrado"}), 404
     return jsonify({"ok": True})
+
+
+# ── Crediário: aprovação pertence ao Financeiro ────────────
+
+@api_clientes_bp.get("/api/clientes/<int:cliente_id>/credito")
+def consultar_credito(cliente_id: int):
+    result = credito.consultar(cliente_id)
+    if result is None:
+        return jsonify({"error": "Cliente não encontrado", "code": "cliente_nao_encontrado"}), 404
+    return jsonify(result)
+
+
+@api_clientes_bp.post("/api/clientes/<int:cliente_id>/credito/solicitar")
+def solicitar_credito(cliente_id: int):
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Payload deve ser um objeto JSON", "code": "payload_invalido"}), 400
+    actor = usuario_id_requisicao()
+    if not actor:
+        return jsonify({"error": "Usuário não identificado", "code": "usuario_nao_identificado"}), 401
+    try:
+        return jsonify(credito.solicitar(cliente_id, data.get("motivo") or "", actor, request.remote_addr, request.headers.get("X-Correlation-ID"))), 201
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "cliente_nao_encontrado"}), 404
+    except PermissionError as exc:
+        return jsonify({"error": str(exc), "code": "credito_permissao_negada"}), 403
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "credito_invalido"}), 400
+
+
+def _decidir_credito(cliente_id: int, operacao: str):
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Payload deve ser um objeto JSON", "code": "payload_invalido"}), 400
+    actor = usuario_id_requisicao()
+    if not actor:
+        return jsonify({"error": "Usuário não identificado", "code": "usuario_nao_identificado"}), 401
+    try:
+        if operacao == "aprovar":
+            result = credito.aprovar(
+                cliente_id, float(data.get("limite_aprovado") or 0), int(data.get("prazo_maximo_dias") or 0),
+                data.get("vigencia_inicio") or "", data.get("vigencia_fim") or "", data.get("motivo") or "",
+                actor, request.remote_addr, request.headers.get("X-Correlation-ID"), data.get("condicoes_permitidas"),
+            )
+        elif operacao == "bloquear":
+            result = credito.bloquear(cliente_id, data.get("motivo") or "", actor, request.remote_addr, request.headers.get("X-Correlation-ID"))
+        else:
+            result = credito.suspender(cliente_id, data.get("motivo") or "", actor, request.remote_addr, request.headers.get("X-Correlation-ID"))
+        return jsonify(result)
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "cliente_nao_encontrado"}), 404
+    except PermissionError as exc:
+        return jsonify({"error": str(exc), "code": "credito_permissao_negada"}), 403
+    except (TypeError, ValueError) as exc:
+        return jsonify({"error": str(exc), "code": "credito_invalido"}), 400
+
+
+@api_clientes_bp.post("/api/clientes/<int:cliente_id>/credito/aprovar")
+def aprovar_credito(cliente_id: int):
+    return _decidir_credito(cliente_id, "aprovar")
+
+
+@api_clientes_bp.post("/api/clientes/<int:cliente_id>/credito/bloquear")
+def bloquear_credito(cliente_id: int):
+    return _decidir_credito(cliente_id, "bloquear")
+
+
+@api_clientes_bp.post("/api/clientes/<int:cliente_id>/credito/suspender")
+def suspender_credito(cliente_id: int):
+    return _decidir_credito(cliente_id, "suspender")
+
+
+@api_clientes_bp.post("/api/clientes/<int:cliente_id>/credito/revisar")
+def revisar_credito(cliente_id: int):
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Payload deve ser um objeto JSON", "code": "payload_invalido"}), 400
+    actor = usuario_id_requisicao()
+    if not actor:
+        return jsonify({"error": "Usuário não identificado", "code": "usuario_nao_identificado"}), 401
+    try:
+        return jsonify(credito.revisar(cliente_id, data.get("motivo") or "", actor, request.remote_addr, request.headers.get("X-Correlation-ID")))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "cliente_nao_encontrado"}), 404
+    except PermissionError as exc:
+        return jsonify({"error": str(exc), "code": "credito_permissao_negada"}), 403
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "credito_invalido"}), 400
+
+
+@api_clientes_bp.get("/api/clientes/<int:cliente_id>/credito/historico")
+def historico_credito(cliente_id: int):
+    if credito.consultar(cliente_id) is None:
+        return jsonify({"error": "Cliente não encontrado", "code": "cliente_nao_encontrado"}), 404
+    return jsonify({"eventos": credito.historico(cliente_id, request.args.get("limite", 100, type=int))})
+
+
+@api_clientes_bp.get("/api/credito/pendentes")
+def pendentes_credito():
+    return jsonify({"pendentes": credito.pendentes(request.args.get("limite", 100, type=int))})
 
 
 @api_clientes_bp.patch("/api/clientes/<int:cliente_id>/ativo")
