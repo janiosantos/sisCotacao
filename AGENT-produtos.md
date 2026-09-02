@@ -42,6 +42,14 @@ Este pacote orienta engenharia de software e organização de conhecimento. Não
 
 O ERP deve controlar Produto Base, ProductVariant/SKU, atributos técnicos em JSONB, preços, custos, estoque, movimentos, documentos comerciais, lançamentos contábeis e documentos fiscais. Atributos flexíveis não devem substituir colunas estruturais necessárias para integridade, pesquisa, auditoria ou cálculo.
 
+### Convenção de SKU de acesso rápido
+
+- SKU automático novo usa `GRUPO-SUBGRUPO-FAM[-VAR]`, por exemplo `ELE-CAB-001` e `ELE-CAB-001-02`.
+- `GRUPO` e `SUBGRUPO` vêm da taxonomia persistida; `FAM` é uma chave curta e estável que agrupa variações; `VAR` é numérico e só aparece quando necessário.
+- Não colocar descrição técnica, marca, cor, bitola, potência, rosca ou fornecedor no SKU automático. Esses dados pertencem aos atributos, descrição, EAN e códigos externos, que continuam pesquisáveis.
+- A regra deve ser aplicada no backend. A interface apenas apresenta a prévia e pode permitir SKU manual válido quando houver necessidade operacional.
+- SKU usado em venda, compra, estoque, documento fiscal, integração ou histórico é imutável. Migração de SKUs antigos exige processo separado, auditável e com confirmação explícita.
+
 O estoque é movimentado por fatos auditáveis, nunca por edição direta silenciosa de saldo. O saldo deve ser derivado ou reconciliável a partir de movimentos, reservas, ajustes e inventários. Contabilidade e fiscal devem receber eventos de negócio com idempotência, período e origem rastreável.
 
 Para emissão de NF-e/NFC-e, separar rascunho, validação, autorização, rejeição, cancelamento, inutilização e contingência. O XML e o resultado autorizado devem ser preservados conforme política de retenção, sem alterar documentos já emitidos.

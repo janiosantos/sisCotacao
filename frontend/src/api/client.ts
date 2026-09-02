@@ -1394,7 +1394,7 @@ export const api = {
   atualizarCodigoMarca: (marcaId: number, codigo: string) =>
     request<{ ok: boolean }>("PUT", `/api/marcas/${marcaId}/codigo`, { codigo }),
 
-  // Grupos e subgrupos (SKU estruturado)
+  // Grupos e subgrupos (SKU de acesso rápido)
   listarGrupos: (somenteAtivos = false) =>
     request<Grupo[]>("GET", "/api/grupos" + qs({ ativas: somenteAtivos })),
   criarGrupo: (codigo: string, nome: string) =>
@@ -1416,6 +1416,8 @@ export const api = {
   previewSkus: (payload: {
     base?: string;
     produto_id?: number | null;
+    familia_id?: number | null;
+    familia_cod?: string;
     grupo_cod?: string;
     subgrupo_cod?: string;
     marca_cod?: string;

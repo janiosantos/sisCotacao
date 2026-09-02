@@ -1,8 +1,8 @@
-"""Migração 0055 — Grupos/subgrupos, códigos e SKU estruturado.
+"""Migração 0055 — Grupos/subgrupos, códigos e SKU de acesso rápido.
 
 Adiciona a taxonomia de **grupo/subgrupo** ao cadastro de produtos e os
-**códigos** curtos usados na composição do SKU estruturado
-`[GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS]`:
+**códigos** curtos usados na composição do SKU de acesso rápido
+`[GRUPO]-[SUBGRUPO]-[FAM][-VAR]`:
 
 1. Tabela `grupos` (codigo, nome) — ex.: ELE/ELETRICO, HID/HIDRAULICO,
    FER/FERRAMENTAS, PAR/PARAFUSOS.
@@ -31,7 +31,7 @@ MUDANCA = {
         "Seed dos grupos iniciais",
     ],
     "porque": [
-        "Taxonomia e códigos curtos para o SKU estruturado [GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS]",
+        "Taxonomia e códigos curtos para o SKU de acesso rápido [GRUPO]-[SUBGRUPO]-[FAM][-VAR]",
     ],
 }
 NAME = "grupos_subgrupos_skus"

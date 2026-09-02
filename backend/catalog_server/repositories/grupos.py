@@ -1,7 +1,7 @@
-"""Repositório de grupos e subgrupos (taxonomia de SKU estruturado).
+"""Repositório de grupos e subgrupos (taxonomia de SKU de acesso rápido).
 
 `grupos` (codigo, nome) e `subgrupos` (grupo_id, codigo, nome) alimentam os
-dois primeiros segmentos do SKU `[GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS]`.
+dois primeiros segmentos do SKU rápido `[GRUPO]-[SUBGRUPO]-[FAM][-VAR]`.
 """
 from __future__ import annotations
 

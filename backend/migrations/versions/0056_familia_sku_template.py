@@ -1,12 +1,11 @@
 """Migração 0056 — Template de SKU por família.
 
-Adiciona `familias.sku_atributos` (JSONB): lista ordenada de ids de
-atributos da família que compõem o segmento de atributos do SKU estruturado
-[GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS].
+Adiciona `familias.sku_atributos` (JSONB): lista ordenada de atributos usados
+na identificação e pesquisa das variações. O SKU de acesso rápido não carrega
+esses valores; ele usa `[GRUPO]-[SUBGRUPO]-[FAM][-VAR]`.
 
-Quando preenchida, a geração de SKU usa apenas esses atributos, na ordem
-definida (ex.: Cabo Flexível -> [bitola, cor]). Quando vazia/nula, mantém-se
-o comportamento anterior (todos os atributos).
+Quando preenchida, a interface usa apenas esses atributos, na ordem definida
+para descrever e localizar variações (ex.: Cabo Flexível -> [bitola, cor]).
 """
 from __future__ import annotations
 
@@ -17,7 +16,7 @@ RISCO = "melhoria"
 MUDANCA = {
     "o_que": ["Adiciona familias.sku_atributos (JSONB)"],
     "porque": [
-        "Define quais atributos da família compõem o segmento de atributos do SKU estruturado, na ordem",
+        "Define quais atributos da família ajudam a descrever e localizar as variações, na ordem",
     ],
 }
 NAME = "familia_sku_template"

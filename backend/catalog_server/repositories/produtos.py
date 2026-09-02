@@ -15,6 +15,8 @@ from catalog_server.db import system_conn
 from catalog_server.repositories import marcas
 from catalog_server.repositories.busca import montar_busca
 from catalog_server.services.sku_service import (
+    codigo_familia,
+    codigo_produto,
     normalizar as normalizar_sku,
     reservar as reservar_sku,
     sku_emitido as sku_emitido_variante,
@@ -69,6 +71,24 @@ def _list_atributos(conn, familia_id: int) -> list[dict]:
             d["opcoes"] = []
         out.append(d)
     return out
+
+
+def _contexto_sku(conn, grupo_id: int | None, subgrupo_id: int | None, familia_id: int | None, produto_id: int) -> tuple[str, str, str]:
+    """Resolve códigos da taxonomia no backend, sem confiar no frontend."""
+    row = conn.execute(
+        "SELECT COALESCE(g.codigo, '') AS grupo_codigo,"
+        " COALESCE(sg.codigo, '') AS subgrupo_codigo"
+        " FROM (SELECT 1) x"
+        " LEFT JOIN grupos g ON g.id=?"
+        " LEFT JOIN subgrupos sg ON sg.id=?",
+        (grupo_id, subgrupo_id),
+    ).fetchone()
+    grupo_cod = row["grupo_codigo"] if row else ""
+    subgrupo_cod = row["subgrupo_codigo"] if row else ""
+    if not (grupo_cod or subgrupo_cod or familia_id):
+        return "", "", ""
+    familia_cod = codigo_familia(familia_id) if familia_id else codigo_produto(produto_id)
+    return grupo_cod, subgrupo_cod, familia_cod
 
 
 class ProdutoRepository:
@@ -378,9 +398,15 @@ class ProdutoRepository:
                 ),
             )
             produto_id = cur.lastrowid
+            grupo_cod, subgrupo_cod, familia_cod = _contexto_sku(
+                conn, grupo_id, subgrupo_id, familia_id, produto_id
+            )
             sku, _aviso = reservar_sku(
                 dados.get("sku") or "", produto_id,
                 base=nome, ignorar_id=produto_id, conn=conn,
+                grupo_cod=grupo_cod,
+                subgrupo_cod=subgrupo_cod,
+                familia_cod=familia_cod,
             )
             if sku:
                 conn.execute("UPDATE produtos_cadastro SET sku=? WHERE id=?", (sku, produto_id))
@@ -416,9 +442,15 @@ class ProdutoRepository:
                 if sku_atual and sku_emitido_variante(conn, produto_id) and \
                         normalizar_sku(novo_sku) != normalizar_sku(sku_atual):
                     novo_sku = sku_atual
+            grupo_cod_sku, subgrupo_cod_sku, familia_cod_sku = _contexto_sku(
+                conn, grupo_id, subgrupo_id, familia_id, produto_id
+            )
             sku, _aviso = reservar_sku(
                 novo_sku, produto_id,
                 base=nome, ignorar_id=produto_id, conn=conn,
+                grupo_cod=grupo_cod_sku,
+                subgrupo_cod=subgrupo_cod_sku,
+                familia_cod=familia_cod_sku,
             )
             cur = conn.execute(
                 "UPDATE produtos_cadastro SET familia_id=?, nome=?, marca=?, marca_id=?, descricao=?,"

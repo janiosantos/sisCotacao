@@ -117,6 +117,11 @@ function normalize(str: string): string {
   return String(str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
+function codigoFamilia(familiaId: string): string {
+  const id = Number(familiaId);
+  return id > 0 ? id.toString(36).toUpperCase().padStart(3, "0") : "";
+}
+
 // Regras de validação de atributo "livre".
 
 function validacaoLabel(v?: string): string {
@@ -630,7 +635,7 @@ function ModalFamiliaForm({ familia, onClose, onSaved }: { familia: Familia | nu
         </Field>
         <Field
           label="Atributos que compõem o SKU"
-          hint="Marque, na ordem, os atributos que entram no SKU (ex.: Bitola, Cor → ELE-CAB-SIL-25V-... ). Vazio = usa todos."
+          hint="Marque, na ordem, os atributos que ajudam a descrever e localizar as variações. O SKU rápido usa grupo, subgrupo e família."
         >
           {atributos.filter((a) => a.nome.trim()).length === 0 ? (
             <p className="text-xs text-gray-400">Cadastre atributos acima para configurar o SKU.</p>
@@ -743,7 +748,7 @@ function ModalQuickAdd({
     >
       <div className="space-y-3">
         <p className="text-xs text-gray-500">
-          O <strong>código</strong> entra no SKU estruturado (ex.: <code>ELE-CAB-SIL-25V</code>). Se vazio, usa o nome.
+          O <strong>código</strong> identifica a família no cadastro e agrupa os SKUs rápidos das variações.
         </p>
         <Field label="Código (curto)">
           <Input placeholder={tipo === "marca" ? "Ex.: VOT" : tipo === "grupo" ? "Ex.: ELE" : "Ex.: CAB"} value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} />
@@ -766,8 +771,8 @@ function CompletudeDadosGerais({ form, dados }: { form: ProdutoEditorForm; dados
     { rotulo: "Marca", preenchido: !!form.marca.trim() },
     { rotulo: "Categoria", preenchido: !!form.categoria.trim(), dica: "Ex.: Fios e Cabos" },
     { rotulo: "Subcategoria", preenchido: !!form.subcategoria.trim(), dica: "Ex.: Cabo Flexível" },
-    { rotulo: "Grupo (SKU)", preenchido: !!form.grupo_id, dica: "1º segmento do SKU estruturado" },
-    { rotulo: "Subgrupo (SKU)", preenchido: !!form.subgrupo_id, dica: "2º segmento do SKU estruturado" },
+    { rotulo: "Grupo (SKU)", preenchido: !!form.grupo_id, dica: "1º segmento do SKU rápido" },
+    { rotulo: "Subgrupo (SKU)", preenchido: !!form.subgrupo_id, dica: "2º segmento do SKU rápido" },
     { rotulo: "Código fabricante", preenchido: !!form.external_id.trim(), dica: "Referência do fornecedor" },
     { rotulo: "Preço de venda > 0", preenchido: Number(dados.preco) > 0 },
   ];
@@ -1198,11 +1203,15 @@ export function ProdutoEditor() {
     form.marca.trim() ? `- ${form.marca.trim()}` : "",
   ].filter(Boolean).join(" ");
 
+  const grupoSku = grupos.find((g) => String(g.id) === form.grupo_id)?.codigo || "";
+  const subgrupoSku = subgrupos.find((s) => String(s.id) === form.subgrupo_id)?.codigo || "";
+  const familiaSku = codigoFamilia(form.familia_id);
+  const skuNucleo = [grupoSku, subgrupoSku, familiaSku].filter(Boolean).join("-").toUpperCase();
+
   const sugerirSku = () => {
-    const partes = [form.nome, ...atributos.map((a) => (valores[a.nome] || "").trim()), form.marca].filter((v) => v && v.trim());
-    const sku = normalize(partes.join(" ")).replace(/[^a-z0-9]+/g, "-").replace(/(^-+|-+$)/g, "").slice(0, 40).toUpperCase();
+    const sku = skuNucleo;
     setDados((d) => ({ ...d, sku: sku || d.sku }));
-    toast(sku ? `SKU sugerido: ${sku}` : "Preencha nome/atributos/marca para sugerir o SKU.", sku ? "success" : "warn");
+    toast(sku ? `SKU sugerido: ${sku}` : "Selecione grupo, subgrupo ou família para sugerir o SKU.", sku ? "success" : "warn");
   };
 
   const TABS: { key: typeof tab; label: string }[] = [
@@ -1254,7 +1263,7 @@ export function ProdutoEditor() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-4 lg:col-span-2">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Grupo (SKU)" hint="1º segmento do SKU estruturado">
+              <Field label="Grupo (SKU)" hint="1º segmento do SKU rápido">
                 <div className="flex gap-2">
                   <Select value={form.grupo_id} onChange={(e) => trocarGrupo(e.target.value)} className="flex-1">
                     <option value="">—</option>
@@ -1267,7 +1276,7 @@ export function ProdutoEditor() {
                   </Button>
                 </div>
               </Field>
-              <Field label="Subgrupo (SKU)" hint="2º segmento do SKU estruturado">
+              <Field label="Subgrupo (SKU)" hint="2º segmento do SKU rápido">
                 <div className="flex gap-2">
                   <Select value={form.subgrupo_id} onChange={(e) => setForm({ ...form, subgrupo_id: e.target.value })} className="flex-1" disabled={!form.grupo_id}>
                     <option value="">—</option>
@@ -1282,8 +1291,8 @@ export function ProdutoEditor() {
               </Field>
             </div>
             <p className="text-xs text-gray-400">
-              SKU estruturado: <code>[GRUPO]-[SUBGRUPO]-[MARCA]-[ATRIBUTOS]</code> (ex.: ELE-CAB-SIL-25V).
-              Grupo e subgrupo têm código próprio; a marca e os atributos completam o SKU.
+              SKU rápido: <code>[GRUPO]-[SUBGRUPO]-[FAM][-VAR]</code> (ex.: <code>ELE-CAB-001-02</code>).
+              A família agrupa as variações; medidas, cor e marca ficam na descrição e nos atributos pesquisáveis.
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Categoria" hint={form.grupo_id ? "Filtrada pelo grupo/subgrupo" : ""}>
@@ -1325,7 +1334,7 @@ export function ProdutoEditor() {
                   <option value="">— sem família —</option>
                   {familias.map((f) => (
                     <option key={f.id} value={f.id}>
-                      {f.nome}
+                      {codigoFamilia(String(f.id))} · {f.nome}
                     </option>
                   ))}
                 </Select>
@@ -1412,7 +1421,7 @@ export function ProdutoEditor() {
               <h4 className="text-sm font-semibold text-gray-900">Dados operacionais do produto</h4>
               <p className="text-xs text-gray-500">Este produto é uma unidade única (antiga variação). Preencha os campos operacionais e, se houver família, os valores dos atributos.</p>
             </div>
-            <Button size="sm" variant="ghost" onClick={sugerirSku} title="Gera um SKU a partir de nome + atributos + marca">
+            <Button size="sm" variant="ghost" onClick={sugerirSku} title="Gera um SKU curto a partir de grupo, subgrupo e família">
               ✨ Sugerir SKU
             </Button>
           </div>
@@ -1453,6 +1462,15 @@ export function ProdutoEditor() {
               </tbody>
             </table>
           </div>
+
+          {skuNucleo ? (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+              <span className="font-semibold">Padrão de acesso rápido:</span>
+              <code className="font-semibold">{skuNucleo}</code>
+              <span>variações seguintes usam <code>{skuNucleo}-02</code>, <code>-03</code>…</span>
+              <span className="text-blue-600">Atributos e marca permanecem na descrição para busca.</span>
+            </div>
+          ) : null}
 
           <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
             <h4 className="mb-1 text-sm font-semibold text-gray-900">Atributos técnicos do ramo</h4>

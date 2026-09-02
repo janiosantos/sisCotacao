@@ -549,7 +549,7 @@ def atualizar_codigo_marca(marca_id: int):
 
 
 # ----------------------------------------------------------------------
-# Grupos e subgrupos (taxonomia do SKU estruturado)
+# Grupos e subgrupos (taxonomia do SKU de acesso rápido)
 # ----------------------------------------------------------------------
 
 
@@ -651,10 +651,14 @@ def preview_skus():
     data = request.get_json(silent=True) or {}
     base = (data.get("base") or "").strip()
     produto_id = int(data.get("produto_id") or 0)
+    familia_id = int(data.get("familia_id") or 0)
     itens = data.get("variantes") or []
     grupo_cod = (data.get("grupo_cod") or "").strip()
     subgrupo_cod = (data.get("subgrupo_cod") or "").strip()
     marca_cod = (data.get("marca_cod") or "").strip()
+    familia_cod = (data.get("familia_cod") or "").strip()
+    if familia_id and not familia_cod:
+        familia_cod = sku_service.codigo_familia(familia_id)
     with system_conn() as conn:
         skus = sku_service.gerar_lote(
             base,
@@ -664,6 +668,7 @@ def preview_skus():
             grupo_cod=grupo_cod or None,
             subgrupo_cod=subgrupo_cod or None,
             marca_cod=marca_cod or None,
+            familia_cod=familia_cod or None,
         )
     return jsonify({"skus": skus})
 
