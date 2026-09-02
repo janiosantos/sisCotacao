@@ -128,3 +128,35 @@ contém produto demonstrativo. Nenhum deploy, restart ou migração não-dev foi
 executado.
 
 > Ao finalizar: atualize `CONTEXTO_SESSAO.md` (log + pendências) e faça commit/push.
+
+## Resultado da auditoria do Plano Mestre — 2026-09-01
+
+Foi realizada revisão estática das ondas implementadas até a migração 0142 e
+execução dos testes frontend e dos módulos backend mais recentes. O resultado
+detalhado está em `RELATORIO_AUDITORIA_PLANO_MESTRE_ERP.md`.
+
+Status: **PENDENTE DE CORREÇÕES P0/P1**.
+
+Achados confirmados:
+
+- ABC histórica usa critério `consumo` inexistente nas métricas, não isola
+  depósito e `aplicar()` sobrescreve a classe global.
+- Recebimento cria conta a pagar fixa em 30 dias, ignora condição, pode duplicar
+  títulos em recebimento parcial e engole falha contábil.
+- Conciliação bancária sempre atualiza `contas_receber`, inclusive matching de
+  contas a pagar.
+- APIs de compras/recebimento aceitam ator (`usuario_id`, `operador_id` e
+  `aprovador_id`) enviado pelo cliente.
+- Motor de reposição mistura trânsito/demanda entre depósitos e não desconta
+  recebimento parcial.
+- Idempotência central conflita chaves de escopos diferentes e não trata
+  exceção com contexto transacional correto.
+- Relatórios novos têm agrupamentos quebrados, escopo incompleto e não atendem
+  paginação/filtros/exportação/drill-down do plano.
+- OpenAPI e schemas não cobrem os endpoints recentes; XML de entrada não fecha
+  o pipeline com recebimento/financeiro.
+
+Verificação: frontend `typecheck` e 39 testes passaram; backend direcionado
+(`test_abc_historica.py`, `test_motor_reposicao.py`, `test_infra.py`,
+`test_recebimento_documento.py`, `test_relatorios.py`) passou com 37 testes.
+A suíte backend integral não foi declarada como aprovada nesta auditoria.
