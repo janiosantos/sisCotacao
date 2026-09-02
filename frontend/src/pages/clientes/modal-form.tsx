@@ -32,6 +32,9 @@ interface Form {
   observacoes: string;
   segmento: string;
   categoria: string;
+  data_nascimento: string;
+  consentimento_contato: boolean;
+  canal_preferencial: string;
 }
 
 const EMPTY_FORM: Form = {
@@ -48,6 +51,9 @@ const EMPTY_FORM: Form = {
   observacoes: "",
   segmento: "consumidor_final",
   categoria: "",
+  data_nascimento: "",
+  consentimento_contato: false,
+  canal_preferencial: "",
 };
 
 const TIPO_INTERACAO_LABEL: Record<string, string> = {
@@ -106,6 +112,9 @@ export function ModalClienteForm({
             observacoes: cliente.observacoes || "",
             segmento: cliente.segmento || "consumidor_final",
             categoria: cliente.categoria || "",
+            data_nascimento: cliente.data_nascimento || "",
+            consentimento_contato: Boolean(cliente.consentimento_contato),
+            canal_preferencial: cliente.canal_preferencial || "",
           }
         : EMPTY_FORM
     );
@@ -169,6 +178,9 @@ export function ModalClienteForm({
       ie: form.ie.trim() || undefined,
       segmento: form.segmento || undefined,
       categoria: form.categoria || undefined,
+      data_nascimento: form.data_nascimento || null,
+      consentimento_contato: form.consentimento_contato,
+      canal_preferencial: form.canal_preferencial || "",
     };
     try {
       if (cliente) await api.atualizarCliente(cliente.id, payload);
@@ -347,6 +359,17 @@ export function ModalClienteForm({
                 ))}
               </Select>
             </Field>
+            <Field label="Data de nascimento" hint="Usada para relatórios de aniversariantes; opcional.">
+              <Input type="date" value={form.data_nascimento} onChange={(e) => setForm({ ...form, data_nascimento: e.target.value })} />
+            </Field>
+            <Field label="Canal preferencial">
+              <Select value={form.canal_preferencial} onChange={(e) => setForm({ ...form, canal_preferencial: e.target.value })}>
+                <option value="">Não definido</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="telefone">Telefone</option>
+                <option value="email">E-mail</option>
+              </Select>
+            </Field>
             <Field label="E-mail">
               <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </Field>
@@ -357,6 +380,10 @@ export function ModalClienteForm({
               <Input value={maskFone(form.whatsapp)} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
             </Field>
           </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={form.consentimento_contato} onChange={(e) => setForm({ ...form, consentimento_contato: e.target.checked })} />
+            Cliente autorizou contato comercial
+          </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Vendedor">
               <Select value={form.vendedor_id} onChange={(e) => setForm({ ...form, vendedor_id: e.target.value })}>

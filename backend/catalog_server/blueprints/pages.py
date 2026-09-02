@@ -18,6 +18,10 @@ from catalog_server.services import quote_service
 from catalog_server.blueprints.api_quotes import _enrich_itens
 from catalog_server.repositories import loja
 from catalog_server.services import boletos as boleto_service
+from catalog_server.services import relatorios_clientes
+from catalog_server.services import relatorios, exportacao_relatorios
+from catalog_server import permissao
+from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 
 pages_bp = Blueprint("pages", __name__)
 
@@ -123,4 +127,73 @@ def orcamento_boleto(orcamento_id: int):
         emitente=emitente,
         parcelas=parcelas,
         condicao_pagamento=cond_nome,
+    )
+
+
+def _autorizar_pagina_relatorio(*, financeiro: bool = False) -> None:
+    """Protege impressão HTML, que não passa pelo gate das rotas /api."""
+    actor = usuario_id_requisicao()
+    if not actor:
+        abort(401, description="Sessão necessária para imprimir relatório")
+    if not permissao.tem_permissao(actor, "relatorios", "visualizar"):
+        abort(403, description="Permissão negada: relatorios.visualizar")
+    if not permissao.tem_permissao(actor, "relatorios", "imprimir"):
+        abort(403, description="Permissão negada: relatorios.imprimir")
+    if financeiro and not permissao.tem_permissao(actor, "relatorios", "financeiro"):
+        abort(403, description="Permissão negada: relatorios.financeiro")
+
+
+@pages_bp.get("/relatorios/imprimir")
+def relatorio_registrado_print():
+    chave = (request.args.get("relatorio") or "").strip().lower()
+    if chave not in {"dashboard", "vendas", "compras", "estoque", "financeiro"}:
+        abort(400, description="Relatório inválido")
+    _autorizar_pagina_relatorio(financeiro=chave == "financeiro")
+    try:
+        data = relatorios.executar(chave, request.args.to_dict(flat=True))
+        columns, rows = exportacao_relatorios.rows_for(chave, data)
+    except (KeyError, ValueError, TypeError) as exc:
+        abort(400, description=str(exc))
+    titles = {"dashboard": "Resumo executivo", "vendas": "Vendas", "compras": "Compras", "estoque": "Estoque valorizado", "financeiro": "Financeiro / DRE"}
+    return render_template(
+        "relatorio_generico_print.html",
+        titulo=titles[chave],
+        chave=chave,
+        data=data,
+        columns=columns,
+        rows=rows,
+        orientacao="portrait" if chave == "dashboard" else "landscape",
+        gerado_em=datetime.now().strftime("%d/%m/%Y %H:%M"),
+    )
+
+
+@pages_bp.get("/relatorios/clientes/imprimir")
+def relatorio_clientes_print():
+    _autorizar_pagina_relatorio()
+    try:
+        data = relatorios_clientes.clientes(request.args.to_dict(flat=True))
+    except relatorios_clientes.RelatorioFiltroError as exc:
+        abort(400, description=str(exc))
+    return render_template(
+        "relatorio_clientes_print.html",
+        data=data,
+        modo="clientes",
+        gerado_em=datetime.now().strftime("%d/%m/%Y %H:%M"),
+    )
+
+
+@pages_bp.get("/relatorios/clientes/<int:cliente_id>/compras/imprimir")
+def relatorio_compras_cliente_print(cliente_id: int):
+    _autorizar_pagina_relatorio()
+    try:
+        data = relatorios_clientes.compras_cliente(cliente_id, request.args.to_dict(flat=True))
+    except LookupError:
+        abort(404)
+    except relatorios_clientes.RelatorioFiltroError as exc:
+        abort(400, description=str(exc))
+    return render_template(
+        "relatorio_clientes_print.html",
+        data=data,
+        modo="compras",
+        gerado_em=datetime.now().strftime("%d/%m/%Y %H:%M"),
     )

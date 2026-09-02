@@ -134,8 +134,9 @@ class ClienteRepository:
             cur = conn.execute(
                 "INSERT INTO clientes (nome, tipo_pessoa, doc, email, telefone,"
                 " whatsapp, endereco, cidade, uf, cep, vendedor_id, limite_credito,"
-                " observacoes, contribuinte, ie, c_municipio, segmento, categoria)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " observacoes, contribuinte, ie, c_municipio, segmento, categoria,"
+                " data_nascimento, consentimento_contato, canal_preferencial, origem_cadastro)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     dados["nome"],
                     dados.get("tipo_pessoa", "f"),
@@ -155,6 +156,10 @@ class ClienteRepository:
                     dados.get("c_municipio") or "",
                     dados.get("segmento") or "consumidor_final",
                     dados.get("categoria") or "",
+                    dados.get("data_nascimento") or None,
+                    bool(dados.get("consentimento_contato")),
+                    dados.get("canal_preferencial") or "",
+                    dados.get("origem_cadastro") or "manual",
                 ),
             )
             return cur.lastrowid
@@ -167,7 +172,8 @@ class ClienteRepository:
                 "UPDATE clientes SET nome=?, tipo_pessoa=?, doc=?, email=?,"
                 " telefone=?, whatsapp=?, endereco=?, cidade=?, uf=?, cep=?,"
                 " vendedor_id=?, limite_credito=?, observacoes=?, contribuinte=?,"
-                " ie=?, c_municipio=?, segmento=?, categoria=?,"
+                " ie=?, c_municipio=?, segmento=?, categoria=?, data_nascimento=?,"
+                " consentimento_contato=?, canal_preferencial=?, origem_cadastro=?,"
                 " atualizado_em=datetime('now') WHERE id=?",
                 (
                     dados["nome"],
@@ -188,6 +194,10 @@ class ClienteRepository:
                     dados.get("c_municipio") or "",
                     dados.get("segmento") or "consumidor_final",
                     dados.get("categoria") or "",
+                    dados.get("data_nascimento") or None,
+                    bool(dados.get("consentimento_contato")),
+                    dados.get("canal_preferencial") or "",
+                    dados.get("origem_cadastro") or "manual",
                     cliente_id,
                 ),
             )

@@ -4592,6 +4592,82 @@
           }
         }
       }
+    },
+    "/api/relatorios/clientes": {
+      "get": {
+        "tags": ["relatorios"],
+        "summary": "Relatório analítico de clientes",
+        "parameters": [
+          {"$ref": "#/components/parameters/DataInicio"},
+          {"$ref": "#/components/parameters/DataFim"},
+          {"name": "tipo_pessoa", "in": "query", "schema": {"type": "string", "enum": ["f", "j"]}},
+          {"name": "segmento", "in": "query", "schema": {"type": "string"}},
+          {"name": "categoria", "in": "query", "schema": {"type": "string"}},
+          {"name": "uf", "in": "query", "schema": {"type": "string"}},
+          {"name": "cidade", "in": "query", "schema": {"type": "string"}},
+          {"name": "ativo", "in": "query", "schema": {"type": "boolean", "default": true}},
+          {"name": "q", "in": "query", "schema": {"type": "string"}},
+          {"name": "aniversario_inicio", "in": "query", "schema": {"type": "string", "format": "date"}},
+          {"name": "aniversario_fim", "in": "query", "schema": {"type": "string", "format": "date"}},
+          {"name": "sem_compra_dias", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 3650}},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+        ],
+        "responses": {"200": {"description": "Lista paginada com dados pessoais minimizados"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
+    },
+    "/api/relatorios/clientes/aniversariantes": {
+      "get": {
+        "tags": ["relatorios"],
+        "summary": "Clientes aniversariantes no intervalo de mês/dia",
+        "responses": {"200": {"description": "Lista ordenada por data de nascimento"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
+    },
+    "/api/relatorios/clientes/compras": {
+      "get": {
+        "tags": ["relatorios"],
+        "summary": "Extrato analítico de compras do cliente",
+        "parameters": [
+          {"name": "cliente_id", "in": "query", "required": true, "schema": {"type": "integer"}},
+          {"$ref": "#/components/parameters/DataInicio"},
+          {"$ref": "#/components/parameters/DataFim"},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+        ],
+        "responses": {"200": {"description": "Resumo e itens vendidos ao cliente"}, "404": {"description": "Cliente não encontrado"}}
+      }
+    },
+    "/api/relatorios/exportar": {
+      "get": {
+        "tags": ["relatorios"],
+        "summary": "Exporta relatório registrado em CSV ou XLSX",
+        "parameters": [
+          {"name": "relatorio", "in": "query", "required": true, "schema": {"type": "string", "enum": ["dashboard", "vendas", "compras", "estoque", "financeiro"]}},
+          {"name": "formato", "in": "query", "schema": {"type": "string", "enum": ["csv", "xlsx"], "default": "csv"}},
+          {"$ref": "#/components/parameters/DataInicio"},
+          {"$ref": "#/components/parameters/DataFim"}
+        ],
+        "responses": {"200": {"description": "Arquivo para download"}, "403": {"$ref": "#/components/responses/Proibido"}}
+      }
+    },
+    "/api/relatorios/clientes/exportar": {
+      "get": {
+        "tags": ["relatorios"],
+        "summary": "Exporta clientes filtrados em CSV ou XLSX",
+        "parameters": [{"name": "formato", "in": "query", "schema": {"type": "string", "enum": ["csv", "xlsx"], "default": "csv"}}],
+        "responses": {"200": {"description": "Arquivo para download"}, "403": {"$ref": "#/components/responses/Proibido"}}
+      }
+    },
+    "/api/relatorios/clientes/compras/exportar": {
+      "get": {
+        "tags": ["relatorios"],
+        "summary": "Exporta extrato de compras do cliente em CSV ou XLSX",
+        "parameters": [
+          {"name": "cliente_id", "in": "query", "required": true, "schema": {"type": "integer"}},
+          {"name": "formato", "in": "query", "schema": {"type": "string", "enum": ["csv", "xlsx"], "default": "csv"}}
+        ],
+        "responses": {"200": {"description": "Arquivo para download"}, "403": {"$ref": "#/components/responses/Proibido"}}
+      }
     }
   },
   "components": {
@@ -4602,6 +4678,18 @@
         "bearerFormat": "HMAC (base64.payload.signature), TTL 7 dias"
       }
     },
+    "parameters": {
+      "DataInicio": {
+        "name": "data_inicio",
+        "in": "query",
+        "schema": {"type": "string", "format": "date"}
+      },
+      "DataFim": {
+        "name": "data_fim",
+        "in": "query",
+        "schema": {"type": "string", "format": "date"}
+      }
+    },
     "responses": {
       "NaoAutenticado": {
         "description": "Token ausente, inválido ou expirado",
@@ -4610,6 +4698,22 @@
             "schema": {
               "$ref": "#/components/schemas/Erro"
             }
+          }
+        }
+      },
+      "Proibido": {
+        "description": "Usuário autenticado sem a permissão necessária",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Erro"}
+          }
+        }
+      },
+      "ErroValidacao": {
+        "description": "Filtros inválidos",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Erro"}
           }
         }
       }

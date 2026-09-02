@@ -196,6 +196,10 @@ export interface Cliente {
   ie?: string;
   segmento?: string;
   categoria?: string;
+  data_nascimento?: string | null;
+  consentimento_contato?: boolean;
+  canal_preferencial?: string;
+  origem_cadastro?: string;
 }
 
 export interface ParceiroProfissional {
@@ -294,6 +298,10 @@ export interface ClientePayload {
   ie?: string;
   segmento?: string;
   categoria?: string;
+  data_nascimento?: string | null;
+  consentimento_contato?: boolean;
+  canal_preferencial?: string;
+  origem_cadastro?: string;
 }
 
 export interface ClienteEndereco {
@@ -1140,6 +1148,25 @@ async function request<T>(
   return result;
 }
 
+async function requestBlob(path: string): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  const tk = getToken();
+  if (tk) headers.Authorization = `Bearer ${tk}`;
+  const res = await fetch(path, { method: "GET", headers });
+  sinalizarRes(res);
+  if (!res.ok) {
+    let detail = res.statusText;
+    let code: string | undefined;
+    try {
+      const json = await res.json() as Record<string, unknown>;
+      detail = (json.error as string) || detail;
+      code = json.code as string | undefined;
+    } catch { /* resposta não-JSON */ }
+    throw new ApiError(res.status, detail, code);
+  }
+  return res.blob();
+}
+
 async function enviarArquivo<T>(
   path: string,
   formData: FormData,
@@ -1676,22 +1703,34 @@ export const api = {
   buscaRapida: (q: string, depositoId?: number, limite = 20) =>
     request<{ produtos: BuscaRapidaItem[] }>("GET", "/api/produtos/busca-rapida" + qs({ q, deposito_id: depositoId, limite })),
   centralRelatorios: () =>
-    request<{ relatorios: { key: string; nome: string; grupo: string; permissao: string }[] }>("GET", "/api/relatorios/central"),
+    request<{ relatorios: RelatorioCatalogo[] }>("GET", "/api/relatorios/central"),
   dashboardExecutivo: (dataInicio?: string, dataFim?: string) =>
     request<DashboardExecutivo>("GET", "/api/relatorios/dashboard" + qs({ data_inicio: dataInicio, data_fim: dataFim })),
-  relatorioVendas: (agrupamento?: string) =>
+  relatorioVendas: (agrupamento?: string, dataInicio?: string, dataFim?: string) =>
     request<{ agrupamento: string; itens: { chave: number | string; receita_bruta: number; receita_liquida: number; pedidos: number }[]; cmv: number; cancelados: { valor: number; pedidos: number } }>(
       "GET",
-      "/api/relatorios/vendas" + qs({ agrupamento })
+      "/api/relatorios/vendas" + qs({ agrupamento, data_inicio: dataInicio, data_fim: dataFim })
     ),
-  relatorioCompras: () => request<{ pedidos: number; recebidos: number; cancelados: number; lead_time_medio_dias: number; comprado: number }>("GET", "/api/relatorios/compras"),
+  relatorioCompras: (dataInicio?: string, dataFim?: string) => request<{ pedidos: number; recebidos: number; cancelados: number; lead_time_medio_dias: number; comprado: number }>("GET", "/api/relatorios/compras" + qs({ data_inicio: dataInicio, data_fim: dataFim })),
   relatorioEstoque: (depositoId?: number) =>
     request<{ itens: { id: number; sku: string; nome: string; quantidade: number; custo_medio: number; valor: number }[]; totais: { produtos: number; unidades: number; valor: number; ruptura: number } }>(
       "GET",
       "/api/relatorios/estoque" + qs({ deposito_id: depositoId })
     ),
-  relatorioFinanceiro: () =>
-    request<{ fluxo_caixa: { entradas: number; saidas: number }; aging: { a_vencer: number; vencido: number; total: number }; dre: { receita_liquida: number; cmv: number; lucro_bruto: number } }>("GET", "/api/relatorios/financeiro"),
+  relatorioFinanceiro: (dataInicio?: string, dataFim?: string) =>
+    request<{ fluxo_caixa: { entradas: number; saidas: number }; aging: { a_vencer: number; vencido: number; total: number }; dre: { receita_liquida: number; cmv: number; lucro_bruto: number } }>("GET", "/api/relatorios/financeiro" + qs({ data_inicio: dataInicio, data_fim: dataFim })),
+  relatorioClientes: (params: Record<string, unknown> = {}) =>
+    request<RelatorioClientes>("GET", "/api/relatorios/clientes" + qs(params)),
+  relatorioAniversariantes: (params: Record<string, unknown> = {}) =>
+    request<RelatorioClientes>("GET", "/api/relatorios/clientes/aniversariantes" + qs(params)),
+  relatorioComprasCliente: (clienteId: number, params: Record<string, unknown> = {}) =>
+    request<RelatorioComprasCliente>("GET", "/api/relatorios/clientes/compras" + qs({ ...params, cliente_id: clienteId })),
+  exportarRelatorioClientes: (params: Record<string, unknown> = {}) =>
+    requestBlob("/api/relatorios/clientes/exportar" + qs({ ...params, formato: params.formato || "csv" })),
+  exportarComprasCliente: (clienteId: number, params: Record<string, unknown> = {}) =>
+    requestBlob("/api/relatorios/clientes/compras/exportar" + qs({ ...params, cliente_id: clienteId, formato: params.formato || "csv" })),
+  exportarRelatorio: (relatorio: string, params: Record<string, unknown> = {}) =>
+    requestBlob("/api/relatorios/exportar" + qs({ ...params, relatorio, formato: params.formato || "csv" })),
   valorizacaoEstoque: (depositoId: number, dataCorte?: string) =>
     request<{ deposito_id: number; data_corte?: string | null; total: number; itens: { produto_id: number; sku: string; nome: string; quantidade: number; custo_medio: number; valor: number }[] }>(
       "GET",
@@ -2704,6 +2743,69 @@ export interface DashboardExecutivo {
     estoque_valorizado: number;
     compras_abertas: number;
   };
+}
+
+export interface RelatorioCatalogo {
+  key: string;
+  nome: string;
+  grupo: string;
+  tipo?: "sintetico" | "analitico";
+  permissao: string;
+  filtros?: string[];
+  orientacao?: "portrait" | "landscape";
+  formatos?: string[];
+}
+
+export interface RelatorioClienteItem {
+  id: number;
+  nome: string;
+  tipo_pessoa: string;
+  doc: string | null;
+  email: string | null;
+  telefone: string | null;
+  cidade: string | null;
+  uf: string | null;
+  segmento: string | null;
+  categoria: string | null;
+  vendedor_nome: string | null;
+  data_nascimento: string | null;
+  ultima_compra: string | null;
+  ativo: boolean;
+}
+
+export interface RelatorioClientes {
+  report_key: "clientes";
+  kind: "analitico";
+  periodo: { inicio: string; fim: string };
+  filtros: Record<string, unknown>;
+  itens: RelatorioClienteItem[];
+  paginacao: { total: number; limit: number; offset: number; proximo_offset: number | null };
+}
+
+export interface RelatorioCompraClienteItem {
+  orcamento_id: number;
+  numero: string;
+  data_venda: string;
+  status: string;
+  nome: string;
+  sku: string;
+  marca: string;
+  quantidade: number;
+  preco_unitario: number;
+  desconto_percentual: number;
+  total_item: number;
+  vendedor_nome: string | null;
+}
+
+export interface RelatorioComprasCliente {
+  report_key: "clientes.compras";
+  kind: "analitico";
+  cliente: { id: number; nome: string; doc: string | null; segmento: string | null; categoria: string | null };
+  periodo: { inicio: string; fim: string };
+  filtros: Record<string, unknown>;
+  resumo: { pedidos: number; receita_bruta: number; receita_liquida: number };
+  itens: RelatorioCompraClienteItem[];
+  paginacao: { total: number; limit: number; offset: number; proximo_offset: number | null };
 }
 
 export interface SaldoItem {

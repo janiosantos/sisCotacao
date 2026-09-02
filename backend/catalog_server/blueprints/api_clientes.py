@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from flask import Blueprint, jsonify, request
 
 from catalog_server.repositories import (
@@ -18,6 +20,26 @@ from catalog_server.services.documentos import normalizar_e_validar_documento, n
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 
 api_clientes_bp = Blueprint("api_clientes", __name__)
+
+
+def _validar_dados_relacionamento(data: dict) -> None:
+    nascimento = data.get("data_nascimento")
+    if nascimento not in (None, ""):
+        try:
+            valor = date.fromisoformat(str(nascimento))
+        except ValueError as exc:
+            raise ValueError("data_nascimento deve estar no formato AAAA-MM-DD") from exc
+        if valor > date.today():
+            raise ValueError("data_nascimento não pode estar no futuro")
+        data["data_nascimento"] = valor.isoformat()
+    else:
+        data["data_nascimento"] = None
+    canal = str(data.get("canal_preferencial") or "").strip().lower()
+    if canal not in {"", "telefone", "whatsapp", "email"}:
+        raise ValueError("canal_preferencial inválido")
+    data["canal_preferencial"] = canal
+    if "consentimento_contato" in data and not isinstance(data["consentimento_contato"], bool):
+        raise ValueError("consentimento_contato deve ser booleano")
 
 
 @api_clientes_bp.get("/api/clientes")
@@ -67,6 +89,10 @@ def criar():
         return jsonify({"error": str(exc), "code": "documento_invalido"}), 400
     data["tipo_pessoa"] = tipo
     data["doc"] = documento_normalizado[1] if documento_normalizado else None
+    try:
+        _validar_dados_relacionamento(data)
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "cliente_invalido"}), 400
     if "limite_credito" in data:
         actor = usuario_id_requisicao()
         from catalog_server import permissao
@@ -96,10 +122,20 @@ def atualizar(cliente_id: int):
         return jsonify({"error": str(exc), "code": "documento_invalido"}), 400
     data["tipo_pessoa"] = tipo
     data["doc"] = documento_normalizado[1] if documento_normalizado else None
+    atual_relacionamento = cliente_repo.get(cliente_id)
+    if atual_relacionamento is None:
+        return jsonify({"error": "Cliente não encontrado"}), 404
+    for campo in ("data_nascimento", "consentimento_contato", "canal_preferencial", "origem_cadastro"):
+        if campo not in data:
+            data[campo] = atual_relacionamento.get(campo)
+    try:
+        _validar_dados_relacionamento(data)
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "cliente_invalido"}), 400
     if "limite_credito" in data:
         actor = usuario_id_requisicao()
         from catalog_server import permissao
-        atual = cliente_repo.get(cliente_id)
+        atual = atual_relacionamento
         if atual is None:
             return jsonify({"error": "Cliente não encontrado"}), 404
         if float(data.get("limite_credito") or 0) != float(atual.get("limite_credito") or 0) and not permissao.tem_permissao(actor, "credito", "aprovar"):

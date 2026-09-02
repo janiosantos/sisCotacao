@@ -3,6 +3,19 @@
 **Objetivo:** transformar o módulo de relatórios em uma solução operacional e gerencial para uma grande loja de material elétrico, hidráulico, ferragens e ferramentas.  
 **Fora de escopo nesta versão:** multi-tenancy, contabilidade legal completa, emissão fiscal e domínio de obras/parceiros quando ainda não houver modelo aprovado.
 
+## Status da execução — 2026-09-02
+
+Esta primeira entrega executável concluiu a fundação e uma vertical completa de clientes, sem alterar staging/produção:
+
+- **P0.1/P0.2:** entregues catálogo/dispatcher para relatórios registrados, validação de período e paginação por `limit/offset`; a correção semântica de todos os fatos históricos e paginação por cursor permanece para as próximas famílias.
+- **P0.3:** entregue RBAC específico para financeiro/exportação, mascaramento de CPF/CNPJ e auditoria de exportações; a ação dedicada de dados pessoais e agenda de exportações ainda não foi concluída.
+- **P0.4/P0.5:** entregues telas HTML de impressão com `window.print()`/Salvar PDF do navegador, orientação A4 retrato/paisagem e exportação síncrona CSV/XLSX com proteção contra fórmula; PDF binário server-side e exportações assíncronas de grandes volumes permanecem pendentes.
+- **P1.1:** entregue migration `0150_clientes_relatorios` com nascimento, consentimento, canal preferencial, origem e índices; API e cadastro preservam os campos com validação backend.
+- **P1.2/P1.3:** entregues filtros de clientes por tipo, segmento, categoria, UF, cidade, status, busca, aniversário e recência de compra, além do extrato de compras por cliente com resumo, itens, impressão e exportação.
+- **P1.4/P2:** ABC/XYZ, necessidade de compra, DRE analítica, rentabilidade, relatórios fiscais, drill-down completo, RFM/segmentação avançada, agendamento e E2E ainda não foram implementados nesta etapa.
+
+O contrato dos novos endpoints foi acrescentado a `backend/openapi.json`. A migration foi aplicada somente no banco DEV local; nenhuma publicação foi autorizada.
+
 ## 1. Princípios obrigatórios
 
 1. A regra de negócio e a segurança ficam no backend; o frontend apenas compõe filtros, exibe o contrato e solicita ações autorizadas.

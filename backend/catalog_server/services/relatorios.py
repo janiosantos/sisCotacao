@@ -5,14 +5,24 @@ Agregações pesadas separadas das operacionais; snapshot de período.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from catalog_server.db import system_conn
 
 
 def _periodo(data_inicio: str | None, data_fim: str | None) -> tuple[str, str]:
-    inicio = (data_inicio or "1900-01-01").strip()
-    fim = (data_fim or date.today().isoformat()).strip()
+    hoje = date.today()
+    inicio = (data_inicio or date(hoje.year, 1, 1).isoformat()).strip()
+    fim = (data_fim or hoje.isoformat()).strip()
+    try:
+        inicio_dt = date.fromisoformat(inicio)
+        fim_dt = date.fromisoformat(fim)
+    except ValueError as exc:
+        raise ValueError("Período deve usar o formato AAAA-MM-DD") from exc
+    if inicio_dt > fim_dt:
+        raise ValueError("data_inicio não pode ser maior que data_fim")
+    if fim_dt - inicio_dt > timedelta(days=3660):
+        raise ValueError("O período máximo do relatório é de 10 anos")
     return inicio, fim
 
 
@@ -223,13 +233,37 @@ def financeiro(data_inicio: str | None = None, data_fim: str | None = None) -> d
 # ─── BI-007: Central de relatórios ─────────────────────────
 
 CATALOGO = [
-    {"key": "dashboard", "nome": "Dashboard executivo", "grupo": "executivo", "permissao": "relatorios.visualizar"},
-    {"key": "vendas", "nome": "Vendas", "grupo": "vendas", "permissao": "relatorios.visualizar", "filtros": ["periodo", "agrupamento"]},
-    {"key": "compras", "nome": "Compras", "grupo": "compras", "permissao": "relatorios.visualizar", "filtros": ["periodo"]},
-    {"key": "estoque", "nome": "Estoque", "grupo": "estoque", "permissao": "relatorios.visualizar", "filtros": ["deposito"]},
-    {"key": "financeiro", "nome": "Financeiro / DRE", "grupo": "financeiro", "permissao": "relatorios.financeiro", "filtros": ["periodo"]},
+    {"key": "dashboard", "nome": "Dashboard executivo", "grupo": "executivo", "tipo": "sintetico", "permissao": "relatorios.visualizar", "orientacao": "portrait", "formatos": ["html", "pdf"]},
+    {"key": "vendas", "nome": "Vendas", "grupo": "vendas", "tipo": "analitico", "permissao": "relatorios.visualizar", "filtros": ["periodo", "agrupamento"], "orientacao": "landscape", "formatos": ["html", "pdf"]},
+    {"key": "compras", "nome": "Compras", "grupo": "compras", "tipo": "analitico", "permissao": "relatorios.visualizar", "filtros": ["periodo"], "orientacao": "landscape", "formatos": ["html", "pdf"]},
+    {"key": "estoque", "nome": "Estoque", "grupo": "estoque", "tipo": "analitico", "permissao": "relatorios.visualizar", "filtros": ["deposito"], "orientacao": "landscape", "formatos": ["html", "pdf"]},
+    {"key": "financeiro", "nome": "Financeiro / DRE", "grupo": "financeiro", "tipo": "sintetico", "permissao": "relatorios.financeiro", "filtros": ["periodo"], "orientacao": "landscape", "formatos": ["html", "pdf"]},
+    {"key": "clientes", "nome": "Clientes e relacionamento", "grupo": "clientes", "tipo": "analitico", "permissao": "relatorios.visualizar", "filtros": ["tipo", "segmento", "categoria", "aniversario", "ultima_compra"], "orientacao": "landscape", "formatos": ["html", "pdf", "csv", "xlsx"]},
+    {"key": "clientes.compras", "nome": "Compras por cliente", "grupo": "clientes", "tipo": "analitico", "permissao": "relatorios.visualizar", "filtros": ["cliente", "periodo"], "orientacao": "landscape", "formatos": ["html", "pdf", "csv", "xlsx"]},
 ]
 
 
 def central() -> dict:
     return {"relatorios": CATALOGO}
+
+
+def executar(chave: str, params: dict[str, object] | None = None) -> dict:
+    """Executa qualquer relatório registrado sem permitir SQL pelo cliente."""
+    params = params or {}
+    key = str(chave or "").strip().lower()
+    if key == "dashboard":
+        return dashboard_executivo(params.get("data_inicio"), params.get("data_fim"))
+    if key == "vendas":
+        return vendas(params.get("data_inicio"), params.get("data_fim"), str(params.get("agrupamento") or "produto"))
+    if key == "compras":
+        return compras(params.get("data_inicio"), params.get("data_fim"))
+    if key == "estoque":
+        deposito = params.get("deposito_id")
+        return estoque(int(deposito) if deposito not in (None, "") else None)
+    if key == "financeiro":
+        return financeiro(params.get("data_inicio"), params.get("data_fim"))
+    if key == "clientes":
+        from catalog_server.services import relatorios_clientes
+
+        return relatorios_clientes.clientes(params)
+    raise KeyError(f"Relatório não encontrado: {key}")

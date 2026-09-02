@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>{{ titulo }}</title>
+  <style>
+    @page { size: A4 {{ orientacao }}; margin: 12mm 10mm; }
+    :root { color: #172033; font-family: Arial, Helvetica, sans-serif; }
+    * { box-sizing: border-box; } body { margin: 0; font-size: 10px; }
+    .toolbar { display: flex; gap: 8px; padding: 12px; margin-bottom: 16px; background: #f1f5f9; border: 1px solid #cbd5e1; }
+    button { cursor: pointer; border: 1px solid #64748b; border-radius: 4px; background: #fff; padding: 7px 12px; font-weight: 700; }
+    .primary { color: #fff; background: #0f766e; border-color: #0f766e; }
+    header { display: flex; justify-content: space-between; gap: 20px; border-bottom: 2px solid #0f766e; padding-bottom: 10px; }
+    h1 { margin: 0 0 4px; font-size: 20px; } .muted { color: #64748b; } .meta { text-align: right; line-height: 1.5; }
+    .filters { margin: 12px 0; padding: 8px; background: #f8fafc; border: 1px solid #e2e8f0; overflow-wrap: anywhere; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; } thead { display: table-header-group; }
+    th { background: #e2e8f0; color: #334155; text-align: left; font-size: 9px; text-transform: uppercase; }
+    th, td { border: 1px solid #cbd5e1; padding: 6px 7px; vertical-align: top; overflow-wrap: anywhere; }
+    tbody tr:nth-child(even) { background: #f8fafc; } footer { margin-top: 12px; padding-top: 7px; border-top: 1px solid #cbd5e1; color: #64748b; display: flex; justify-content: space-between; }
+    @media print { .toolbar { display: none; } th, td { padding: 4px 5px; } }
+  </style>
+</head>
+<body>
+  <div class="toolbar"><button type="button" onclick="history.back()">Voltar</button><button type="button" class="primary" onclick="window.print()">Imprimir / Salvar PDF</button></div>
+  <header><div><div class="muted">Casa LM · Gestão</div><h1>{{ titulo }}</h1><div class="muted">Relatório {{ 'sintético' if chave == 'dashboard' else 'analítico' }} · gerado em {{ gerado_em }}</div></div><div class="meta"><strong>Período</strong><br>{{ data.periodo.inicio if data.periodo is defined else 'Posição atual' }}{% if data.periodo is defined %} a {{ data.periodo.fim }}{% endif %}</div></header>
+  <div class="filters"><strong>Parâmetros:</strong> {{ data|tojson }}</div>
+  <table><thead><tr>{% for column in columns %}<th>{{ column }}</th>{% endfor %}</tr></thead><tbody>{% for row in rows %}<tr>{% for value in row %}<td>{{ value }}</td>{% endfor %}</tr>{% else %}<tr><td colspan="{{ columns|length }}">Nenhum dado encontrado para os filtros.</td></tr>{% endfor %}</tbody></table>
+  <footer><span>Fonte: dados operacionais do ERP · consulta somente leitura</span><span>Relatório confidencial · página impressa pelo navegador</span></footer>
+</body>
+</html>

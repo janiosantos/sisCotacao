@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>{{ 'Compras do cliente' if modo == 'compras' else 'Relatório de clientes' }}</title>
+  <style>
+    @page { size: A4 landscape; margin: 12mm 10mm; }
+    :root { color: #172033; font-family: Arial, Helvetica, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-size: 10px; }
+    .toolbar { display: flex; gap: 8px; padding: 12px; margin-bottom: 16px; background: #f1f5f9; border: 1px solid #cbd5e1; }
+    button { cursor: pointer; border: 1px solid #64748b; border-radius: 4px; background: #fff; padding: 7px 12px; font-weight: 700; }
+    .primary { color: #fff; background: #0f766e; border-color: #0f766e; }
+    .header { display: flex; justify-content: space-between; gap: 20px; border-bottom: 2px solid #0f766e; padding-bottom: 10px; }
+    h1 { margin: 0 0 4px; font-size: 20px; color: #0f172a; }
+    h2 { margin: 18px 0 8px; font-size: 14px; }
+    .muted { color: #64748b; }
+    .meta { text-align: right; line-height: 1.5; }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 12px 0; padding: 8px; background: #f8fafc; border: 1px solid #e2e8f0; }
+    .filter strong { color: #475569; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    thead { display: table-header-group; }
+    th { background: #e2e8f0; color: #334155; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
+    th, td { border: 1px solid #cbd5e1; padding: 6px 7px; vertical-align: top; overflow-wrap: anywhere; }
+    td.num, th.num { text-align: right; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    .summary { display: flex; gap: 24px; margin: 12px 0; }
+    .summary div { padding: 8px 12px; border-left: 3px solid #0f766e; background: #f0fdfa; }
+    .summary strong { display: block; font-size: 14px; }
+    footer { margin-top: 12px; padding-top: 7px; border-top: 1px solid #cbd5e1; color: #64748b; display: flex; justify-content: space-between; }
+    @media print { .toolbar { display: none; } body { font-size: 9px; } th, td { padding: 4px 5px; } }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button type="button" onclick="history.back()">Voltar</button>
+    <button type="button" class="primary" onclick="window.print()">Imprimir / Salvar PDF</button>
+  </div>
+  <header class="header">
+    <div>
+      <div class="muted">Casa LM · Gestão</div>
+      <h1>{{ 'Compras do cliente' if modo == 'compras' else 'Clientes e relacionamento' }}</h1>
+      <div class="muted">Relatório analítico · gerado em {{ gerado_em }}</div>
+    </div>
+    <div class="meta">
+      <strong>Período</strong><br>
+      {{ data.periodo.inicio }} a {{ data.periodo.fim }}
+    </div>
+  </header>
+  <div class="filters">
+    {% if modo == 'compras' %}<span class="filter"><strong>Cliente:</strong> {{ data.cliente.nome }}</span>{% endif %}
+    {% if data.filtros %}<span class="filter"><strong>Filtros aplicados:</strong> {{ data.filtros|tojson }}</span>{% endif %}
+  </div>
+  {% if modo == 'compras' %}
+    <div class="summary">
+      <div><span>Pedidos</span><strong>{{ data.resumo.pedidos }}</strong></div>
+      <div><span>Receita bruta</span><strong>R$ {{ '%.2f'|format(data.resumo.receita_bruta or 0) }}</strong></div>
+      <div><span>Receita líquida</span><strong>R$ {{ '%.2f'|format(data.resumo.receita_liquida or 0) }}</strong></div>
+    </div>
+    <table>
+      <thead><tr><th>Pedido</th><th>Data</th><th>Status</th><th>Produto</th><th>SKU</th><th>Marca</th><th class="num">Qtd.</th><th class="num">Preço</th><th class="num">Desc. %</th><th class="num">Total</th><th>Vendedor</th></tr></thead>
+      <tbody>
+      {% for row in data.itens %}<tr><td>{{ row.numero }}</td><td>{{ row.data_venda }}</td><td>{{ row.status }}</td><td>{{ row.nome }}</td><td>{{ row.sku }}</td><td>{{ row.marca }}</td><td class="num">{{ row.quantidade }}</td><td class="num">R$ {{ '%.2f'|format(row.preco_unitario or 0) }}</td><td class="num">{{ '%.2f'|format(row.desconto_percentual or 0) }}</td><td class="num">R$ {{ '%.2f'|format(row.total_item or 0) }}</td><td>{{ row.vendedor_nome or '-' }}</td></tr>{% else %}<tr><td colspan="11">Nenhuma compra encontrada para os filtros.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="summary"><div><span>Clientes encontrados</span><strong>{{ data.paginacao.total }}</strong></div></div>
+    <table>
+      <thead><tr><th>ID</th><th>Nome</th><th>Tipo</th><th>Documento</th><th>E-mail</th><th>Telefone</th><th>Cidade/UF</th><th>Segmento</th><th>Categoria</th><th>Vendedor</th><th>Nascimento</th><th>Última compra</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for row in data.itens %}<tr><td>{{ row.id }}</td><td>{{ row.nome }}</td><td>{{ 'Pessoa física' if row.tipo_pessoa == 'f' else 'Pessoa jurídica' }}</td><td>{{ row.doc or '-' }}</td><td>{{ row.email or '-' }}</td><td>{{ row.telefone or '-' }}</td><td>{{ row.cidade or '-' }}/{{ row.uf or '-' }}</td><td>{{ row.segmento or '-' }}</td><td>{{ row.categoria or '-' }}</td><td>{{ row.vendedor_nome or '-' }}</td><td>{{ row.data_nascimento or '-' }}</td><td>{{ row.ultima_compra or '-' }}</td><td>{{ 'Ativo' if row.ativo else 'Inativo' }}</td></tr>{% else %}<tr><td colspan="13">Nenhum cliente encontrado para os filtros.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+  <footer><span>Fonte: dados operacionais do ERP · consulta somente leitura</span><span>Relatório confidencial · página impressa pelo navegador</span></footer>
+</body>
+</html>

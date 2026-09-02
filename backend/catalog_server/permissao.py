@@ -28,7 +28,10 @@ from flask import abort
 
 from catalog_server.db import system_conn
 
-_ACOES = ("visualizar", "cadastrar", "editar", "excluir", "imprimir", "aprovar", "configurar", "emitir")
+_ACOES = (
+    "visualizar", "cadastrar", "editar", "excluir", "imprimir", "aprovar",
+    "configurar", "emitir", "exportar", "financeiro", "dados_pessoais", "agendar",
+)
 
 # Alias público (usado por blueprints e testes).
 ACOES = _ACOES
