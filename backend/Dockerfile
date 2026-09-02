@@ -1,7 +1,10 @@
 FROM python:3.14-slim
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
+ENV TZ=America/Sao_Paulo
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata && \
+    rm -rf /var/lib/apt/lists/*
 # Contexto de build = raiz do repositório (ver docker-compose*.yml)
 COPY backend/catalog_server/ catalog_server/
 COPY backend/migrations/ migrations/
