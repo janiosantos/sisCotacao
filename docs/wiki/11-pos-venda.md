@@ -19,3 +19,7 @@ de devolução para manter a cadeia auditável.
 
 Interação, garantia, item devolvido, decisão, crédito/estorno e responsável
 precisam permanecer associados à venda original.
+
+## Capturas
+
+- [Pós-venda](capturas/posvenda-desktop-dev.png), [Nova interação](capturas/posvenda-nova-interacao-desktop-dev.png), [Garantia](capturas/posvenda-garantia-desktop-dev.png) e [Devolução/troca](capturas/posvenda-devolucao-desktop-dev.png).

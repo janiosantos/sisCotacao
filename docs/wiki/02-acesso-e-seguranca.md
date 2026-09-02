@@ -40,3 +40,7 @@ Financeiro aprova crédito, baixa títulos e aprova bônus conforme a política.
 
 Alterações de usuário, senha, perfis, overrides, alçadas e status precisam ter
 responsável e histórico.
+
+## Capturas
+
+- [Usuários](capturas/usuarios-desktop-dev.png), [Perfis](capturas/perfis-desktop-dev.png) e [Atualizações](capturas/atualizacoes-desktop-dev.png).

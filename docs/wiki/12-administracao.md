@@ -30,3 +30,7 @@ Compras/Estoque seguem as páginas específicas desta wiki.
 
 Toda alteração de configuração e reprocessamento de integração deve ter
 responsável, data, versão e resultado.
+
+## Capturas
+
+- [Configurações](capturas/configuracoes-desktop-dev.png), [Usuários](capturas/usuarios-desktop-dev.png), [Perfis](capturas/perfis-desktop-dev.png), [Atualizações](capturas/atualizacoes-desktop-dev.png) e [Webhooks](capturas/webhooks-desktop-dev.png).

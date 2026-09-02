@@ -28,6 +28,8 @@ No mobile, a mesma tela foi validada em `capturas/manual-central-mobile-dev.png`
 - [Configurações, atualizações e integrações](12-administracao.md)
 - [Atalhos do PDV](13-atalhos-pdv.md)
 - [Capturas de tela e critérios de atualização](14-capturas-e-atualizacao.md)
+- [Índice completo de capturas, ações e subtelas](capturas/README.md)
+- [Auditoria visual e melhorias UI/UX](15-melhorias-ui-ux.md)
 
 ## Fluxo principal da loja
 

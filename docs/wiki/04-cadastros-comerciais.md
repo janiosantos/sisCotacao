@@ -43,3 +43,8 @@ e conversões. Não exclua uma unidade/categoria usada sem avaliar impactos.
 
 Alterações cadastrais, documentos, crédito, indicações, pontos e bônus devem ter
 responsável, data e motivo quando aplicável.
+
+## Capturas
+
+- [Catálogo](capturas/catalogo-desktop-dev.png), [Produtos](capturas/produtos-desktop-dev.png), [Clientes](capturas/clientes-desktop-dev.png), [Parceiros](capturas/parceiros-desktop-dev.png), [Vendedores](capturas/vendedores-desktop-dev.png), [Categorias](capturas/categorias-desktop-dev.png) e [Unidades](capturas/unidades-desktop-dev.png).
+- [Novo produto](capturas/produtos-novo-desktop-dev.png), [etiquetas](capturas/produtos-etiquetas-desktop-dev.png), [importação](capturas/produtos-importar-lote-desktop-dev.png), [novo cliente](capturas/clientes-novo-desktop-dev.png), [crediário](capturas/clientes-crediario-desktop-dev.png), [novo parceiro](capturas/parceiros-novo-desktop-dev.png) e [novo vendedor](capturas/vendedores-novo-desktop-dev.png).

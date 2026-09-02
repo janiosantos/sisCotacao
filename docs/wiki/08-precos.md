@@ -23,3 +23,8 @@ alterar a comparação; registre uma nova revisão em vez de apagar histórico.
 ## Auditoria
 
 Regra, tabela, promoção, vigência, revisão e autorização devem ser recuperáveis.
+
+## Capturas
+
+- [Preços](capturas/precos-desktop-dev.png) e [Histórico de preços](capturas/historico-desktop-dev.png).
+- [Nova tabela](capturas/precos-nova-tabela-desktop-dev.png) e [Simulador](capturas/precos-simulador-desktop-dev.png).

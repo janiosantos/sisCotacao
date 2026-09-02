@@ -7,15 +7,16 @@ da wiki. A captura deve mostrar a tela, os campos relevantes e, quando fizer
 sentido, estados de sucesso, vazio, erro e aprovação. Telas responsivas devem
 ter evidência desktop e mobile/tablet.
 
-As capturas da própria central de ajuda já estão disponíveis em:
+As capturas da própria central de ajuda estão disponíveis em:
 
 - `capturas/manual-central-dev.png` — desktop, consulta pública;
 - `capturas/manual-central-mobile-dev.png` — viewport móvel, consulta pública.
 
-As capturas autenticadas de cada módulo ainda dependem de o proxy DEV `/api`
-estar disponível e de uma massa de demonstração aprovada. Enquanto isso, cada
-capítulo mantém o procedimento textual e não deve apresentar uma imagem
-genérica como se fosse evidência da tela operacional.
+As capturas autenticadas das rotas, ações e subtelas estão indexadas em
+[`capturas/README.md`](capturas/README.md). Elas foram realizadas no DEV com
+dados anonimizados no DOM e sem confirmar operações destrutivas. A captura de
+Relatórios registra “Sem acesso” para o administrador como evidência de uma
+pendência funcional de RBAC.
 
 ## Segurança
 
@@ -26,8 +27,9 @@ sensível. Use apenas massa de demonstração anonimizada.
 ## Convenção
 
 ```text
-docs/wiki/capturas/<modulo>-desktop.png
-docs/wiki/capturas/<modulo>-mobile.png
+docs/wiki/capturas/<modulo>-desktop-dev.png
+docs/wiki/capturas/<modulo>-mobile-dev.png
+docs/wiki/capturas/<modulo>-<acao>-desktop-dev.png
 ```
 
 Os capítulos devem usar legenda no formato “Figura N — tela X, versão Y, estado

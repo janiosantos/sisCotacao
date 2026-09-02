@@ -35,3 +35,8 @@ Operador de caixa recebe à vista dentro da sessão; não aprova crediário.
 
 Título, parcela, cobrança, retorno, baixa, conciliação, comprovante e aprovação
 devem guardar autor e vínculo com documento de origem.
+
+## Capturas
+
+- [Financeiro](capturas/financeiro-desktop-dev.png), [Bancos](capturas/bancos-desktop-dev.png) e [Plano de contas](capturas/plano-contas-desktop-dev.png).
+- [Entrada](capturas/financeiro-entrada-desktop-dev.png), [Saída](capturas/financeiro-saida-desktop-dev.png), [Receber](capturas/financeiro-receber-desktop-dev.png), [Condições](capturas/financeiro-condicoes-desktop-dev.png) e [Nova conta bancária](capturas/bancos-nova-conta-desktop-dev.png).

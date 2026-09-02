@@ -24,3 +24,7 @@ transformar fatos dos módulos em indicadores, sem corrigir a origem.
 
 Registre os filtros usados ao compartilhar um relatório. O dado deve continuar
 reconciliável com os documentos de origem.
+
+## Capturas
+
+- [Relatórios no DEV](capturas/relatorios-desktop-dev.png). A imagem registra o estado “Sem acesso” observado para o administrador e permanece como evidência da pendência de RBAC.

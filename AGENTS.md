@@ -47,6 +47,12 @@ da tela em DEV, com legendas associadas ao passo a passo, estados de sucesso,
 vazio, erro ou aprovação quando aplicável, e validação desktop/mobile quando
 relevante.
 
+O escopo visual não se limita à tela inicial: deve incluir ações, consultas,
+abas, subtelas, drawers e modais que façam parte do fluxo do usuário. O índice
+em `docs/wiki/capturas/README.md` deve mapear tela principal e subtelas,
+registrar capturas que não puderam ser abertas e separar evidência de defeito
+funcional de sugestão visual.
+
 Screenshots não podem conter senhas, tokens, documentos reais, dados pessoais
 ou credenciais de provedores. Usar massa de demonstração anonimizada e
 registrar a data/versão do manual. Antes de publicar, validar todos os links,

@@ -27,3 +27,7 @@ seleciona o item e preserva a operação de pesquisa.
 
 Tabelas e listboxes devem seguir navegação por teclado, foco visível, seleção
 sem depender de cor e comportamento equivalente em desktop/tablet/mobile.
+
+## Capturas
+
+- [Pré-venda](capturas/pre-venda-desktop-dev.png) e [busca de cliente](capturas/pre-venda-cliente-desktop-dev.png).

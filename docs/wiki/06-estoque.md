@@ -30,3 +30,8 @@ inventários dependem do RBAC.
 
 Entrada de compra, saída de venda, ajuste, inventário, lote, endereço e
 expedição precisam de origem, operador, depósito e data.
+
+## Capturas
+
+- [Estoque](capturas/estoque-desktop-dev.png) e [Qualidade do Catálogo](capturas/diagnostico-variacoes-desktop-dev.png).
+- [Curva ABC](capturas/estoque-abc-desktop-dev.png), [Inventário](capturas/estoque-inventario-desktop-dev.png) e [Endereços](capturas/estoque-enderecos-desktop-dev.png).

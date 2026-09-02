@@ -24,3 +24,7 @@ operação comercial não deve editar regra tributária durante o atendimento.
 
 O sistema deve preservar contexto, snapshot, regra, versão, retorno do provedor,
 rejeição, contingência e responsável.
+
+## Capturas
+
+- [Fiscal](capturas/fiscal-desktop-dev.png), [Simulador](capturas/fiscal-simulador-desktop-dev.png) e [Histórico](capturas/fiscal-historico-desktop-dev.png).

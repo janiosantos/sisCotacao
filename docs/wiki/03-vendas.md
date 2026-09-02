@@ -49,3 +49,9 @@ Financeiro executam ações de alçada. O RBAC e o estado do documento são gate
 
 Cliente, vendedor, desconto, aprovação, pedido, recebimento e estoque devem
 permanecer vinculados ao usuário, horário e documento.
+
+## Capturas
+
+- [Painel](capturas/dashboard-desktop-dev.png), [Pré-venda](capturas/pre-venda-desktop-dev.png), [Orçamentos](capturas/orcamentos-desktop-dev.png), [Caixa](capturas/caixa-desktop-dev.png) e [Pós-venda](capturas/posvenda-desktop-dev.png).
+- [Busca de cliente no PDV](capturas/pre-venda-cliente-desktop-dev.png), [detalhe do orçamento](capturas/orcamentos-detalhes-desktop-dev.png), [nova interação](capturas/posvenda-nova-interacao-desktop-dev.png), [garantia](capturas/posvenda-garantia-desktop-dev.png) e [devolução/troca](capturas/posvenda-devolucao-desktop-dev.png).
+- [PDV sem cliente](capturas/pre-venda-dados-desktop-dev.png) e [Caixa sem pedido](capturas/caixa-acoes-desktop-dev.png) mostram ações dependentes de contexto desabilitadas.

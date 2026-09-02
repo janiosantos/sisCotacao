@@ -38,3 +38,8 @@ equivalentes e condições comerciais.
 
 Convite, resposta, escolha, pedido, recebimento, estoque, contas a pagar e
 divergência devem formar uma cadeia consultável.
+
+## Capturas
+
+- [Compras](capturas/compras-desktop-dev.png), [Fornecedores](capturas/fornecedores-desktop-dev.png), [Histórico](capturas/historico-desktop-dev.png), [Cotações legadas](capturas/cotacoes-desktop-dev.png) e [Solicitações legadas](capturas/solicitacoes-desktop-dev.png).
+- [Sugestões](capturas/compras-sugestoes-desktop-dev.png), [nova cotação](capturas/compras-nova-cotacao-desktop-dev.png), [cotações](capturas/compras-cotacoes-desktop-dev.png), [pedidos](capturas/compras-pedidos-desktop-dev.png), [novo fornecedor](capturas/fornecedores-novo-desktop-dev.png) e [editar fornecedor](capturas/fornecedores-editar-desktop-dev.png).

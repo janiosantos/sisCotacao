@@ -34,7 +34,7 @@ Venda, compra, estoque, caixa, crédito, aprovação e financeiro devem nascer d
 uma ação no ERP. Evite anotar um ajuste para lançar depois: a origem é parte da
 auditoria.
 
-## Captura DEV
+## Capturas
 
-Inserir captura do Painel após validação da versão publicada. Não usar números
-reais, CPF/CNPJ real, credenciais, tokens ou certificados.
+- [Painel em DEV](capturas/dashboard-desktop-dev.png).
+- [Central de ajuda desktop](capturas/manual-central-dev.png) e [mobile](capturas/manual-central-mobile-dev.png).
