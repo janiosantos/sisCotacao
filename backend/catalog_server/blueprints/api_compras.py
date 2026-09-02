@@ -5,7 +5,7 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request
 
 from catalog_server.repositories import compras_repo, quote_repo
-from catalog_server.services import compras as compras_service
+from catalog_server.services import compras as compras_service, recebimento as recebimento_service
 from catalog_server import contabil_gatilhos
 
 api_compras_bp = Blueprint("api_compras", __name__)
@@ -170,16 +170,35 @@ def receber_pedido(pedido_id: int):
     Com `condicao_pagamento_id` (e parcelas cadastradas), gera as contas a
     pagar PARCELADAS vinculadas ao pedido; sem condição, 1 conta em 30 dias.
     """
-    from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
-
     data = request.get_json(silent=True) or {}
     try:
-        result = compras_repo.confirmar_recebimento(
+        from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
+
+        usuario_id = usuario_id_requisicao()
+        pedido = compras_repo.get_pedido(pedido_id)
+        if not pedido:
+            raise ValueError("Pedido não encontrado")
+        recebimento = recebimento_service.criar(
             pedido_id,
-            deposito_id=int(data.get("deposito_id") or 1),
-            usuario_id=usuario_id_requisicao(),
-            condicao_pagamento_id=data.get("condicao_pagamento_id"),
+            deposito_id=int(data.get("deposito_id") or pedido.get("deposito_id") or 1),
+            documento_fiscal=pedido.get("numero"),
+            operador_id=usuario_id,
         )
+        detalhe = recebimento_service.detalhe(recebimento["recebimento_id"])
+        for item in detalhe["itens"]:
+            recebimento_service.conferir_item(
+                recebimento["recebimento_id"], item["id"], float(item["qtd_pedido"] or 0)
+            )
+        result = recebimento_service.finalizar(
+            recebimento["recebimento_id"],
+            condicao_pagamento_id=data.get("condicao_pagamento_id"),
+            usuario_id=usuario_id,
+            origem_tipo="pedido_compra",
+        )
+        result["ok"] = True
+        result["recebimento_id"] = recebimento["recebimento_id"]
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    except LookupError as exc:
+        return jsonify({"error": str(exc)}), 404
     return jsonify(result)

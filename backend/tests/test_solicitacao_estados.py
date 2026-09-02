@@ -124,18 +124,24 @@ def test_api_fluxo(system_db):
             "INSERT INTO usuario_perfis (usuario_id, perfil_id) SELECT %s, id FROM perfis WHERE nome='Administrador'",
             (solic,),
         )
+        conn.execute(
+            "INSERT INTO usuario_perfis (usuario_id, perfil_id) SELECT %s, id FROM perfis WHERE nome='Administrador'",
+            (aprov,),
+        )
         conn.commit()
     permissao.invalidar(solic)
+    permissao.invalidar(aprov)
     client = create_app().test_client()
     h = {"Authorization": f"Bearer {auth_token.criar_token({'id': solic, 'login': 'apisol'})}"}
+    h_aprov = {"Authorization": f"Bearer {auth_token.criar_token({'id': aprov, 'login': 'apiapr'})}"}
     r = client.post("/api/solicitacoes-compra", headers=h, json={"codigo": "SOL-API", "prioridade": "urgente", "origem": "sugestao"})
     assert r.status_code == 201, r.get_json()
     sc_id = r.get_json()["id"]
     r = client.post(f"/api/solicitacoes-compra/{sc_id}/transicao", headers=h, json={"status": "enviada", "usuario_id": solic})
     assert r.status_code == 200
-    r = client.post(f"/api/solicitacoes-compra/{sc_id}/transicao", headers=h, json={"status": "aprovada", "usuario_id": aprov})
+    r = client.post(f"/api/solicitacoes-compra/{sc_id}/transicao", headers=h_aprov, json={"status": "aprovada", "usuario_id": solic})
     assert r.status_code == 200
-    r = client.post(f"/api/solicitacoes-compra/{sc_id}/transicao", headers=h, json={"status": "cotando", "usuario_id": aprov})
+    r = client.post(f"/api/solicitacoes-compra/{sc_id}/transicao", headers=h_aprov, json={"status": "cotando", "usuario_id": solic})
     assert r.status_code == 200
     # transição inválida
     r = client.post(f"/api/solicitacoes-compra/{sc_id}/transicao", headers=h, json={"status": "cancelada"})

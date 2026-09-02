@@ -39,6 +39,7 @@ class CaixaRepository:
         bandeira: str | None = None,
         codigo_autorizacao: str | None = None,
         sessao_id: int | None = None,
+        idempotency_key: str | None = None,
         _conn=None,
     ) -> dict:
         if valor <= 0:
@@ -48,7 +49,7 @@ class CaixaRepository:
                 return self.movimentar(
                     tipo, descricao, valor, forma_pagamento, plano_conta_id,
                     documento, orcamento_id, usuario_id, bandeira,
-                    codigo_autorizacao, sessao_id, _conn=conn,
+                    codigo_autorizacao, sessao_id, idempotency_key, _conn=conn,
                 )
 
         # Vincula à sessão de caixa aberta do operador (se houver) e bloqueia
@@ -85,11 +86,11 @@ class CaixaRepository:
         cur = _conn.execute(
             "INSERT INTO caixa_movimento (tipo, descricao, valor, saldo_anterior, saldo_posterior,"
             " forma_pagamento, plano_conta_id, documento, orcamento_id, usuario_id,"
-            " bandeira, codigo_autorizacao, sessao_id)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " bandeira, codigo_autorizacao, sessao_id, idempotency_key)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (tipo, descricao, valor, saldo_ant, saldo_novo,
              forma_pagamento, plano_conta_id, documento, orcamento_id, usuario_id,
-             bandeira, codigo_autorizacao, sessao_id),
+             bandeira, codigo_autorizacao, sessao_id, idempotency_key),
         )
         return {"id": cur.lastrowid, "saldo_anterior": saldo_ant, "saldo_posterior": saldo_novo}
 

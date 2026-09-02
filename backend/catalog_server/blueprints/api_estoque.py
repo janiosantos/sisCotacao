@@ -328,7 +328,7 @@ def registrar_movimento():
         documento=data.get("documento"),
         observacao=data.get("observacao"),
         lote_id=data.get("lote_id"),
-        usuario_id=data.get("usuario_id"),
+        usuario_id=usuario_id_requisicao(),
     )
     # Gatilho contábil (v2.15.0): ajuste de estoque → lançamento quando
     # configurado (default inativo — não altera o comportamento atual).
@@ -376,7 +376,7 @@ def transferir():
     if erros:
         return jsonify({"error": "Campos inválidos: " + ", ".join(erros)}), 400
     result = estoque_repo.transferir(
-        origem_id, destino_id, produto_id, quantidade, data.get("observacao"), data.get("usuario_id")
+        origem_id, destino_id, produto_id, quantidade, data.get("observacao"), usuario_id_requisicao()
     )
     return jsonify(result), 201
 
@@ -784,7 +784,7 @@ def transicionar_expedicao(expedicao_id: int):
     data = request.get_json(silent=True) or {}
     try:
         return jsonify(expedicao_avancada.transicionar(
-            expedicao_id, data.get("status") or "", data.get("usuario_id"), data.get("rastreio"),
+            expedicao_id, data.get("status") or "", usuario_id_requisicao(), data.get("rastreio"),
         ))
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "expedicao_nao_encontrada"}), 404

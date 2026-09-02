@@ -344,6 +344,8 @@ def listar_interacoes_cliente(cliente_id: int):
 
 @api_clientes_bp.post("/api/clientes/<int:cliente_id>/interacoes")
 def criar_interacao_cliente(cliente_id: int):
+    from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
+
     data = request.get_json(silent=True) or {}
     cliente = cliente_repo.get(cliente_id)
     if cliente is None:
@@ -363,6 +365,6 @@ def criar_interacao_cliente(cliente_id: int):
         data_contato=data_contato,
         data_proximo_contato=data.get("data_proximo_contato"),
         orcamento_id=data.get("orcamento_id"),
-        usuario_id=data.get("usuario_id"),
+        usuario_id=usuario_id_requisicao(),
     )
     return jsonify({"id": interacao_id}), 201

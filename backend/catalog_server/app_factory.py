@@ -34,6 +34,7 @@ from catalog_server.blueprints import (
     api_ia_bp,
     api_impressao_bp,
     api_orcamentos_bp,
+    api_parceiros_bp,
     api_plano_contas_bp,
     api_produtos_bp,
     api_quotes_bp,
@@ -59,6 +60,7 @@ _RECURSO_POR_PREFIXO: list[tuple[str, str]] = [
     # Admin / sistema
     ("/api/usuarios", "usuarios"),
     ("/api/perfis", "perfis"),
+    ("/api/parceiros", "parceiros"),
     ("/api/permissoes", "perfis"),
     ("/api/flags", "configuracoes"),
     ("/api/sistema", "atualizacoes"),
@@ -207,6 +209,10 @@ def _acao_da_rota(path: str, method: str) -> str | None:
         return "cadastrar" if method == "POST" else "visualizar"
     if path.startswith("/api/credito/"):
         return "visualizar" if method == "GET" else "aprovar"
+    if method == "POST" and path.startswith("/api/parceiros/bonus/") and path.endswith("/aprovar"):
+        return "aprovar"
+    if method == "POST" and path.startswith("/api/parceiros/bonus/") and path.endswith("/pagar"):
+        return "aprovar"
     if (path.startswith("/api/orcamentos/") or path.startswith("/api/financeiro/receber/")) and path.endswith("/receber"):
         return "cadastrar"
     especifica = _ACAO_ESPECIFICA.get((method, path))
@@ -295,6 +301,7 @@ def create_app() -> Flask:
     app.register_blueprint(api_suppliers_bp)
     app.register_blueprint(api_quotes_bp)
     app.register_blueprint(api_orcamentos_bp)
+    app.register_blueprint(api_parceiros_bp)
     app.register_blueprint(api_impressao_bp)
     app.register_blueprint(api_compras_bp)
     app.register_blueprint(api_ia_bp)

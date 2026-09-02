@@ -24,7 +24,7 @@ from catalog_server import contabil_gatilhos
 from catalog_server import permissao
 from catalog_server.db import system_conn
 from catalog_server.services.parcelas_venda import eh_a_prazo
-from catalog_server.services import credito
+from catalog_server.services import credito, parceiros
 
 api_orcamentos_bp = Blueprint("api_orcamentos", __name__)
 
@@ -83,6 +83,12 @@ def criar():
             "error": "O cliente padrão só pode comprar à vista",
             "code": "cliente_padrao_somente_avista",
         }), 403
+    indicacao_id = data.get("indicacao_id")
+    if indicacao_id:
+        try:
+            parceiros.validar_indicacao(int(indicacao_id), int(cliente_id) if cliente_id else None)
+        except (LookupError, ValueError) as exc:
+            return jsonify({"error": str(exc), "code": "indicacao_invalida"}), 400
     # Status "protegidos" (finalizado) só podem ser aplicados pelo PATCH, que
     # passa pelo gate de alçada/estoque/fiscal. Criar já direto como
     # finalizado pulava todas essas checagens — força rascunho aqui, e quem
@@ -109,6 +115,8 @@ def criar():
         contribuinte=contribuinte,
         ie=ie,
         modelo_documento=data.get("modelo_documento"),
+        deposito_id=int(data["deposito_id"]) if data.get("deposito_id") else 1,
+        indicacao_id=int(indicacao_id) if indicacao_id else None,
     )
     return jsonify({"id": orcamento_id, "numero": numero}), 201
 
@@ -309,7 +317,7 @@ def atualizar(orcamento_id: int):
                         raise ValueError("item sem produto")
                     if loja.bloquear_sem_estoque():
                         estoque_repo.movimentar_fato(
-                            deposito_id=1,
+                            deposito_id=orc.get("deposito_id") or 1,
                             produto_id=vid,
                             tipo="saida",
                             quantidade=qtd,
@@ -323,7 +331,7 @@ def atualizar(orcamento_id: int):
                         # Compatibilidade com a configuração legada que permite
                         # venda sem saldo: ainda registra a baixa na transação.
                         estoque_repo.movimentar(
-                            deposito_id=1,
+                            deposito_id=orc.get("deposito_id") or 1,
                             produto_id=vid,
                             tipo="saida",
                             quantidade=qtd,
@@ -342,6 +350,11 @@ def atualizar(orcamento_id: int):
                 )
                 if not aplicar_transicao(orcamento_id, "finalizado", _conn=conn):
                     return jsonify({"error": "Transição finalizado inválida"}), 409
+                if orc.get("indicacao_id"):
+                    parceiros.converter_indicacao(
+                        int(orc["indicacao_id"]), orcamento_id,
+                        usuario_id_requisicao(), _conn=conn,
+                    )
         except ValueError as exc:
             return jsonify({"error": str(exc), "code": "operacao_invalida"}), 409
 
@@ -749,7 +762,7 @@ def devolver(orcamento_id: int):
             continue
         try:
             estoque_repo.movimentar(
-                deposito_id=1, produto_id=vid,
+                deposito_id=orc.get("deposito_id") or 1, produto_id=vid,
                 tipo="entrada", quantidade=qtd,
                 documento=f"DEV {orc.get('numero', '')}",
             )

@@ -119,6 +119,18 @@ def test_item_nf_sem_pedido(system_db):
     assert r["status_tres_vias"] == "divergente"
 
 
+def test_linha_nf_repetida_nao_sobrescreve_divergencia(system_db):
+    rid, pid, _, _ = _setup_rec(system_db)
+    try:
+        tres_vias.conferir(rid, [
+            {"produto_id": pid, "quantidade": 5, "preco_unitario": 8.0},
+            {"produto_id": pid, "quantidade": 5, "preco_unitario": 8.0},
+        ])
+        assert False, "linha repetida deveria exigir vínculo explícito"
+    except ValueError as exc:
+        assert "mais de uma vez" in str(exc)
+
+
 def test_rejeitar(system_db):
     rid, pid, _, _ = _setup_rec(system_db)
     tres_vias.conferir(rid, [{"produto_id": pid, "quantidade": 13, "preco_unitario": 8.0}])

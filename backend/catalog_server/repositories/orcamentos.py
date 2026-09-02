@@ -70,6 +70,8 @@ class OrcamentoRepository:
         contribuinte: str | None = None,
         ie: str | None = None,
         modelo_documento: str | None = None,
+        deposito_id: int | None = None,
+        indicacao_id: int | None = None,
     ) -> tuple[int, str]:
         """Cria o orçamento com seus itens e calcula subtotal/total."""
         itens = itens or []
@@ -97,8 +99,8 @@ class OrcamentoRepository:
                      frete, seguro, despesas_acessorias,
                      total_liquido, condicao_pagamento_id, usuario_id,
                      cliente_id, cliente_doc, uf_destino, tipo_cliente,
-                     contribuinte, ie, modelo_documento)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     contribuinte, ie, modelo_documento, deposito_id, indicacao_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     numero,
@@ -123,6 +125,8 @@ class OrcamentoRepository:
                     contribuinte,
                     ie,
                     modelo_documento,
+                    deposito_id,
+                    indicacao_id,
                 ),
             )
             orcamento_id = cur.lastrowid

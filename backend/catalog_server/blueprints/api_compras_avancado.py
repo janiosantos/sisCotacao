@@ -3,6 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request
 from catalog_server.repositories import fornecedor_preco_repo, fornecedor_preferencial_repo, solicitacao_repo, tolerancia_repo
 from catalog_server.services import custo_engine, cotacao_necessidade, comparacao, alcada_compra, pedido_compra, recebimento as recebimento_svc, conferencia, tres_vias, nfe_entrada, devolucao
+from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 
 api_compras_avancado_bp = Blueprint("api_compras_avancado", __name__)
 
@@ -56,7 +57,7 @@ def criar_solicitacao():
     try:
         sc_id = solicitacao_repo.create(
             data.get("codigo", ""), data.get("descricao", ""),
-            data.get("observacao", ""), data.get("usuario_id"),
+            data.get("observacao", ""), usuario_id_requisicao(),
             data.get("prioridade") or "media", data.get("origem") or "manual",
             data.get("centro_custo"), data.get("deposito_id"),
             data.get("prazo_desejado"),
@@ -73,7 +74,7 @@ def transicionar_solicitacao(sc_id: int):
     if not status:
         return jsonify({"error": "status é obrigatório", "code": "status_obrigatorio"}), 400
     try:
-        return jsonify({"resultado": solicitacao_repo.transicionar(sc_id, status, data.get("usuario_id"))})
+        return jsonify({"resultado": solicitacao_repo.transicionar(sc_id, status, usuario_id_requisicao())})
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "solicitacao_nao_encontrada"}), 404
     except ValueError as exc:
@@ -114,7 +115,7 @@ def remover_item_solicitacao(sc_id: int, item_id: int):
 def cotar_solicitacao(sc_id: int):
     data = request.get_json(silent=True) or {}
     try:
-        return jsonify(cotacao_necessidade.gerar_cotacao(sc_id, data.get("apelido"), data.get("usuario_id")))
+        return jsonify(cotacao_necessidade.gerar_cotacao(sc_id, data.get("apelido"), usuario_id_requisicao()))
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "solicitacao_nao_encontrada"}), 404
     except ValueError as exc:
@@ -141,7 +142,7 @@ def comparacao_cotacao(cotacao_id: int):
 def decidir_vencedor(preco_id: int):
     data = request.get_json(silent=True) or {}
     try:
-        return jsonify(comparacao.decidir_vencedor(preco_id, data.get("justificativa") or "", data.get("usuario_id")))
+        return jsonify(comparacao.decidir_vencedor(preco_id, data.get("justificativa") or "", usuario_id_requisicao()))
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "proposta_nao_encontrada"}), 404
     except ValueError as exc:
@@ -174,10 +175,10 @@ def criar_alcada():
 
 @api_compras_avancado_bp.get("/api/alcada-compra/verificar")
 def verificar_alcada():
-    usuario_id = request.args.get("usuario_id", type=int)
+    usuario_id = usuario_id_requisicao()
     total = request.args.get("total", type=float)
     if not usuario_id or total is None:
-        return jsonify({"error": "usuario_id e total são obrigatórios", "code": "verificacao_invalida"}), 400
+        return jsonify({"error": "usuário autenticado e total são obrigatórios", "code": "verificacao_invalida"}), 400
     fornecedor_id = request.args.get("fornecedor_id", type=int)
     centro = request.args.get("centro_custo")
     return jsonify({
@@ -191,7 +192,7 @@ def registrar_aprovacao_api():
     data = request.get_json(silent=True) or {}
     try:
         return jsonify({"aprovacao": alcada_compra.registrar_aprovacao(
-            int(data["pedido_id"]), int(data["aprovador_id"]), data["status"],
+            int(data["pedido_id"]), usuario_id_requisicao(), data["status"],
             data.get("motivo"), data.get("antes"), data.get("depois"),
             int(data.get("versao") or 1),
         )})
@@ -206,7 +207,7 @@ def registrar_aprovacao_api():
 def gerar_pedido_de_cotacao(cotacao_id: int):
     data = request.get_json(silent=True) or {}
     try:
-        return jsonify(pedido_compra.gerar_pedido(cotacao_id, data.get("usuario_id")))
+        return jsonify(pedido_compra.gerar_pedido(cotacao_id, usuario_id_requisicao()))
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "cotacao_nao_encontrada"}), 404
     except ValueError as exc:
@@ -220,7 +221,7 @@ def transicionar_pedido(pedido_id: int):
     if not status:
         return jsonify({"error": "status é obrigatório", "code": "status_obrigatorio"}), 400
     try:
-        return jsonify({"resultado": pedido_compra.transicionar(pedido_id, status, data.get("usuario_id"))})
+        return jsonify({"resultado": pedido_compra.transicionar(pedido_id, status, usuario_id_requisicao())})
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "pedido_nao_encontrado"}), 404
     except ValueError as exc:
@@ -254,7 +255,7 @@ def criar_recebimento(pedido_id: int):
     data = request.get_json(silent=True) or {}
     try:
         return jsonify(recebimento_svc.criar(
-            pedido_id, int(data.get("deposito_id") or 1), data.get("documento_fiscal"), data.get("operador_id"),
+            pedido_id, int(data.get("deposito_id") or 1), data.get("documento_fiscal"), usuario_id_requisicao(),
         ))
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "pedido_nao_encontrado"}), 404
@@ -294,7 +295,7 @@ def finalizar_recebimento(recebimento_id: int):
     data = request.get_json(silent=True) or {}
     try:
         return jsonify(recebimento_svc.finalizar(
-            recebimento_id, data.get("condicao_pagamento_id"), data.get("usuario_id"),
+            recebimento_id, data.get("condicao_pagamento_id"), usuario_id_requisicao(),
         ))
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "recebimento_nao_encontrado"}), 404
@@ -314,7 +315,7 @@ def conferir_por_codigo(recebimento_id: int):
         return jsonify({"error": "codigo e quantidade são obrigatórios", "code": "scanner_invalido"}), 400
     try:
         return jsonify({"conferencia": conferencia.conferir_por_codigo(
-            recebimento_id, codigo, float(quantidade), data.get("unidade"), data.get("operador_id"),
+            recebimento_id, codigo, float(quantidade), data.get("unidade"), usuario_id_requisicao(),
         )})
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "recebimento_nao_encontrado"}), 404
@@ -355,7 +356,7 @@ def listar_divergencias(recebimento_id: int):
 def aprovar_tres_vias(recebimento_id: int):
     data = request.get_json(silent=True) or {}
     try:
-        return jsonify(tres_vias.aprovar(recebimento_id, data.get("usuario_id")))
+        return jsonify(tres_vias.aprovar(recebimento_id, usuario_id_requisicao()))
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "recebimento_nao_encontrado"}), 404
     except ValueError as exc:
@@ -443,7 +444,7 @@ def criar_devolucao(recebimento_id: int):
     try:
         return jsonify(devolucao.criar(
             recebimento_id, data.get("motivo") or "", data.get("estado") or "avariado",
-            data.get("documento_fiscal"), data.get("observacao"), data.get("usuario_id"),
+            data.get("documento_fiscal"), data.get("observacao"), usuario_id_requisicao(),
             data.get("itens") or [],
         )), 201
     except LookupError as exc:
@@ -469,7 +470,7 @@ def detalhe_devolucao(devolucao_id: int):
 def concluir_devolucao(devolucao_id: int):
     data = request.get_json(silent=True) or {}
     try:
-        return jsonify(devolucao.concluir(devolucao_id, data.get("usuario_id")))
+        return jsonify(devolucao.concluir(devolucao_id, usuario_id_requisicao()))
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "devolucao_nao_encontrada"}), 404
     except ValueError as exc:

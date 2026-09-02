@@ -198,6 +198,47 @@ export interface Cliente {
   categoria?: string;
 }
 
+export interface ParceiroProfissional {
+  id: number;
+  cliente_id: number;
+  codigo: string;
+  categoria: string;
+  status: "pendente" | "ativo" | "suspenso" | "bloqueado" | "inativo" | string;
+  nivel: "bronze" | "prata" | "ouro" | "platina" | string;
+  observacao: string | null;
+  cliente_nome: string;
+  cliente_doc: string | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export interface ParceiroPonto {
+  id: number;
+  tipo: "credito" | "debito" | "expiracao" | "ajuste" | string;
+  pontos: number;
+  origem_tipo: string | null;
+  origem_id: number | null;
+  observacao: string | null;
+  criado_em: string;
+}
+
+export interface ParceiroBonus {
+  id: number;
+  valor: number;
+  status: "pendente" | "aprovado" | "pago" | "cancelado" | string;
+  indicacao_id: number | null;
+  orcamento_id: number | null;
+  motivo: string | null;
+  criado_em: string;
+}
+
+export interface ParceiroLedger {
+  parceiro_id: number;
+  saldo_pontos: number;
+  pontos: ParceiroPonto[];
+  bonus: ParceiroBonus[];
+}
+
 export interface ClienteSituacao {
   nome: string;
   limite_credito: number;
@@ -1492,6 +1533,24 @@ export const api = {
     id: number,
     data: { tipo: string; descricao?: string; data_contato: string; data_proximo_contato?: string | null }
   ) => request<{ id: number }>("POST", `/api/clientes/${id}/interacoes`, data),
+
+  // parceiros profissionais, indicações, pontos e bônus
+  listarParceiros: (params: Record<string, unknown> = {}) =>
+    request<{ parceiros: ParceiroProfissional[] }>("GET", "/api/parceiros" + qs(params)),
+  criarParceiro: (data: { cliente_id: number; categoria: string; observacao?: string }) =>
+    request<ParceiroProfissional & { duplicado?: boolean }>("POST", "/api/parceiros", data),
+  alterarStatusParceiro: (id: number, status: string) =>
+    request<{ id: number; status: string }>("PATCH", `/api/parceiros/${id}/status`, { status }),
+  criarIndicacaoParceiro: (id: number, clienteId?: number) =>
+    request<{ id: number; codigo: string }>("POST", `/api/parceiros/${id}/indicacoes`, { cliente_id: clienteId || null }),
+  converterIndicacaoParceiro: (id: number, orcamentoId: number) =>
+    request<{ bonus: number; pontos: number }>("POST", `/api/parceiros/indicacoes/${id}/converter`, { orcamento_id: orcamentoId }),
+  aprovarBonusParceiro: (id: number) =>
+    request<{ id: number; status: string }>("POST", `/api/parceiros/bonus/${id}/aprovar`),
+  pagarBonusParceiro: (id: number) =>
+    request<{ id: number; status: string }>("POST", `/api/parceiros/bonus/${id}/pagar`),
+  ledgerParceiro: (id: number) => request<ParceiroLedger>("GET", `/api/parceiros/${id}/ledger`),
+
   listarVendedores: (somenteAtivos = false) =>
     request<Vendedor[]>("GET", "/api/vendedores" + qs({ somente_ativos: somenteAtivos })),
   detalharVendedor: (id: number) => request<Vendedor>("GET", `/api/vendedores/${id}`),
@@ -2396,6 +2455,7 @@ export interface OrcamentoPayload {
   condicao_pagamento_id?: number;
   usuario_id?: number;
   cliente_id?: number;
+  indicacao_id?: number | null;
 }
 
 export interface ProdutoSubcategoria {

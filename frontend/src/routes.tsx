@@ -11,6 +11,7 @@ export interface RouteDef {
 
 const Dashboard = lazy(() => import("./pages/dashboard"));
 const Clientes = lazy(() => import("./pages/clientes"));
+const Parceiros = lazy(() => import("./pages/parceiros"));
 const Fornecedores = lazy(() => import("./pages/fornecedores"));
 const Vendedores = lazy(() => import("./pages/vendedores"));
 const Usuarios = lazy(() => import("./pages/usuarios"));
@@ -88,6 +89,7 @@ export const ROUTES: RouteDef[] = [
   { pattern: /^#\/fornecedores$/, title: "Fornecedores", component: Fornecedores, recurso: "fornecedores" },
   { pattern: /^#\/historico$/, title: "Histórico de Preços", component: Historico, recurso: "historico" },
   { pattern: /^#\/clientes$/, title: "Clientes", component: Clientes, recurso: "clientes" },
+  { pattern: /^#\/parceiros$/, title: "Parceiros", component: Parceiros, recurso: "parceiros" },
   { pattern: /^#\/vendedores$/, title: "Vendedores", component: Vendedores, recurso: "vendedores" },
   { pattern: /^#\/usuarios$/, title: "Usuários", component: Usuarios, recurso: "usuarios" },
   { pattern: /^#\/perfis$/, title: "Perfis e permissões", component: Perfis, recurso: "perfis" },

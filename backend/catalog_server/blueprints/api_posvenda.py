@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request
 
 from catalog_server.repositories import garantia_repo, interacao_repo
 from catalog_server.services import posvenda, crm_comissao
+from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 
 api_posvenda_bp = Blueprint("api_posvenda", __name__)
 
@@ -35,7 +36,7 @@ def criar_interacao():
         data_contato=data_contato,
         data_proximo_contato=data.get("data_proximo_contato"),
         orcamento_id=data.get("orcamento_id"),
-        usuario_id=data.get("usuario_id"),
+        usuario_id=usuario_id_requisicao(),
     )
     return jsonify({"id": interacao_id}), 201
 
@@ -170,9 +171,10 @@ def listar_oportunidades():
 
 @api_posvenda_bp.post("/api/posvenda/comissoes/apurar/<int:orcamento_id>")
 def apurar_comissao(orcamento_id: int):
-    data = request.get_json(silent=True) or {}
     try:
-        return jsonify(crm_comissao.apurar_venda(orcamento_id, data.get("vendedor_id")))
+        # O vendedor é a autoria comercial congelada no orçamento; não pode
+        # ser trocado pelo payload de uma chamada administrativa.
+        return jsonify(crm_comissao.apurar_venda(orcamento_id))
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "orcamento_nao_encontrado"}), 404
     except ValueError as exc:

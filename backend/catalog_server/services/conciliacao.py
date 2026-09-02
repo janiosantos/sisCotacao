@@ -56,13 +56,13 @@ def sugerir_matching(conta_id: int, tolerancia: float = 0.01) -> list[dict]:
             "SELECT * FROM extrato_bancario WHERE conta_id=? AND status IN ('importado','sugerido')",
             (conta_id,),
         ).fetchall()
-        contas = conn.execute(
+        contas = [dict(c) | {"conta_tipo": "receber"} for c in conn.execute(
             """SELECT id, descricao, saldo, documento, data_vencimento, status
                FROM contas_receber WHERE status IN ('aberto','parcial')""",
-        ).fetchall() + conn.execute(
+        ).fetchall()] + [dict(c) | {"conta_tipo": "pagar"} for c in conn.execute(
             """SELECT id, descricao, saldo, documento, data_vencimento, status
                FROM contas_pagar WHERE status IN ('aberto','parcial')""",
-        ).fetchall()
+        ).fetchall()]
         sugestoes = []
         for m in movs:
             melhor = None
@@ -72,10 +72,12 @@ def sugerir_matching(conta_id: int, tolerancia: float = 0.01) -> list[dict]:
                     break
             if melhor:
                 conn.execute(
-                    "UPDATE extrato_bancario SET status='sugerido', matching_conta_id=? WHERE id=?",
-                    (melhor["id"], m["id"]),
+                    "UPDATE extrato_bancario SET status='sugerido', matching_conta_id=?, "
+                    "matching_conta_tipo=? WHERE id=?",
+                    (melhor["id"], melhor["conta_tipo"], m["id"]),
                 )
                 sugestoes.append({"movimento_id": m["id"], "matching_conta_id": melhor["id"],
+                                  "matching_conta_tipo": melhor["conta_tipo"],
                                   "valor": float(m["valor"] or 0), "descricao": m["descricao"],
                                   "conta_descricao": melhor["descricao"]})
     return sugestoes
@@ -84,29 +86,56 @@ def sugerir_matching(conta_id: int, tolerancia: float = 0.01) -> list[dict]:
 def aprovar(movimento_id: int, usuario_id: int | None = None) -> dict:
     """Aprova a conciliação: baixa a conta correspondente e marca conciliado (auditado)."""
     with system_conn() as conn:
-        mov = conn.execute("SELECT * FROM extrato_bancario WHERE id=?", (movimento_id,)).fetchone()
+        mov = conn.execute("SELECT * FROM extrato_bancario WHERE id=? FOR UPDATE", (movimento_id,)).fetchone()
         if not mov:
             raise LookupError("Movimento bancário não encontrado")
         if mov["status"] == "conciliado":
             return {"movimento_id": movimento_id, "duplicado": True}
         conta = None
-        if mov["matching_conta_id"]:
+        conta_tipo = mov["matching_conta_tipo"]
+        if mov["matching_conta_id"] and conta_tipo in ("receber", "pagar"):
+            tabela = "contas_receber" if conta_tipo == "receber" else "contas_pagar"
             conta = conn.execute(
-                "SELECT * FROM contas_receber WHERE id=?", (mov["matching_conta_id"],)
-            ).fetchone() or conn.execute(
-                "SELECT * FROM contas_pagar WHERE id=?", (mov["matching_conta_id"],)
+                f"SELECT * FROM {tabela} WHERE id=? FOR UPDATE", (mov["matching_conta_id"],)
             ).fetchone()
+        elif mov["matching_conta_id"]:
+            # Compatibilidade com sugestões gravadas antes da coluna de tipo:
+            # só aceita quando o ID existir em exatamente um ledger.
+            receber = conn.execute(
+                "SELECT * FROM contas_receber WHERE id=? FOR UPDATE", (mov["matching_conta_id"],)
+            ).fetchone()
+            pagar = conn.execute(
+                "SELECT * FROM contas_pagar WHERE id=? FOR UPDATE", (mov["matching_conta_id"],)
+            ).fetchone()
+            if receber and pagar:
+                raise ValueError("Conciliação ambígua: informe o tipo do título")
+            conta = receber or pagar
+            conta_tipo = "receber" if receber else "pagar" if pagar else None
+        if mov["matching_conta_id"] and conta is None:
+            raise ValueError("Título da conciliação não encontrado")
         if conta:
-            conn.execute(
-                "UPDATE contas_receber SET status='pago', data_recebimento=NOW(), saldo=0 WHERE id=?",
-                (mov["matching_conta_id"],),
-            )
+            if float(conta["saldo"] or 0) <= 0 or conta["status"] == "pago":
+                raise ValueError("Título já baixado ou sem saldo")
+            if abs(abs(float(mov["valor"] or 0)) - float(conta["saldo"] or 0)) > 0.01:
+                raise ValueError("Valor do extrato diverge do saldo do título")
+            if conta_tipo == "receber":
+                conn.execute(
+                    "UPDATE contas_receber SET status='pago', data_recebimento=NOW(), saldo=0 WHERE id=?",
+                    (mov["matching_conta_id"],),
+                )
+            else:
+                conn.execute(
+                    "UPDATE contas_pagar SET status='pago', data_pagamento=NOW(), saldo=0 WHERE id=?",
+                    (mov["matching_conta_id"],),
+                )
         conn.execute(
-            "UPDATE extrato_bancario SET status='conciliado', aprovado_por=?, aprovado_em=NOW() WHERE id=?",
-            (usuario_id, movimento_id),
+            "UPDATE extrato_bancario SET status='conciliado', aprovado_por=?, aprovado_em=NOW(), "
+            "matching_conta_tipo=? WHERE id=?",
+            (usuario_id, conta_tipo, movimento_id),
         )
         infra.registrar("conciliar_bancario", "extrato_bancario", movimento_id,
-                        depois={"status": "conciliado", "matching": mov["matching_conta_id"]},
+                        depois={"status": "conciliado", "matching": mov["matching_conta_id"],
+                                "matching_tipo": conta_tipo},
                         ator_id=usuario_id, conn=conn)
     return {"movimento_id": movimento_id, "status": "conciliado", "conta_baixada": bool(conta)}
 
@@ -114,7 +143,8 @@ def aprovar(movimento_id: int, usuario_id: int | None = None) -> dict:
 def rejeitar(movimento_id: int, usuario_id: int | None = None) -> dict:
     with system_conn() as conn:
         cur = conn.execute(
-            "UPDATE extrato_bancario SET status='rejeitado', matching_conta_id=NULL, aprovado_por=? WHERE id=?",
+            "UPDATE extrato_bancario SET status='rejeitado', matching_conta_id=NULL, "
+            "matching_conta_tipo=NULL, aprovado_por=? WHERE id=?",
             (usuario_id, movimento_id),
         )
         if cur.rowcount == 0:

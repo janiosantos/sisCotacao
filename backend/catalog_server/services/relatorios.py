@@ -32,7 +32,7 @@ def dashboard_executivo(data_inicio: str | None = None, data_fim: str | None = N
                  COUNT(DISTINCT o.id) AS pedidos,
                  COALESCE(SUM(o.total),0) AS receita_bruta,
                  COALESCE(SUM(o.desconto),0) AS desconto,
-                 COALESCE(SUM(o.total - o.desconto),0) AS receita_liquida
+                 COALESCE(SUM(COALESCE(NULLIF(o.total_liquido, 0), o.total - o.desconto)),0) AS receita_liquida
                FROM orcamentos o
                WHERE o.status IN ('finalizado','recebido')
                  AND SUBSTR(o.criado_em,1,10) BETWEEN ? AND ?""",
@@ -86,7 +86,7 @@ def dashboard_executivo(data_inicio: str | None = None, data_fim: str | None = N
 # ─── BI-003: Vendas (agrupáveis, cancelados separados) ─────
 
 _AGRUPAMENTOS = {"produto": "oi.produto_id", "marca": "oi.marca", "grupo": "p.categoria_id",
-                 "vendedor": "o.usuario_id", "cliente": "o.cliente_id", "deposito": "o.uf_destino",
+                 "vendedor": "o.usuario_id", "cliente": "o.cliente_id", "deposito": "o.deposito_id",
                  "canal": "o.modelo_documento", "forma": "o.condicao_pagamento_id"}
 
 
@@ -101,6 +101,7 @@ def vendas(data_inicio: str | None = None, data_fim: str | None = None, agrupame
                   COALESCE(SUM(oi.quantidade * oi.preco_unitario),0) AS receita_bruta,
                   COUNT(DISTINCT o.id) AS pedidos
                FROM orcamento_itens oi JOIN orcamentos o ON o.id=oi.orcamento_id
+               LEFT JOIN produtos_cadastro p ON p.id=oi.produto_id
                WHERE o.status IN ('finalizado','recebido')
                  AND SUBSTR(o.criado_em,1,10) BETWEEN ? AND ?
                GROUP BY {ag} ORDER BY receita_liquida DESC LIMIT 200""",
@@ -204,7 +205,7 @@ def financeiro(data_inicio: str | None = None, data_fim: str | None = None) -> d
         ).fetchone()
         dre = conn.execute(
             """SELECT
-                 (SELECT COALESCE(SUM(total),0) FROM orcamentos WHERE status IN ('finalizado','recebido') AND SUBSTR(criado_em,1,10) BETWEEN ? AND ?) AS receita,
+                 (SELECT COALESCE(SUM(COALESCE(NULLIF(total_liquido, 0), total - desconto)),0) FROM orcamentos WHERE status IN ('finalizado','recebido') AND SUBSTR(criado_em,1,10) BETWEEN ? AND ?) AS receita,
                  (SELECT COALESCE(SUM(custo_unitario * quantidade),0) FROM estoque_movimento WHERE tipo='saida' AND origem_tipo='venda' AND SUBSTR(criado_em,1,10) BETWEEN ? AND ?) AS cmv""",
             (inicio, fim, inicio, fim),
         ).fetchone()

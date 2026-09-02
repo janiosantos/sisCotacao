@@ -19,16 +19,14 @@ def registrar(orcamento_id: int, pagamentos: list[dict], idempotency_key: str | 
     if not pagamentos:
         raise ValueError("pagamentos é obrigatório")
     with system_conn() as conn:
-        orc = conn.execute("SELECT * FROM orcamentos WHERE id=?", (orcamento_id,)).fetchone()
+        orc = conn.execute("SELECT * FROM orcamentos WHERE id=? FOR UPDATE", (orcamento_id,)).fetchone()
         if not orc:
             raise LookupError("Orçamento não encontrado")
         if orc["status"] not in ("finalizado", "recebido"):
             raise ValueError(f"Orçamento {orc['status']} — pagamentos exigem pedido finalizado")
 
         total = float(orc["total"] or 0)
-        soma = 0.0
         criados = []
-        pendentes = 0
         for i, p in enumerate(pagamentos):
             forma = (p.get("forma") or p.get("forma_pagamento") or "").strip().lower()
             if forma not in FORMAS:
@@ -36,15 +34,17 @@ def registrar(orcamento_id: int, pagamentos: list[dict], idempotency_key: str | 
             valor = float(p.get("valor") or 0)
             if valor <= 0:
                 raise ValueError("valor deve ser positivo")
-            soma += valor
             key = f"{idempotency_key or 'auto'}-{i}" if idempotency_key else None
             status = "confirmado" if forma not in PENDENTES_POR_PADRAO else "pendente"
             if key:
                 existente = conn.execute(
-                    "SELECT id FROM orcamento_pagamento WHERE orcamento_id=? AND idempotency_key=?",
+                    "SELECT id, forma, valor, status FROM orcamento_pagamento "
+                    "WHERE orcamento_id=? AND idempotency_key=? FOR UPDATE",
                     (orcamento_id, key),
                 ).fetchone()
                 if existente:
+                    if existente["forma"] != forma or abs(float(existente["valor"] or 0) - valor) > 0.005:
+                        raise ValueError("Chave idempotente reutilizada com pagamento diferente")
                     criados.append(existente["id"])
                     continue
             pid_novo = conn.execute(
@@ -57,9 +57,20 @@ def registrar(orcamento_id: int, pagamentos: list[dict], idempotency_key: str | 
             ).fetchone()["id"]
             criados.append(pid_novo)
             if status == "confirmado":
-                _lancar_caixa(conn, orc, forma, valor, p.get("bandeira"), p.get("codigo_autorizacao"), usuario_id)
-            else:
-                pendentes += 1
+                _lancar_caixa(
+                    conn, orc, forma, valor, p.get("bandeira"),
+                    p.get("codigo_autorizacao"), usuario_id,
+                    idempotency_key=f"venda-pagamento-{pid_novo}",
+                )
+
+        ativos = conn.execute(
+            "SELECT COALESCE(SUM(valor),0) AS soma, "
+            "COUNT(*) FILTER (WHERE status='pendente') AS pendentes "
+            "FROM orcamento_pagamento WHERE orcamento_id=? AND status <> 'estornado'",
+            (orcamento_id,),
+        ).fetchone()
+        soma = round(float(ativos["soma"] or 0), 2)
+        pendentes = int(ativos["pendentes"] or 0)
         if soma > total + 1e-6:
             tem_dinheiro = any((p.get("forma") or "").strip().lower() == "dinheiro" for p in pagamentos)
             if not tem_dinheiro:
@@ -72,12 +83,13 @@ def registrar(orcamento_id: int, pagamentos: list[dict], idempotency_key: str | 
                 "total_pagamentos": round(soma, 2), "pendentes": pendentes}
 
 
-def _lancar_caixa(conn, orc, forma, valor, bandeira, codigo, usuario_id):
+def _lancar_caixa(conn, orc, forma, valor, bandeira, codigo, usuario_id, idempotency_key=None):
     descricao = f"Venda {orc['numero']} — {orc['cliente'] or 'cliente'}"
     caixa_repo.movimentar(
         "entrada", descricao, round(valor, 2), forma_pagamento=forma,
         documento=orc["numero"], orcamento_id=orc["id"], usuario_id=usuario_id,
         bandeira=bandeira, codigo_autorizacao=codigo, _conn=conn,
+        idempotency_key=idempotency_key,
     )
 
 
@@ -85,12 +97,13 @@ def confirmar(orcamento_id: int, idempotency_key: str | None = None, usuario_id:
     """Confirma pagamentos pendentes (cartão/PIX) e marca a venda como paga quando
     a soma fecha o total (troco só em dinheiro)."""
     with system_conn() as conn:
-        orc = conn.execute("SELECT * FROM orcamentos WHERE id=?", (orcamento_id,)).fetchone()
+        orc = conn.execute("SELECT * FROM orcamentos WHERE id=? FOR UPDATE", (orcamento_id,)).fetchone()
         if not orc:
             raise LookupError("Orçamento não encontrado")
         total = float(orc["total"] or 0)
         pagamentos = conn.execute(
-            "SELECT * FROM orcamento_pagamento WHERE orcamento_id=? ORDER BY id",
+            "SELECT * FROM orcamento_pagamento WHERE orcamento_id=? "
+            "AND status IN ('pendente','confirmado') ORDER BY id FOR UPDATE",
             (orcamento_id,),
         ).fetchall()
         if not pagamentos:
@@ -105,12 +118,16 @@ def confirmar(orcamento_id: int, idempotency_key: str | None = None, usuario_id:
                     "UPDATE orcamento_pagamento SET status='confirmado', confirmado_em=NOW() WHERE id=?",
                     (p["id"],),
                 )
-                _lancar_caixa(conn, orc, p["forma"], float(p["valor"]), p["bandeira"], p["codigo_autorizacao"], usuario_id)
+                _lancar_caixa(
+                    conn, orc, p["forma"], float(p["valor"]), p["bandeira"],
+                    p["codigo_autorizacao"], usuario_id,
+                    idempotency_key=f"venda-pagamento-{p['id']}",
+                )
             soma_confirmado += float(p["valor"])
         # troco só em dinheiro: excedente devolvido como saída de caixa
         if soma_confirmado > total + 1e-6:
             troco = round(soma_confirmado - total, 2)
-            dinheiro = next((p for p in pagamentos if p["forma"] == "dinheiro" and p["status"] != "estornado"), None)
+            dinheiro = next((p for p in pagamentos if p["forma"] == "dinheiro"), None)
             if dinheiro:
                 caixa_repo.movimentar("saida", f"Troco venda {orc['numero']}", troco,
                                       forma_pagamento="dinheiro", orcamento_id=orcamento_id,
@@ -139,7 +156,8 @@ def estornar(pagamento_id: int, usuario_id: int | None = None) -> dict:
         if p["status"] == "confirmado":
             caixa_repo.movimentar("saida", f"Estorno pagamento #{pagamento_id}", float(p["valor"]),
                                   forma_pagamento=p["forma"], orcamento_id=p["orcamento_id"],
-                                  usuario_id=usuario_id, _conn=conn)
+                                  usuario_id=usuario_id, _conn=conn,
+                                  idempotency_key=f"estorno-pagamento-{pagamento_id}")
         conn.execute(
             "UPDATE orcamento_pagamento SET status='estornado', estornado_em=NOW() WHERE id=?",
             (pagamento_id,),

@@ -15,7 +15,7 @@ api_financeiro_bp = Blueprint("api_financeiro", __name__)
 @api_financeiro_bp.post("/api/financeiro/caixa/sessao/abrir")
 def abrir_sessao_caixa():
     data = request.get_json(silent=True) or {}
-    operador_id = data.get("operador_id") or usuario_id_requisicao()
+    operador_id = usuario_id_requisicao()
     if not operador_id:
         return jsonify({"error": "operador_id é obrigatório", "code": "operador_obrigatorio"}), 400
     try:
@@ -31,7 +31,7 @@ def abrir_sessao_caixa():
 def suprimento_sessao(sessao_id: int):
     data = request.get_json(silent=True) or {}
     try:
-        return jsonify(caixa_sessao.suprimento(sessao_id, float(data.get("valor") or 0), data.get("descricao") or "", data.get("usuario_id")))
+        return jsonify(caixa_sessao.suprimento(sessao_id, float(data.get("valor") or 0), data.get("descricao") or "", usuario_id_requisicao()))
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "sessao_nao_encontrada"}), 404
     except ValueError as exc:
@@ -42,7 +42,7 @@ def suprimento_sessao(sessao_id: int):
 def sangria_sessao(sessao_id: int):
     data = request.get_json(silent=True) or {}
     try:
-        return jsonify(caixa_sessao.sangria(sessao_id, float(data.get("valor") or 0), data.get("descricao") or "", data.get("usuario_id")))
+        return jsonify(caixa_sessao.sangria(sessao_id, float(data.get("valor") or 0), data.get("descricao") or "", usuario_id_requisicao()))
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "sessao_nao_encontrada"}), 404
     except ValueError as exc:
@@ -63,7 +63,7 @@ def fechar_sessao_caixa(sessao_id: int):
 @api_financeiro_bp.post("/api/financeiro/caixa/sessao/<int:sessao_id>/aprovar")
 def aprovar_sessao_caixa(sessao_id: int):
     data = request.get_json(silent=True) or {}
-    aprovador_id = data.get("aprovador_id") or usuario_id_requisicao()
+    aprovador_id = usuario_id_requisicao()
     try:
         return jsonify(caixa_sessao.aprovar(sessao_id, int(aprovador_id)))
     except LookupError as exc:

@@ -33,3 +33,4 @@ from catalog_server.blueprints.pages import pages_bp
 from catalog_server.blueprints.portal import portal_bp
 
 from catalog_server.blueprints.api_infra import api_infra_bp
+from catalog_server.blueprints.api_parceiros import api_parceiros_bp

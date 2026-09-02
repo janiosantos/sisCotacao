@@ -14,16 +14,13 @@ def abrir(operador_id: int, saldo_inicial: float, deposito_id: int = 1, terminal
         raise ValueError("saldo_inicial não pode ser negativo")
     with system_conn() as conn:
         existente = conn.execute(
-            "SELECT id FROM caixa_sessao WHERE operador_id=? AND status='aberta'",
-            (operador_id,),
-        ).fetchone()
-        if existente:
-            raise ValueError("Operador já possui sessão de caixa aberta")
-        sessao_id = conn.execute(
             "INSERT INTO caixa_sessao (deposito_id, operador_id, terminal, saldo_inicial, status)"
-            " VALUES (?,?,?,?, 'aberta') RETURNING id",
+            " VALUES (?,?,?,?, 'aberta') ON CONFLICT (operador_id) WHERE status='aberta' DO NOTHING RETURNING id",
             (deposito_id, operador_id, terminal, saldo_inicial),
-        ).fetchone()["id"]
+        ).fetchone()
+        if not existente:
+            raise ValueError("Operador já possui sessão de caixa aberta")
+        sessao_id = existente["id"]
         if saldo_inicial > 0:
             caixa_repo.movimentar(
                 "abertura", f"Abertura de caixa (sessão #{sessao_id})", saldo_inicial,
@@ -43,7 +40,11 @@ def _validar_aberta(conn, sessao_id: int) -> dict:
 
 def suprimento(sessao_id: int, valor: float, descricao: str = "", usuario_id: int | None = None) -> dict:
     with system_conn() as conn:
-        sess = _validar_aberta(conn, sessao_id)
+        sess = conn.execute("SELECT * FROM caixa_sessao WHERE id=? FOR UPDATE", (sessao_id,)).fetchone()
+        if not sess:
+            raise LookupError("Sessão de caixa não encontrada")
+        if sess["status"] != "aberta":
+            raise ValueError(f"Sessão {sess['status']} — não aceita movimentos")
         r = caixa_repo.movimentar(
             "suprimento", descricao or f"Suprimento (sessão #{sessao_id})", float(valor),
             usuario_id=usuario_id or sess["operador_id"], sessao_id=sessao_id, _conn=conn,
@@ -53,7 +54,11 @@ def suprimento(sessao_id: int, valor: float, descricao: str = "", usuario_id: in
 
 def sangria(sessao_id: int, valor: float, descricao: str = "", usuario_id: int | None = None) -> dict:
     with system_conn() as conn:
-        sess = _validar_aberta(conn, sessao_id)
+        sess = conn.execute("SELECT * FROM caixa_sessao WHERE id=? FOR UPDATE", (sessao_id,)).fetchone()
+        if not sess:
+            raise LookupError("Sessão de caixa não encontrada")
+        if sess["status"] != "aberta":
+            raise ValueError(f"Sessão {sess['status']} — não aceita movimentos")
         r = caixa_repo.movimentar(
             "sangria", descricao or f"Sangria (sessão #{sessao_id})", float(valor),
             usuario_id=usuario_id or sess["operador_id"], sessao_id=sessao_id, _conn=conn,
@@ -64,7 +69,9 @@ def sangria(sessao_id: int, valor: float, descricao: str = "", usuario_id: int |
 def fechar(sessao_id: int, saldo_contado: float, justificativa: str | None = None) -> dict:
     saldo_contado = float(saldo_contado or 0)
     with system_conn() as conn:
-        sess = _validar_aberta(conn, sessao_id)
+        sess = conn.execute("SELECT * FROM caixa_sessao WHERE id=? FOR UPDATE", (sessao_id,)).fetchone()
+        if not sess:
+            raise LookupError("Sessão de caixa não encontrada")
         movs = conn.execute(
             "SELECT tipo, valor FROM caixa_movimento WHERE sessao_id=?",
             (sessao_id,),
@@ -87,11 +94,15 @@ def fechar(sessao_id: int, saldo_contado: float, justificativa: str | None = Non
 
 def aprovar(sessao_id: int, aprovador_id: int) -> dict:
     with system_conn() as conn:
-        sess = conn.execute("SELECT status FROM caixa_sessao WHERE id=?", (sessao_id,)).fetchone()
+        sess = conn.execute("SELECT status, operador_id, diferenca, aprovador_id FROM caixa_sessao WHERE id=? FOR UPDATE", (sessao_id,)).fetchone()
         if not sess:
             raise LookupError("Sessão de caixa não encontrada")
         if sess["status"] != "fechada":
             raise ValueError("Aprovação de diferença exige sessão fechada")
+        if sess["aprovador_id"]:
+            raise ValueError("Sessão de caixa já foi aprovada")
+        if sess["operador_id"] == aprovador_id:
+            raise ValueError("O operador não pode aprovar a própria sessão")
         conn.execute(
             "UPDATE caixa_sessao SET aprovador_id=?, aprovado_em=NOW() WHERE id=?",
             (aprovador_id, sessao_id),

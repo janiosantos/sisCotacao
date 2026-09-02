@@ -29,7 +29,7 @@ def _saldo(conn, deposito_id: int, produto_id: int) -> dict:
             "bloqueado": float(row["bloqueado"] or 0), "separacao": float(row["separacao"] or 0)}
 
 
-def _transito(conn, produto_id: int) -> float:
+def _transito(conn, produto_id: int, deposito_id: int | None = None) -> float:
     """Compras confirmadas em trânsito (pedidos não recebidos/cancelados)."""
     row = conn.execute(
         """
@@ -38,13 +38,14 @@ def _transito(conn, produto_id: int) -> float:
         JOIN pedidos_compra pc ON pc.id=pi.pedido_id
         JOIN cotacao_itens ci ON ci.id=pi.cotacao_item_id
         WHERE ci.produto_id=? AND pc.status NOT IN ('recebido','cancelado')
+          AND (? IS NULL OR pc.deposito_id=? OR pc.deposito_id IS NULL)
         """,
-        (produto_id,),
+        (produto_id, deposito_id, deposito_id),
     ).fetchone()
     return float(row["qtd"] or 0)
 
 
-def _demanda_aberta(conn, produto_id: int) -> float:
+def _demanda_aberta(conn, produto_id: int, deposito_id: int | None = None) -> float:
     """Demanda aberta: orçamentos firmes (em_análise/liberado) + registros abertos."""
     row = conn.execute(
         """
@@ -52,17 +53,19 @@ def _demanda_aberta(conn, produto_id: int) -> float:
             SELECT SUM(oi.quantidade) FROM orcamento_itens oi
             JOIN orcamentos o ON o.id=oi.orcamento_id
             WHERE oi.produto_id=? AND o.status IN ('em_analise','liberado') AND o.virou_pedido=0
+              AND (? IS NULL OR o.deposito_id=? OR o.deposito_id IS NULL)
         ),0) + COALESCE((
             SELECT SUM(quantidade) FROM demanda_registro
             WHERE produto_id=? AND status='aberta'
+              AND (? IS NULL OR deposito_id=? OR deposito_id IS NULL)
         ),0) AS qtd
         """,
-        (produto_id, produto_id),
+        (produto_id, deposito_id, deposito_id, produto_id, deposito_id, deposito_id),
     ).fetchone()
     return float(row["qtd"] or 0)
 
 
-def _demanda_mensal(conn, produto_id: int) -> float:
+def _demanda_mensal(conn, produto_id: int, deposito_id: int | None = None) -> float:
     """Média mensal de vendas finalizadas nos últimos 6 meses."""
     row = conn.execute(
         """
@@ -70,12 +73,13 @@ def _demanda_mensal(conn, produto_id: int) -> float:
             SELECT SUM(oi.quantidade) AS qtd
             FROM orcamento_itens oi
             JOIN orcamentos o ON o.id=oi.orcamento_id
-            WHERE o.status='finalizado' AND oi.produto_id=?
+            WHERE o.status IN ('finalizado','recebido') AND oi.produto_id=?
+              AND (? IS NULL OR o.deposito_id=? OR o.deposito_id IS NULL)
               AND SUBSTR(o.criado_em,1,10) >= to_char(CURRENT_DATE - interval '6 month', 'YYYY-MM-DD')
             GROUP BY SUBSTR(o.criado_em,1,7)
         ) m
         """,
-        (produto_id,),
+        (produto_id, deposito_id, deposito_id),
     ).fetchone()
     return float(row["media"] or 0)
 
@@ -126,6 +130,8 @@ def calcular(produto_id: int | None = None, deposito_id: int | None = None) -> d
                 "   FROM orcamento_itens oi JOIN orcamentos o ON o.id=oi.orcamento_id"
                 "   WHERE o.status='finalizado'"
                 "     AND SUBSTR(o.criado_em,1,10) >= to_char(CURRENT_DATE - interval '6 month', 'YYYY-MM-DD')"
+                " UNION SELECT produto_id, COALESCE(deposito_id, (SELECT id FROM depositos ORDER BY id LIMIT 1))"
+                "   FROM demanda_registro WHERE status='aberta'"
             )
             if deposito_id:
                 sql = f"SELECT * FROM ({sql}) t WHERE deposito_id=?"
@@ -148,8 +154,8 @@ def calcular(produto_id: int | None = None, deposito_id: int | None = None) -> d
                 continue
             s = _saldo(conn, dep, pid)
             disponivel = s["fisico"] - s["reservado"] - s["bloqueado"] - s["separacao"]
-            transito = _transito(conn, pid)
-            demanda_aberta = _demanda_aberta(conn, pid)
+            transito = _transito(conn, pid, dep)
+            demanda_aberta = _demanda_aberta(conn, pid, dep)
             disponivel_projetado = disponivel + transito - demanda_aberta
 
             par = parametro_svc.obter_efetivo(pid, dep)
@@ -168,7 +174,7 @@ def calcular(produto_id: int | None = None, deposito_id: int | None = None) -> d
                 lead_dias = _fornecedor_lead_time(conn, f["fornecedor_id"]) or 0
             lead_dias = lead_dias or 0
 
-            demanda_mensal = _demanda_mensal(conn, pid)
+            demanda_mensal = _demanda_mensal(conn, pid, dep)
             demanda_lead = demanda_mensal * lead_dias / 30.0 if lead_dias else 0.0
             alvo = maximo if maximo > 0 else (minimo + seguranca)
             necessidade = max(0.0, alvo + demanda_lead - disponivel_projetado)
@@ -207,6 +213,7 @@ def calcular(produto_id: int | None = None, deposito_id: int | None = None) -> d
                 "deposito_id": dep,
                 "fisico": round(s["fisico"], 3), "reservado": round(s["reservado"], 3),
                 "bloqueado": round(s["bloqueado"], 3),
+                "separacao": round(s["separacao"], 3),
                 "disponivel": round(disponivel, 3),
                 "transito": round(transito, 3), "demanda_aberta": round(demanda_aberta, 3),
                 "disponivel_projetado": round(disponivel_projetado, 3),

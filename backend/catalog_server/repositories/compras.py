@@ -316,6 +316,13 @@ class ComprasRepository:
         """Gera pedidos consolidados por fornecedor. logica: fracionado|centralizado."""
         logica = "centralizado" if logica == "centralizado" else "fracionado"
         with system_conn() as conn:
+            destino = conn.execute(
+                "SELECT sc.deposito_id FROM cotacoes c "
+                "LEFT JOIN solicitacao_compra sc ON sc.id=c.solicitacao_id "
+                "WHERE c.id=?",
+                (cotacao_id,),
+            ).fetchone()
+            deposito_destino = destino["deposito_id"] if destino else None
             itens = conn.execute(
                 "SELECT id AS cotacao_item_id, produto_id, descricao, quantidade"
                 " FROM cotacao_itens WHERE cotacao_id=? ORDER BY id",
@@ -351,9 +358,9 @@ class ComprasRepository:
             for i, (fid, linhas) in enumerate(sorted(agrupados.items()), start=1):
                 numero = str(numero_base + i).zfill(4)
                 cur = conn.execute(
-                    "INSERT INTO pedidos_compra (numero, cotacao_id, fornecedor_id,"
-                    " status, observacoes, data_geracao) VALUES (?,?,?,'enviado',?, datetime('now'))",
-                    (numero, cotacao_id, fid, f"Cotação {cotacao_id} · {logica}"),
+                    "INSERT INTO pedidos_compra (numero, cotacao_id, fornecedor_id, deposito_id,"
+                    " status, observacoes, data_geracao) VALUES (?,?,?,?,'enviado',?, datetime('now'))",
+                    (numero, cotacao_id, fid, deposito_destino, f"Cotação {cotacao_id} · {logica}"),
                 )
                 pedido_id = cur.lastrowid
                 total = 0.0

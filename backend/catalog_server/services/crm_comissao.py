@@ -96,7 +96,14 @@ def apurar_venda(orcamento_id: int, vendedor_id: int | None = None) -> dict:
         if not vid:
             return {"orcamento_id": orcamento_id, "comissao": 0.0, "motivo": "sem vendedor"}
         pct, versao = _percentual_vendedor(conn, vid)
-        base = round(float(orc["total"] or 0) - float(orc["desconto"] or 0), 2)
+        # `total_liquido` já é o total após desconto nos documentos criados
+        # pelo ERP. O fallback preserva documentos legados que gravavam apenas
+        # o total bruto e o desconto em colunas separadas.
+        total_liquido = float(orc["total_liquido"] or 0)
+        base_bruta = total_liquido if total_liquido > 0 else (
+            float(orc["total"] or 0) - float(orc["desconto"] or 0)
+        )
+        base = round(max(base_bruta, 0.0), 2)
         valor = round(base * pct / 100.0, 2)
         com_id = conn.execute(
             "INSERT INTO comissao (orcamento_id, vendedor_id, base, percentual, valor, politica_versao, status)"

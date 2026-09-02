@@ -81,9 +81,9 @@ def conferir_item(recebimento_id: int, item_id: int, qtd_aceita: float, qtd_recu
         global_rec = conn.execute(
             "SELECT COALESCE(SUM(r.qtd_aceita + r.qtd_recusada + r.qtd_avariada),0) AS soma"
             " FROM recebimento_item r JOIN recebimento rc ON rc.id=r.recebimento_id"
-            " WHERE r.produto_id=? AND rc.pedido_id=(SELECT pedido_id FROM recebimento WHERE id=?)"
+            " WHERE r.pedido_item_id=? AND rc.pedido_id=(SELECT pedido_id FROM recebimento WHERE id=?)"
             " AND rc.status IN ('finalizado','conferido')",
-            (item["produto_id"], recebimento_id),
+            (item["pedido_item_id"], recebimento_id),
         ).fetchone()["soma"]
         if float(global_rec or 0) + total > limite_pedido:
             raise ValueError(
@@ -104,13 +104,19 @@ def conferir_item(recebimento_id: int, item_id: int, qtd_aceita: float, qtd_recu
         return {"item_id": item_id, "status": status, "pendentes": pendentes}
 
 
-def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usuario_id: int | None = None) -> dict:
+def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usuario_id: int | None = None,
+              origem_tipo: str = "pedido_compra") -> dict:
     """Postagem transacional (REC-005): estoque + custo + contas a pagar + contábil
     em UMA transação, com lock no pedido e idempotência (reprocessar é seguro)."""
     from catalog_server.repositories import compras_repo
 
     with system_conn() as conn:
         # Idempotência: já postado → devolve o resultado gravado
+        # O lock precisa ser adquirido antes da consulta de idempotência:
+        # dois cliques concorrentes não podem observar "não postado" ao mesmo tempo.
+        rec = conn.execute("SELECT * FROM recebimento WHERE id=? FOR UPDATE", (recebimento_id,)).fetchone()
+        if not rec:
+            raise LookupError("Recebimento não encontrado")
         ja_postado = conn.execute(
             "SELECT * FROM recebimento_postagem WHERE recebimento_id=?",
             (recebimento_id,),
@@ -118,10 +124,6 @@ def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usu
         if ja_postado:
             return {"recebimento_id": recebimento_id, "duplicado": True,
                     "pedido_status": ja_postado["pedido_status"], "total": float(ja_postado["total"])}
-
-        rec = conn.execute("SELECT * FROM recebimento WHERE id=?", (recebimento_id,)).fetchone()
-        if not rec:
-            raise LookupError("Recebimento não encontrado")
         if rec["status"] != "conferido":
             raise ValueError(f"Recebimento {rec['status']} deve estar conferido para finalizar")
         # REC-003: divergência de três vias precisa de aprovação para efeitos definitivos
@@ -139,7 +141,7 @@ def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usu
             raise LookupError("Pedido não encontrado")
 
         itens = conn.execute(
-            "SELECT * FROM recebimento_item WHERE recebimento_id=? AND qtd_aceita > 0",
+            "SELECT * FROM recebimento_item WHERE recebimento_id=? AND qtd_aceita > 0 FOR UPDATE",
             (recebimento_id,),
         ).fetchall()
         if not itens:
@@ -167,31 +169,54 @@ def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usu
                 (it["id"],),
             )
 
-        # contas a pagar (simplificado: 1 conta em 30 dias)
-        from catalog_server.repositories.financeiro import contas_repo
-        from datetime import datetime, timedelta
+        # Contas a pagar seguem a condição do fornecedor, ou a condição enviada
+        # pelo operador quando houver uma exceção aprovada para este recebimento.
+        from catalog_server.services import lancamentos_lote
 
-        venc = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-        fornecedor = conn.execute("SELECT nome FROM fornecedores WHERE id=?", (rec["fornecedor_id"],)).fetchone()
-        conn.execute(
-            "INSERT INTO contas_pagar (descricao, fornecedor_id, valor, saldo, data_vencimento, status,"
-            " origem_tipo, origem_id) VALUES (?,?,?,?,?, 'aberto', 'pedido_compra', ?)",
-            (f"Recebimento #{recebimento_id} — {fornecedor['nome'] if fornecedor else ''}", rec["fornecedor_id"],
-             round(total, 2), round(total, 2), venc, rec["pedido_id"]),
-        )
-        contas = 1
-
-        # contábil (gatilho configurável; False quando sem gatilho ativo)
-        contabil_ok = False
-        try:
-            from catalog_server import contabil_gatilhos
-
-            contabil_ok = contabil_gatilhos.disparar(
-                "recebimento_compra", evento_id=recebimento_id, valor=round(total, 2),
-                historico=f"Recebimento #{recebimento_id}", origem_tipo="pedido_compra", _conn=conn,
+        fornecedor = conn.execute(
+            "SELECT nome, condicao_pagamento_id FROM fornecedores WHERE id=?",
+            (rec["fornecedor_id"],),
+        ).fetchone()
+        condicao_id = condicao_pagamento_id
+        if condicao_id is None and fornecedor:
+            condicao_id = fornecedor["condicao_pagamento_id"]
+        if condicao_id is not None:
+            parcelas = lancamentos_lote.calcular_parcelas(
+                "condicao", round(total, 2), date.today().isoformat(),
+                condicao_id=int(condicao_id),
             )
-        except Exception:  # noqa: BLE001 (contábil não pode travar a postagem)
-            contabil_ok = False
+        else:
+            from datetime import timedelta
+            parcelas = [{
+                "valor": round(total, 2),
+                "vencimento": (date.today() + timedelta(days=30)).isoformat(),
+                "dias": 30,
+            }]
+        grupo_id = lancamentos_lote.novo_grupo()
+        n_parcelas = len(parcelas)
+        for i, parcela in enumerate(parcelas, start=1):
+            descricao = f"Recebimento #{recebimento_id}"
+            if n_parcelas > 1:
+                descricao += f" — parcela {i}/{n_parcelas}"
+            conn.execute(
+                "INSERT INTO contas_pagar (fornecedor, fornecedor_id, descricao, valor, saldo,"
+                " data_vencimento, documento, status, origem_tipo, origem_id, parcela,"
+                " total_parcelas, grupo_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (fornecedor["nome"] if fornecedor else "", rec["fornecedor_id"], descricao,
+                 float(parcela["valor"]), float(parcela["valor"]), parcela["vencimento"],
+                 rec["documento_fiscal"], "aberto", origem_tipo, recebimento_id, i,
+                 n_parcelas, grupo_id),
+            )
+        contas = n_parcelas
+
+        # Falha contábil deve abortar a transação inteira: estoque e financeiro
+        # não podem confirmar enquanto o lançamento patrimonial falhou.
+        from catalog_server import contabil_gatilhos
+
+        contabil_ok = contabil_gatilhos.disparar(
+            "recebimento_compra", evento_id=recebimento_id, valor=round(total, 2),
+            historico=f"Recebimento #{recebimento_id}", origem_tipo="recebimento_compra", _conn=conn,
+        )
 
         # atualiza status do pedido (recebido se não resta nada; senão parcialmente_recebido)
         pedido_total = conn.execute(
@@ -213,8 +238,9 @@ def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usu
             " total, pedido_status, contabil_ok) VALUES (?,?,?,?,?,?,?)",
             (recebimento_id, rec["pedido_id"], estoque_itens, contas, round(total, 2), novo_status, contabil_ok),
         )
-    return {"recebimento_id": recebimento_id, "duplicado": False, "pedido_status": novo_status, "total": round(total, 2),
-            "itens_aceitos": len(itens), "contabil_ok": contabil_ok}
+    return {"recebimento_id": recebimento_id, "duplicado": False, "pedido_status": novo_status,
+            "total": round(total, 2), "itens": len(itens), "itens_aceitos": len(itens),
+            "parcelas": n_parcelas, "grupo_id": grupo_id, "contabil_ok": contabil_ok}
 
 
 def detalhe(recebimento_id: int) -> dict | None:

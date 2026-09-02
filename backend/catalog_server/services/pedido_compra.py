@@ -38,15 +38,20 @@ def gerar_pedido(cotacao_id: int, usuario_id: int | None = None) -> dict:
             raise ValueError("Nenhum vencedor definido")
 
         pedidos = []
+        destino = conn.execute(
+            "SELECT deposito_id FROM solicitacao_compra WHERE id=?",
+            (cot["solicitacao_id"],),
+        ).fetchone() if cot["solicitacao_id"] else None
+        deposito_id = destino["deposito_id"] if destino else None
         por_fornecedor: dict[int, list] = {}
         for v in vencedores:
             por_fornecedor.setdefault(v["fornecedor_id"], []).append(v)
         for fid, itens in por_fornecedor.items():
             numero = f"PC-{cotacao_id}-{fid}"
             pedido_id = conn.execute(
-                "INSERT INTO pedidos_compra (numero, cotacao_id, fornecedor_id, status, data_pedido)"
-                " VALUES (?,?,?, 'rascunho', NOW()) RETURNING id",
-                (numero, cotacao_id, fid),
+                "INSERT INTO pedidos_compra (numero, cotacao_id, fornecedor_id, deposito_id, status, data_pedido)"
+                " VALUES (?,?,?,?, 'rascunho', NOW()) RETURNING id",
+                (numero, cotacao_id, fid, deposito_id),
             ).fetchone()["id"]
             for it in itens:
                 conn.execute(

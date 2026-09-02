@@ -10,7 +10,7 @@ from catalog_server.db import system_conn
 
 def _pedido_linhas(conn, pedido_id: int) -> list[dict]:
     return [dict(r) for r in conn.execute(
-        "SELECT pi.preco_unitario, ci.produto_id, ci.quantidade AS qtd_pedido"
+        "SELECT pi.id AS pedido_item_id, pi.preco_unitario, ci.produto_id, ci.quantidade AS qtd_pedido"
         " FROM pedido_itens pi JOIN cotacao_itens ci ON ci.id=pi.cotacao_item_id"
         " WHERE pi.pedido_id=?",
         (pedido_id,),
@@ -34,27 +34,50 @@ def conferir(recebimento_id: int, itens_nf: list[dict]) -> dict:
         rec = conn.execute("SELECT * FROM recebimento WHERE id=?", (recebimento_id,)).fetchone()
         if not rec:
             raise LookupError("Recebimento não encontrado")
-        pedido_linhas = {r["produto_id"]: r for r in _pedido_linhas(conn, rec["pedido_id"])}
+        pedido_linhas = _pedido_linhas(conn, rec["pedido_id"])
         tol = _tolerancias(conn, rec["fornecedor_id"])
-        nf = {int(n["produto_id"]): n for n in itens_nf if n.get("produto_id")}
+        usados: set[int] = set()
 
         divergentes = 0
-        for produto_id, n in nf.items():
+        for n in itens_nf:
+            if not n.get("produto_id"):
+                continue
+            produto_id = int(n["produto_id"])
             qtd_nf = float(n.get("quantidade") or 0)
             preco_nf = float(n.get("preco_unitario") or 0)
-            p = pedido_linhas.get(produto_id)
+            pedido_item_id = int(n["pedido_item_id"]) if n.get("pedido_item_id") else None
+            candidatos = [
+                linha for linha in pedido_linhas
+                if linha["produto_id"] == produto_id and linha["pedido_item_id"] not in usados
+            ]
+            if pedido_item_id is not None:
+                candidatos = [linha for linha in candidatos if linha["pedido_item_id"] == pedido_item_id]
+            if len(candidatos) > 1:
+                raise ValueError(
+                    f"produto {produto_id} aparece em mais de uma linha; informe pedido_item_id"
+                )
+            p = candidatos[0] if candidatos else None
             if not p:
+                if any(linha["produto_id"] == produto_id for linha in pedido_linhas):
+                    raise ValueError(f"linha do produto {produto_id} foi informada mais de uma vez")
                 # item da NF sem pedido → divergência fiscal/quantidade
                 conn.execute(
-                    "INSERT INTO recebimento_divergencia (recebimento_id, produto_id, qtd_pedido, qtd_nf,"
+                    "DELETE FROM recebimento_divergencia WHERE recebimento_id=? AND produto_id=? "
+                    "AND pedido_item_id IS NULL",
+                    (recebimento_id, produto_id),
+                )
+                conn.execute(
+                    "INSERT INTO recebimento_divergencia (recebimento_id, pedido_item_id, produto_id, qtd_pedido, qtd_nf,"
                     " preco_pedido, preco_nf, tipo, dif_pct, dentro_tolerancia)"
-                    " VALUES (?,?,0,?,NULL,?,'quantidade',100.0,FALSE)"
-                    " ON CONFLICT (recebimento_id, produto_id, tipo) DO UPDATE SET qtd_nf=EXCLUDED.qtd_nf,"
+                    " VALUES (?,?,?,0,?,NULL,?,'quantidade',100.0,FALSE)"
+                    " ON CONFLICT (recebimento_id, pedido_item_id, tipo) DO UPDATE SET qtd_nf=EXCLUDED.qtd_nf,"
                     " preco_nf=EXCLUDED.preco_nf, dif_pct=100.0, dentro_tolerancia=FALSE",
-                    (recebimento_id, produto_id, qtd_nf, preco_nf),
+                    (recebimento_id, None, produto_id, qtd_nf, preco_nf),
                 )
                 divergentes += 1
                 continue
+            usados.add(p["pedido_item_id"])
+            pedido_item_id = p["pedido_item_id"]
             qtd_pedido = float(p["qtd_pedido"] or 0)
             preco_pedido = float(p["preco_unitario"] or 0)
             dif_qtd = _pct(qtd_nf, qtd_pedido)
@@ -62,20 +85,20 @@ def conferir(recebimento_id: int, itens_nf: list[dict]) -> dict:
             dentro_qtd = abs(dif_qtd) <= tol["qtd_pct"]
             dentro_preco = abs(dif_preco) <= tol["preco_pct"]
             conn.execute(
-                "INSERT INTO recebimento_divergencia (recebimento_id, produto_id, qtd_pedido, qtd_nf,"
+                "INSERT INTO recebimento_divergencia (recebimento_id, pedido_item_id, produto_id, qtd_pedido, qtd_nf,"
                 " preco_pedido, preco_nf, tipo, dif_pct, dentro_tolerancia)"
-                " VALUES (?,?,?,?,?,?,'quantidade',?,?)"
-                " ON CONFLICT (recebimento_id, produto_id, tipo) DO UPDATE SET qtd_pedido=EXCLUDED.qtd_pedido,"
+                " VALUES (?,?,?,?,?,?,?,'quantidade',?,?)"
+                " ON CONFLICT (recebimento_id, pedido_item_id, tipo) DO UPDATE SET qtd_pedido=EXCLUDED.qtd_pedido,"
                 " qtd_nf=EXCLUDED.qtd_nf, dif_pct=EXCLUDED.dif_pct, dentro_tolerancia=EXCLUDED.dentro_tolerancia",
-                (recebimento_id, produto_id, qtd_pedido, qtd_nf, preco_pedido, preco_nf, dif_qtd, dentro_qtd),
+                (recebimento_id, pedido_item_id, produto_id, qtd_pedido, qtd_nf, preco_pedido, preco_nf, dif_qtd, dentro_qtd),
             )
             conn.execute(
-                "INSERT INTO recebimento_divergencia (recebimento_id, produto_id, qtd_pedido, qtd_nf,"
+                "INSERT INTO recebimento_divergencia (recebimento_id, pedido_item_id, produto_id, qtd_pedido, qtd_nf,"
                 " preco_pedido, preco_nf, tipo, dif_pct, dentro_tolerancia)"
-                " VALUES (?,?,?,?,?,?,'preco',?,?)"
-                " ON CONFLICT (recebimento_id, produto_id, tipo) DO UPDATE SET preco_pedido=EXCLUDED.preco_pedido,"
+                " VALUES (?,?,?,?,?,?,?,'preco',?,?)"
+                " ON CONFLICT (recebimento_id, pedido_item_id, tipo) DO UPDATE SET preco_pedido=EXCLUDED.preco_pedido,"
                 " preco_nf=EXCLUDED.preco_nf, dif_pct=EXCLUDED.dif_pct, dentro_tolerancia=EXCLUDED.dentro_tolerancia",
-                (recebimento_id, produto_id, qtd_pedido, qtd_nf, preco_pedido, preco_nf, dif_preco, dentro_preco),
+                (recebimento_id, pedido_item_id, produto_id, qtd_pedido, qtd_nf, preco_pedido, preco_nf, dif_preco, dentro_preco),
             )
             if not dentro_qtd or not dentro_preco:
                 divergentes += 1

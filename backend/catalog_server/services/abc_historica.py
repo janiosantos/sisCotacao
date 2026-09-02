@@ -14,11 +14,26 @@ CLASSE_A_LIMITE = 0.70
 CLASSE_B_LIMITE = 0.90
 
 
-def _metricas(data_inicio: str, data_fim: str) -> list[dict]:
+def _metricas(data_inicio: str, data_fim: str, deposito_id: int | None = None) -> list[dict]:
     """Métricas por produto a partir do ledger e das vendas finalizadas."""
+    filtro_venda = ""
+    filtro_custo = ""
+    args_venda: list = [data_inicio, data_fim]
+    args_custo: list = [data_inicio, data_fim]
+    if deposito_id:
+        # A venda só pertence ao depósito quando houve baixa física nele. O
+        # EXISTS evita duplicar a receita quando há mais de um movimento.
+        filtro_venda = (
+            " AND EXISTS (SELECT 1 FROM estoque_movimento sm "
+            "WHERE sm.origem_tipo='venda' AND sm.origem_id=o.id "
+            "AND sm.produto_id=oi.produto_id AND sm.deposito_id=?)"
+        )
+        filtro_custo = " AND deposito_id=?"
+        args_venda.append(deposito_id)
+        args_custo.append(deposito_id)
     with system_conn() as conn:
         return [dict(r) for r in conn.execute(
-            """
+            f"""
             WITH vendas AS (
                 SELECT oi.produto_id,
                        SUM(oi.quantidade) AS quantidade,
@@ -26,22 +41,23 @@ def _metricas(data_inicio: str, data_fim: str) -> list[dict]:
                        COUNT(DISTINCT SUBSTR(o.criado_em,1,10)) AS frequencia
                 FROM orcamento_itens oi
                 JOIN orcamentos o ON o.id = oi.orcamento_id
-                WHERE o.status = 'finalizado'
-                  AND SUBSTR(o.criado_em,1,10) BETWEEN ? AND ?
+                WHERE o.status IN ('finalizado','recebido')
+                  AND SUBSTR(o.criado_em,1,10) BETWEEN ? AND ?{filtro_venda}
                 GROUP BY oi.produto_id
             ),
             custos AS (
                 SELECT produto_id, SUM(COALESCE(custo_unitario,0) * quantidade) AS custo_total
                 FROM estoque_movimento
                 WHERE tipo='saida' AND origem_tipo='venda'
-                  AND SUBSTR(criado_em,1,10) BETWEEN ? AND ?
+                  AND SUBSTR(criado_em,1,10) BETWEEN ? AND ?{filtro_custo}
                 GROUP BY produto_id
             )
             SELECT v.produto_id, v.quantidade, v.receita, v.frequencia,
+                   COALESCE(c.custo_total,0) AS consumo,
                    v.receita - COALESCE(c.custo_total,0) AS margem
             FROM vendas v LEFT JOIN custos c ON c.produto_id = v.produto_id
             """,
-            (data_inicio, data_fim, data_inicio, data_fim),
+            tuple(args_venda + args_custo),
         ).fetchall()]
 
 
@@ -64,7 +80,7 @@ def calcular(
     if data_inicio > data_fim:
         raise ValueError("data_inicio deve ser <= data_fim")
 
-    metricas = _metricas(data_inicio, data_fim)
+    metricas = _metricas(data_inicio, data_fim, deposito_id)
     linhas = [
         {"produto_id": m["produto_id"], "valor": round(_valor(m, criterio), 4),
          "metricas": m}
