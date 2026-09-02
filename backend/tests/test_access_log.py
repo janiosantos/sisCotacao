@@ -19,3 +19,9 @@ def test_filtro_nao_oculta_rotas_normais_nem_erros_sem_requestline():
     filtro = HealthProbeAccessFilter()
     assert filtro.filter(_record("GET /api/clientes HTTP/1.1")) is True
     assert filtro.filter(logging.LogRecord("werkzeug", logging.ERROR, __file__, 1, "falha", (), None)) is True
+
+
+def test_falha_do_probe_continua_no_log():
+    record = logging.LogRecord("werkzeug", logging.WARNING, __file__, 1, '"%s" 503 -', ("GET /api/pronto HTTP/1.1",), None)
+    record.requestline = "GET /api/pronto HTTP/1.1"
+    assert HealthProbeAccessFilter().filter(record) is True

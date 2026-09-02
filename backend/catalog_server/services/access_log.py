@@ -28,6 +28,20 @@ def _request_line(record: logging.LogRecord) -> str:
     return ""
 
 
+def _status_code(record: logging.LogRecord) -> int | None:
+    status = getattr(record, "status", None)
+    if status is not None:
+        try:
+            return int(status)
+        except (TypeError, ValueError):
+            return None
+    try:
+        match = re.search(r'"[^"\n]+"\s+(\d{3})(?:\s|$)', record.getMessage())
+    except Exception:
+        match = None
+    return int(match.group(1)) if match else None
+
+
 class HealthProbeAccessFilter(logging.Filter):
     """Oculta somente as linhas de acesso dos probes conhecidos."""
 
@@ -42,7 +56,10 @@ class HealthProbeAccessFilter(logging.Filter):
             path = urlsplit(parts[1]).path
         except ValueError:
             return True
-        return path not in _PROBE_PATHS
+        status = _status_code(record)
+        if path in _PROBE_PATHS and status is not None and status < 400:
+            return False
+        return True
 
 
 def configure_health_probe_logging() -> None:
