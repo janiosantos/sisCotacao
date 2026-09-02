@@ -1723,8 +1723,12 @@ export const api = {
     request<RelatorioComprasAnalitico>("GET", "/api/relatorios/compras-analitico" + qs(params)),
   relatorioEstoqueAnalitico: (params: Record<string, unknown> = {}) =>
     request<RelatorioEstoqueAnalitico>("GET", "/api/relatorios/estoque-analitico" + qs(params)),
+  relatorioNecessidadeCompra: (params: Record<string, unknown> = {}) =>
+    request<RelatorioNecessidadeCompra>("GET", "/api/relatorios/necessidade-compra" + qs(params)),
   relatorioFinanceiro: (dataInicio?: string, dataFim?: string) =>
     request<{ fluxo_caixa: { entradas: number; saidas: number }; aging: { a_vencer: number; vencido: number; total: number }; dre: { receita_liquida: number; cmv: number; lucro_bruto: number } }>("GET", "/api/relatorios/financeiro" + qs({ data_inicio: dataInicio, data_fim: dataFim })),
+  relatorioFinanceiroAnalitico: (params: Record<string, unknown> = {}) =>
+    request<RelatorioFinanceiroAnalitico>("GET", "/api/relatorios/financeiro-analitico" + qs(params)),
   relatorioClientes: (params: Record<string, unknown> = {}) =>
     request<RelatorioClientes>("GET", "/api/relatorios/clientes" + qs(params)),
   relatorioAniversariantes: (params: Record<string, unknown> = {}) =>
@@ -2871,6 +2875,7 @@ export interface RelatorioComprasAnalitico {
   resumo: { pedidos: number; valor_pedido: number; valor_recebido: number; quantidade_pendente: number };
   itens: RelatorioCompraAnaliticoItem[];
   paginacao: { total: number; limit: number; offset: number; proximo_offset: number | null };
+  ranking_fornecedores: { fornecedor_id: number | null; fornecedor_nome: string; pedidos: number; valor_pedido: number; valor_recebido: number; quantidade_pendente: number }[];
 }
 
 export interface RelatorioEstoqueAnaliticoItem {
@@ -2898,6 +2903,56 @@ export interface RelatorioEstoqueAnalitico {
   kind: "analitico";
   filtros: Record<string, unknown>;
   itens: RelatorioEstoqueAnaliticoItem[];
+  paginacao: { total: number; limit: number; offset: number; proximo_offset: number | null };
+}
+
+export interface RelatorioNecessidadeCompraItem {
+  produto_id: number;
+  sku: string;
+  nome: string;
+  unidade_venda: string;
+  classe_abc: string;
+  classe_xyz: string;
+  deposito_id: number;
+  fisico: number;
+  reservado: number;
+  bloqueado: number;
+  separacao: number;
+  disponivel: number;
+  transito: number;
+  demanda_aberta: number;
+  disponivel_projetado: number;
+  estoque_alvo: number;
+  estoque_seguranca: number;
+  demanda_lead_time: number;
+  lead_time_dias: number;
+  necessidade: number;
+  sugestao: number;
+  fornecedor_id: number | null;
+  fornecedor_nome: string | null;
+  ruptura_provavel: string | null;
+  justificativa: string;
+}
+
+export interface RelatorioNecessidadeCompra {
+  report_key: "estoque.necessidade_compra";
+  kind: "analitico";
+  data: string;
+  filtros: Record<string, unknown>;
+  itens: RelatorioNecessidadeCompraItem[];
+  resumo: { produtos: number; com_necessidade: number; total_sugerido: number };
+  paginacao: { total: number; limit: number; offset: number; proximo_offset: number | null };
+}
+
+export interface RelatorioFinanceiroAnalitico {
+  report_key: "financeiro.analitico";
+  kind: "analitico";
+  regime: { resultado: string; fluxo: string; data_corte_aging: string };
+  periodo: { inicio: string; fim: string };
+  aging: { receber: { faixa: string; quantidade: number; saldo: number }[]; pagar: { faixa: string; quantidade: number; saldo: number }[] };
+  fluxo_caixa: { entradas: number; saidas: number; liquido: number };
+  dre: { receita_bruta: number; descontos: number; receita_liquida: number; cmv: number; lucro_bruto: number; despesas_pagamento: number; despesas_por_categoria: { categoria: string; valor: number }[] };
+  itens: { tipo: string; id: number; documento: string | null; descricao: string; pessoa: string; valor: number; saldo: number; data_emissao: string; data_vencimento: string; status: string }[];
   paginacao: { total: number; limit: number; offset: number; proximo_offset: number | null };
 }
 

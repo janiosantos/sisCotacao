@@ -4712,6 +4712,39 @@
         ],
         "responses": {"200": {"description": "Posicao com disponibilidade, valor e situacao operacional"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
       }
+    },
+    "/api/relatorios/necessidade-compra": {
+      "get": {
+        "tags": ["relatorios"],
+        "summary": "Necessidade consolidada de compra pelo motor de reposicao",
+        "parameters": [
+          {"name": "deposito_id", "in": "query", "schema": {"type": "integer"}},
+          {"name": "produto_id", "in": "query", "schema": {"type": "integer"}},
+          {"name": "fornecedor_id", "in": "query", "schema": {"type": "integer"}},
+          {"name": "classe_abc", "in": "query", "schema": {"type": "string", "enum": ["A", "B", "C"]}},
+          {"name": "somente_necessidade", "in": "query", "schema": {"type": "boolean"}},
+          {"name": "q", "in": "query", "schema": {"type": "string"}},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+        ],
+        "responses": {"200": {"description": "Itens com fórmula, demanda, trânsito e sugestão de compra"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
+    },
+    "/api/relatorios/financeiro-analitico": {
+      "get": {
+        "tags": ["relatorios"],
+        "summary": "Financeiro analitico com aging, fluxo e DRE gerencial",
+        "parameters": [
+          {"$ref": "#/components/parameters/DataInicio"},
+          {"$ref": "#/components/parameters/DataFim"},
+          {"name": "data_corte", "in": "query", "schema": {"type": "string", "format": "date"}},
+          {"name": "tipo", "in": "query", "schema": {"type": "string", "enum": ["todos", "receber", "pagar"], "default": "todos"}},
+          {"name": "q", "in": "query", "schema": {"type": "string"}},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+        ],
+        "responses": {"200": {"description": "Aging por faixa, fluxo, DRE e titulos de suporte"}, "403": {"$ref": "#/components/responses/Proibido"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
     }
   },
   "components": {

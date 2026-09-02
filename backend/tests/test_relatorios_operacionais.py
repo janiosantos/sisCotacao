@@ -3,12 +3,14 @@ from __future__ import annotations
 
 from catalog_server.db import system_conn
 from catalog_server.services import relatorios_operacionais as relatorios
+from catalog_server.services import relatorios_financeiros as financeiro
 
 
 def test_relatorios_analiticos_vazios_mantem_contrato(system_db):
     vendas = relatorios.vendas_analitico({"data_inicio": "2026-01-01", "data_fim": "2026-12-31"})
     compras = relatorios.compras_analitico({"data_inicio": "2026-01-01", "data_fim": "2026-12-31"})
     estoque = relatorios.estoque_analitico({"limit": 10})
+    necessidade = relatorios.necessidade_compra({"somente_necessidade": "true", "limit": 10})
 
     assert vendas["report_key"] == "vendas.analitico"
     assert vendas["resumo"]["pedidos"] == 0
@@ -16,6 +18,8 @@ def test_relatorios_analiticos_vazios_mantem_contrato(system_db):
     assert compras["resumo"]["pedidos"] == 0
     assert estoque["report_key"] == "estoque.analitico"
     assert estoque["paginacao"]["limit"] == 10
+    assert necessidade["report_key"] == "estoque.necessidade_compra"
+    assert necessidade["paginacao"]["limit"] == 10
 
 
 def test_relatorio_vendas_rejeita_sql_e_paginacao_invalida(system_db):
@@ -23,6 +27,30 @@ def test_relatorio_vendas_rejeita_sql_e_paginacao_invalida(system_db):
         relatorios.vendas_analitico({"agrupamento": "sql"})
         assert False, "agrupamento livre nao deveria ser aceito"
     except relatorios.RelatorioOperacionalError:
+        pass
+
+
+def test_estoque_rejeita_situacao_invalida_e_necessidade_booleano_invalido(system_db):
+    for chamada in (
+        lambda: relatorios.estoque_analitico({"situacao": "desconhecida"}),
+        lambda: relatorios.necessidade_compra({"somente_necessidade": "talvez"}),
+    ):
+        try:
+            chamada()
+            assert False, "filtro inválido deveria ser rejeitado"
+        except relatorios.RelatorioOperacionalError:
+            pass
+
+
+def test_financeiro_analitico_mantem_faixas_de_aging_sem_sobreposicao(system_db):
+    result = financeiro.gerar({"data_inicio": "2026-01-01", "data_fim": "2026-12-31", "data_corte": "2026-09-02", "limit": 10})
+    assert result["report_key"] == "financeiro.analitico"
+    assert [row["faixa"] for row in result["aging"]["receber"]] == ["a_vencer", "vencido_0_30", "vencido_31_60", "vencido_61_90", "vencido_91_mais"]
+    assert result["paginacao"]["limit"] == 10
+    try:
+        financeiro.gerar({"tipo": "sql"})
+        assert False, "tipo livre nao deveria ser aceito"
+    except financeiro.RelatorioFinanceiroError:
         pass
 
 

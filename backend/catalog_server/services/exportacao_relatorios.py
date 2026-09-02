@@ -112,9 +112,15 @@ def rows_for(report_key: str, data: dict) -> tuple[list[str], list[list[object]]
     elif report_key == "estoque.analitico":
         columns = ["Produto", "SKU", "Depósito", "ABC", "XYZ", "Quantidade", "Disponível", "Mínimo", "Máximo", "Custo médio", "Valor", "Situação"]
         rows = [[item.get("nome"), item.get("sku"), item.get("deposito_nome"), item.get("classe_abc"), item.get("classe_xyz"), item.get("quantidade"), item.get("disponivel"), item.get("estoque_minimo"), item.get("estoque_maximo"), item.get("custo_medio"), item.get("valor"), item.get("situacao")] for item in data.get("itens", [])]
+    elif report_key == "estoque.necessidade_compra":
+        columns = ["Produto", "SKU", "Depósito", "ABC", "XYZ", "Disponível", "Em trânsito", "Demanda aberta", "Estoque alvo", "Lead time (dias)", "Sugestão", "Fornecedor", "Ruptura provável", "Justificativa"]
+        rows = [[item.get("nome"), item.get("sku"), item.get("deposito_id"), item.get("classe_abc"), item.get("classe_xyz"), item.get("disponivel"), item.get("transito"), item.get("demanda_aberta"), item.get("estoque_alvo"), item.get("lead_time_dias"), item.get("sugestao"), item.get("fornecedor_nome"), item.get("ruptura_provavel"), item.get("justificativa")] for item in data.get("itens", [])]
     elif report_key == "financeiro":
         columns = ["Grupo", "Indicador", "Valor"]
         rows = [["Fluxo de caixa", "Entradas", data.get("fluxo_caixa", {}).get("entradas")], ["Fluxo de caixa", "Saídas", data.get("fluxo_caixa", {}).get("saidas")], ["Aging", "A vencer", data.get("aging", {}).get("a_vencer")], ["Aging", "Vencido", data.get("aging", {}).get("vencido")], ["DRE", "Receita líquida", data.get("dre", {}).get("receita_liquida")], ["DRE", "CMV", data.get("dre", {}).get("cmv")], ["DRE", "Lucro bruto", data.get("dre", {}).get("lucro_bruto")]]
+    elif report_key == "financeiro.analitico":
+        columns = ["Tipo", "ID", "Documento", "Descrição", "Pessoa", "Valor", "Saldo", "Emissão", "Vencimento", "Status"]
+        rows = [[item.get("tipo"), item.get("id"), item.get("documento"), item.get("descricao"), item.get("pessoa"), item.get("valor"), item.get("saldo"), item.get("data_emissao"), item.get("data_vencimento"), item.get("status")] for item in data.get("itens", [])]
     else:
         raise ValueError("Relatório não possui exportador")
     return columns, list(rows)

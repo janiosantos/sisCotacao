@@ -146,15 +146,15 @@ def _autorizar_pagina_relatorio(*, financeiro: bool = False) -> None:
 @pages_bp.get("/relatorios/imprimir")
 def relatorio_registrado_print():
     chave = (request.args.get("relatorio") or "").strip().lower()
-    if chave not in {"dashboard", "vendas", "compras", "estoque", "financeiro", "vendas.analitico", "compras.analitico", "estoque.analitico"}:
+    if chave not in {"dashboard", "vendas", "compras", "estoque", "financeiro", "financeiro.analitico", "vendas.analitico", "compras.analitico", "estoque.analitico", "estoque.necessidade_compra"}:
         abort(400, description="Relatório inválido")
-    _autorizar_pagina_relatorio(financeiro=chave == "financeiro")
+    _autorizar_pagina_relatorio(financeiro=chave in {"financeiro", "financeiro.analitico"})
     try:
         data = relatorios.executar(chave, request.args.to_dict(flat=True))
         columns, rows = exportacao_relatorios.rows_for(chave, data)
     except (KeyError, ValueError, TypeError) as exc:
         abort(400, description=str(exc))
-    titles = {"dashboard": "Resumo executivo", "vendas": "Vendas", "compras": "Compras", "estoque": "Estoque valorizado", "financeiro": "Financeiro / DRE", "vendas.analitico": "Vendas analíticas", "compras.analitico": "Compras analíticas", "estoque.analitico": "Posição de estoque"}
+    titles = {"dashboard": "Resumo executivo", "vendas": "Vendas", "compras": "Compras", "estoque": "Estoque valorizado", "financeiro": "Financeiro / DRE", "financeiro.analitico": "Financeiro analítico", "vendas.analitico": "Vendas analíticas", "compras.analitico": "Compras analíticas", "estoque.analitico": "Posição de estoque", "estoque.necessidade_compra": "Necessidade de compra"}
     return render_template(
         "relatorio_generico_print.html",
         titulo=titles[chave],

@@ -261,6 +261,14 @@ def compras_analitico(filters: Mapping[str, object] | None = None) -> dict:
             "COALESCE(SUM(valor_recebido),0) AS valor_recebido, COALESCE(SUM(quantidade_pedida-quantidade_recebida),0) AS quantidade_pendente "
             f"FROM linhas WHERE {condition}", tuple(args),
         ).fetchone()
+        ranking = conn.execute(
+            f"{base} SELECT fornecedor_id, fornecedor_nome, COUNT(DISTINCT pedido_id) AS pedidos, "
+            "COALESCE(SUM(valor_pedido),0) AS valor_pedido, "
+            "COALESCE(SUM(valor_recebido),0) AS valor_recebido, "
+            "COALESCE(SUM(quantidade_pedida-quantidade_recebida),0) AS quantidade_pendente "
+            f"FROM linhas WHERE {condition} GROUP BY fornecedor_id, fornecedor_nome "
+            "ORDER BY valor_pedido DESC, fornecedor_nome ASC LIMIT 50", tuple(args),
+        ).fetchall()
         rows = conn.execute(
             query_base + " ORDER BY data_pedido DESC, pedido_id DESC, pedido_item_id ASC LIMIT ? OFFSET ?",
             tuple([*args, limit, offset]),
@@ -277,6 +285,13 @@ def compras_analitico(filters: Mapping[str, object] | None = None) -> dict:
         "periodo": {"inicio": inicio, "fim": fim}, "filtros": dict(filters), "itens": itens,
         "resumo": {"pedidos": int(summary["pedidos"] or 0), "valor_pedido": _float(summary["valor_pedido"]),
                    "valor_recebido": _float(summary["valor_recebido"]), "quantidade_pendente": _float(summary["quantidade_pendente"])},
+        "ranking_fornecedores": [
+            {**dict(row), "pedidos": int(row["pedidos"] or 0),
+             "valor_pedido": _float(row["valor_pedido"]),
+             "valor_recebido": _float(row["valor_recebido"]),
+             "quantidade_pendente": _float(row["quantidade_pendente"])}
+            for row in ranking
+        ],
         "paginacao": {"total": total, "limit": limit, "offset": offset, "proximo_offset": offset + limit if offset + limit < total else None},
     }
 
@@ -296,6 +311,18 @@ def estoque_analitico(filters: Mapping[str, object] | None = None) -> dict:
             raise RelatorioOperacionalError("classe_abc deve ser A, B ou C")
         where.append("COALESCE(p.classe_abc,'C')=?")
         args.append(classe)
+    termo = str(filters.get("q") or "").strip()
+    if termo:
+        like = f"%{termo}%"
+        where.append("(p.nome ILIKE ? OR COALESCE(p.sku,'') ILIKE ?)")
+        args.extend([like, like])
+    situacao = str(filters.get("situacao") or "").strip().lower()
+    if situacao not in {"", "normal", "ruptura", "reposicao", "excesso"}:
+        raise RelatorioOperacionalError("situacao deve ser normal, ruptura, reposicao ou excesso")
+    if situacao:
+        situacao_sql = "CASE WHEN p.quantidade=0 THEN 'ruptura' WHEN p.estoque_maximo>0 AND p.quantidade>p.estoque_maximo THEN 'excesso' WHEN p.estoque_minimo>0 AND p.quantidade<=p.estoque_minimo THEN 'reposicao' ELSE 'normal' END"
+        where.append(f"{situacao_sql}=?")
+        args.append(situacao)
     base = """
         WITH posicao AS (
             SELECT p.id AS produto_id, p.ativo, p.sku, p.nome, p.classe_abc, p.classe_xyz,
@@ -329,5 +356,48 @@ def estoque_analitico(filters: Mapping[str, object] | None = None) -> dict:
     return {
         "report_key": "estoque.analitico", "kind": "analitico", "calculation_version": "1.0",
         "filtros": dict(filters), "itens": itens,
+        "paginacao": {"total": total, "limit": limit, "offset": offset, "proximo_offset": offset + limit if offset + limit < total else None},
+    }
+
+
+def necessidade_compra(filters: Mapping[str, object] | None = None) -> dict:
+    """Expõe o motor de reposição como relatório paginado e exportável.
+
+    O cálculo continua centralizado em ``motor_reposicao``; esta camada apenas
+    aplica filtros de apresentação e garante que a origem da sugestão seja
+    explícita para o comprador.
+    """
+    filters = filters or {}
+    limit, offset = _pagination(filters)
+    deposito_id = _int_filter(filters, "deposito_id")
+    produto_id = _int_filter(filters, "produto_id")
+    from catalog_server.services import motor_reposicao
+
+    resultado = motor_reposicao.calcular(produto_id=produto_id, deposito_id=deposito_id)
+    itens = resultado.get("sugestoes", [])
+    classe = str(filters.get("classe_abc") or "").strip().upper()
+    if classe:
+        if classe not in {"A", "B", "C"}:
+            raise RelatorioOperacionalError("classe_abc deve ser A, B ou C")
+        itens = [item for item in itens if (item.get("classe_abc") or "C") == classe]
+    termo = str(filters.get("q") or "").strip().lower()
+    if termo:
+        itens = [item for item in itens if termo in f"{item.get('nome') or ''} {item.get('sku') or ''}".lower()]
+    somente = str(filters.get("somente_necessidade") or "").strip().lower()
+    if somente in {"1", "true", "sim"}:
+        itens = [item for item in itens if float(item.get("sugestao") or 0) > 0]
+    elif somente not in {"", "0", "false", "nao", "não"}:
+        raise RelatorioOperacionalError("somente_necessidade deve ser booleano")
+    fornecedor_id = _int_filter(filters, "fornecedor_id")
+    if fornecedor_id is not None:
+        itens = [item for item in itens if item.get("fornecedor_id") == fornecedor_id]
+    itens.sort(key=lambda item: (-float(item.get("sugestao") or 0), item.get("ruptura_provavel") or "9999", item.get("nome") or ""))
+    total = len(itens)
+    page = itens[offset:offset + limit]
+    return {
+        "report_key": "estoque.necessidade_compra", "kind": "analitico", "calculation_version": "1.0",
+        "data": resultado.get("data"), "filtros": dict(filters), "itens": page,
+        "resumo": {"produtos": total, "com_necessidade": sum(1 for item in itens if float(item.get("sugestao") or 0) > 0),
+                   "total_sugerido": round(sum(float(item.get("sugestao") or 0) for item in itens), 3)},
         "paginacao": {"total": total, "limit": limit, "offset": offset, "proximo_offset": offset + limit if offset + limit < total else None},
     }
