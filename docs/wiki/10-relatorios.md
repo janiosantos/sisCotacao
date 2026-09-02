@@ -1,30 +1,33 @@
-# Relatórios e decisões
+# Relatórios
 
-## Relatórios (`#/relatorios`)
+## O que é?
 
-**O que é?** Visões consolidadas da operação. **Para que serve?** Decidir sobre
-vendas, margem, estoque, compras, inadimplência, caixa e parceiros. **Papel:**
-transformar fatos dos módulos em indicadores, sem corrigir a origem.
+A área de Relatórios reúne consultas sintéticas e analíticas para vendas, clientes, compras, estoque e financeiro. A tela atual está em evolução: o levantamento completo das lacunas e o backlog de implementação estão em [RELATORIO_AUDITORIA_RELATORIOS.md](../../RELATORIO_AUDITORIA_RELATORIOS.md) e [PLANO_RELATORIOS_ANALITICOS_SINTETICOS.md](../../PLANO_RELATORIOS_ANALITICOS_SINTETICOS.md).
 
-1. Escolha o relatório que responde à pergunta.
-2. Defina período, depósito, categoria, fornecedor ou parceiro.
-3. Confira totais, unidade e critérios de cálculo.
-4. Compare períodos e investigue divergências na tela de origem.
-5. Exporte somente dados autorizados.
+## Para que serve?
 
-## Indicadores úteis
+Use os relatórios para acompanhar indicadores e abrir os documentos que formam cada total. O produto final deverá permitir filtrar clientes por tipo, segmento e aniversário; consultar compras por cliente; analisar vendas e fornecedores; identificar ruptura, excesso, giro, cobertura e curva ABC; e acompanhar contas a receber, contas a pagar e DRE gerencial.
 
-- Curva ABC por valor/consumo para priorizar reposição e inventário.
-- Ruptura, excesso, giro e cobertura para compras e estoque.
-- Receita líquida, CMV e margem para preço e mix.
-- Vendas por vendedor, cliente, parceiro e indicação para gestão comercial.
-- A vencer, vencido, caixa e conciliação para tesouraria.
+## Como acessar
 
-## Auditoria
+1. Abra o menu lateral.
+2. Selecione **Relatórios**.
+3. Escolha uma família e defina o período e os demais filtros.
+4. Atualize a consulta, abra o detalhe ou use **Imprimir**/**Exportar** quando a permissão estiver disponível.
 
-Registre os filtros usados ao compartilhar um relatório. O dado deve continuar
-reconciliável com os documentos de origem.
+## Sintético x analítico
 
-## Capturas
+- **Sintético:** indicadores, totais, variação e alertas para decisão rápida.
+- **Analítico:** linhas detalhadas, subtotais, documentos de origem e drill-down para auditoria.
 
-- [Relatórios no DEV](capturas/relatorios-desktop-dev.png). A imagem registra o estado “Sem acesso” observado para o administrador e permanece como evidência da pendência de RBAC.
+## Impressão e exportação
+
+Relatórios compactos devem usar A4 retrato. Relatórios com muitos campos, como extrato de cliente, DRE, kardex, ABC/XYZ e comparação de fornecedores, devem usar A4 paisagem. A saída deve manter cabeçalho, período, filtros, totais, paginação e usuário gerador.
+
+## Perfis e permissões
+
+Os dados exibidos dependem do perfil. Visualizar, imprimir, exportar, acessar financeiro e consultar dados pessoais são permissões distintas. Exportações devem ser auditadas e respeitar mascaramento de documentos, contatos e crédito.
+
+## Estado da documentação
+
+As telas e fluxos serão acrescentados ao manual conforme cada sprint do plano for concluída e validada. Esta página não deve prometer recursos que ainda não estejam disponíveis no ambiente.
