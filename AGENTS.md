@@ -19,6 +19,39 @@ Este projeto é trabalhado por **múltiplos agentes de codificação** (opencode
 - **ATUALIZE ao final de toda sessão**: log do que foi implementado, tarefas pendentes e próximos passos.
 - Mantenha sempre fiel ao estado real (commitado/deployado).
 
+## 📚 Manual final do usuário — requisito de encerramento
+
+O ERP só pode ser considerado concluído após a entrega do manual de uso para
+usuário final em formato wiki. O manual deve ficar em `docs/wiki/`, ter um
+`README.md` com índice e uma página por módulo/tela, sem substituir a
+documentação técnica existente.
+
+Cada página deve explicar, em linguagem operacional:
+
+- **O que é?** — conceito e finalidade da tela;
+- **Para que serve?** — decisões e tarefas que o usuário realiza;
+- **Qual é o papel no sistema?** — relação com vendas, compras, estoque,
+  financeiro, fiscal, administração e demais módulos;
+- **Quem pode usar?** — perfis, permissões e segregação de funções;
+- **Pré-requisitos** — cadastros, configurações e estados necessários;
+- **Passo a passo** — fluxo principal, atalhos de teclado, validações e
+  resultado esperado;
+- **Exceções e solução de problemas** — mensagens, bloqueios e próximos passos;
+- **Auditoria** — efeitos gerados, histórico, documentos e responsabilidades.
+
+O manual deve cobrir todas as rotas/telas do frontend, incluindo dashboard,
+pré-venda/caixa, orçamentos, clientes, parceiros, produtos, fornecedores,
+compras/cotações, estoque, fiscal, financeiro, relatórios, pós-venda,
+configurações, usuários e perfis. Cada página deve conter screenshots reais
+da tela em DEV, com legendas associadas ao passo a passo, estados de sucesso,
+vazio, erro ou aprovação quando aplicável, e validação desktop/mobile quando
+relevante.
+
+Screenshots não podem conter senhas, tokens, documentos reais, dados pessoais
+ou credenciais de provedores. Usar massa de demonstração anonimizada e
+registrar a data/versão do manual. Antes de publicar, validar todos os links,
+imagens, atalhos, textos e permissões contra a versão efetivamente entregue.
+
 ## Aplicação de patches
 
 Os patches (arquivos `.patch`, normalmente em `PATCH/`) são aplicados **em ordem sequencial**.
