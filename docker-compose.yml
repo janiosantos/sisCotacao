@@ -31,6 +31,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        INSTALL_TEST_DEPS: "1"
     # Apenas na rede Docker, como na produção — o acesso externo entra pelo nginx.
     expose:
       - "8000"

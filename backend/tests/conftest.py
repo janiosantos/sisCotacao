@@ -32,6 +32,10 @@ if not TEST_PG_URL:
 
 # O ERP é 100% PostgreSQL: `catalog_server.db` lê `DATABASE_URL` no import.
 os.environ["DATABASE_URL"] = TEST_PG_URL
+# O compose mantém AUTO_MIGRATE=0 para proteger ambientes persistentes. A
+# suíte usa um banco explicitamente isolado e precisa preparar seu schema antes
+# das fixtures; isso não altera o ambiente da aplicação fora do pytest.
+os.environ["AUTO_MIGRATE"] = "1"
 
 from catalog_server import db as db_mod  # noqa: E402
 

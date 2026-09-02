@@ -6,11 +6,13 @@ set -euo pipefail
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 NET="ci-net-$$"
 PG="ci-pg-$$"
+IMAGE="siscom-backend:pytest-$$"
 URL="postgresql+psycopg://catalog:catalog@${PG}:5432/catalog"
 
 cleanup() {
   docker rm -f "$PG" >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
+  docker image rm "$IMAGE" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -25,12 +27,17 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
-# pytest instalado ad-hoc no container efêmero (não altera a imagem).
+# A imagem de testes contém a mesma árvore do repositório e as dependências de
+# desenvolvimento; a imagem de produção continua sem pytest por padrão.
 echo "[backend] pytest backend/tests ..."
+docker build --quiet \
+  --build-arg INSTALL_TEST_DEPS=1 \
+  -t "$IMAGE" \
+  -f "$RAIZ/backend/Dockerfile" "$RAIZ" >/dev/null
+
 docker run --rm --network "$NET" \
-  -v "${RAIZ}/backend:/app" -v "${RAIZ}/app:/app/app" -w /app \
   -e DATABASE_URL="$URL" -e TEST_PG_URL="$URL" \
-  siscom-backend:latest \
-  bash -c "pip install -q pytest && python -m pytest tests -q"
+  "$IMAGE" \
+  python -m pytest backend/tests -q
 
 echo "[backend] BACKEND OK"
