@@ -41,6 +41,7 @@ const Pdv = lazy(() => import("./pages/pre-venda"));
 const Configuracoes = lazy(() => import("./pages/configuracoes"));
 const Atualizacoes = lazy(() => import("./pages/atualizacoes"));
 const Perfis = lazy(() => import("./pages/perfis"));
+const Manual = lazy(() => import("./pages/manual"));
 
 export const ROUTES: RouteDef[] = [
   { pattern: /^#\/dashboard$/, title: "Painel", component: Dashboard, recurso: "dashboard" },
@@ -96,4 +97,5 @@ export const ROUTES: RouteDef[] = [
   { pattern: /^#\/plano-contas$/, title: "Plano de Contas", component: PlanoContas, recurso: "plano_contas" },
   { pattern: /^#\/configuracoes$/, title: "Configurações", component: Configuracoes, recurso: "configuracoes" },
   { pattern: /^#\/atualizacoes$/, title: "Atualizações", component: Atualizacoes, recurso: "atualizacoes" },
+  { pattern: /^#\/manual$/, title: "Manual do sistema", component: Manual },
 ];

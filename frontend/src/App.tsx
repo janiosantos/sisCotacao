@@ -1,6 +1,6 @@
 // App.tsx — shell do ERP (sidebar + topbar + conteúdo) em React + Tailwind.
 
-import { Component, Suspense, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import {
   LayoutDashboard,
   Package,
@@ -32,6 +32,7 @@ import {
   Menu,
   X,
   BarChart3,
+  CircleHelp,
   type LucideIcon,
 } from "lucide-react";
 import { ROUTES } from "./routes";
@@ -41,6 +42,8 @@ import { Manutencao, estaOffline } from "./manutencao";
 import { countItens, injectOverlay as injectCartOverlay, toggle as toggleCart } from "./cart";
 import { Button } from "./ui/ui";
 import { podeVisualizar } from "./perm";
+
+const ManualPage = lazy(() => import("./pages/manual"));
 
 interface NavItem {
   href: string;
@@ -219,6 +222,9 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           <Button id="lgEntrar" variant="primary" className="w-full" onClick={() => void tentar()}>
             Entrar
           </Button>
+          <a href="#/manual" className="block text-center text-xs font-semibold text-brand-700 hover:underline">
+            Consultar manual do sistema
+          </a>
         </div>
       </div>
     </div>
@@ -287,6 +293,17 @@ export default function App() {
   }
 
   if (!authed) {
+    if (hash === "#/manual") {
+      return (
+        <>
+          <div className="min-h-screen bg-slate-100 p-3 sm:p-6">
+            <Suspense fallback={<div className="py-16 text-center text-sm text-slate-500">Carregando manual…</div>}>
+              <ManualPage />
+            </Suspense>
+          </div>
+        </>
+      );
+    }
     return (
       <>
         <LoginScreen onLogin={() => setAuthed(true)} />
@@ -388,6 +405,15 @@ export default function App() {
             {route?.def.title ?? "ERP"}
           </h1>
           <div className="ml-auto flex flex-none items-center gap-1.5 sm:gap-3">
+            <a
+              href="#/manual"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-2 text-sm font-medium text-slate-600 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+              title="Consultar manual e atalhos"
+              aria-label="Abrir manual do sistema"
+            >
+              <CircleHelp size={17} />
+              <span className="hidden lg:inline">Ajuda</span>
+            </a>
             <button
               onClick={() => toggleCart()}
               aria-label="Abrir carrinho"
