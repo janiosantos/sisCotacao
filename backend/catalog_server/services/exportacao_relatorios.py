@@ -97,12 +97,21 @@ def rows_for(report_key: str, data: dict) -> tuple[list[str], list[list[object]]
     elif report_key == "vendas":
         columns = ["Chave", "Receita bruta", "Receita líquida", "Pedidos"]
         rows = [[item.get("chave"), item.get("receita_bruta"), item.get("receita_liquida"), item.get("pedidos")] for item in data.get("itens", [])]
+    elif report_key == "vendas.analitico":
+        columns = ["Dimensão", "Quantidade", "Pedidos", "Clientes", "Receita bruta", "Desconto", "Receita líquida", "CMV", "Margem bruta", "Margem %"]
+        rows = [[item.get("dimensao"), item.get("quantidade"), item.get("pedidos"), item.get("clientes"), item.get("receita_bruta"), item.get("desconto"), item.get("receita_liquida"), item.get("cmv"), item.get("margem_bruta"), item.get("margem_pct")] for item in data.get("itens", [])]
     elif report_key == "compras":
         columns = ["Indicador", "Valor"]
         rows = [["Pedidos", data.get("pedidos")], ["Recebidos", data.get("recebidos")], ["Cancelados", data.get("cancelados")], ["Lead time médio (dias)", data.get("lead_time_medio_dias")], ["Comprado", data.get("comprado")]]
+    elif report_key == "compras.analitico":
+        columns = ["Pedido", "Número", "Status", "Data", "Fornecedor", "Produto", "SKU", "Qtd. pedida", "Qtd. recebida", "Qtd. pendente", "Preço", "Valor pedido", "Valor recebido"]
+        rows = [[item.get("pedido_id"), item.get("numero"), item.get("status"), item.get("data_pedido"), item.get("fornecedor_nome"), item.get("produto_nome"), item.get("sku"), item.get("quantidade_pedida"), item.get("quantidade_recebida"), item.get("quantidade_pendente"), item.get("preco_unitario"), item.get("valor_pedido"), item.get("valor_recebido")] for item in data.get("itens", [])]
     elif report_key == "estoque":
         columns = ["ID", "SKU", "Produto", "Quantidade", "Disponível", "Valor"]
         rows = [[item.get("id"), item.get("sku"), item.get("nome"), item.get("quantidade"), item.get("disponivel"), item.get("valor")] for item in data.get("itens", [])]
+    elif report_key == "estoque.analitico":
+        columns = ["Produto", "SKU", "Depósito", "ABC", "XYZ", "Quantidade", "Disponível", "Mínimo", "Máximo", "Custo médio", "Valor", "Situação"]
+        rows = [[item.get("nome"), item.get("sku"), item.get("deposito_nome"), item.get("classe_abc"), item.get("classe_xyz"), item.get("quantidade"), item.get("disponivel"), item.get("estoque_minimo"), item.get("estoque_maximo"), item.get("custo_medio"), item.get("valor"), item.get("situacao")] for item in data.get("itens", [])]
     elif report_key == "financeiro":
         columns = ["Grupo", "Indicador", "Valor"]
         rows = [["Fluxo de caixa", "Entradas", data.get("fluxo_caixa", {}).get("entradas")], ["Fluxo de caixa", "Saídas", data.get("fluxo_caixa", {}).get("saidas")], ["Aging", "A vencer", data.get("aging", {}).get("a_vencer")], ["Aging", "Vencido", data.get("aging", {}).get("vencido")], ["DRE", "Receita líquida", data.get("dre", {}).get("receita_liquida")], ["DRE", "CMV", data.get("dre", {}).get("cmv")], ["DRE", "Lucro bruto", data.get("dre", {}).get("lucro_bruto")]]

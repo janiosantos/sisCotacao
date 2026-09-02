@@ -1717,6 +1717,12 @@ export const api = {
       "GET",
       "/api/relatorios/estoque" + qs({ deposito_id: depositoId })
     ),
+  relatorioVendasAnalitico: (params: Record<string, unknown> = {}) =>
+    request<RelatorioVendasAnalitico>("GET", "/api/relatorios/vendas-analitico" + qs(params)),
+  relatorioComprasAnalitico: (params: Record<string, unknown> = {}) =>
+    request<RelatorioComprasAnalitico>("GET", "/api/relatorios/compras-analitico" + qs(params)),
+  relatorioEstoqueAnalitico: (params: Record<string, unknown> = {}) =>
+    request<RelatorioEstoqueAnalitico>("GET", "/api/relatorios/estoque-analitico" + qs(params)),
   relatorioFinanceiro: (dataInicio?: string, dataFim?: string) =>
     request<{ fluxo_caixa: { entradas: number; saidas: number }; aging: { a_vencer: number; vencido: number; total: number }; dre: { receita_liquida: number; cmv: number; lucro_bruto: number } }>("GET", "/api/relatorios/financeiro" + qs({ data_inicio: dataInicio, data_fim: dataFim })),
   relatorioClientes: (params: Record<string, unknown> = {}) =>
@@ -2805,6 +2811,93 @@ export interface RelatorioComprasCliente {
   filtros: Record<string, unknown>;
   resumo: { pedidos: number; receita_bruta: number; receita_liquida: number };
   itens: RelatorioCompraClienteItem[];
+  paginacao: { total: number; limit: number; offset: number; proximo_offset: number | null };
+}
+
+export interface RelatorioVendasAnaliticoItem {
+  dimensao_id: number | string | null;
+  dimensao: string | null;
+  quantidade: number;
+  pedidos: number;
+  clientes: number;
+  receita_bruta: number;
+  desconto: number;
+  receita_liquida: number;
+  cmv: number;
+  margem_bruta: number;
+  margem_pct: number;
+}
+
+export interface RelatorioVendasAnalitico {
+  report_key: "vendas.analitico";
+  kind: "analitico";
+  periodo: { inicio: string; fim: string };
+  agrupamento: string;
+  dimensao: string;
+  filtros: Record<string, unknown>;
+  resumo: { quantidade: number; pedidos: number; clientes: number; receita_bruta: number; desconto: number; receita_liquida: number; cmv: number };
+  itens: RelatorioVendasAnaliticoItem[];
+  paginacao: { total: number; limit: number; offset: number; proximo_offset: number | null };
+}
+
+export interface RelatorioCompraAnaliticoItem {
+  pedido_id: number;
+  pedido_item_id: number;
+  numero: string;
+  status: string;
+  data_pedido: string;
+  data_prometida: string | null;
+  data_recebida: string | null;
+  fornecedor_id: number | null;
+  fornecedor_nome: string;
+  deposito_id: number | null;
+  deposito_nome: string;
+  produto_id: number | null;
+  produto_nome: string;
+  sku: string;
+  quantidade_pedida: number;
+  quantidade_recebida: number;
+  quantidade_pendente: number;
+  preco_unitario: number;
+  valor_pedido: number;
+  valor_recebido: number;
+}
+
+export interface RelatorioComprasAnalitico {
+  report_key: "compras.analitico";
+  kind: "analitico";
+  periodo: { inicio: string; fim: string };
+  filtros: Record<string, unknown>;
+  resumo: { pedidos: number; valor_pedido: number; valor_recebido: number; quantidade_pendente: number };
+  itens: RelatorioCompraAnaliticoItem[];
+  paginacao: { total: number; limit: number; offset: number; proximo_offset: number | null };
+}
+
+export interface RelatorioEstoqueAnaliticoItem {
+  produto_id: number;
+  sku: string;
+  nome: string;
+  classe_abc: string | null;
+  classe_xyz: string | null;
+  deposito_id: number;
+  deposito_nome: string;
+  quantidade: number;
+  reserva: number;
+  bloqueado: number;
+  separacao: number;
+  estoque_minimo: number;
+  estoque_maximo: number;
+  custo_medio: number;
+  disponivel: number;
+  valor: number;
+  situacao: string;
+}
+
+export interface RelatorioEstoqueAnalitico {
+  report_key: "estoque.analitico";
+  kind: "analitico";
+  filtros: Record<string, unknown>;
+  itens: RelatorioEstoqueAnaliticoItem[];
   paginacao: { total: number; limit: number; offset: number; proximo_offset: number | null };
 }
 

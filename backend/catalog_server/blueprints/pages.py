@@ -146,7 +146,7 @@ def _autorizar_pagina_relatorio(*, financeiro: bool = False) -> None:
 @pages_bp.get("/relatorios/imprimir")
 def relatorio_registrado_print():
     chave = (request.args.get("relatorio") or "").strip().lower()
-    if chave not in {"dashboard", "vendas", "compras", "estoque", "financeiro"}:
+    if chave not in {"dashboard", "vendas", "compras", "estoque", "financeiro", "vendas.analitico", "compras.analitico", "estoque.analitico"}:
         abort(400, description="Relatório inválido")
     _autorizar_pagina_relatorio(financeiro=chave == "financeiro")
     try:
@@ -154,7 +154,7 @@ def relatorio_registrado_print():
         columns, rows = exportacao_relatorios.rows_for(chave, data)
     except (KeyError, ValueError, TypeError) as exc:
         abort(400, description=str(exc))
-    titles = {"dashboard": "Resumo executivo", "vendas": "Vendas", "compras": "Compras", "estoque": "Estoque valorizado", "financeiro": "Financeiro / DRE"}
+    titles = {"dashboard": "Resumo executivo", "vendas": "Vendas", "compras": "Compras", "estoque": "Estoque valorizado", "financeiro": "Financeiro / DRE", "vendas.analitico": "Vendas analíticas", "compras.analitico": "Compras analíticas", "estoque.analitico": "Posição de estoque"}
     return render_template(
         "relatorio_generico_print.html",
         titulo=titles[chave],

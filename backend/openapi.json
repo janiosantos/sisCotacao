@@ -4668,6 +4668,50 @@
         ],
         "responses": {"200": {"description": "Arquivo para download"}, "403": {"$ref": "#/components/responses/Proibido"}}
       }
+    },
+    "/api/relatorios/vendas-analitico": {
+      "get": {
+        "tags": ["relatorios"],
+        "summary": "Vendas analiticas agrupadas com margem e CMV",
+        "parameters": [
+          {"$ref": "#/components/parameters/DataInicio"},
+          {"$ref": "#/components/parameters/DataFim"},
+          {"name": "agrupamento", "in": "query", "schema": {"type": "string", "enum": ["produto", "categoria", "marca", "vendedor", "cliente", "segmento", "deposito", "canal", "condicao"]}},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+        ],
+        "responses": {"200": {"description": "Totais paginados de receita, desconto, CMV e margem"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
+    },
+    "/api/relatorios/compras-analitico": {
+      "get": {
+        "tags": ["relatorios"],
+        "summary": "Compras por pedido/item com recebimento parcial",
+        "parameters": [
+          {"$ref": "#/components/parameters/DataInicio"},
+          {"$ref": "#/components/parameters/DataFim"},
+          {"name": "fornecedor_id", "in": "query", "schema": {"type": "integer"}},
+          {"name": "deposito_id", "in": "query", "schema": {"type": "integer"}},
+          {"name": "status", "in": "query", "schema": {"type": "string"}},
+          {"name": "q", "in": "query", "schema": {"type": "string"}},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+        ],
+        "responses": {"200": {"description": "Itens pedidos, recebidos e pendentes"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
+    },
+    "/api/relatorios/estoque-analitico": {
+      "get": {
+        "tags": ["relatorios"],
+        "summary": "Posicao de estoque por deposito incluindo saldo zero",
+        "parameters": [
+          {"name": "deposito_id", "in": "query", "schema": {"type": "integer"}},
+          {"name": "classe_abc", "in": "query", "schema": {"type": "string", "enum": ["A", "B", "C"]}},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+        ],
+        "responses": {"200": {"description": "Posicao com disponibilidade, valor e situacao operacional"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
     }
   },
   "components": {

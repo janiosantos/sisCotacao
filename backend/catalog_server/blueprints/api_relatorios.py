@@ -15,6 +15,7 @@ from catalog_server.repositories.relatorios import relatorio_repo
 from catalog_server.services import relatorios
 from catalog_server.services import relatorios_clientes
 from catalog_server.services import exportacao_relatorios
+from catalog_server.services import relatorios_operacionais
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 
 api_relatorios_bp = Blueprint("api_relatorios", __name__)
@@ -84,6 +85,30 @@ def estoque():
     return jsonify(relatorios.estoque(request.args.get("deposito_id", type=int)))
 
 
+@api_relatorios_bp.get("/api/relatorios/vendas-analitico")
+def vendas_analitico():
+    try:
+        return jsonify(relatorios_operacionais.vendas_analitico(_filters()))
+    except relatorios_operacionais.RelatorioOperacionalError as exc:
+        return jsonify({"error": str(exc), "code": "filtro_relatorio_invalido"}), 400
+
+
+@api_relatorios_bp.get("/api/relatorios/compras-analitico")
+def compras_analitico():
+    try:
+        return jsonify(relatorios_operacionais.compras_analitico(_filters()))
+    except relatorios_operacionais.RelatorioOperacionalError as exc:
+        return jsonify({"error": str(exc), "code": "filtro_relatorio_invalido"}), 400
+
+
+@api_relatorios_bp.get("/api/relatorios/estoque-analitico")
+def estoque_analitico():
+    try:
+        return jsonify(relatorios_operacionais.estoque_analitico(_filters()))
+    except relatorios_operacionais.RelatorioOperacionalError as exc:
+        return jsonify({"error": str(exc), "code": "filtro_relatorio_invalido"}), 400
+
+
 @api_relatorios_bp.get("/api/relatorios/financeiro")
 def financeiro():
     actor = usuario_id_requisicao()
@@ -100,7 +125,7 @@ def exportar_relatorio_registrado():
         return jsonify({"error": "Permissão negada: relatorios.exportar", "code": "permissao_negada"}), 403
     chave = (request.args.get("relatorio") or "").strip().lower()
     formato = (request.args.get("formato") or "csv").lower()
-    if chave not in {"dashboard", "vendas", "compras", "estoque", "financeiro"}:
+    if chave not in {"dashboard", "vendas", "compras", "estoque", "financeiro", "vendas.analitico", "compras.analitico", "estoque.analitico"}:
         return jsonify({"error": "relatorio inválido", "code": "relatorio_invalido"}), 400
     if chave == "financeiro" and not permissao.tem_permissao(actor, "relatorios", "financeiro"):
         return jsonify({"error": "Permissão negada: relatorios.financeiro", "code": "permissao_negada"}), 403
@@ -112,7 +137,7 @@ def exportar_relatorio_registrado():
         content = (exportacao_relatorios.csv_bytes if formato == "csv" else exportacao_relatorios.xlsx_bytes)(
             chave, data, actor_id=actor, filtros=filtros, ip=request.remote_addr
         )
-    except (KeyError, ValueError, TypeError) as exc:
+    except (KeyError, ValueError, TypeError, relatorios_operacionais.RelatorioOperacionalError) as exc:
         return jsonify({"error": str(exc), "code": "filtro_relatorio_invalido"}), 400
     ext = "csv" if formato == "csv" else "xlsx"
     mimetype = "text/csv" if ext == "csv" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

@@ -2,7 +2,7 @@
 
 ## O que é?
 
-A área de Relatórios reúne consultas sintéticas e analíticas para vendas, clientes, compras, estoque e financeiro. A tela atual está em evolução: o levantamento completo das lacunas e o backlog de implementação estão em [RELATORIO_AUDITORIA_RELATORIOS.md](../../RELATORIO_AUDITORIA_RELATORIOS.md) e [PLANO_RELATORIOS_ANALITICOS_SINTETICOS.md](../../PLANO_RELATORIOS_ANALITICOS_SINTETICOS.md).
+A área de Relatórios reúne consultas sintéticas e analíticas para vendas, clientes, compras, estoque e financeiro. A central já possui uma primeira vertical operacional de clientes e relatórios analíticos de vendas, compras e posição de estoque. O levantamento completo das lacunas e o backlog de implementação estão em [RELATORIO_AUDITORIA_RELATORIOS.md](../../RELATORIO_AUDITORIA_RELATORIOS.md) e [PLANO_RELATORIOS_ANALITICOS_SINTETICOS.md](../../PLANO_RELATORIOS_ANALITICOS_SINTETICOS.md).
 
 ## Para que serve?
 
@@ -14,6 +14,15 @@ Use os relatórios para acompanhar indicadores e abrir os documentos que formam 
 2. Selecione **Relatórios**.
 3. Escolha uma família e defina o período e os demais filtros.
 4. Atualize a consulta, abra o detalhe ou use **Imprimir**/**Exportar** quando a permissão estiver disponível.
+
+## Relatórios disponíveis
+
+- **Vendas analíticas:** agrupa por produto, categoria, marca, cliente, segmento, vendedor, depósito, canal ou condição; mostra quantidade, pedidos, clientes, receita, desconto, CMV e margem.
+- **Compras analíticas:** mostra pedido/item, fornecedor, prazo, quantidade pedida, quantidade recebida, saldo pendente e valor recebido.
+- **Posição de estoque:** inclui produtos ativos sem saldo, depósito, ABC/XYZ, disponibilidade, mínimo/máximo, custo e situação operacional.
+- **Clientes:** filtra perfil, aniversário e recência de compra; o botão **Compras** abre o extrato do cliente.
+
+As consultas analíticas são paginadas no backend e aceitam exportação CSV/XLSX. A impressão abre uma página HTML autenticada com opção do navegador **Salvar como PDF**.
 
 ## Sintético x analítico
 

@@ -12,7 +12,8 @@ Esta primeira entrega executável concluiu a fundação e uma vertical completa 
 - **P0.4/P0.5:** entregues telas HTML de impressão com `window.print()`/Salvar PDF do navegador, orientação A4 retrato/paisagem e exportação síncrona CSV/XLSX com proteção contra fórmula; PDF binário server-side e exportações assíncronas de grandes volumes permanecem pendentes.
 - **P1.1:** entregue migration `0150_clientes_relatorios` com nascimento, consentimento, canal preferencial, origem e índices; API e cadastro preservam os campos com validação backend.
 - **P1.2/P1.3:** entregues filtros de clientes por tipo, segmento, categoria, UF, cidade, status, busca, aniversário e recência de compra, além do extrato de compras por cliente com resumo, itens, impressão e exportação.
-- **P1.4/P2:** ABC/XYZ, necessidade de compra, DRE analítica, rentabilidade, relatórios fiscais, drill-down completo, RFM/segmentação avançada, agendamento e E2E ainda não foram implementados nesta etapa.
+- **P1.4/P1.5/P1.6:** entregues endpoints e telas analíticas de vendas, compras e posição de estoque, com agrupamentos, nomes, CMV/margem, recebimento parcial, saldo zero, situação operacional, paginação, impressão e exportação. Ainda faltam drill-down até documento, filtros avançados na UI, ranking/concentração de fornecedores e integração visual com ABC/reposição.
+- **P2:** ABC/XYZ histórica como relatório gerencial, necessidade de compra consolidada, DRE analítica, rentabilidade, relatórios fiscais, RFM/segmentação avançada, agendamento, exportação assíncrona e E2E ainda não foram implementados nesta etapa.
 
 O contrato dos novos endpoints foi acrescentado a `backend/openapi.json`. A migration foi aplicada somente no banco DEV local; nenhuma publicação foi autorizada.
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from catalog_server.db import system_conn
+from catalog_server.services import relatorios_operacionais
 
 
 def _periodo(data_inicio: str | None, data_fim: str | None) -> tuple[str, str]:
@@ -237,6 +238,9 @@ CATALOGO = [
     {"key": "vendas", "nome": "Vendas", "grupo": "vendas", "tipo": "analitico", "permissao": "relatorios.visualizar", "filtros": ["periodo", "agrupamento"], "orientacao": "landscape", "formatos": ["html", "pdf"]},
     {"key": "compras", "nome": "Compras", "grupo": "compras", "tipo": "analitico", "permissao": "relatorios.visualizar", "filtros": ["periodo"], "orientacao": "landscape", "formatos": ["html", "pdf"]},
     {"key": "estoque", "nome": "Estoque", "grupo": "estoque", "tipo": "analitico", "permissao": "relatorios.visualizar", "filtros": ["deposito"], "orientacao": "landscape", "formatos": ["html", "pdf"]},
+    {"key": "vendas.analitico", "nome": "Vendas analiticas", "grupo": "vendas", "tipo": "analitico", "permissao": "relatorios.visualizar", "filtros": ["periodo", "dimensao", "produto", "categoria", "marca", "vendedor", "cliente", "deposito"], "orientacao": "landscape", "formatos": ["html", "pdf", "csv", "xlsx"]},
+    {"key": "compras.analitico", "nome": "Compras analiticas", "grupo": "compras", "tipo": "analitico", "permissao": "relatorios.visualizar", "filtros": ["periodo", "fornecedor", "status", "deposito"], "orientacao": "landscape", "formatos": ["html", "pdf", "csv", "xlsx"]},
+    {"key": "estoque.analitico", "nome": "Posicao de estoque", "grupo": "estoque", "tipo": "analitico", "permissao": "relatorios.visualizar", "filtros": ["deposito", "classe_abc"], "orientacao": "landscape", "formatos": ["html", "pdf", "csv", "xlsx"]},
     {"key": "financeiro", "nome": "Financeiro / DRE", "grupo": "financeiro", "tipo": "sintetico", "permissao": "relatorios.financeiro", "filtros": ["periodo"], "orientacao": "landscape", "formatos": ["html", "pdf"]},
     {"key": "clientes", "nome": "Clientes e relacionamento", "grupo": "clientes", "tipo": "analitico", "permissao": "relatorios.visualizar", "filtros": ["tipo", "segmento", "categoria", "aniversario", "ultima_compra"], "orientacao": "landscape", "formatos": ["html", "pdf", "csv", "xlsx"]},
     {"key": "clientes.compras", "nome": "Compras por cliente", "grupo": "clientes", "tipo": "analitico", "permissao": "relatorios.visualizar", "filtros": ["cliente", "periodo"], "orientacao": "landscape", "formatos": ["html", "pdf", "csv", "xlsx"]},
@@ -266,4 +270,10 @@ def executar(chave: str, params: dict[str, object] | None = None) -> dict:
         from catalog_server.services import relatorios_clientes
 
         return relatorios_clientes.clientes(params)
+    if key == "vendas.analitico":
+        return relatorios_operacionais.vendas_analitico(params)
+    if key == "compras.analitico":
+        return relatorios_operacionais.compras_analitico(params)
+    if key == "estoque.analitico":
+        return relatorios_operacionais.estoque_analitico(params)
     raise KeyError(f"Relatório não encontrado: {key}")
