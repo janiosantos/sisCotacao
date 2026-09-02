@@ -41,7 +41,7 @@ export const Button = forwardRef<
   return (
     <button
       ref={ref}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-md font-semibold tracking-[-0.01em] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${BTN_VARIANTS[variant]} ${sizeCls} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-md font-semibold tracking-[-0.01em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${BTN_VARIANTS[variant]} ${sizeCls} ${className}`}
       {...props}
       disabled={disabled || !permitido}
       aria-disabled={!permitido || undefined}
@@ -174,13 +174,14 @@ export function THead({
           return (
             <th
               key={i}
+              scope="col"
               aria-sort={ariaSort}
               className="sticky top-0 z-10 border-b border-slate-200 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500"
             >
               {ordenavel ? (
                 <button
                   type="button"
-                  className="flex items-center gap-1 hover:text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                  className="flex items-center gap-1 rounded hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 focus-visible:ring-offset-1"
                   onClick={() => onSort(i)}
                   aria-label={`ordenar por ${typeof c === "string" ? c : `coluna ${i + 1}`}`}
                 >
@@ -251,6 +252,41 @@ export function EmptyRow({ colSpan, message }: { colSpan: number; message: strin
         {message}
       </td>
     </tr>
+  );
+}
+
+export function EmptyState({
+  title = "Nenhum registro encontrado",
+  message = "Ajuste os filtros ou cadastre o primeiro registro.",
+}: {
+  title?: string;
+  message?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center" role="status">
+      <p className="text-sm font-semibold text-slate-700">{title}</p>
+      <p className="mt-1 text-sm text-slate-500">{message}</p>
+    </div>
+  );
+}
+
+export function ErrorState({
+  message = "Não foi possível carregar os dados.",
+  onRetry,
+}: {
+  message?: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-red-200 bg-red-50/70 px-5 py-8 text-center" role="alert">
+      <p className="text-sm font-semibold text-red-800">Não foi possível concluir a consulta</p>
+      <p className="mt-1 text-sm text-red-700">{message}</p>
+      {onRetry ? (
+        <Button type="button" variant="outline" size="sm" className="mt-4 border-red-300 text-red-800 hover:bg-red-100" onClick={onRetry}>
+          Tentar novamente
+        </Button>
+      ) : null}
+    </div>
   );
 }
 
@@ -393,8 +429,9 @@ export function Modal({
           <h2 id={titleId} className="min-w-0 truncate text-base font-semibold text-gray-900">{title}</h2>
           <button
             ref={closeRef}
+            type="button"
             onClick={onClose}
-            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
             aria-label="Fechar"
           >
             <X size={18} />
@@ -491,7 +528,7 @@ export function Paginacao({
 
 export function Loading({ message = "Carregando…" }: { message?: string }) {
   return (
-    <div className="space-y-3 py-12" role="status" aria-live="polite" aria-label={message}>
+    <div className="min-h-40 space-y-3 rounded-xl border border-slate-200 bg-white px-5 py-12" role="status" aria-live="polite" aria-busy="true" aria-label={message}>
       <div className="mx-auto h-3 w-40 rounded-full erp-skeleton" />
       <div className="mx-auto h-2.5 w-56 rounded-full erp-skeleton" />
       <p className="pt-1 text-center text-xs text-slate-500">{message}</p>

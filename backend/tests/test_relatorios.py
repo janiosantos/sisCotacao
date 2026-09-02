@@ -89,6 +89,19 @@ def test_central(system_db):
     assert any(r["key"] == "financeiro" for r in c["relatorios"])
 
 
+def test_admin_recebe_permissao_da_central_de_relatorios(system_db):
+    uid = _usuario("bi_rbac")
+    with system_conn() as conn:
+        conn.execute(
+            "INSERT INTO usuario_perfis (usuario_id, perfil_id) "
+            "SELECT %s, id FROM perfis WHERE nome='Administrador'",
+            (uid,),
+        )
+        conn.commit()
+    permissao.invalidar(uid)
+    assert "relatorios.visualizar" in api_permissoes_efetivas(uid)
+
+
 def test_api_relatorios(system_db):
     _setup(system_db)
     uid = _usuario("bi_api")
@@ -120,3 +133,9 @@ def _usuario(login: str) -> int:
         uid = int(cur.lastrowid)
         conn.commit()
     return uid
+
+
+def api_permissoes_efetivas(usuario_id: int) -> list[str]:
+    from catalog_server.blueprints.api_permissoes import permissoes_efetivas
+
+    return permissoes_efetivas(usuario_id)

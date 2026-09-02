@@ -4,6 +4,21 @@
 > abas e formulários do DEV em 02/09/2026. A auditoria avalia operação de uma
 > grande loja de material elétrico, hidráulico, ferragens e ferramentas.
 
+## Status da execução
+
+- **P0 concluído:** Relatórios voltou a ser acessível ao administrador com
+  recurso RBAC próprio; loading, erro, vazio e retry foram padronizados em
+  Relatórios, Painel e fallback global.
+- **P1 concluído nesta rodada:** busca e grupos recolhíveis na navegação,
+  breadcrumb de contexto, foco visível em controles, semântica `scope="col"`,
+  abas acessíveis com setas/Home/End e hierarquia visual renovada em Relatórios.
+- **P2 concluído nesta rodada:** foco consistente nos botões, estados com
+  `aria-live`/`aria-busy`, recuperação de erros, responsividade preservada e
+  atalho `Ctrl+/` da central de ajuda mantido.
+- **Próxima evolução:** visões salvas, filtros por coluna, seleção em massa,
+  paginação server-side e virtualização de tabelas ainda exigem contrato de API
+  e medição de volume; não foram simulados como se já estivessem entregues.
+
 ## Diagnóstico atual
 
 O sistema já possui uma base visual consistente: shell compartilhado, navegação
@@ -90,4 +105,3 @@ preservada e evoluída em três incrementos: **P0 de confiabilidade e estados**,
 produtividade e acessibilidade**. Essa abordagem reduz risco de treinamento e
 permite medir tempo de atendimento, erros de recebimento, conversão de orçamento
 e tempo de reposição antes/depois.
-

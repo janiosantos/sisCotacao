@@ -3,7 +3,7 @@
 
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { Badge, Cell, EmptyRow, Table, TBody, THead } from "../src/ui/ui";
+import { Badge, Cell, EmptyRow, ErrorState, Table, TBody, THead } from "../src/ui/ui";
 
 describe("Table (responsiva mobile)", () => {
   it("injeta data-label por coluna em cada célula", () => {
@@ -71,6 +71,18 @@ describe("Table (responsiva mobile)", () => {
     expect(html).toContain("Nenhum registro");
     expect(html).toContain('colSpan="2"');
     expect(html).toContain('data-label=""');
+  });
+
+  it("mantém semântica de coluna e estado de erro recuperável", () => {
+    const html = renderToStaticMarkup(
+      <>
+        <Table><THead cols={["Nome"]} /><TBody><tr><Cell>Produto</Cell></tr></TBody></Table>
+        <ErrorState message="Falha de conexão" onRetry={() => undefined} />
+      </>,
+    );
+    expect(html).toContain('scope="col"');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Tentar novamente");
   });
 });
 

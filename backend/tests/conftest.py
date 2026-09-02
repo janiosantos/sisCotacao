@@ -167,6 +167,7 @@ def _seed_rbac_pg(conn) -> None:
         )
     recursos = [
         ("dashboard", "Painel", "Vendas"),
+        ("relatorios", "Relatórios", "Administração"),
         ("catalogo", "Catálogo", "Vendas"),
         ("pre-venda", "Pré-venda (PDV)", "Vendas"),
         ("orcamentos", "Orçamentos", "Vendas"),

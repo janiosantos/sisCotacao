@@ -132,7 +132,7 @@ _RECURSO_POR_PREFIXO: list[tuple[str, str]] = [
     ("/api/plano-contas", "plano_contas"),
     # Pós-venda / relatórios / painel
     ("/api/posvenda", "posvenda"),
-    ("/api/relatorios", "dashboard"),
+    ("/api/relatorios", "relatorios"),
     ("/api/dashboard", "dashboard"),
     ("/api/produtos", "catalogo"),
     ("/api/ia", "catalogo"),

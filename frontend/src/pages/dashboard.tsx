@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { fmtMoney } from "../ui/format";
-import { Badge, Button, Cell, EmptyRow, Loading, PageHeader, StatCard, Table, TBody, THead } from "../ui/ui";
+import { Badge, Button, Cell, EmptyRow, ErrorState, Loading, PageHeader, StatCard, Table, TBody, THead } from "../ui/ui";
 import { Section } from "./dashboard/section";
 
 interface DashboardData {
@@ -48,30 +48,33 @@ export default function Dashboard() {
   const [reposicao, setReposicao] = useState<Reposicao[]>([]);
   const [comissoes, setComissoes] = useState<Comissao[]>([]);
   const [erro, setErro] = useState("");
+  const [carregando, setCarregando] = useState(true);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const data = await api.requestDashboard();
-        const [rep, com] = await Promise.all([
-          api.reposicaoSugerida() as Promise<Reposicao[]>,
-          api.comissoes() as Promise<Comissao[]>,
-        ]);
-        setD(data);
-        setReposicao(rep);
-        setComissoes(com);
-      } catch (e) {
-        setErro((e as Error).message);
-      }
-    })();
-  }, []);
+  const carregar = async () => {
+    setCarregando(true);
+    setErro("");
+    try {
+      const data = await api.requestDashboard();
+      const [rep, com] = await Promise.all([
+        api.reposicaoSugerida() as Promise<Reposicao[]>,
+        api.comissoes() as Promise<Comissao[]>,
+      ]);
+      setD(data);
+      setReposicao(rep);
+      setComissoes(com);
+    } catch (e) {
+      setErro((e as Error).message || "Servidor indisponível");
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  useEffect(() => { void carregar(); }, []);
 
   if (erro) {
-    return (
-      <div className="py-16 text-center text-sm text-red-500">Erro ao carregar o painel: {erro}</div>
-    );
+    return <ErrorState message={`Erro ao carregar o painel: ${erro}`} onRetry={() => void carregar()} />;
   }
-  if (!d) return <Loading message="Carregando painel…" />;
+  if (carregando || !d) return <Loading message="Carregando painel…" />;
 
   const r = d.resumo;
 
@@ -97,9 +100,19 @@ export default function Dashboard() {
       </div>
 
       {r.estoque_baixo > 0 ? (
-        <div className="mt-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800" role="status">
           <Badge tone="amber">Estoque</Badge>
           {r.estoque_baixo} produto(s) abaixo do estoque mínimo.
+          <a href="#/estoque" className="ml-auto font-semibold text-amber-900 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700">Ver estoque</a>
+          <a href="#/compras" className="font-semibold text-amber-900 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700">Abrir compras</a>
+        </div>
+      ) : null}
+
+      {r.receber_vencidas > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-800" role="alert">
+          <Badge tone="red">Financeiro</Badge>
+          Há {fmtMoney(r.receber_vencidas)} vencido a receber.
+          <a href="#/financeiro" className="ml-auto font-semibold text-red-900 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700">Revisar títulos</a>
         </div>
       ) : null}
 

@@ -33,6 +33,8 @@ import {
   X,
   BarChart3,
   CircleHelp,
+  ChevronDown,
+  Search,
   type LucideIcon,
 } from "lucide-react";
 import { ROUTES } from "./routes";
@@ -40,7 +42,7 @@ import { carregarSessao, entrar, sair, usuarioCorrente } from "./pages/login";
 import { startupAuth } from "./auth";
 import { Manutencao, estaOffline } from "./manutencao";
 import { countItens, injectOverlay as injectCartOverlay, toggle as toggleCart } from "./cart";
-import { Button } from "./ui/ui";
+import { Button, ErrorState, Loading } from "./ui/ui";
 import { podeVisualizar } from "./perm";
 
 const ManualPage = lazy(() => import("./pages/manual"));
@@ -152,15 +154,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
 
   render() {
     if (this.state.failed) {
-      return (
-        <div className="rounded-lg border border-dashed border-red-200 bg-white py-16 text-center text-sm text-gray-500">
-          <p className="text-base font-medium text-gray-700">Não foi possível carregar esta tela</p>
-          <p className="mt-1">Atualize a página ou tente novamente.</p>
-          <Button variant="outline" className="mt-4" onClick={() => location.reload()}>
-            Tentar novamente
-          </Button>
-        </div>
-      );
+      return <ErrorState message="Atualize a página ou tente novamente." onRetry={() => location.reload()} />;
     }
     return this.props.children;
   }
@@ -236,6 +230,8 @@ export default function App() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [cartCount, setCartCount] = useState(0);
   const [menuAberto, setMenuAberto] = useState(false);
+  const [buscaModulo, setBuscaModulo] = useState("");
+  const [gruposAbertos, setGruposAbertos] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     injectCartOverlay();
@@ -297,7 +293,7 @@ export default function App() {
       return (
         <>
           <div className="min-h-screen bg-slate-100 p-3 sm:p-6">
-            <Suspense fallback={<div className="py-16 text-center text-sm text-slate-500">Carregando manual…</div>}>
+            <Suspense fallback={<Loading message="Carregando manual…" />}>
               <ManualPage />
             </Suspense>
           </div>
@@ -314,38 +310,63 @@ export default function App() {
 
   const usuario = usuarioCorrente();
   const RouteComponent = route?.def.component ?? null;
+  const grupoAtual = NAV.find((g) => g.items.some((item) => item.recurso === route?.def.recurso));
 
   const SidebarNav = (
     <nav className="erp-scrollbar flex-1 space-y-5 overflow-y-auto px-3 py-4" aria-label="Navegação principal">
+      <div className="sticky top-0 z-10 bg-white pb-1">
+        <div className="relative">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+          <input
+            aria-label="Buscar módulo"
+            value={buscaModulo}
+            onChange={(e) => setBuscaModulo(e.target.value)}
+            placeholder="Buscar módulo..."
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs text-slate-800 outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
+          />
+        </div>
+      </div>
       {NAV.map((g) => {
-        const visiveis = g.items.filter((it) => podeVisualizar(it.recurso));
+        const termo = buscaModulo.trim().toLocaleLowerCase();
+        const visiveis = g.items.filter((it) => podeVisualizar(it.recurso) && (!termo || g.label.toLocaleLowerCase().includes(termo) || it.label.toLocaleLowerCase().includes(termo)));
         if (visiveis.length === 0) return null;
+        const aberto = termo.length > 0 || gruposAbertos[g.label] !== false;
+        const grupoId = `nav-grupo-${g.label.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
         return (
           <div key={g.label}>
-            <div className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between rounded px-2 pb-1.5 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+              aria-expanded={aberto}
+              aria-controls={grupoId}
+              onClick={() => setGruposAbertos((atual) => ({ ...atual, [g.label]: !aberto }))}
+            >
               {g.label}
-            </div>
-            <div className="space-y-1">
-              {visiveis.map((it) => {
-                const active = isActive(hash, it.href);
-                const Icon = it.icon;
-                return (
-                  <a
-                    key={it.href}
-                    href={it.href}
-                    aria-current={active ? "page" : undefined}
-                    className={`group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium ${
-                      active
-                        ? "bg-brand-50 text-brand-800 shadow-sm ring-1 ring-brand-100"
-                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    }`}
-                  >
-                    <Icon size={16} strokeWidth={active ? 2.2 : 1.8} className={active ? "text-brand-600" : "text-slate-400 group-hover:text-slate-600"} />
-                    {it.label}
-                  </a>
-                );
-              })}
-            </div>
+              <ChevronDown size={13} className={`transition-transform ${aberto ? "" : "-rotate-90"}`} aria-hidden="true" />
+            </button>
+            {aberto ? (
+              <div id={grupoId} className="space-y-1">
+                {visiveis.map((it) => {
+                  const active = isActive(hash, it.href);
+                  const Icon = it.icon;
+                  return (
+                    <a
+                      key={it.href}
+                      href={it.href}
+                      aria-current={active ? "page" : undefined}
+                      className={`group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
+                        active
+                          ? "bg-brand-50 text-brand-800 shadow-sm ring-1 ring-brand-100"
+                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      }`}
+                    >
+                      <Icon size={16} strokeWidth={active ? 2.2 : 1.8} className={active ? "text-brand-600" : "text-slate-400 group-hover:text-slate-600"} />
+                      {it.label}
+                    </a>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
         );
       })}
@@ -449,6 +470,15 @@ export default function App() {
         </header>
 
         <main id="main-content" className="erp-scrollbar flex-1 overflow-auto p-3 sm:p-4 md:p-5 lg:p-6">
+          {route ? (
+            <nav aria-label="Caminho da página" className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+              <span>ERP</span>
+              <span aria-hidden="true">/</span>
+              <span>{grupoAtual?.label ?? "Módulo"}</span>
+              <span aria-hidden="true">/</span>
+              <span className="text-slate-600">{route.def.title}</span>
+            </nav>
+          ) : null}
           {!rotaLiberada ? (
             <div className="rounded-lg border border-dashed border-gray-300 bg-white py-16 text-center text-sm text-gray-400">
               <p className="text-base font-medium text-gray-600">Sem acesso</p>
@@ -459,7 +489,7 @@ export default function App() {
             </div>
           ) : (
             <RouteErrorBoundary>
-              <Suspense fallback={<div className="py-16 text-center text-sm text-gray-400">Carregando…</div>}>
+              <Suspense fallback={<Loading />}>
                 {route && RouteComponent ? <RouteComponent key={route.m[0]} /> : null}
               </Suspense>
             </RouteErrorBoundary>
