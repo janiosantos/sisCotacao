@@ -1,6 +1,6 @@
 // tests/format.test.ts — esqueleto da suíte vitest do frontend.
 import { describe, expect, it } from "vitest";
-import { escapeHtml, fmtMoney, toDate } from "../src/ui/format";
+import { escapeHtml, fmtMoney, maskDoc, normalizarTipoPessoa, toDate, validarCnpj, validarCpf } from "../src/ui/format";
 
 describe("escapeHtml", () => {
   it("escapa caracteres HTML", () => {
@@ -31,5 +31,19 @@ describe("toDate", () => {
   it("retorna null para valores inválidos", () => {
     expect(toDate(null)).toBeNull();
     expect(toDate("not-a-date")).toBeNull();
+  });
+});
+
+describe("documentos", () => {
+  it("valida CNPJ formatado e sem mascara", () => {
+    expect(validarCnpj("04.252.011/0001-10")).toBe(true);
+    expect(validarCnpj("04252011000110")).toBe(true);
+    expect(validarCnpj("04.252.011/0001-11")).toBe(false);
+  });
+
+  it("mantem CPF e normaliza tipo juridico ao editar cadastro", () => {
+    expect(validarCpf("529.982.247-25")).toBe(true);
+    expect(normalizarTipoPessoa("J")).toBe("j");
+    expect(maskDoc("04252011000110", normalizarTipoPessoa("J"))).toBe("04.252.011/0001-10");
   });
 });

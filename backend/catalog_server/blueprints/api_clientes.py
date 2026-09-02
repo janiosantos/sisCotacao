@@ -14,6 +14,7 @@ from catalog_server.repositories import (
     vendedor_repo,
 )
 from catalog_server.services import credito
+from catalog_server.services.documentos import normalizar_e_validar_documento, normalizar_tipo_pessoa
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 
 api_clientes_bp = Blueprint("api_clientes", __name__)
@@ -59,6 +60,13 @@ def criar():
     nome = (data.get("nome") or "").strip()
     if not nome:
         return jsonify({"error": "Informe o nome do cliente"}), 400
+    try:
+        tipo, documento = normalizar_tipo_pessoa(data.get("tipo_pessoa")), data.get("doc")
+        documento_normalizado = normalizar_e_validar_documento(documento, tipo)
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "documento_invalido"}), 400
+    data["tipo_pessoa"] = tipo
+    data["doc"] = documento_normalizado[1] if documento_normalizado else None
     if "limite_credito" in data:
         actor = usuario_id_requisicao()
         from catalog_server import permissao
@@ -81,6 +89,13 @@ def atualizar(cliente_id: int):
         return jsonify({"error": "Payload deve ser um objeto JSON", "code": "payload_invalido"}), 400
     if not (data.get("nome") or "").strip():
         return jsonify({"error": "Informe o nome do cliente"}), 400
+    try:
+        tipo, documento = normalizar_tipo_pessoa(data.get("tipo_pessoa")), data.get("doc")
+        documento_normalizado = normalizar_e_validar_documento(documento, tipo)
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "documento_invalido"}), 400
+    data["tipo_pessoa"] = tipo
+    data["doc"] = documento_normalizado[1] if documento_normalizado else None
     if "limite_credito" in data:
         actor = usuario_id_requisicao()
         from catalog_server import permissao

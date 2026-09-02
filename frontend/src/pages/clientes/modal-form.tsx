@@ -12,7 +12,7 @@ import {
   type ContextoCliente,
   type Vendedor,
 } from "../../api/client";
-import { fmtDate, maskCep, maskDoc, maskFone, maskIe, soDigitos, validarCnpj, validarCpf } from "../../ui/format";
+import { fmtDate, maskCep, maskDoc, maskFone, maskIe, normalizarTipoPessoa, soDigitos, validarCnpj, validarCpf } from "../../ui/format";
 import { toast } from "../../ui/dom";
 import { Button, Field, Input, Modal, Select, Textarea } from "../../ui/ui";
 
@@ -94,8 +94,8 @@ export function ModalClienteForm({
       cliente
         ? {
             nome: cliente.nome,
-            tipo_pessoa: cliente.tipo_pessoa || "f",
-            doc: cliente.doc || "",
+            tipo_pessoa: normalizarTipoPessoa(cliente.tipo_pessoa),
+            doc: soDigitos(cliente.doc || ""),
             contribuinte: cliente.contribuinte || "",
             ie: cliente.ie || "",
             email: cliente.email || "",
@@ -132,7 +132,7 @@ export function ModalClienteForm({
   }, [cliente]);
 
   const validarDoc = (): string | null => {
-    const tipo = form.tipo_pessoa;
+    const tipo = normalizarTipoPessoa(form.tipo_pessoa);
     const d = soDigitos(form.doc);
     if (!d) return null; // documento opcional
     if (tipo === "j") {
@@ -157,7 +157,7 @@ export function ModalClienteForm({
     }
     const payload: ClientePayload = {
       nome: form.nome.trim(),
-      tipo_pessoa: form.tipo_pessoa,
+      tipo_pessoa: normalizarTipoPessoa(form.tipo_pessoa),
       doc: soDigitos(form.doc) || null,
       email: form.email.trim() || null,
       whatsapp: soDigitos(form.whatsapp) || null,
@@ -313,9 +313,9 @@ export function ModalClienteForm({
             </Field>
             <Field label="CPF/CNPJ">
               <Input
-                value={maskDoc(form.doc, form.tipo_pessoa === "j" ? "j" : "f")}
+                value={maskDoc(form.doc, normalizarTipoPessoa(form.tipo_pessoa))}
                 onChange={(e) => setForm({ ...form, doc: e.target.value })}
-                placeholder={form.tipo_pessoa === "j" ? "00.000.000/0000-00" : "000.000.000-00"}
+                placeholder={normalizarTipoPessoa(form.tipo_pessoa) === "j" ? "00.000.000/0000-00" : "000.000.000-00"}
               />
             </Field>
             <Field label="Condição de contribuinte">

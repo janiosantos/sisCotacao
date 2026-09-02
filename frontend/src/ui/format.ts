@@ -44,6 +44,14 @@ export function soDigitos(v: unknown): string {
   return String(v ?? "").replace(/\D/g, "");
 }
 
+export type TipoPessoa = "f" | "j";
+
+/** Normaliza valores antigos da API para os valores usados pelos selects. */
+export function normalizarTipoPessoa(value: unknown): TipoPessoa {
+  const tipo = String(value ?? "").trim().toLowerCase();
+  return ["j", "pj", "juridica"].includes(tipo) ? "j" : "f";
+}
+
 /** Máscara de CPF (000.000.000-00) ou CNPJ (00.000.000/0000-00). */
 export function maskDoc(value: string, tipo: "f" | "j" = "f"): string {
   const d = soDigitos(value);
@@ -106,12 +114,15 @@ export function validarCpf(doc: string): boolean {
 export function validarCnpj(doc: string): boolean {
   const d = soDigitos(doc);
   if (d.length !== 14 || /^(\d)\1{13}$/.test(d)) return false;
-  const pesos = (base: number) => {
-    const seq = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const calcular = (tamanho: number) => {
     let sum = 0;
-    for (let i = 0; i < base; i++) sum += parseInt(d[i], 10) * (seq[base - 1 - i] ?? seq[base + 11 - i]);
-    const r = sum % 11;
-    return r < 2 ? 0 : 11 - r;
+    let peso = 2;
+    for (let i = tamanho - 1; i >= 0; i -= 1) {
+      sum += Number(d[i]) * peso;
+      peso = peso === 9 ? 2 : peso + 1;
+    }
+    const resto = sum % 11;
+    return resto < 2 ? 0 : 11 - resto;
   };
-  return pesos(12) === parseInt(d[12], 10) && pesos(13) === parseInt(d[13], 10);
+  return calcular(12) === Number(d[12]) && calcular(13) === Number(d[13]);
 }

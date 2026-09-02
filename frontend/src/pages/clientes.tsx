@@ -9,7 +9,7 @@ import {
   type ContextoCliente,
   type Vendedor,
 } from "../api/client";
-import { fmtMoney, maskDoc } from "../ui/format";
+import { fmtMoney, maskDoc, normalizarTipoPessoa } from "../ui/format";
 import { toast } from "../ui/dom";
 import { Badge, Button, Cell, Input, Loading, PageHeader, Table, TBody, THead } from "../ui/ui";
 import { ModalClienteForm } from "./clientes/modal-form";
@@ -110,7 +110,7 @@ export default function Clientes() {
                       <span className="font-medium">{c.nome}</span>
                       {c.email ? <div className="text-xs text-gray-400">{c.email}</div> : null}
                     </Cell>
-                    <Cell className="font-mono text-xs">{c.doc ? maskDoc(c.doc, c.tipo_pessoa === "j" ? "j" : "f") : "—"}</Cell>
+                    <Cell className="font-mono text-xs">{c.doc ? maskDoc(c.doc, normalizarTipoPessoa(c.tipo_pessoa)) : "—"}</Cell>
                     <Cell className="text-xs">{[c.cidade, c.uf].filter(Boolean).join(" - ") || "—"}</Cell>
                     <Cell className="text-xs">{c.vendedor_nome || "—"}</Cell>
                     <Cell className="text-xs">{segLabel(c.segmento)}</Cell>

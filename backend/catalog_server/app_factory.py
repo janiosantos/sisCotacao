@@ -46,6 +46,7 @@ from catalog_server.blueprints import (
     portal_bp,
 )
 from catalog_server.services import quote_service
+from catalog_server.services.access_log import configure_health_probe_logging
 from catalog_server.services.impressao import impressao_service
 from catalog_server.db import system_conn
 
@@ -265,6 +266,7 @@ def _autorizar_acesso() -> None:
 
 
 def create_app() -> Flask:
+    configure_health_probe_logging()
     app = Flask(__name__)
     # Limite global de request evita uploads e payloads JSON sem teto.
     app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MAX_CONTENT_LENGTH", str(25 * 1024 * 1024)))

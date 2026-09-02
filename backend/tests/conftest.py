@@ -37,16 +37,24 @@ from catalog_server import db as db_mod  # noqa: E402
 
 
 @pytest.fixture(scope="session")
-def pg_schema():
-    """Aplica o schema Postgres (baseline + migrações) uma vez por sessão."""
+def test_engine():
+    """Reutiliza o pool de teste; nao compartilha transacoes entre testes."""
     import sqlalchemy
 
-    engine = sqlalchemy.create_engine(TEST_PG_URL)
-    with engine.connect() as conn:
+    engine = sqlalchemy.create_engine(TEST_PG_URL, pool_pre_ping=True)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def pg_schema(test_engine):
+    """Aplica o schema Postgres (baseline + migrações) uma vez por sessão."""
+    with test_engine.connect() as conn:
         conn.exec_driver_sql("DROP SCHEMA public CASCADE")
         conn.exec_driver_sql("CREATE SCHEMA public")
         conn.commit()
-    engine.dispose()
 
     # Mesmo caminho do startup de produção: migrações (a 0091 cria extensões,
     # f_unaccent e os índices pg_trgm da busca por descrição padronizada).
@@ -54,51 +62,48 @@ def pg_schema():
 
     init_db()
 
-    engine = sqlalchemy.create_engine(TEST_PG_URL)
-    with engine.connect() as conn:
+    with test_engine.connect() as conn:
         # Seeds replicados das migrações (estado pós-migração):
         conn.exec_driver_sql("INSERT INTO depositos (nome) VALUES ('Matriz')")
         conn.exec_driver_sql("INSERT INTO tabelas_preco (nome, tipo) VALUES ('Tabela Padrão', 'varejo')")
         conn.commit()
-    engine.dispose()
     return True
 
 
 @pytest.fixture()
-def system_db(pg_schema):
+def system_db(pg_schema, test_engine, pg_tables):
     """Zera as tabelas do banco de teste PG antes de cada teste.
 
     Os testes assumem banco vazio; `DATABASE_URL` já aponta para `TEST_PG_URL`
     (definido no conftest) e as migrações são aplicadas uma vez por processo.
     """
-    _truncate_all(TEST_PG_URL)
-    _seed_pg(TEST_PG_URL)
+    _truncate_all(test_engine, pg_tables)
+    _seed_pg(test_engine)
     return None
 
 
-def _truncate_all(url: str) -> None:
-    import sqlalchemy
-
-    engine = sqlalchemy.create_engine(url)
-    with engine.connect() as conn:
-        tables = [
+@pytest.fixture(scope="session")
+def pg_tables(pg_schema, test_engine):
+    """Lista estavel das tabelas publicas criada depois das migracoes."""
+    with test_engine.connect() as conn:
+        return [
             r[0]
             for r in conn.exec_driver_sql(
                 "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
             ).fetchall()
         ]
+
+
+def _truncate_all(engine, tables: list[str]) -> None:
+    with engine.connect() as conn:
         if tables:
             conn.exec_driver_sql(
                 f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE"
             )
         conn.commit()
-    engine.dispose()
 
 
-def _seed_pg(url: str) -> None:
-    import sqlalchemy
-
-    engine = sqlalchemy.create_engine(url)
+def _seed_pg(engine) -> None:
     with engine.connect() as conn:
         conn.exec_driver_sql("INSERT INTO depositos (nome) VALUES ('Matriz')")
         conn.exec_driver_sql("INSERT INTO tabelas_preco (nome, tipo) VALUES ('Tabela Padrão', 'varejo')")
@@ -143,7 +148,6 @@ def _seed_pg(url: str) -> None:
         # Seeds de controle de acesso (migração 0075 — TRUNCATE por teste apaga).
         _seed_rbac_pg(conn)
         conn.commit()
-    engine.dispose()
 
 
 def _seed_rbac_pg(conn) -> None:
