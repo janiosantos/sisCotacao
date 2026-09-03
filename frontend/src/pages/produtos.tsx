@@ -905,15 +905,14 @@ export function ProdutoEditor() {
 
   useEffect(() => {
     void (async () => {
-      // Restaura rascunho duplicado (novo produto)
+      // Restaura rascunho duplicado (novo produto) — usado como base abaixo,
+// pois o setForm/buildAtributosState do novo produto zeraria o rascunho.
+      let rascunho: { form?: Record<string, unknown>; dados?: DadosOperacionais; valores?: Record<string, string> } | null = null;
       if (!id) {
         try {
-          const rascunho = sessionStorage.getItem("dup_produto");
-          if (rascunho) {
-            const copia = JSON.parse(rascunho);
-            if (copia.form) setForm((f) => ({ ...f, ...copia.form }));
-            if (copia.dados) setDados((d) => ({ ...d, ...copia.dados }));
-            if (copia.valores) setValores(copia.valores);
+          const raw = sessionStorage.getItem("dup_produto");
+          if (raw) {
+            rascunho = JSON.parse(raw);
             sessionStorage.removeItem("dup_produto");
           }
         } catch {
@@ -965,23 +964,25 @@ export function ProdutoEditor() {
       setProduto(prod);
 
       const familiaId = prod ? prod.familia_id : fs[0] ? fs[0].id : null;
+      const b = (rascunho?.form ?? {}) as Record<string, string | undefined>;
       setForm({
-        familia_id: String(familiaId ?? ""),
-        marca: prod?.marca ?? "",
-        marca_id: prod?.marca_id ? String(prod.marca_id) : "",
-        external_id: prod?.external_id ?? "",
-        nome: prod?.nome ?? "",
-        categoria: prod?.categoria ?? "",
-        subcategoria: prod?.subcategoria ?? "",
-        grupo_id: prod?.grupo_id ? String(prod.grupo_id) : "",
-        subgrupo_id: prod?.subgrupo_id ? String(prod.subgrupo_id) : "",
-        descricao: prod?.descricao ?? "",
-        termos_busca: prod?.termos_busca ?? "",
+        familia_id: b.familia_id ?? String(familiaId ?? ""),
+        marca: b.marca ?? prod?.marca ?? "",
+        marca_id: b.marca_id ?? (prod?.marca_id ? String(prod.marca_id) : ""),
+        external_id: b.external_id ?? prod?.external_id ?? "",
+        nome: b.nome ?? prod?.nome ?? "",
+        categoria: b.categoria ?? prod?.categoria ?? "",
+        subcategoria: b.subcategoria ?? prod?.subcategoria ?? "",
+        grupo_id: b.grupo_id ?? (prod?.grupo_id ? String(prod.grupo_id) : ""),
+        subgrupo_id: b.subgrupo_id ?? (prod?.subgrupo_id ? String(prod.subgrupo_id) : ""),
+        descricao: b.descricao ?? prod?.descricao ?? "",
+        termos_busca: b.termos_busca ?? prod?.termos_busca ?? "",
       });
 
-      if (prod?.grupo_id) {
+      const grupoEfetivo = (rascunho?.form?.grupo_id as string | undefined) || prod?.grupo_id;
+      if (grupoEfetivo) {
         try {
-          setSubgrupos(await api.listarSubgrupos(prod.grupo_id));
+          setSubgrupos(await api.listarSubgrupos(Number(grupoEfetivo)));
         } catch {
           setSubgrupos([]);
         }
@@ -991,8 +992,8 @@ export function ProdutoEditor() {
 
       const st = buildAtributosState(fs, familiaId, prod);
       setAtributos(st.atributos);
-      setDados(st.dados);
-      setValores(st.valores);
+      setDados(rascunho?.dados ? { ...st.dados, ...rascunho.dados } : st.dados);
+      setValores(rascunho?.valores ? { ...st.valores, ...rascunho.valores } : st.valores);
 
       if (prod) {
         const [f, u] = await Promise.all([api.listarFornecedores(true), api.listarUnidadesCompra(true)]).catch(() => [[], []] as [Fornecedor[], UnidadeCompra[]]);
