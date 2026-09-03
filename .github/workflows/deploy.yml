@@ -89,6 +89,8 @@ jobs:
 
       - name: Build imagem do frontend
         if: steps.comp.outputs.frontend == 'true'
+        env:
+          APP_VERSION: ${{ steps.version.outputs.tag }}
         run: docker compose -f deployment/compose/docker-compose.prod.yml build frontend
 
       # Regra 03: release imutável — além do latest, cada versão fica etiquetada
