@@ -1,4 +1,4 @@
-services:
+﻿services:
   db:
     image: postgres:16-alpine
     environment:
@@ -34,7 +34,7 @@ services:
       - APP_VERSION=${APP_VERSION:-dev}
       - CATALOG_ENV=production
       - CATALOG_SECRET=${CATALOG_SECRET:?CATALOG_SECRET obrigatório}
-- PUBLIC_CORS_ORIGINS=${PUBLIC_CORS_ORIGINS:-https://casalm.com.br,https://www.casalm.com.br}
+      - PUBLIC_CORS_ORIGINS=${PUBLIC_CORS_ORIGINS:-https://casalm.com.br,https://www.casalm.com.br}
       # Links de convite ao fornecedor: URL pública com a porta do redirecionamento
       # CGNAT — o Host header/X-Forwarded-* não carrega a porta externa.
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-https://siscom.casalm.com.br:6173}
