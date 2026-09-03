@@ -82,13 +82,28 @@ def criar():
         return jsonify({
             "error": "O cliente padrão só pode comprar à vista",
             "code": "cliente_padrao_somente_avista",
-        }), 403
+}), 403
     indicacao_id = data.get("indicacao_id")
     if indicacao_id:
         try:
             parceiros.validar_indicacao(int(indicacao_id), int(cliente_id) if cliente_id else None)
         except (LookupError, ValueError) as exc:
             return jsonify({"error": str(exc), "code": "indicacao_invalida"}), 400
+    else:
+        parceiro_id = data.get("parceiro_id")
+        if parceiro_id:
+            # Indicação direto do PDV: cria a indicação do parceiro ativo para
+            # esta venda (cliente real, se não for o consumidor padrão) e vincula.
+            cliente_indicado = (
+                int(cliente_id)
+                if cliente_id and int(cliente_id) != credito.CLIENTE_PADRAO_ID
+                else None
+            )
+            try:
+                indicacao = parceiros.criar_indicacao(int(parceiro_id), cliente_indicado)
+            except (LookupError, ValueError) as exc:
+                return jsonify({"error": str(exc), "code": "parceiro_indicacao_invalida"}), 400
+            indicacao_id = indicacao["id"]
     # Status "protegidos" (finalizado) só podem ser aplicados pelo PATCH, que
     # passa pelo gate de alçada/estoque/fiscal. Criar já direto como
     # finalizado pulava todas essas checagens — força rascunho aqui, e quem
@@ -164,6 +179,29 @@ def atualizar(orcamento_id: int):
         )
     except PermissionError as exc:
         return jsonify({"error": str(exc)}), 403
+
+    # Indicação de parceiro no rascunho (PDV): vincula/desvincula a indicação.
+    if "parceiro_id" in data:
+        parceiro_id = data.get("parceiro_id")
+        if parceiro_id:
+            cliente_indicado = (
+                int(atual["cliente_id"])
+                if atual.get("cliente_id") and int(atual["cliente_id"]) != credito.CLIENTE_PADRAO_ID
+                else None
+            )
+            try:
+                indicacao = parceiros.criar_indicacao(int(parceiro_id), cliente_indicado)
+            except (LookupError, ValueError) as exc:
+                return jsonify({"error": str(exc), "code": "parceiro_indicacao_invalida"}), 400
+            try:
+                orcamento_repo.atualizar_cabecalho(orcamento_id, indicacao_id=indicacao["id"])
+            except PermissionError as exc:
+                return jsonify({"error": str(exc)}), 403
+        else:
+            try:
+                orcamento_repo.limpar_indicacao(orcamento_id)
+            except PermissionError as exc:
+                return jsonify({"error": str(exc)}), 403
 
     # Conversão orçamento → pedido (gate de alçada + estoque + fiscal).
     if status == "finalizado":

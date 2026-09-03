@@ -26,7 +26,7 @@ def _setup(system_db) -> tuple[int, int]:
 
 def test_fluxo_indicacao_pontos_bonus(system_db):
     cliente_id, venda_id = _setup(system_db)
-    criado = parceiros.criar(cliente_id, "eletricista", usuario_id=1)
+    criado = parceiros.criar("eletricista", usuario_id=1, cliente_id=cliente_id)
     parceiro_id = criado["id"]
     assert criado["status"] == "pendente"
     parceiros.alterar_status(parceiro_id, "ativo", usuario_id=1)
@@ -40,6 +40,9 @@ def test_fluxo_indicacao_pontos_bonus(system_db):
     assert ledger["saldo_pontos"] == 1000.0
     assert len(ledger["bonus"]) == 1
     assert ledger["bonus"][0]["status"] == "pendente"
+    assert len(ledger["vendas"]) == 1
+    assert ledger["vendas"][0]["orcamento_id"] == venda_id
+    assert float(ledger["vendas"][0]["total"] or 0) == 1000.0
 
     aprovado = parceiros.aprovar_bonus(ledger["bonus"][0]["id"], usuario_id=1)
     assert aprovado["status"] == "aprovado"
@@ -49,7 +52,7 @@ def test_fluxo_indicacao_pontos_bonus(system_db):
 
 def test_indicacao_nao_duplica_nem_aceita_venda_aberta(system_db):
     cliente_id, venda_id = _setup(system_db)
-    parceiro_id = parceiros.criar(cliente_id, "encanador")["id"]
+    parceiro_id = parceiros.criar("encanador", cliente_id=cliente_id)["id"]
     parceiros.alterar_status(parceiro_id, "ativo")
     indicacao = parceiros.criar_indicacao(parceiro_id)
     with system_conn() as conn:

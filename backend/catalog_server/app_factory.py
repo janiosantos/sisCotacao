@@ -60,6 +60,9 @@ _RECURSO_POR_PREFIXO: list[tuple[str, str]] = [
     # Admin / sistema
     ("/api/usuarios", "usuarios"),
     ("/api/perfis", "perfis"),
+    # Parceiros: a seleção de indicação no PDV é operação de pré-venda; o
+    # restante (rede, extrato, bônus) fica restrito a Admin/Financeiro.
+    ("/api/parceiros/indicacao", "pre-venda"),
     ("/api/parceiros", "parceiros"),
     ("/api/permissoes", "perfis"),
     ("/api/flags", "configuracoes"),

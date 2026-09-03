@@ -20,12 +20,27 @@ def criar_parceiro():
     data = request.get_json(silent=True) or {}
     try:
         return jsonify(parceiros.criar(
-            int(data["cliente_id"]), data.get("categoria"), usuario_id_requisicao(), data.get("observacao"),
+            data.get("categoria"),
+            usuario_id=usuario_id_requisicao(),
+            observacao=data.get("observacao"),
+            cliente_id=int(data["cliente_id"]) if data.get("cliente_id") else None,
+            nome=data.get("nome"),
+            apelido=data.get("apelido"),
+            cpf=data.get("cpf"),
+            telefone=data.get("telefone"),
+            whatsapp=data.get("whatsapp"),
+            email=data.get("email"),
         )), 201
     except (KeyError, TypeError, ValueError) as exc:
         return jsonify({"error": str(exc), "code": "parceiro_invalido"}), 400
     except LookupError as exc:
         return jsonify({"error": str(exc), "code": "cliente_nao_encontrado"}), 404
+
+
+@api_parceiros_bp.get("/api/parceiros/indicacao")
+def listar_parceiros_indicacao():
+    """Parceiros ativos para o seletor de indicação do PDV (recurso pre-venda)."""
+    return jsonify({"parceiros": parceiros.listar_ativos_indicacao()})
 
 
 @api_parceiros_bp.patch("/api/parceiros/<int:parceiro_id>/status")

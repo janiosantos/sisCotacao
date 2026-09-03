@@ -14,6 +14,7 @@ const categorias = [
 const statusLabel: Record<string, string> = { pendente: "Pendente", ativo: "Ativo", suspenso: "Suspenso", bloqueado: "Bloqueado", inativo: "Inativo" };
 const statusTone: Record<string, "gray" | "green" | "red" | "amber" | "blue"> = { pendente: "amber", ativo: "green", suspenso: "red", bloqueado: "red", inativo: "gray" };
 const categoriaLabel = (value: string) => categorias.find(([key]) => key === value)?.[1] || value;
+const nomeExibicao = (p: ParceiroProfissional) => p.apelido || p.nome || p.cliente_nome || "Parceiro";
 const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const date = (value?: string | null) => value ? new Date(value).toLocaleDateString("pt-BR") : "—";
 
@@ -31,9 +32,9 @@ export default function Parceiros() {
   const [indicacaoParceiro, setIndicacaoParceiro] = useState<ParceiroProfissional | null>(null);
   const [indicacaoClienteId, setIndicacaoClienteId] = useState("");
   const [criandoIndicacao, setCriandoIndicacao] = useState(false);
-  const [clienteId, setClienteId] = useState("");
   const [categoriaForm, setCategoriaForm] = useState("eletricista");
   const [observacao, setObservacao] = useState("");
+  const [form, setForm] = useState({ nome: "", apelido: "", cpf: "", telefone: "", whatsapp: "", email: "" });
 
   const carregar = async () => {
     try {
@@ -63,12 +64,24 @@ export default function Parceiros() {
   }), [parceiros]);
 
   const salvar = async () => {
-    if (!clienteId) { toast("Selecione o cliente que será vinculado ao parceiro.", "error"); return; }
+    if (!form.nome.trim()) { toast("Informe o nome completo do parceiro.", "error"); return; }
     setSalvando(true);
     try {
-      const result = await api.criarParceiro({ cliente_id: Number(clienteId), categoria: categoriaForm, observacao: observacao.trim() || undefined });
-      toast(result.duplicado ? "Cliente já estava cadastrado como parceiro." : "Parceiro cadastrado.", "success");
-      setCadastroAberto(false); setClienteId(""); setObservacao(""); await carregar();
+      const result = await api.criarParceiro({
+        categoria: categoriaForm,
+        observacao: observacao.trim() || undefined,
+        nome: form.nome.trim(),
+        apelido: form.apelido.trim() || undefined,
+        cpf: form.cpf.trim() || undefined,
+        telefone: form.telefone.trim() || undefined,
+        whatsapp: form.whatsapp.trim() || undefined,
+        email: form.email.trim() || undefined,
+      });
+      toast(result.duplicado ? "Parceiro já cadastrado." : "Parceiro cadastrado.", "success");
+      setCadastroAberto(false);
+      setForm({ nome: "", apelido: "", cpf: "", telefone: "", whatsapp: "", email: "" });
+      setObservacao("");
+      await carregar();
     } catch (error) {
       toast("Erro ao cadastrar parceiro: " + (error as Error).message, "error");
     } finally { setSalvando(false); }
@@ -135,23 +148,38 @@ export default function Parceiros() {
     {carregando ? <Loading message="Carregando rede de parceiros…" /> : parceiros.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center text-sm text-slate-500"><Handshake className="mx-auto mb-3 text-slate-300" size={30} />Nenhum parceiro encontrado com os filtros atuais.</div> : <Table>
       <THead cols={["Parceiro", "Categoria", "Nível", "Status", "Cadastro", "Ações"]} />
       <TBody>{parceiros.map((parceiro) => <tr key={parceiro.id} className="hover:bg-slate-50">
-        <Cell><div className="font-semibold text-slate-900">{parceiro.cliente_nome}</div><div className="font-mono text-[11px] text-slate-500">{parceiro.codigo} · {parceiro.cliente_doc || "sem documento"}</div></Cell>
+        <Cell><div className="font-semibold text-slate-900">{nomeExibicao(parceiro)}</div><div className="font-mono text-[11px] text-slate-500">{parceiro.codigo} · {parceiro.apelido && parceiro.nome ? parceiro.nome : parceiro.cpf || parceiro.cliente_doc || "sem documento"}</div></Cell>
         <Cell>{categoriaLabel(parceiro.categoria)}</Cell><Cell><Badge tone="blue">{parceiro.nivel}</Badge></Cell>
         <Cell><Badge tone={statusTone[parceiro.status] || "gray"}>{statusLabel[parceiro.status] || parceiro.status}</Badge></Cell><Cell className="text-xs text-slate-500">{date(parceiro.criado_em)}</Cell>
         <Cell><div className="flex flex-wrap justify-end gap-1.5"><Button size="sm" onClick={() => void abrirLedger(parceiro)}><WalletCards size={14} /> Extrato</Button>{parceiro.status === "ativo" ? <Button size="sm" variant="outline" onClick={() => setIndicacaoParceiro(parceiro)}>Nova indicação</Button> : null}{parceiro.status === "pendente" ? <Button size="sm" variant="primary" onClick={() => void alterarStatus(parceiro, "ativo")}>Aprovar</Button> : null}{parceiro.status === "ativo" ? <Button size="sm" variant="ghost" onClick={() => void alterarStatus(parceiro, "suspenso")}>Suspender</Button> : null}{parceiro.status === "suspenso" ? <Button size="sm" variant="outline" onClick={() => void alterarStatus(parceiro, "ativo")}>Reativar</Button> : null}</div></Cell>
       </tr>)}</TBody>
     </Table>}
 
-    <Modal open={cadastroAberto} title="Cadastrar parceiro profissional" onClose={() => setCadastroAberto(false)} footer={<div className="flex justify-end gap-2"><Button onClick={() => setCadastroAberto(false)}>Cancelar</Button><Button variant="primary" disabled={salvando} onClick={() => void salvar()}>{salvando ? "Salvando…" : "Cadastrar parceiro"}</Button></div>}>
-      <div className="space-y-4 p-4 sm:p-5"><Field label="Cliente vinculado" hint="O parceiro precisa existir no cadastro de clientes."><Select value={clienteId} onChange={(event) => setClienteId(event.target.value)}><option value="">Selecione um cliente</option>{clientes.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome}{cliente.doc ? ` · ${cliente.doc}` : ""}</option>)}</Select></Field><Field label="Categoria profissional"><Select value={categoriaForm} onChange={(event) => setCategoriaForm(event.target.value)}>{categorias.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select></Field><Field label="Observação"><Textarea value={observacao} onChange={(event) => setObservacao(event.target.value)} placeholder="Região de atendimento, especialidades ou acordo comercial" /></Field></div>
+    <Modal open={cadastroAberto} title="Cadastrar parceiro" onClose={() => setCadastroAberto(false)} footer={<div className="flex justify-end gap-2"><Button onClick={() => setCadastroAberto(false)}>Cancelar</Button><Button variant="primary" disabled={salvando} onClick={() => void salvar()}>{salvando ? "Salvando…" : "Cadastrar parceiro"}</Button></div>}>
+      <div className="space-y-4 p-4 sm:p-5">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Nome completo *"><Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="Nome do parceiro" /></Field>
+          <Field label="Apelido"><Input value={form.apelido} onChange={(e) => setForm({ ...form, apelido: e.target.value })} placeholder="Como é conhecido" /></Field>
+          <Field label="CPF"><Input value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} placeholder="000.000.000-00" /></Field>
+          <Field label="Telefone"><Input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} placeholder="(00) 0000-0000" /></Field>
+          <Field label="WhatsApp"><Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} placeholder="(00) 00000-0000" /></Field>
+          <Field label="E-mail"><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@exemplo.com" /></Field>
+        </div>
+        <Field label="Categoria profissional"><Select value={categoriaForm} onChange={(e) => setCategoriaForm(e.target.value)}>{categorias.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select></Field>
+        <Field label="Observação"><Textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} placeholder="Região de atendimento, especialidades ou acordo comercial" /></Field>
+      </div>
     </Modal>
 
     <Modal open={Boolean(indicacaoParceiro)} title="Nova indicação" onClose={() => { setIndicacaoParceiro(null); setIndicacaoClienteId(""); }} footer={<div className="flex justify-end gap-2"><Button onClick={() => setIndicacaoParceiro(null)}>Cancelar</Button><Button variant="primary" disabled={criandoIndicacao} onClick={() => void criarIndicacao()}>{criandoIndicacao ? "Gerando…" : "Gerar código"}</Button></div>}>
       <div className="space-y-4 p-4 sm:p-5"><p className="text-sm text-slate-600">O código será vinculado ao parceiro <strong>{indicacaoParceiro?.cliente_nome}</strong> e poderá ser associado a uma venda concluída.</p><Field label="Cliente indicado (opcional)" hint="Deixe em branco para permitir a vinculação no atendimento."><Select value={indicacaoClienteId} onChange={(event) => setIndicacaoClienteId(event.target.value)}><option value="">Sem cliente definido</option>{clientes.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome}{cliente.doc ? ` · ${cliente.doc}` : ""}</option>)}</Select></Field></div>
     </Modal>
 
-    <Modal open={Boolean(ledger && selecionado)} title={`Extrato · ${selecionado?.cliente_nome || "Parceiro"}`} wide onClose={() => { setLedger(null); setSelecionado(null); }}>
-      {ledger ? <div className="space-y-5 p-4 sm:p-5"><div className="grid gap-3 sm:grid-cols-3"><StatCard label="Saldo de pontos" value={ledger.saldo_pontos.toLocaleString("pt-BR")} sub="Calculado pelo ledger" tone="highlight" /><StatCard label="Movimentações" value={String(ledger.pontos.length)} /><StatCard label="Bônus registrados" value={String(ledger.bonus.length)} /></div><section aria-labelledby="bonus-title"><h3 id="bonus-title" className="mb-2 text-sm font-semibold text-slate-800">Bônus</h3><Table><THead cols={["Valor", "Status", "Origem", "Data", "Ações"]} /><TBody>{ledger.bonus.length ? ledger.bonus.map((bonus) => <tr key={bonus.id}><Cell className="font-semibold">{money(Number(bonus.valor))}</Cell><Cell><Badge tone={bonus.status === "pendente" ? "amber" : bonus.status === "pago" ? "green" : "gray"}>{bonus.status}</Badge></Cell><Cell>Indicação #{bonus.indicacao_id || "—"}</Cell><Cell>{date(bonus.criado_em)}</Cell><Cell>{bonus.status === "pendente" ? <Button size="sm" variant="primary" onClick={() => void aprovarBonus(bonus)}>Aprovar</Button> : bonus.status === "aprovado" ? <Button size="sm" variant="primary" onClick={() => void pagarBonus(bonus)}>Marcar pago</Button> : null}</Cell></tr>) : <tr><Cell>Nenhum bônus registrado.</Cell></tr>}</TBody></Table></section><section aria-labelledby="points-title"><h3 id="points-title" className="mb-2 text-sm font-semibold text-slate-800">Movimentações de pontos</h3><Table><THead cols={["Tipo", "Pontos", "Origem", "Data"]} /><TBody>{ledger.pontos.map((ponto) => <tr key={ponto.id}><Cell>{ponto.tipo}</Cell><Cell className={ponto.tipo === "debito" || ponto.tipo === "expiracao" ? "text-red-600" : "text-emerald-600"}>{ponto.tipo === "debito" || ponto.tipo === "expiracao" ? "-" : "+"}{Number(ponto.pontos).toLocaleString("pt-BR")}</Cell><Cell>{ponto.origem_tipo || "Ajuste operacional"}</Cell><Cell>{date(ponto.criado_em)}</Cell></tr>)}</TBody></Table></section></div> : <Loading />}
+    <Modal open={Boolean(ledger && selecionado)} title={`Extrato · ${nomeExibicao(selecionado || ({} as ParceiroProfissional)) || "Parceiro"}`} wide onClose={() => { setLedger(null); setSelecionado(null); }}>
+      {ledger ? <div className="space-y-5 p-4 sm:p-5">
+        <div className="grid gap-3 sm:grid-cols-3"><StatCard label="Saldo de pontos" value={ledger.saldo_pontos.toLocaleString("pt-BR")} sub="Calculado pelo ledger" tone="highlight" /><StatCard label="Movimentações" value={String(ledger.pontos.length)} /><StatCard label="Bônus registrados" value={String(ledger.bonus.length)} /></div>
+        {ledger.parceiro ? <section aria-labelledby="parceiro-info"><h3 id="parceiro-info" className="mb-2 text-sm font-semibold text-slate-800">Informações do parceiro</h3><div className="grid gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm sm:grid-cols-2"><span><strong>Nome:</strong> {ledger.parceiro.apelido ? `${ledger.parceiro.nome || "—"} (${ledger.parceiro.apelido})` : ledger.parceiro.nome || ledger.parceiro.cliente_nome || "—"}</span><span><strong>Código:</strong> {ledger.parceiro.codigo}</span><span><strong>CPF:</strong> {ledger.parceiro.cpf || ledger.parceiro.cliente_doc || "—"}</span><span><strong>Telefone:</strong> {ledger.parceiro.telefone || "—"}</span><span><strong>WhatsApp:</strong> {ledger.parceiro.whatsapp || "—"}</span><span><strong>E-mail:</strong> {ledger.parceiro.email || "—"}</span></div></section> : null}
+        {ledger.vendas.length ? <section aria-labelledby="vendas-title"><h3 id="vendas-title" className="mb-2 text-sm font-semibold text-slate-800">Vendas indicadas</h3><Table><THead cols={["Cliente", "Compra", "Valor", "Data"]} /><TBody>{ledger.vendas.map((venda) => <tr key={venda.orcamento_id}><Cell className="font-medium">{venda.cliente_nome}</Cell><Cell className="font-mono text-xs">{venda.numero || `#${venda.orcamento_id}`}</Cell><Cell className="font-semibold">{money(Number(venda.total) || 0)}</Cell><Cell>{date(venda.criado_em)}</Cell></tr>)}</TBody></Table></section> : null}
+        <section aria-labelledby="bonus-title"><h3 id="bonus-title" className="mb-2 text-sm font-semibold text-slate-800">Bônus</h3><Table><THead cols={["Valor", "Status", "Origem", "Data", "Ações"]} /><TBody>{ledger.bonus.length ? ledger.bonus.map((bonus) => <tr key={bonus.id}><Cell className="font-semibold">{money(Number(bonus.valor))}</Cell><Cell><Badge tone={bonus.status === "pendente" ? "amber" : bonus.status === "pago" ? "green" : "gray"}>{bonus.status}</Badge></Cell><Cell>Indicação #{bonus.indicacao_id || "—"}</Cell><Cell>{date(bonus.criado_em)}</Cell><Cell>{bonus.status === "pendente" ? <Button size="sm" variant="primary" onClick={() => void aprovarBonus(bonus)}>Aprovar</Button> : bonus.status === "aprovado" ? <Button size="sm" variant="primary" onClick={() => void pagarBonus(bonus)}>Marcar pago</Button> : null}</Cell></tr>) : <tr><Cell>Nenhum bônus registrado.</Cell></tr>}</TBody></Table></section><section aria-labelledby="points-title"><h3 id="points-title" className="mb-2 text-sm font-semibold text-slate-800">Movimentações de pontos</h3><Table><THead cols={["Tipo", "Pontos", "Origem", "Data"]} /><TBody>{ledger.pontos.map((ponto) => <tr key={ponto.id}><Cell>{ponto.tipo}</Cell><Cell className={ponto.tipo === "debito" || ponto.tipo === "expiracao" ? "text-red-600" : "text-emerald-600"}>{ponto.tipo === "debito" || ponto.tipo === "expiracao" ? "-" : "+"}{Number(ponto.pontos).toLocaleString("pt-BR")}</Cell><Cell>{ponto.origem_tipo || "Ajuste operacional"}</Cell><Cell>{date(ponto.criado_em)}</Cell></tr>)}</TBody></Table></section></div> : <Loading />}
     </Modal>
   </div>;
 }

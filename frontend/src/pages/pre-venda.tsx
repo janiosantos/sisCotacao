@@ -7,6 +7,7 @@ import {
   type CondicaoPagamento,
   type OrcamentoDetalhe,
   type OrcamentoItemPayload,
+  type ParceiroIndicacao,
   type ProdutoResumo,
 } from "../api/client";
 import { fmtMoney } from "../ui/format";
@@ -16,6 +17,7 @@ import { Button } from "../ui/ui";
 import { DataBox } from "../ui/data-box";
 import { ModalCadastroCliente } from "./pre-venda/modal-cadastro-cliente";
 import { ModalBuscaCliente } from "./pre-venda/modal-busca-cliente";
+import { ModalBuscaParceiro } from "./pre-venda/modal-busca-parceiro";
 import { ModalDadosCliente } from "./pre-venda/modal-dados-cliente";
 import { ModalAutorizar } from "./pre-venda/modal-autorizar";
 import { ModalLocalizarOrcamento } from "./pre-venda/modal-localizar-orcamento";
@@ -92,6 +94,17 @@ export default function PreVenda() {
 
   const [modalCadCliente, setModalCadCliente] = useState<string | null>(null);
   const [modalBuscaCliente, setModalBuscaCliente] = useState(false);
+  const [modalBuscaParceiro, setModalBuscaParceiro] = useState(false);
+  const [parceiro, setParceiro] = useState<ParceiroIndicacao | null>(() => {
+    const saved = sessionStorage.getItem("pdv_parceiro");
+    if (!saved) return null;
+    try {
+      const p = JSON.parse(saved);
+      return p && p.id ? (p as ParceiroIndicacao) : null;
+    } catch {
+      return null;
+    }
+  });
   const [modalAutorizar, setModalAutorizar] = useState<
     { id: number | null; descontoPct?: number; limitePct?: number; modo: "autorizar" | "finalizar" } | null
   >(null);
@@ -109,6 +122,7 @@ export default function PreVenda() {
   const obsRef = useRef<HTMLInputElement>(null);
   const salvarRef = useRef<HTMLButtonElement>(null);
   const qtdCentralRef = useRef<HTMLInputElement>(null);
+  const parceiroEnviadoRef = useRef<number | null | undefined>(undefined);
   const buscaTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const buscaRequestRef = useRef(0);
 
@@ -253,7 +267,7 @@ export default function PreVenda() {
       .catch(() => {});
   };
 
-  const selecionarCliente = (cli: Cliente) => {
+const selecionarCliente = (cli: Cliente) => {
     setCliente(cli.nome);
     setClienteId(cli.id);
     sessionStorage.setItem("pdv_cliente", cli.nome);
@@ -264,6 +278,18 @@ export default function PreVenda() {
     }
     buscaRef.current?.focus();
     void carregarAvisoCredito(cli.id, cli.nome);
+  };
+
+  const selecionarParceiro = (p: ParceiroIndicacao) => {
+    setParceiro(p);
+    sessionStorage.setItem("pdv_parceiro", JSON.stringify({ id: p.id, nome_exibicao: p.nome_exibicao }));
+    buscaRef.current?.focus();
+  };
+
+  const limparParceiro = () => {
+    setParceiro(null);
+    sessionStorage.removeItem("pdv_parceiro");
+    buscaRef.current?.focus();
   };
 
   const carregarAvisoCredito = (id: number, nome: string) => {
@@ -347,6 +373,11 @@ export default function PreVenda() {
           desconto: c.descontoGeral,
         };
         if (condId !== undefined) patch.condicao_pagamento_id = condId;
+        const pid = parceiro ? parceiro.id : null;
+        if (parceiroEnviadoRef.current !== pid) {
+          patch.parceiro_id = pid;
+          parceiroEnviadoRef.current = pid;
+        }
         await api.atualizarOrcamento(editandoId, patch);
         await api.substituirItensOrcamento(editandoId, itens);
         res = { id: editandoId, numero: editandoNumero };
@@ -359,7 +390,9 @@ export default function PreVenda() {
           itens,
           condicao_pagamento_id: condId,
           cliente_id: clienteId ?? undefined,
+          parceiro_id: parceiro ? parceiro.id : undefined,
         });
+        parceiroEnviadoRef.current = parceiro ? parceiro.id : null;
         setEditandoId(res.id);
         setEditandoNumero(res.numero);
       }
@@ -684,6 +717,24 @@ export default function PreVenda() {
           >
             Dados
           </button>
+          <span className="ml-1">Indicado por:</span>
+          <button
+            onClick={() => setModalBuscaParceiro(true)}
+            className="max-w-[28vw] truncate rounded border border-dashed border-gray-400 bg-white px-2 py-0.5 text-sm font-medium text-gray-800 hover:bg-gray-100 sm:max-w-xs"
+            title="Selecionar parceiro que indicou (opcional)"
+          >
+            {parceiro?.nome_exibicao || "—"}
+          </button>
+          {parceiro ? (
+            <button
+              onClick={limparParceiro}
+              className="rounded border border-gray-400 bg-white px-1.5 text-xs text-gray-600 hover:bg-gray-100"
+              title="Remover indicação"
+              aria-label="Remover indicação"
+            >
+              ×
+            </button>
+          ) : null}
         </div>
         <div className="hidden md:block">Vendedor: {usuarioCorrente()?.nome ?? "—"}</div>
         <div className="hidden md:block">Horário: {hora}</div>
@@ -1000,6 +1051,9 @@ export default function PreVenda() {
             setModalCadCliente("");
           }}
         />
+      )}
+      {modalBuscaParceiro && (
+        <ModalBuscaParceiro onClose={() => setModalBuscaParceiro(false)} onSelect={selecionarParceiro} />
       )}
       {modalLocalizar && (
         <ModalLocalizarOrcamento onClose={() => setModalLocalizar(false)} onSelecionar={(id) => void carregarParaEdicao(id)} />

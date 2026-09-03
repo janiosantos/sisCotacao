@@ -1292,70 +1292,255 @@
     },
     "/api/clientes/{cliente_id}/credito": {
       "get": {
-        "tags": ["clientes", "credito"],
+        "tags": [
+          "clientes",
+          "credito"
+        ],
         "summary": "Consulta situacao completa do crediario",
-        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
-        "responses": {"200": {"description": "Situacao do crediario", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ClienteCredito"}}}}, "404": {"description": "Cliente nao encontrado"}}
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Situacao do crediario",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClienteCredito"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cliente nao encontrado"
+          }
+        }
       }
     },
     "/api/clientes/{cliente_id}/credito/solicitar": {
       "post": {
-        "tags": ["credito"],
+        "tags": [
+          "credito"
+        ],
         "summary": "Solicita analise de crediario",
-        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["motivo"], "properties": {"motivo": {"type": "string", "minLength": 1}}}}}},
-        "responses": {"201": {"description": "Solicitacao criada"}, "403": {"description": "Sem permissao"}}
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "motivo"
+                ],
+                "properties": {
+                  "motivo": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Solicitacao criada"
+          },
+          "403": {
+            "description": "Sem permissao"
+          }
+        }
       }
     },
     "/api/clientes/{cliente_id}/credito/aprovar": {
       "post": {
-        "tags": ["credito"],
+        "tags": [
+          "credito"
+        ],
         "summary": "Aprova limite e prazo do crediario",
-        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditoAprovacaoInput"}}}},
-        "responses": {"200": {"description": "Crediario aprovado"}, "403": {"description": "Sem permissao"}}
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditoAprovacaoInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Crediario aprovado"
+          },
+          "403": {
+            "description": "Sem permissao"
+          }
+        }
       }
     },
     "/api/clientes/{cliente_id}/credito/bloquear": {
       "post": {
-        "tags": ["credito"],
+        "tags": [
+          "credito"
+        ],
         "summary": "Bloqueia o crediario do cliente",
-        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditoMotivoInput"}}}},
-        "responses": {"200": {"description": "Crediario bloqueado"}}
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditoMotivoInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Crediario bloqueado"
+          }
+        }
       }
     },
     "/api/clientes/{cliente_id}/credito/suspender": {
       "post": {
-        "tags": ["credito"],
+        "tags": [
+          "credito"
+        ],
         "summary": "Suspende o crediario do cliente",
-        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditoMotivoInput"}}}},
-        "responses": {"200": {"description": "Crediario suspenso"}}
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditoMotivoInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Crediario suspenso"
+          }
+        }
       }
     },
     "/api/clientes/{cliente_id}/credito/revisar": {
       "post": {
-        "tags": ["credito"],
+        "tags": [
+          "credito"
+        ],
         "summary": "Retorna o crediario para nova analise",
-        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreditoMotivoInput"}}}},
-        "responses": {"200": {"description": "Crediario em analise"}, "403": {"description": "Sem permissao"}}
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditoMotivoInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Crediario em analise"
+          },
+          "403": {
+            "description": "Sem permissao"
+          }
+        }
       }
     },
     "/api/clientes/{cliente_id}/credito/historico": {
       "get": {
-        "tags": ["credito"],
+        "tags": [
+          "credito"
+        ],
         "summary": "Consulta historico auditavel do crediario",
-        "parameters": [{"name": "cliente_id", "in": "path", "required": true, "schema": {"type": "integer"}}],
-        "responses": {"200": {"description": "Eventos do crediario"}}
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Eventos do crediario"
+          }
+        }
       }
     },
     "/api/credito/pendentes": {
       "get": {
-        "tags": ["credito"],
+        "tags": [
+          "credito"
+        ],
         "summary": "Lista solicitacoes de crediario pendentes",
-        "responses": {"200": {"description": "Fila financeira"}}
+        "responses": {
+          "200": {
+            "description": "Fila financeira"
+          }
+        }
       }
     },
     "/api/clientes/{cliente_id}/apoio-comercial": {
@@ -2260,149 +2445,437 @@
     },
     "/api/plano-contas": {
       "get": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Lista o plano de contas com filtros de natureza e rateabilidade",
         "parameters": [
-          {"name": "tipo", "in": "query", "schema": {"type": "string", "enum": ["receita", "despesa"]}},
-          {"name": "natureza", "in": "query", "schema": {"type": "string"}},
-          {"name": "rateavel", "in": "query", "schema": {"type": "boolean"}},
-          {"name": "somente_ativos", "in": "query", "schema": {"type": "boolean"}}
+          {
+            "name": "tipo",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "receita",
+                "despesa"
+              ]
+            }
+          },
+          {
+            "name": "natureza",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rateavel",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "somente_ativos",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
         ],
-        "responses": {"200": {"description": "Contas do plano"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "responses": {
+          "200": {
+            "description": "Contas do plano"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       },
       "post": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Cria conta de receita ou despesa com classificação",
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PlanoContaIn"}}}},
-        "responses": {"201": {"description": "Conta criada"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanoContaIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Conta criada"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/plano-contas/{conta_id}/uso": {
       "get": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Consulta uso histórico de uma conta do plano",
-        "parameters": [{"$ref": "#/components/parameters/ContaId"}],
-        "responses": {"200": {"description": "Uso da conta"}, "404": {"description": "Conta não encontrada"}}
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContaId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Uso da conta"
+          },
+          "404": {
+            "description": "Conta não encontrada"
+          }
+        }
       }
     },
     "/api/financeiro/classificacao/pendencias": {
       "get": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Lista contas a pagar pendentes de classificação",
         "parameters": [
-          {"name": "limit", "in": "query", "schema": {"type": "integer", "default": 100, "maximum": 500}},
-          {"name": "offset", "in": "query", "schema": {"type": "integer", "default": 0, "minimum": 0}}
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0
+            }
+          }
         ],
-        "responses": {"200": {"description": "Pendências de classificação"}}
+        "responses": {
+          "200": {
+            "description": "Pendências de classificação"
+          }
+        }
       }
     },
     "/api/financeiro/contas-pagar/{conta_id}/classificar": {
       "post": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Classifica ou aprova uma conta a pagar",
-        "parameters": [{"$ref": "#/components/parameters/ContaId"}],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContaId"
+          }
+        ],
         "requestBody": {
           "required": true,
-          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ClassificacaoContaPagarIn"}}}
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassificacaoContaPagarIn"
+              }
+            }
+          }
         },
-        "responses": {"200": {"description": "Conta classificada"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "responses": {
+          "200": {
+            "description": "Conta classificada"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/financeiro/contas-pagar/{conta_id}/rateio": {
       "get": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Lista o rateio de uma conta a pagar",
-        "parameters": [{"$ref": "#/components/parameters/ContaId"}],
-        "responses": {"200": {"description": "Rateio da conta"}}
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContaId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rateio da conta"
+          }
+        }
       },
       "post": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Substitui o rateio de uma conta a pagar",
-        "parameters": [{"$ref": "#/components/parameters/ContaId"}],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContaId"
+          }
+        ],
         "requestBody": {
           "required": true,
-          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RateioContaPagarIn"}}}
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateioContaPagarIn"
+              }
+            }
+          }
         },
-        "responses": {"200": {"description": "Rateio salvo"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "responses": {
+          "200": {
+            "description": "Rateio salvo"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/financeiro/competencias": {
       "get": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Lista competências financeiras para precificação",
-        "responses": {"200": {"description": "Competências cadastradas"}}
+        "responses": {
+          "200": {
+            "description": "Competências cadastradas"
+          }
+        }
       },
       "post": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Cria ou atualiza uma competência financeira",
         "requestBody": {
           "required": true,
-          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CompetenciaFinanceiraIn"}}}
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompetenciaFinanceiraIn"
+              }
+            }
+          }
         },
-        "responses": {"201": {"description": "Competência criada"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "responses": {
+          "201": {
+            "description": "Competência criada"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/financeiro/competencias/{competencia}/status": {
       "post": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Altera o status de aprovação da competência",
-        "parameters": [{"$ref": "#/components/parameters/Competencia"}],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Competencia"
+          }
+        ],
         "requestBody": {
           "required": true,
-          "content": {"application/json": {"schema": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string", "enum": ["aberta", "aprovada", "fechada"]}, "motivo": {"type": "string"}}}}}
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "aberta",
+                      "aprovada",
+                      "fechada"
+                    ]
+                  },
+                  "motivo": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
         },
-        "responses": {"200": {"description": "Status atualizado"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "responses": {
+          "200": {
+            "description": "Status atualizado"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/financeiro/competencias/{competencia}/apuracao": {
       "get": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Apura despesas elegíveis da competência",
-        "parameters": [{"$ref": "#/components/parameters/Competencia"}],
-        "responses": {"200": {"description": "Apuração da competência"}}
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Competencia"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Apuração da competência"
+          }
+        }
       }
     },
     "/api/financeiro/fornecedores/{fornecedor_id}/regra-classificacao": {
       "get": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Consulta regra de classificação herdada do fornecedor",
-        "parameters": [{"$ref": "#/components/parameters/FornecedorId"}],
-        "responses": {"200": {"description": "Regra do fornecedor"}}
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FornecedorId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Regra do fornecedor"
+          }
+        }
       },
       "put": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Configura a classificação padrão de um fornecedor",
-        "parameters": [{"$ref": "#/components/parameters/FornecedorId"}],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FornecedorId"
+          }
+        ],
         "requestBody": {
           "required": true,
-          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RegraFornecedorFinanceiraIn"}}}
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegraFornecedorFinanceiraIn"
+              }
+            }
+          }
         },
-        "responses": {"200": {"description": "Regra salva"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "responses": {
+          "200": {
+            "description": "Regra salva"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/financeiro/competencias/{competencia}/fechar": {
       "post": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Fecha a competência após validação das pendências",
-        "parameters": [{"$ref": "#/components/parameters/Competencia"}],
-        "responses": {"200": {"description": "Competência fechada"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Competencia"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Competência fechada"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/financeiro/competencias/{competencia}/reabrir": {
       "post": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Reabre uma competência fechada com motivo",
-        "parameters": [{"$ref": "#/components/parameters/Competencia"}],
-        "requestBody": {"content": {"application/json": {"schema": {"type": "object", "required": ["motivo"], "properties": {"motivo": {"type": "string"}}}}}},
-        "responses": {"200": {"description": "Competência reaberta"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Competencia"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "motivo"
+                ],
+                "properties": {
+                  "motivo": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Competência reaberta"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/financeiro/contas-pagar/{conta_id}/memoria-classificacao": {
       "get": {
-        "tags": ["financeiro"],
+        "tags": [
+          "financeiro"
+        ],
         "summary": "Consulta o snapshot de classificação e o rateio do título",
-        "parameters": [{"$ref": "#/components/parameters/ContaId"}],
-        "responses": {"200": {"description": "Memória de classificação"}, "404": {"description": "Conta não encontrada"}}
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContaId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Memória de classificação"
+          },
+          "404": {
+            "description": "Conta não encontrada"
+          }
+        }
       }
     },
     "/api/publico/produtos": {
@@ -3356,40 +3829,125 @@
     },
     "/api/precos/configuracao": {
       "get": {
-        "tags": ["precos"],
+        "tags": [
+          "precos"
+        ],
         "summary": "Consulta as premissas persistidas da formação de preço",
-        "responses": {"200": {"description": "Configuração de precificação"}}
+        "responses": {
+          "200": {
+            "description": "Configuração de precificação"
+          }
+        }
       },
       "put": {
-        "tags": ["precos"],
+        "tags": [
+          "precos"
+        ],
         "summary": "Atualiza faturamento, despesas, tributos, atividade e cenário",
         "requestBody": {
           "required": true,
-          "content": {"application/json": {"schema": {"type": "object"}}}
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
         },
         "responses": {
-          "200": {"description": "Configuração atualizada"},
-          "400": {"description": "Premissa inválida"}
+          "200": {
+            "description": "Configuração atualizada"
+          },
+          "400": {
+            "description": "Premissa inválida"
+          }
         }
       }
     },
     "/api/precos/calcular/{produto_id}": {
       "get": {
-        "tags": ["precos"],
+        "tags": [
+          "precos"
+        ],
         "summary": "Calcula preço pela metodologia do divisor e devolve memória de cálculo",
         "parameters": [
-          {"name": "produto_id", "in": "path", "required": true, "schema": {"type": "integer"}},
-          {"name": "margem", "in": "query", "schema": {"type": "number"}},
-          {"name": "embalagem_unitaria", "in": "query", "schema": {"type": "number", "minimum": 0}},
-          {"name": "frete_unitario", "in": "query", "schema": {"type": "number", "minimum": 0}},
-          {"name": "frete_pct", "in": "query", "schema": {"type": "number", "minimum": 0, "maximum": 100}},
-          {"name": "cartao_pct", "in": "query", "schema": {"type": "number", "minimum": 0, "maximum": 100}},
-          {"name": "impostos_pct", "in": "query", "schema": {"type": "number", "minimum": 0, "maximum": 100}},
-          {"name": "cenario_tributario", "in": "query", "schema": {"type": "string", "enum": ["atual", "reforma"]}}
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "margem",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "embalagem_unitaria",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "frete_unitario",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "frete_pct",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cartao_pct",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "impostos_pct",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cenario_tributario",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "atual",
+                "reforma"
+              ]
+            }
+          }
         ],
         "responses": {
-          "200": {"description": "Preço e memória de cálculo"},
-          "400": {"description": "Parâmetro inválido"}
+          "200": {
+            "description": "Preço e memória de cálculo"
+          },
+          "400": {
+            "description": "Parâmetro inválido"
+          }
         }
       }
     },
@@ -4781,155 +5339,846 @@
     },
     "/api/relatorios/clientes": {
       "get": {
-        "tags": ["relatorios"],
+        "tags": [
+          "relatorios"
+        ],
         "summary": "Relatório analítico de clientes",
         "parameters": [
-          {"$ref": "#/components/parameters/DataInicio"},
-          {"$ref": "#/components/parameters/DataFim"},
-          {"name": "tipo_pessoa", "in": "query", "schema": {"type": "string", "enum": ["f", "j"]}},
-          {"name": "segmento", "in": "query", "schema": {"type": "string"}},
-          {"name": "categoria", "in": "query", "schema": {"type": "string"}},
-          {"name": "uf", "in": "query", "schema": {"type": "string"}},
-          {"name": "cidade", "in": "query", "schema": {"type": "string"}},
-          {"name": "ativo", "in": "query", "schema": {"type": "boolean", "default": true}},
-          {"name": "q", "in": "query", "schema": {"type": "string"}},
-          {"name": "aniversario_inicio", "in": "query", "schema": {"type": "string", "format": "date"}},
-          {"name": "aniversario_fim", "in": "query", "schema": {"type": "string", "format": "date"}},
-          {"name": "sem_compra_dias", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 3650}},
-          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
-          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+          {
+            "$ref": "#/components/parameters/DataInicio"
+          },
+          {
+            "$ref": "#/components/parameters/DataFim"
+          },
+          {
+            "name": "tipo_pessoa",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "f",
+                "j"
+              ]
+            }
+          },
+          {
+            "name": "segmento",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoria",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "uf",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cidade",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ativo",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "aniversario_inicio",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "aniversario_fim",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "sem_compra_dias",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
         ],
-        "responses": {"200": {"description": "Lista paginada com dados pessoais minimizados"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "responses": {
+          "200": {
+            "description": "Lista paginada com dados pessoais minimizados"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/relatorios/clientes/aniversariantes": {
       "get": {
-        "tags": ["relatorios"],
+        "tags": [
+          "relatorios"
+        ],
         "summary": "Clientes aniversariantes no intervalo de mês/dia",
-        "responses": {"200": {"description": "Lista ordenada por data de nascimento"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "responses": {
+          "200": {
+            "description": "Lista ordenada por data de nascimento"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/relatorios/clientes/compras": {
       "get": {
-        "tags": ["relatorios"],
+        "tags": [
+          "relatorios"
+        ],
         "summary": "Extrato analítico de compras do cliente",
         "parameters": [
-          {"name": "cliente_id", "in": "query", "required": true, "schema": {"type": "integer"}},
-          {"$ref": "#/components/parameters/DataInicio"},
-          {"$ref": "#/components/parameters/DataFim"},
-          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
-          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+          {
+            "name": "cliente_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/DataInicio"
+          },
+          {
+            "$ref": "#/components/parameters/DataFim"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
         ],
-        "responses": {"200": {"description": "Resumo e itens vendidos ao cliente"}, "404": {"description": "Cliente não encontrado"}}
+        "responses": {
+          "200": {
+            "description": "Resumo e itens vendidos ao cliente"
+          },
+          "404": {
+            "description": "Cliente não encontrado"
+          }
+        }
       }
     },
     "/api/relatorios/exportar": {
       "get": {
-        "tags": ["relatorios"],
+        "tags": [
+          "relatorios"
+        ],
         "summary": "Exporta relatório registrado em CSV ou XLSX",
         "parameters": [
-          {"name": "relatorio", "in": "query", "required": true, "schema": {"type": "string", "enum": ["dashboard", "vendas", "compras", "estoque", "financeiro"]}},
-          {"name": "formato", "in": "query", "schema": {"type": "string", "enum": ["csv", "xlsx"], "default": "csv"}},
-          {"$ref": "#/components/parameters/DataInicio"},
-          {"$ref": "#/components/parameters/DataFim"}
+          {
+            "name": "relatorio",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "dashboard",
+                "vendas",
+                "compras",
+                "estoque",
+                "financeiro"
+              ]
+            }
+          },
+          {
+            "name": "formato",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "csv",
+                "xlsx"
+              ],
+              "default": "csv"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/DataInicio"
+          },
+          {
+            "$ref": "#/components/parameters/DataFim"
+          }
         ],
-        "responses": {"200": {"description": "Arquivo para download"}, "403": {"$ref": "#/components/responses/Proibido"}}
+        "responses": {
+          "200": {
+            "description": "Arquivo para download"
+          },
+          "403": {
+            "$ref": "#/components/responses/Proibido"
+          }
+        }
       }
     },
     "/api/relatorios/clientes/exportar": {
       "get": {
-        "tags": ["relatorios"],
+        "tags": [
+          "relatorios"
+        ],
         "summary": "Exporta clientes filtrados em CSV ou XLSX",
-        "parameters": [{"name": "formato", "in": "query", "schema": {"type": "string", "enum": ["csv", "xlsx"], "default": "csv"}}],
-        "responses": {"200": {"description": "Arquivo para download"}, "403": {"$ref": "#/components/responses/Proibido"}}
+        "parameters": [
+          {
+            "name": "formato",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "csv",
+                "xlsx"
+              ],
+              "default": "csv"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Arquivo para download"
+          },
+          "403": {
+            "$ref": "#/components/responses/Proibido"
+          }
+        }
       }
     },
     "/api/relatorios/clientes/compras/exportar": {
       "get": {
-        "tags": ["relatorios"],
+        "tags": [
+          "relatorios"
+        ],
         "summary": "Exporta extrato de compras do cliente em CSV ou XLSX",
         "parameters": [
-          {"name": "cliente_id", "in": "query", "required": true, "schema": {"type": "integer"}},
-          {"name": "formato", "in": "query", "schema": {"type": "string", "enum": ["csv", "xlsx"], "default": "csv"}}
+          {
+            "name": "cliente_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "formato",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "csv",
+                "xlsx"
+              ],
+              "default": "csv"
+            }
+          }
         ],
-        "responses": {"200": {"description": "Arquivo para download"}, "403": {"$ref": "#/components/responses/Proibido"}}
+        "responses": {
+          "200": {
+            "description": "Arquivo para download"
+          },
+          "403": {
+            "$ref": "#/components/responses/Proibido"
+          }
+        }
       }
     },
     "/api/relatorios/vendas-analitico": {
       "get": {
-        "tags": ["relatorios"],
+        "tags": [
+          "relatorios"
+        ],
         "summary": "Vendas analiticas agrupadas com margem e CMV",
         "parameters": [
-          {"$ref": "#/components/parameters/DataInicio"},
-          {"$ref": "#/components/parameters/DataFim"},
-          {"name": "agrupamento", "in": "query", "schema": {"type": "string", "enum": ["produto", "categoria", "marca", "vendedor", "cliente", "segmento", "deposito", "canal", "condicao"]}},
-          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
-          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+          {
+            "$ref": "#/components/parameters/DataInicio"
+          },
+          {
+            "$ref": "#/components/parameters/DataFim"
+          },
+          {
+            "name": "agrupamento",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "produto",
+                "categoria",
+                "marca",
+                "vendedor",
+                "cliente",
+                "segmento",
+                "deposito",
+                "canal",
+                "condicao"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
         ],
-        "responses": {"200": {"description": "Totais paginados de receita, desconto, CMV e margem"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "responses": {
+          "200": {
+            "description": "Totais paginados de receita, desconto, CMV e margem"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/relatorios/compras-analitico": {
       "get": {
-        "tags": ["relatorios"],
+        "tags": [
+          "relatorios"
+        ],
         "summary": "Compras por pedido/item com recebimento parcial",
         "parameters": [
-          {"$ref": "#/components/parameters/DataInicio"},
-          {"$ref": "#/components/parameters/DataFim"},
-          {"name": "fornecedor_id", "in": "query", "schema": {"type": "integer"}},
-          {"name": "deposito_id", "in": "query", "schema": {"type": "integer"}},
-          {"name": "status", "in": "query", "schema": {"type": "string"}},
-          {"name": "q", "in": "query", "schema": {"type": "string"}},
-          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
-          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+          {
+            "$ref": "#/components/parameters/DataInicio"
+          },
+          {
+            "$ref": "#/components/parameters/DataFim"
+          },
+          {
+            "name": "fornecedor_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
         ],
-        "responses": {"200": {"description": "Itens pedidos, recebidos e pendentes"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "responses": {
+          "200": {
+            "description": "Itens pedidos, recebidos e pendentes"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/relatorios/estoque-analitico": {
       "get": {
-        "tags": ["relatorios"],
+        "tags": [
+          "relatorios"
+        ],
         "summary": "Posicao de estoque por deposito incluindo saldo zero",
         "parameters": [
-          {"name": "deposito_id", "in": "query", "schema": {"type": "integer"}},
-          {"name": "classe_abc", "in": "query", "schema": {"type": "string", "enum": ["A", "B", "C"]}},
-          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
-          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "classe_abc",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "A",
+                "B",
+                "C"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
         ],
-        "responses": {"200": {"description": "Posicao com disponibilidade, valor e situacao operacional"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "responses": {
+          "200": {
+            "description": "Posicao com disponibilidade, valor e situacao operacional"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/relatorios/necessidade-compra": {
       "get": {
-        "tags": ["relatorios"],
+        "tags": [
+          "relatorios"
+        ],
         "summary": "Necessidade consolidada de compra pelo motor de reposicao",
         "parameters": [
-          {"name": "deposito_id", "in": "query", "schema": {"type": "integer"}},
-          {"name": "produto_id", "in": "query", "schema": {"type": "integer"}},
-          {"name": "fornecedor_id", "in": "query", "schema": {"type": "integer"}},
-          {"name": "classe_abc", "in": "query", "schema": {"type": "string", "enum": ["A", "B", "C"]}},
-          {"name": "somente_necessidade", "in": "query", "schema": {"type": "boolean"}},
-          {"name": "q", "in": "query", "schema": {"type": "string"}},
-          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
-          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "produto_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "fornecedor_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "classe_abc",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "A",
+                "B",
+                "C"
+              ]
+            }
+          },
+          {
+            "name": "somente_necessidade",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
         ],
-        "responses": {"200": {"description": "Itens com fórmula, demanda, trânsito e sugestão de compra"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "responses": {
+          "200": {
+            "description": "Itens com fórmula, demanda, trânsito e sugestão de compra"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
       }
     },
     "/api/relatorios/financeiro-analitico": {
       "get": {
-        "tags": ["relatorios"],
+        "tags": [
+          "relatorios"
+        ],
         "summary": "Financeiro analitico com aging, fluxo e DRE gerencial",
         "parameters": [
-          {"$ref": "#/components/parameters/DataInicio"},
-          {"$ref": "#/components/parameters/DataFim"},
-          {"name": "data_corte", "in": "query", "schema": {"type": "string", "format": "date"}},
-          {"name": "tipo", "in": "query", "schema": {"type": "string", "enum": ["todos", "receber", "pagar"], "default": "todos"}},
-          {"name": "q", "in": "query", "schema": {"type": "string"}},
-          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
-          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}}
+          {
+            "$ref": "#/components/parameters/DataInicio"
+          },
+          {
+            "$ref": "#/components/parameters/DataFim"
+          },
+          {
+            "name": "data_corte",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "tipo",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "todos",
+                "receber",
+                "pagar"
+              ],
+              "default": "todos"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
         ],
-        "responses": {"200": {"description": "Aging por faixa, fluxo, DRE e titulos de suporte"}, "403": {"$ref": "#/components/responses/Proibido"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+        "responses": {
+          "200": {
+            "description": "Aging por faixa, fluxo, DRE e titulos de suporte"
+          },
+          "403": {
+            "$ref": "#/components/responses/Proibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErroValidacao"
+          }
+        }
+      }
+    },
+    "/api/parceiros": {
+      "get": {
+        "tags": [
+          "parceiros"
+        ],
+        "summary": "Lista parceiros (filtros por status, categoria e termo)",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoria",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de parceiros",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "parceiros": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ParceiroProfissional"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "parceiros"
+        ],
+        "summary": "Cadastra parceiro (simples ou vinculado a cliente)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "categoria": {
+                    "type": "string"
+                  },
+                  "observacao": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "cliente_id": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "nome": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "apelido": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "cpf": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "telefone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "whatsapp": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "email": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Parceiro criado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParceiroProfissional"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/parceiros/indicacao": {
+      "get": {
+        "tags": [
+          "pre-venda"
+        ],
+        "summary": "Parceiros ativos para o seletor de indicação do PDV",
+        "responses": {
+          "200": {
+            "description": "Lista mínima (id/apelido/nome)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "parceiros": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ParceiroIndicacao"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/parceiros/{parceiro_id}/ledger": {
+      "get": {
+        "tags": [
+          "parceiros"
+        ],
+        "summary": "Extrato do parceiro: saldo de pontos, bônus e vendas indicadas",
+        "parameters": [
+          {
+            "name": "parceiro_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Extrato",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParceiroLedger"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -4945,30 +6194,45 @@
       "DataInicio": {
         "name": "data_inicio",
         "in": "query",
-        "schema": {"type": "string", "format": "date"}
+        "schema": {
+          "type": "string",
+          "format": "date"
+        }
       },
       "DataFim": {
         "name": "data_fim",
         "in": "query",
-        "schema": {"type": "string", "format": "date"}
+        "schema": {
+          "type": "string",
+          "format": "date"
+        }
       },
       "ContaId": {
         "name": "conta_id",
         "in": "path",
         "required": true,
-        "schema": {"type": "integer", "format": "int64"}
+        "schema": {
+          "type": "integer",
+          "format": "int64"
+        }
       },
       "FornecedorId": {
         "name": "fornecedor_id",
         "in": "path",
         "required": true,
-        "schema": {"type": "integer", "format": "int64"}
+        "schema": {
+          "type": "integer",
+          "format": "int64"
+        }
       },
       "Competencia": {
         "name": "competencia",
         "in": "path",
         "required": true,
-        "schema": {"type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"}
+        "schema": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+        }
       }
     },
     "responses": {
@@ -4986,7 +6250,9 @@
         "description": "Usuário autenticado sem a permissão necessária",
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/Erro"}
+            "schema": {
+              "$ref": "#/components/schemas/Erro"
+            }
           }
         }
       },
@@ -4994,7 +6260,9 @@
         "description": "Filtros inválidos",
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/Erro"}
+            "schema": {
+              "$ref": "#/components/schemas/Erro"
+            }
           }
         }
       }
@@ -5827,49 +7095,116 @@
       },
       "ClassificacaoContaPagarIn": {
         "type": "object",
-        "required": ["plano_conta_id"],
+        "required": [
+          "plano_conta_id"
+        ],
         "properties": {
-          "plano_conta_id": {"type": "integer"},
-          "competencia": {"type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"},
-          "centro_custo_id": {"type": "integer", "nullable": true},
-          "aprovar": {"type": "boolean", "default": false},
-          "observacao_classificacao": {"type": "string"}
+          "plano_conta_id": {
+            "type": "integer"
+          },
+          "competencia": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          },
+          "centro_custo_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "aprovar": {
+            "type": "boolean",
+            "default": false
+          },
+          "observacao_classificacao": {
+            "type": "string"
+          }
         }
       },
       "PlanoContaIn": {
         "type": "object",
-        "required": ["codigo", "nome", "tipo"],
+        "required": [
+          "codigo",
+          "nome",
+          "tipo"
+        ],
         "properties": {
-          "codigo": {"type": "string"},
-          "nome": {"type": "string"},
-          "tipo": {"type": "string", "enum": ["receita", "despesa"]},
-          "pai_id": {"type": "integer", "nullable": true},
-          "natureza_custo": {"type": "string"},
-          "politica_rateio": {"type": "string"},
-          "exige_centro_custo": {"type": "boolean"},
-          "exige_competencia": {"type": "boolean"},
-          "permite_rateio": {"type": "boolean"},
-          "componente_variavel": {"type": "string", "nullable": true}
+          "codigo": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "receita",
+              "despesa"
+            ]
+          },
+          "pai_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "natureza_custo": {
+            "type": "string"
+          },
+          "politica_rateio": {
+            "type": "string"
+          },
+          "exige_centro_custo": {
+            "type": "boolean"
+          },
+          "exige_competencia": {
+            "type": "boolean"
+          },
+          "permite_rateio": {
+            "type": "boolean"
+          },
+          "componente_variavel": {
+            "type": "string",
+            "nullable": true
+          }
         }
       },
       "RateioContaPagarIn": {
         "type": "object",
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
             "minItems": 1,
             "items": {
               "type": "object",
-              "required": ["percentual"],
+              "required": [
+                "percentual"
+              ],
               "properties": {
-                "competencia": {"type": "string"},
-                "centro_custo_id": {"type": "integer", "nullable": true},
-                "produto_id": {"type": "integer", "nullable": true},
-                "percentual": {"type": "number", "minimum": 0, "maximum": 100},
-                "valor": {"type": "number"},
-                "politica_rateio": {"type": "string"},
-                "elegivel_precificacao": {"type": "boolean"}
+                "competencia": {
+                  "type": "string"
+                },
+                "centro_custo_id": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "produto_id": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "percentual": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "valor": {
+                  "type": "number"
+                },
+                "politica_rateio": {
+                  "type": "string"
+                },
+                "elegivel_precificacao": {
+                  "type": "boolean"
+                }
               }
             }
           }
@@ -5877,62 +7212,186 @@
       },
       "CompetenciaFinanceiraIn": {
         "type": "object",
-        "required": ["competencia"],
+        "required": [
+          "competencia"
+        ],
         "properties": {
-          "competencia": {"type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"},
-          "faturamento_base": {"type": "number", "minimum": 0},
-          "faturamento_fonte": {"type": "string", "enum": ["realizado", "planejado", "media_movel", "manual"]},
-          "criterio_apuracao": {"type": "string", "enum": ["competencia", "caixa", "gerencial", "planejado"]},
-          "observacao": {"type": "string"}
+          "competencia": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          },
+          "faturamento_base": {
+            "type": "number",
+            "minimum": 0
+          },
+          "faturamento_fonte": {
+            "type": "string",
+            "enum": [
+              "realizado",
+              "planejado",
+              "media_movel",
+              "manual"
+            ]
+          },
+          "criterio_apuracao": {
+            "type": "string",
+            "enum": [
+              "competencia",
+              "caixa",
+              "gerencial",
+              "planejado"
+            ]
+          },
+          "observacao": {
+            "type": "string"
+          }
         }
       },
       "RegraFornecedorFinanceiraIn": {
         "type": "object",
-        "required": ["plano_conta_id"],
+        "required": [
+          "plano_conta_id"
+        ],
         "properties": {
-          "plano_conta_id": {"type": "integer"},
-          "centro_custo_id": {"type": "integer", "nullable": true},
-          "competencia_padrao": {"type": "string", "nullable": true},
-          "prioridade": {"type": "integer", "minimum": 0},
-          "ativo": {"type": "boolean", "default": true},
-          "vigencia_inicio": {"type": "string", "format": "date", "nullable": true},
-          "vigencia_fim": {"type": "string", "format": "date", "nullable": true}
+          "plano_conta_id": {
+            "type": "integer"
+          },
+          "centro_custo_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "competencia_padrao": {
+            "type": "string",
+            "nullable": true
+          },
+          "prioridade": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ativo": {
+            "type": "boolean",
+            "default": true
+          },
+          "vigencia_inicio": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "vigencia_fim": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          }
         }
       },
       "ClienteCredito": {
         "type": "object",
         "properties": {
-          "cliente_id": {"type": "integer"},
-          "cliente": {"type": "string"},
-          "status": {"type": "string", "enum": ["nao_solicitado", "em_analise", "aprovado", "suspenso", "reprovado", "expirado", "bloqueado"]},
-          "aprovado": {"type": "boolean"},
-          "limite_cadastrado": {"type": "number"},
-          "limite_aprovado": {"type": "number"},
-          "limite_utilizado": {"type": "number"},
-          "limite_disponivel": {"type": "number"},
-          "saldo_em_atraso": {"type": "number"},
-          "tem_atraso": {"type": "boolean"},
-          "prazo_maximo_dias": {"type": "integer"},
-          "vigencia_inicio": {"type": "string", "format": "date", "nullable": true},
-          "vigencia_fim": {"type": "string", "format": "date", "nullable": true},
-          "versao": {"type": "integer"}
+          "cliente_id": {
+            "type": "integer"
+          },
+          "cliente": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "nao_solicitado",
+              "em_analise",
+              "aprovado",
+              "suspenso",
+              "reprovado",
+              "expirado",
+              "bloqueado"
+            ]
+          },
+          "aprovado": {
+            "type": "boolean"
+          },
+          "limite_cadastrado": {
+            "type": "number"
+          },
+          "limite_aprovado": {
+            "type": "number"
+          },
+          "limite_utilizado": {
+            "type": "number"
+          },
+          "limite_disponivel": {
+            "type": "number"
+          },
+          "saldo_em_atraso": {
+            "type": "number"
+          },
+          "tem_atraso": {
+            "type": "boolean"
+          },
+          "prazo_maximo_dias": {
+            "type": "integer"
+          },
+          "vigencia_inicio": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "vigencia_fim": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "versao": {
+            "type": "integer"
+          }
         }
       },
       "CreditoMotivoInput": {
         "type": "object",
-        "required": ["motivo"],
-        "properties": {"motivo": {"type": "string", "minLength": 1}}
+        "required": [
+          "motivo"
+        ],
+        "properties": {
+          "motivo": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       },
       "CreditoAprovacaoInput": {
         "type": "object",
-        "required": ["limite_aprovado", "prazo_maximo_dias", "vigencia_inicio", "vigencia_fim", "motivo"],
+        "required": [
+          "limite_aprovado",
+          "prazo_maximo_dias",
+          "vigencia_inicio",
+          "vigencia_fim",
+          "motivo"
+        ],
         "properties": {
-          "limite_aprovado": {"type": "number", "exclusiveMinimum": 0},
-          "prazo_maximo_dias": {"type": "integer", "minimum": 0},
-          "vigencia_inicio": {"type": "string", "format": "date"},
-          "vigencia_fim": {"type": "string", "format": "date"},
-          "motivo": {"type": "string", "minLength": 1},
-          "condicoes_permitidas": {"type": "array", "items": {"type": "string"}}
+          "limite_aprovado": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "prazo_maximo_dias": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "vigencia_inicio": {
+            "type": "string",
+            "format": "date"
+          },
+          "vigencia_fim": {
+            "type": "string",
+            "format": "date"
+          },
+          "motivo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "condicoes_permitidas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "ClienteApoioComercial": {
@@ -6645,6 +8104,182 @@
           "grupo_nome": {
             "type": "string",
             "description": "Nome do grupo (ELETRICO, HIDRAULICO...)"
+          }
+        }
+      },
+      "ParceiroProfissional": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "cliente_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Cliente vinculado (legado) ou null"
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "categoria": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pendente",
+              "ativo",
+              "suspenso",
+              "bloqueado",
+              "inativo"
+            ]
+          },
+          "nivel": {
+            "type": "string"
+          },
+          "nome": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "apelido": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cpf": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "telefone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "whatsapp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cliente_nome": {
+            "type": "string"
+          },
+          "cliente_doc": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observacao": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ParceiroVenda": {
+        "type": "object",
+        "properties": {
+          "orcamento_id": {
+            "type": "integer"
+          },
+          "numero": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "criado_em": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cliente_nome": {
+            "type": "string"
+          },
+          "indicacao_codigo": {
+            "type": "string"
+          }
+        }
+      },
+      "ParceiroLedger": {
+        "type": "object",
+        "properties": {
+          "parceiro_id": {
+            "type": "integer"
+          },
+          "parceiro": {
+            "$ref": "#/components/schemas/ParceiroProfissional"
+          },
+          "saldo_pontos": {
+            "type": "number"
+          },
+          "pontos": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "bonus": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "vendas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParceiroVenda"
+            }
+          }
+        }
+      },
+      "ParceiroIndicacao": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "apelido": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nome": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cliente_nome": {
+            "type": "string"
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "nome_exibicao": {
+            "type": "string"
           }
         }
       }

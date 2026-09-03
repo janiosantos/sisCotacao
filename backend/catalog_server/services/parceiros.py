@@ -14,24 +14,76 @@ def _codigo(prefixo: str) -> str:
     return f"{prefixo}-{secrets.token_hex(5).upper()}"
 
 
-def criar(cliente_id: int, categoria: str, usuario_id: int | None = None, observacao: str | None = None) -> dict:
+def _nome_exibicao(pp: dict) -> str:
+    """Nome de exibição do parceiro: apelido > nome > cliente vinculado."""
+    return (pp.get("apelido") or pp.get("nome") or pp.get("cliente_nome") or "").strip() or "Parceiro"
+
+
+def criar(
+    categoria: str,
+    usuario_id: int | None = None,
+    observacao: str | None = None,
+    cliente_id: int | None = None,
+    nome: str | None = None,
+    apelido: str | None = None,
+    cpf: str | None = None,
+    telefone: str | None = None,
+    whatsapp: str | None = None,
+    email: str | None = None,
+) -> dict:
     categoria = (categoria or "outro").strip().lower()
     categorias = {"eletricista", "encanador", "instalador", "construtor", "arquiteto", "engenheiro", "revenda", "outro"}
     if categoria not in categorias:
         raise ValueError("categoria de parceiro inválida")
+    nome = (nome or "").strip()
+    apelido = (apelido or "").strip()
+    cpf = "".join(c for c in (cpf or "") if c.isdigit())
     with system_conn() as conn:
-        cliente = conn.execute("SELECT id, nome FROM clientes WHERE id=?", (cliente_id,)).fetchone()
-        if not cliente:
-            raise LookupError("Cliente não encontrado")
-        existente = conn.execute("SELECT * FROM parceiro_profissional WHERE cliente_id=?", (cliente_id,)).fetchone()
-        if existente:
-            return {**dict(existente), "duplicado": True}
+        if cliente_id:
+            cliente = conn.execute("SELECT id, nome FROM clientes WHERE id=?", (cliente_id,)).fetchone()
+            if not cliente:
+                raise LookupError("Cliente não encontrado")
+            existente = conn.execute("SELECT * FROM parceiro_profissional WHERE cliente_id=?", (cliente_id,)).fetchone()
+            if existente:
+                return {**dict(existente), "duplicado": True}
+        elif not nome:
+            raise ValueError("Informe o nome completo do parceiro")
+        else:
+            if cpf:
+                existente = conn.execute(
+                    "SELECT * FROM parceiro_profissional WHERE cpf=?", (cpf,)
+                ).fetchone()
+                if existente:
+                    return {**dict(existente), "duplicado": True}
+            existente = conn.execute(
+                "SELECT * FROM parceiro_profissional WHERE nome IS NOT NULL "
+                "AND LOWER(nome)=LOWER(?) AND LOWER(COALESCE(apelido,''))=LOWER(?)",
+                (nome, apelido),
+            ).fetchone()
+            if existente:
+                return {**dict(existente), "duplicado": True}
         row = conn.execute(
-            "INSERT INTO parceiro_profissional (cliente_id, codigo, categoria, observacao, criado_por) "
-            "VALUES (?,?,?,?,?) RETURNING *",
-            (cliente_id, _codigo("PAR"), categoria, (observacao or "").strip() or None, usuario_id),
+            "INSERT INTO parceiro_profissional "
+            "(cliente_id, codigo, categoria, observacao, criado_por, nome, apelido, cpf, telefone, whatsapp, email) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING *",
+            (
+                cliente_id,
+                _codigo("PAR"),
+                categoria,
+                (observacao or "").strip() or None,
+                usuario_id,
+                nome or None,
+                apelido or None,
+                cpf or None,
+                (telefone or "").strip() or None,
+                (whatsapp or "").strip() or None,
+                (email or "").strip() or None,
+            ),
         ).fetchone()
-        return {**dict(row), "cliente_nome": cliente["nome"], "duplicado": False}
+        resultado = dict(row)
+        resultado["cliente_nome"] = cliente["nome"] if cliente_id else (nome or "")
+        resultado["duplicado"] = False
+        return resultado
 
 
 def alterar_status(parceiro_id: int, status: str, usuario_id: int | None = None) -> dict:
@@ -54,8 +106,9 @@ def alterar_status(parceiro_id: int, status: str, usuario_id: int | None = None)
 
 
 def listar(status: str | None = None, categoria: str | None = None, termo: str | None = None) -> list[dict]:
-    sql = ("SELECT pp.*, c.nome AS cliente_nome, c.doc AS cliente_doc FROM parceiro_profissional pp "
-           "JOIN clientes c ON c.id=pp.cliente_id WHERE 1=1")
+    sql = ("SELECT pp.*, COALESCE(c.nome, pp.nome, '') AS cliente_nome, "
+           "COALESCE(c.doc, pp.cpf, '') AS cliente_doc FROM parceiro_profissional pp "
+           "LEFT JOIN clientes c ON c.id=pp.cliente_id WHERE 1=1")
     args: list = []
     if status:
         sql += " AND pp.status=?"
@@ -64,11 +117,32 @@ def listar(status: str | None = None, categoria: str | None = None, termo: str |
         sql += " AND pp.categoria=?"
         args.append(categoria)
     if termo:
-        sql += " AND (c.nome ILIKE ? OR c.doc ILIKE ? OR pp.codigo ILIKE ?)"
-        args.extend([f"%{termo}%"] * 3)
+        sql += (" AND (COALESCE(c.nome, pp.nome, '') ILIKE ? OR COALESCE(pp.apelido, '') ILIKE ? "
+                "OR COALESCE(pp.cpf, c.doc, '') ILIKE ? OR pp.codigo ILIKE ?)")
+        args.extend([f"%{termo}%"] * 4)
     sql += " ORDER BY pp.id DESC LIMIT 500"
     with system_conn() as conn:
         return [dict(r) for r in conn.execute(sql, tuple(args)).fetchall()]
+
+
+def listar_ativos_indicacao() -> list[dict]:
+    """Parceiros ativos para o seletor de indicação no PDV (campos mínimos).
+
+    O operador do caixa só precisa identificar o parceiro que indicou; os
+    dados financeiros da rede ficam restritos a Administrador/Financeiro.
+    """
+    with system_conn() as conn:
+        rows = conn.execute(
+            "SELECT pp.id, pp.apelido, pp.nome, COALESCE(c.nome,'') AS cliente_nome, pp.codigo "
+            "FROM parceiro_profissional pp LEFT JOIN clientes c ON c.id=pp.cliente_id "
+            "WHERE pp.status='ativo' ORDER BY COALESCE(pp.apelido, pp.nome, c.nome, pp.codigo) LIMIT 500"
+        ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["nome_exibicao"] = _nome_exibicao(d)
+            out.append(d)
+        return out
 
 
 def criar_indicacao(parceiro_id: int, cliente_id: int | None = None) -> dict:
@@ -192,8 +266,15 @@ def pagar_bonus(bonus_id: int, usuario_id: int | None = None) -> dict:
 
 def ledger(parceiro_id: int) -> dict:
     with system_conn() as conn:
-        if not conn.execute("SELECT id FROM parceiro_profissional WHERE id=?", (parceiro_id,)).fetchone():
+        parceiro = conn.execute(
+            "SELECT pp.*, COALESCE(c.nome, pp.nome, '') AS cliente_nome, COALESCE(c.doc, pp.cpf, '') AS cliente_doc "
+            "FROM parceiro_profissional pp LEFT JOIN clientes c ON c.id=pp.cliente_id WHERE pp.id=?",
+            (parceiro_id,),
+        ).fetchone()
+        if not parceiro:
             raise LookupError("Parceiro não encontrado")
+        p = dict(parceiro)
+        p["nome_exibicao"] = _nome_exibicao(p)
         pontos = conn.execute(
             "SELECT COALESCE(SUM(CASE WHEN tipo='credito' OR tipo='ajuste' THEN pontos ELSE -pontos END),0) saldo "
             "FROM parceiro_ponto WHERE parceiro_id=?", (parceiro_id,)
@@ -204,4 +285,21 @@ def ledger(parceiro_id: int) -> dict:
         bonus = [dict(r) for r in conn.execute(
             "SELECT * FROM parceiro_bonus WHERE parceiro_id=? ORDER BY id DESC LIMIT 200", (parceiro_id,)
         ).fetchall()]
-    return {"parceiro_id": parceiro_id, "saldo_pontos": float(pontos["saldo"] or 0), "pontos": itens, "bonus": bonus}
+        vendas = [dict(r) for r in conn.execute(
+            "SELECT o.id AS orcamento_id, o.numero, o.total_liquido AS total, o.criado_em, "
+            " COALESCE(cl.nome, 'Consumidor') AS cliente_nome, i.codigo AS indicacao_codigo "
+            "FROM parceiro_indicacao i "
+            "JOIN orcamentos o ON o.id=i.orcamento_id "
+            "LEFT JOIN clientes cl ON cl.id=o.cliente_id "
+            "WHERE i.parceiro_id=? AND i.status='convertida' "
+            "ORDER BY o.criado_em DESC LIMIT 200",
+            (parceiro_id,),
+        ).fetchall()]
+    return {
+        "parceiro_id": parceiro_id,
+        "parceiro": p,
+        "saldo_pontos": float(pontos["saldo"] or 0),
+        "pontos": itens,
+        "bonus": bonus,
+        "vendas": vendas,
+    }

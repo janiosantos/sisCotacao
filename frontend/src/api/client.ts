@@ -204,16 +204,32 @@ export interface Cliente {
 
 export interface ParceiroProfissional {
   id: number;
-  cliente_id: number;
+  cliente_id: number | null;
   codigo: string;
   categoria: string;
   status: "pendente" | "ativo" | "suspenso" | "bloqueado" | "inativo" | string;
   nivel: "bronze" | "prata" | "ouro" | "platina" | string;
   observacao: string | null;
+  nome: string | null;
+  apelido: string | null;
+  cpf: string | null;
+  telefone: string | null;
+  whatsapp: string | null;
+  email: string | null;
   cliente_nome: string;
   cliente_doc: string | null;
+  nome_exibicao?: string;
   criado_em: string;
   atualizado_em: string;
+}
+
+export interface ParceiroVenda {
+  orcamento_id: number;
+  numero: string | null;
+  total: number | null;
+  criado_em: string;
+  cliente_nome: string;
+  indicacao_codigo: string;
 }
 
 export interface ParceiroPonto {
@@ -238,9 +254,20 @@ export interface ParceiroBonus {
 
 export interface ParceiroLedger {
   parceiro_id: number;
+  parceiro: ParceiroProfissional;
   saldo_pontos: number;
   pontos: ParceiroPonto[];
   bonus: ParceiroBonus[];
+  vendas: ParceiroVenda[];
+}
+
+export interface ParceiroIndicacao {
+  id: number;
+  apelido: string | null;
+  nome: string | null;
+  cliente_nome: string;
+  codigo: string;
+  nome_exibicao: string;
 }
 
 export interface ClienteSituacao {
@@ -1589,8 +1616,19 @@ export const api = {
   // parceiros profissionais, indicações, pontos e bônus
   listarParceiros: (params: Record<string, unknown> = {}) =>
     request<{ parceiros: ParceiroProfissional[] }>("GET", "/api/parceiros" + qs(params)),
-  criarParceiro: (data: { cliente_id: number; categoria: string; observacao?: string }) =>
-    request<ParceiroProfissional & { duplicado?: boolean }>("POST", "/api/parceiros", data),
+  criarParceiro: (data: {
+    cliente_id?: number | null;
+    categoria: string;
+    observacao?: string;
+    nome?: string;
+    apelido?: string;
+    cpf?: string;
+    telefone?: string;
+    whatsapp?: string;
+    email?: string;
+  }) => request<ParceiroProfissional & { duplicado?: boolean }>("POST", "/api/parceiros", data),
+  listarParceirosIndicacao: () =>
+    request<{ parceiros: ParceiroIndicacao[] }>("GET", "/api/parceiros/indicacao"),
   alterarStatusParceiro: (id: number, status: string) =>
     request<{ id: number; status: string }>("PATCH", `/api/parceiros/${id}/status`, { status }),
   criarIndicacaoParceiro: (id: number, clienteId?: number) =>
@@ -2557,6 +2595,7 @@ export interface OrcamentoPayload {
   usuario_id?: number;
   cliente_id?: number;
   indicacao_id?: number | null;
+  parceiro_id?: number | null;
 }
 
 export interface ProdutoSubcategoria {

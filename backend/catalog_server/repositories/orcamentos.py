@@ -244,6 +244,7 @@ class OrcamentoRepository:
         status: str | None = None,
         desconto: float | None = None,
         condicao_pagamento_id: int | None = None,
+        indicacao_id: int | None = None,
     ) -> bool:
         with system_conn() as conn:
             row = conn.execute(
@@ -263,7 +264,7 @@ class OrcamentoRepository:
             # Conteúdo: só editável até `liberado`.
             conteudo_mudou = any(
                 val is not None
-                for val in (cliente, contato, validade_dias, observacoes, desconto, condicao_pagamento_id)
+                for val in (cliente, contato, validade_dias, observacoes, desconto, condicao_pagamento_id, indicacao_id)
             )
             if conteudo_mudou and not pode_editar_conteudo(status_atual):
                 raise PermissionError(
@@ -278,6 +279,7 @@ class OrcamentoRepository:
                 ("observacoes", observacoes),
                 ("desconto", desconto),
                 ("condicao_pagamento_id", condicao_pagamento_id),
+                ("indicacao_id", indicacao_id),
             ):
                 if val is not None:
                     fields.append(f"{key}=?")
@@ -303,6 +305,25 @@ class OrcamentoRepository:
             )
             conn.commit()
         return True
+
+    def limpar_indicacao(self, orcamento_id: int) -> bool:
+        """Remove a indicação de parceiro do orçamento (rascunho editável)."""
+        with system_conn() as conn:
+            row = conn.execute(
+                "SELECT status FROM orcamentos WHERE id=?", (orcamento_id,)
+            ).fetchone()
+            if row is None:
+                return False
+            if not pode_editar_conteudo(row["status"]):
+                raise PermissionError(
+                    f"Orçamento {row['status']}: edição de conteúdo bloqueada (edite até liberado)"
+                )
+            cur = conn.execute(
+                "UPDATE orcamentos SET indicacao_id=NULL, atualizado_em=datetime('now') WHERE id=?",
+                (orcamento_id,),
+            )
+            conn.commit()
+            return cur.rowcount > 0
 
     # ------------------------------------------------------------------
 
