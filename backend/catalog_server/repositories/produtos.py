@@ -87,7 +87,23 @@ def _contexto_sku(conn, grupo_id: int | None, subgrupo_id: int | None, familia_i
     subgrupo_cod = row["subgrupo_codigo"] if row else ""
     if not (grupo_cod or subgrupo_cod or familia_id):
         return "", "", ""
-    familia_cod = codigo_familia(familia_id) if familia_id else codigo_produto(produto_id)
+    if familia_id:
+        # Ordinal estável da família dentro do grupo/subgrupo (1, 2, 3…) —
+        # não depende do id global da família; variações da mesma família
+        # compartilham o núcleo e diferem pelo sufixo numérico.
+        seq = conn.execute(
+            """SELECT COUNT(*) + 1 AS seq FROM (
+                   SELECT p.familia_id, MIN(p.id) AS first_id
+                   FROM produtos_cadastro p
+                   WHERE p.grupo_id=? AND p.subgrupo_id=? AND p.familia_id IS NOT NULL
+                   GROUP BY p.familia_id
+               ) f0
+               WHERE f0.first_id < (SELECT COALESCE(MIN(p2.id),0) FROM produtos_cadastro p2 WHERE p2.familia_id=?)""",
+            (grupo_id, subgrupo_id, familia_id),
+        ).fetchone()["seq"]
+        familia_cod = f"{int(seq or 1):03d}"
+    else:
+        familia_cod = codigo_produto(produto_id)
     return grupo_cod, subgrupo_cod, familia_cod
 
 

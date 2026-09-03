@@ -11,10 +11,19 @@ from catalog_server import flags as app_flags
 from catalog_server.db import system_conn
 from catalog_server.fiscal.resolvedor import resolver_v2
 
-_MIG = (
-    Path(__file__).resolve().parent.parent
-    / "migrations" / "versions" / "0071_seeds_normativas_8544.py"
-)
+def _mig_path() -> Path:
+    """Localiza a migração 0071 — o layout de pastas difere entre o checkout
+    (backend/migrations) e a imagem de testes CI (/app/migrations)."""
+    aqui = Path(__file__).resolve().parent
+    candidatos = [aqui.parent, aqui.parent.parent, aqui.parent.parent.parent, Path("/app"), Path("/backend")]
+    for base in candidatos:
+        cand = base / "migrations" / "versions" / "0071_seeds_normativas_8544.py"
+        if cand.exists():
+            return cand
+    return aqui.parent.parent / "migrations" / "versions" / "0071_seeds_normativas_8544.py"
+
+
+_MIG = _mig_path()
 
 
 def _helpers():
