@@ -911,7 +911,9 @@ export function ProdutoEditor() {
           const rascunho = sessionStorage.getItem("dup_produto");
           if (rascunho) {
             const copia = JSON.parse(rascunho);
-            setForm((f) => ({ ...f, ...copia }));
+            if (copia.form) setForm((f) => ({ ...f, ...copia.form }));
+            if (copia.dados) setDados((d) => ({ ...d, ...copia.dados }));
+            if (copia.valores) setValores(copia.valores);
             sessionStorage.removeItem("dup_produto");
           }
         } catch {
@@ -1183,9 +1185,17 @@ export function ProdutoEditor() {
   const catAtual = categoriasTree.find((c) => c.nome === form.categoria);
   const subcategorias = catAtual ? catAtual.subcategorias.map((s) => s.nome) : [];
   const duplicar = () => {
-    // Copia o cadastro como novo rascunho (mantém atributos/dados p/ edição)
-    const copia = { ...form, id: undefined };
-    sessionStorage.setItem("dup_produto", JSON.stringify(copia));
+    // Copia o cadastro como novo rascunho — inclui dados operacionais e
+    // atributos (modelo produto único pós v2.26). SKU é limpo para não
+    // conflitar com o original ao salvar.
+    sessionStorage.setItem(
+      "dup_produto",
+      JSON.stringify({
+        form: { ...form, id: undefined },
+        dados: { ...dados, sku: "" },
+        valores,
+      }),
+    );
     location.hash = "#/produtos/novo";
     toast("Copiado como rascunho — revise antes de salvar", "success");
   };
