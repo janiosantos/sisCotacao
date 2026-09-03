@@ -95,10 +95,13 @@ jobs:
 
       # Regra 03: release imutável — além do latest, cada versão fica etiquetada
       # para diagnóstico e rollback pontual (qualquer tag, não só prev).
+      # A build do compose já etiqueta a versão (image: ...:${APP_VERSION}); aqui
+      # apenas movemos `latest` para a versão recém-buildada. NUNCA o contrário
+      # (latest -> versão) — isso sobrescreveria a imagem nova com a antiga.
       - name: Etiqueta imagens com a versão da release
         run: |
-          docker tag siscom-backend:latest  "siscom-backend:${{ steps.version.outputs.tag }}" || true
-          docker tag siscom-frontend:latest "siscom-frontend:${{ steps.version.outputs.tag }}" || true
+          docker tag "siscom-backend:${{ steps.version.outputs.tag }}" siscom-backend:latest
+          docker tag "siscom-frontend:${{ steps.version.outputs.tag }}" siscom-frontend:latest
 
       - name: Para o backend (janela de manutenção — DDL sem tráfego)
         if: steps.comp.outputs.migracoes == 'true'
