@@ -118,6 +118,13 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 9. Registro da sessão atual
 
+- **2026-09-03 (PUBLICAÇÃO v2.38.0 — STAGING + PRODUÇÃO):** autorizada explicitamente pelo usuário.
+  - **Fixes de CI destravando o gate** (commit `48efa8f`): `_contexto_sku` agora calcula `familia_cod` como **ordinal da família dentro do grupo/subgrupo** (não o id global) — variações compartilham núcleo `ELE-CAB-001` e diferem pelo sufixo; `test_fiscal_golden_8544` localiza a migração 0071 em checkout ou imagem CI.
+  - **Deploy Staging** (run `33743971679`) → **success**: CI completo (migrações vazio→head, backend 561, frontend) + build + migração no banco vazio de staging + health + smoke + reconciliação.
+  - **Deploy Produção** (run `33745848562`, `versao=v2.38.0`, `componentes=todos`) → **success**: backup, imagem `prev`, build/tag `v2.38.0`, janela de manutenção, migrações até **154**, rollout, health gate, smoke tests, registro no Histórico.
+  - Produção agora em **v2.38.0** (backend+frontend+schema, migração 154). Controles: staging validado antes de produção; rollback = imagens `v2.37.2` + backup pré-migração.
+  - Nota: houve 1 flake ambiental no gate de migrações (PG descartável não subiu em 60s) — resolvido no re-dispatch.
+
 - **2026-09-01 (auditoria do Plano Mestre):** revisado o trabalho das ondas até a migração **0142**, confrontando implementação com os critérios de aceite de `PLANO_MESTRE_IMPLEMENTACAO_ERP.md`. Criado `RELATORIO_AUDITORIA_PLANO_MESTRE_ERP.md` e atualizado `TODO.md`. Foram confirmados bloqueios P0/P1 em ABC histórica (consumo/depósito/aplicação global), recebimento financeiro (condição/duplicidade/erro contábil), conciliação bancária (conta a pagar atualizada como receber), autoria Bearer em APIs de compras/recebimento, motor de reposição por depósito, idempotência central, relatórios/OpenAPI e pipeline XML→recebimento. **Nenhuma correção de código, migração, restart ou deploy foi executado nesta sessão; o objetivo foi auditar e registrar as pendências.** Frontend: `typecheck` + 39 testes verdes. Backend direcionado: 37 testes verdes em 5m23s; suíte integral não declarada aprovada.
 
 - **2026-09-01 (infra — timezone America/Sao_Paulo):** `TZ=America/Sao_Paulo` em db/backend/worker/scheduler/vite/frontend no `docker-compose.yml`; `backend/Dockerfile` + `tzdata` + `ENV TZ`; PostgreSQL com `command: postgres -c timezone=America/Sao_Paulo` (o `TZ` do SO não muda o GUC do PG). Confirmado: `SHOW timezone` → `America/Sao_Paulo`; `date` → `-03` nos containers. Stack healthy (health 200). Commit `3e2871c`. Sem deploy.
