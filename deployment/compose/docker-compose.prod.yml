@@ -34,12 +34,10 @@ services:
       - APP_VERSION=${APP_VERSION:-dev}
       - CATALOG_ENV=production
       - CATALOG_SECRET=${CATALOG_SECRET:?CATALOG_SECRET obrigatório}
-      - PUBLIC_CORS_ORIGINS=${PUBLIC_CORS_ORIGINS:-https://casalm.com.br,https://www.casalm.com.br}
-      # Links de convite ao fornecedor usam DETECÇÃO DINÂMICA da URL externa
-      # acessada (Host header / X-Forwarded-*). PUBLIC_BASE_URL é override
-      # explícito, opcional — use apenas se o comprador acessa pela LAN e os
-      # fornecedores pela porta pública (ex.: redirecionamento de porta/CGNAT):
-      #   - PUBLIC_BASE_URL=https://siscom.casalm.com.br:6173
+- PUBLIC_CORS_ORIGINS=${PUBLIC_CORS_ORIGINS:-https://casalm.com.br,https://www.casalm.com.br}
+      # Links de convite ao fornecedor: URL pública com a porta do redirecionamento
+      # CGNAT — o Host header/X-Forwarded-* não carrega a porta externa.
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-https://siscom.casalm.com.br:6173}
       # Migrações são aplicadas em passo explícito do pipeline (deploy.yml),
       # fora do processo web — evita crash-loop se uma migração falhar.
       - AUTO_MIGRATE=0
