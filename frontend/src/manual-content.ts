@@ -31,8 +31,8 @@ export const MANUAL_ENTRIES: ManualQuickEntry[] = [
   {
     id: "orcamentos", title: "Orçamentos", route: "#/orcamentos", group: "Operação", keywords: "proposta pedido desconto aprovação boleto",
     what: "Lista de propostas e pedidos de venda com ciclo controlado.", purpose: "Acompanhar rascunhos, aprovações, conversões, reaberturas e documentos financeiros.", role: "É a ponte entre negociação comercial, estoque, crédito, caixa e fiscal.", access: "Vendas para operação; aprovadores e financeiro para ações específicas.", prerequisites: "Cliente/produtos cadastrados; desconto e condição definidos.",
-    steps: ["Filtre o status do documento.", "Abra o detalhe para revisar itens, cliente e condição.", "Autorize ou rejeite desconto quando a alçada exigir.", "Converta somente após resolver bloqueios de crédito, estoque e fiscal.", "Use Boleto/Contas apenas nas vendas a prazo elegíveis."],
-    shortcuts: "Tab percorre ações; Escape fecha detalhes e modais.", cautions: "Pedido finalizado é congelado; reabertura é controlada e boleto emitido impede alteração.", audit: "Status, desconto, aprovador, conversão, contas e documentos fiscais são rastreáveis."
+    steps: ["Filtre o status do documento.", "Abra o detalhe para revisar itens, cliente e condição.", "Autorize ou rejeite desconto quando a alçada exigir.", "Converta somente após resolver bloqueios de crédito, estoque e fiscal.", "Use Boleto/Contas apenas nas vendas a prazo elegíveis.", "Para venda à vista, encaminhe o pedido ao Caixa; o pagamento não é recebido aqui.", "Use PDF para emissão ou reimpressão do documento."],
+    shortcuts: "Tab percorre ações; Escape fecha detalhes e modais.", cautions: "Pedido finalizado é congelado; reabertura é controlada e boleto emitido impede alteração. Orçamentos nunca recebe dinheiro, PIX, cartão ou qualquer outra forma de pagamento.", audit: "Status, desconto, aprovador, conversão, contas e documentos fiscais são rastreáveis."
   },
   {
     id: "caixa", title: "Caixa", route: "#/caixa", group: "Operação", keywords: "receber pagamento pix dinheiro cartão sangria abertura",

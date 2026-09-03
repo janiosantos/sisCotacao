@@ -6,12 +6,10 @@ import { api, type OrcamentoDetalhe, type OrcamentoLista } from "../api/client";
 import { fmtDate, fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
 import { Badge, Button, Cell, Field, Loading, Modal, PageHeader, Select, StatCard, Table, TBody, THead } from "../ui/ui";
-import { ModalRecebimento } from "./recebimento";
 import { STATUS_LABELS, DESCONTO_LABELS, statusTone, descontoTone } from "./orcamentos/tones";
 import { ModalDetalhe } from "./orcamentos/modal-detalhe";
 import { ModalAutorizar } from "./orcamentos/modal-autorizar";
 import { ModalRejeitar } from "./orcamentos/modal-rejeitar";
-import { temPermissao } from "../perm";
 
 export default function Orcamentos() {
   const [filtro, setFiltro] = useState("");
@@ -20,7 +18,6 @@ export default function Orcamentos() {
   const [detalhe, setDetalhe] = useState<OrcamentoDetalhe | null>(null);
   const [autorizarDe, setAutorizarDe] = useState<number | null>(null);
   const [rejeitarDe, setRejeitarDe] = useState<{ id: number; motivo: string } | null>(null);
-  const [receberDe, setReceberDe] = useState<{ id: number; numero: string; total: number } | null>(null);
   const [pendentes, setPendentes] = useState<(OrcamentoLista & { desconto_pct?: number; limite_aprovador?: number })[]>([]);
   const [showFila, setShowFila] = useState(false);
 
@@ -180,10 +177,6 @@ export default function Orcamentos() {
                             Contas
                           </a>
                         </>
-                      ) : temPermissao("caixa", "cadastrar") ? (
-                        <Button size="sm" variant="primary" onClick={() => setReceberDe({ id: o.id, numero: o.numero, total: o.total })}>
-                          Receber
-                        </Button>
                       ) : null)}
                     <a
                       aria-label={`Imprimir PDF do orçamento ${o.numero}`}
@@ -214,7 +207,6 @@ export default function Orcamentos() {
           onRejeitar={() => setRejeitarDe({ id: detalhe.id, motivo: "" })}
           onReabrir={() => void reabrir(detalhe.id)}
           onExcluir={excluir}
-          onReceber={() => setReceberDe({ id: detalhe.id, numero: detalhe.numero, total: detalhe.total })}
         />
       )}
 
@@ -236,18 +228,6 @@ export default function Orcamentos() {
             setRejeitarDe(null);
             await abrirDetalhe(detalhe?.id ?? (rejeitarDe.id as number));
             await carregar();
-          }}
-        />
-      )}
-
-      {receberDe && (
-        <ModalRecebimento
-          dados={receberDe}
-          onClose={() => setReceberDe(null)}
-          onRecebido={() => {
-            setReceberDe(null);
-            setDetalhe(null);
-            void carregar();
           }}
         />
       )}

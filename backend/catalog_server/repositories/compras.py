@@ -548,6 +548,13 @@ class ComprasRepository:
             if not parcelas:
                 venc = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
                 parcelas = [{"valor": round(total, 2), "vencimento": venc, "dias": 30}]
+            from catalog_server.services import classificacao_financeira
+            classificacao = classificacao_financeira.preparar_classificacao(
+                conn,
+                fornecedor_id=pedido["fornecedor_id"],
+                competencia_value=datetime.now().strftime("%Y-%m"),
+                origem="herdada_compra",
+            )
             n = len(parcelas)
             for i, p in enumerate(parcelas, start=1):
                 descricao = f"Pedido {pedido['numero']}"
@@ -556,12 +563,19 @@ class ComprasRepository:
                 conn.execute(
                     """INSERT INTO contas_pagar
                          (fornecedor, fornecedor_id, descricao, valor, saldo,
-                          data_vencimento, documento, origem_tipo, origem_id,
-                          parcela, total_parcelas, grupo_id)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                          data_vencimento, documento, plano_conta_id, competencia,
+                          natureza_custo_snapshot, politica_rateio_snapshot,
+                          elegivel_precificacao, componente_precificacao,
+                          centro_custo_id, origem_classificacao, status_classificacao,
+                          origem_tipo, origem_id, parcela, total_parcelas, grupo_id)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (fnome, pedido["fornecedor_id"], descricao, float(p["valor"]),
                      float(p["valor"]), p["vencimento"], pedido["numero"],
-                     "pedido_compra", pedido_id, i, n, grupo),
+                     classificacao["plano_conta_id"], classificacao["competencia"],
+                     classificacao["natureza_custo_snapshot"], classificacao["politica_rateio_snapshot"],
+                     classificacao["elegivel_precificacao"], classificacao["componente_precificacao"],
+                     classificacao["centro_custo_id"], classificacao["origem_classificacao"],
+                     classificacao["status_classificacao"], "pedido_compra", pedido_id, i, n, grupo),
                 )
             conn.execute("UPDATE pedidos_compra SET status='recebido' WHERE id=?", (pedido_id,))
             return {"ok": True, "total": round(total, 2), "itens": len(itens),

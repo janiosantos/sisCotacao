@@ -4,9 +4,17 @@ from flask import Blueprint, jsonify, request
 
 from catalog_server.repositories import adiantamento_repo, caixa_repo, centro_custo_repo, condicao_repo, contas_repo
 from catalog_server.services import caixa_sessao, cobranca
+from catalog_server.services import classificacao_financeira
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
+from catalog_server import permissao
 
 api_financeiro_bp = Blueprint("api_financeiro", __name__)
+
+
+def _flag(value, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value is True or value == 1 or str(value).lower() in {"1", "true", "on", "sim"}
 
 
 # ─── Sessão de caixa e terminal (VEN-004) ──────────────────
@@ -259,14 +267,20 @@ def criar_pagar():
     data_vencimento = data.get("data_vencimento")
     if not fornecedor or valor <= 0 or not data_vencimento:
         return jsonify({"error": "fornecedor, valor e data_vencimento obrigatórios"}), 400
-    conta_id = contas_repo.criar_pagar(
-        fornecedor, valor, data_vencimento,
-        fornecedor_id=data.get("fornecedor_id"),
-        descricao=data.get("descricao", ""),
-        documento=data.get("documento"),
-        plano_conta_id=data.get("plano_conta_id"),
-        observacao=data.get("observacao"),
-    )
+    try:
+        conta_id = contas_repo.criar_pagar(
+            fornecedor, valor, data_vencimento,
+            fornecedor_id=data.get("fornecedor_id"),
+            descricao=data.get("descricao", ""),
+            documento=data.get("documento"),
+            plano_conta_id=data.get("plano_conta_id"),
+            observacao=data.get("observacao"),
+            competencia_value=data.get("competencia") or data.get("data_emissao") or data_vencimento,
+            centro_custo_id=data.get("centro_custo_id"),
+            exigir_classificacao=_flag(data.get("exigir_classificacao"), True),
+        )
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "classificacao_invalida"}), 400
     return jsonify({"id": conta_id}), 201
 
 
@@ -281,6 +295,149 @@ def pagar_conta(conta_id: int):
         return jsonify(result)
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
+
+
+# ─── Classificação de despesas e competências ──────────────
+
+@api_financeiro_bp.get("/api/financeiro/classificacao/pendencias")
+def listar_pendencias_classificacao():
+    try:
+        return jsonify(classificacao_financeira.listar_pendencias(
+            request.args.get("limit", 100, type=int), request.args.get("offset", 0, type=int)
+        ))
+    except (TypeError, ValueError) as exc:
+        return jsonify({"error": str(exc), "code": "paginacao_invalida"}), 400
+
+
+@api_financeiro_bp.post("/api/financeiro/contas-pagar/<int:conta_id>/classificar")
+def classificar_conta_pagar(conta_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        if _flag(data.get("aprovar")) and not permissao.tem_permissao(
+            usuario_id_requisicao(), "financeiro", "aprovar"
+        ):
+            return jsonify({"error": "Somente o responsável financeiro pode aprovar a classificação", "code": "permissao_negada"}), 403
+        result = classificacao_financeira.classificar_conta(
+            conta_id,
+            plano_conta_id=int(data["plano_conta_id"]),
+            competencia_value=data.get("competencia"),
+            centro_custo_id=int(data["centro_custo_id"]) if data.get("centro_custo_id") else None,
+            usuario_id=usuario_id_requisicao(),
+            observacao=data.get("observacao_classificacao"),
+            aprovar=_flag(data.get("aprovar")),
+        )
+        return jsonify(result)
+    except KeyError:
+        return jsonify({"error": "plano_conta_id é obrigatório", "code": "classificacao_obrigatoria"}), 400
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "conta_nao_encontrada"}), 404
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "classificacao_invalida"}), 400
+
+
+@api_financeiro_bp.get("/api/financeiro/contas-pagar/<int:conta_id>/rateio")
+def listar_rateio_conta(conta_id: int):
+    return jsonify(classificacao_financeira.listar_rateio(conta_id))
+
+
+@api_financeiro_bp.post("/api/financeiro/contas-pagar/<int:conta_id>/rateio")
+def criar_rateio_conta(conta_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(classificacao_financeira.criar_rateio(
+            conta_id, data.get("items") or [], usuario_id=usuario_id_requisicao()
+        ))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "conta_nao_encontrada"}), 404
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "rateio_invalido"}), 400
+
+
+@api_financeiro_bp.get("/api/financeiro/competencias")
+def listar_competencias():
+    return jsonify(classificacao_financeira.listar_competencias())
+
+
+@api_financeiro_bp.post("/api/financeiro/competencias")
+def criar_competencia():
+    try:
+        return jsonify(classificacao_financeira.criar_competencia(
+            request.get_json(silent=True) or {}, usuario_id_requisicao()
+        )), 201
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "competencia_invalida"}), 400
+
+
+@api_financeiro_bp.post("/api/financeiro/competencias/<competencia>/status")
+def alterar_status_competencia(competencia: str):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(classificacao_financeira.alterar_status_competencia(
+            competencia, data.get("status") or "", usuario_id_requisicao(), data.get("motivo")
+        ))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "competencia_nao_encontrada"}), 404
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "competencia_invalida"}), 400
+
+
+@api_financeiro_bp.post("/api/financeiro/competencias/<competencia>/fechar")
+def fechar_competencia(competencia: str):
+    try:
+        return jsonify(classificacao_financeira.alterar_status_competencia(
+            competencia, "fechada", usuario_id_requisicao(), (request.get_json(silent=True) or {}).get("motivo")
+        ))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "competencia_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "competencia_invalida"}), 400
+
+
+@api_financeiro_bp.post("/api/financeiro/competencias/<competencia>/reabrir")
+def reabrir_competencia(competencia: str):
+    try:
+        return jsonify(classificacao_financeira.alterar_status_competencia(
+            competencia, "reaberta", usuario_id_requisicao(), (request.get_json(silent=True) or {}).get("motivo")
+        ))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "competencia_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "competencia_invalida"}), 400
+
+
+@api_financeiro_bp.get("/api/financeiro/competencias/<competencia>/apuracao")
+def apurar_competencia(competencia: str):
+    try:
+        return jsonify(classificacao_financeira.apurar_competencia(competencia))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "competencia_nao_encontrada"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "competencia_invalida"}), 400
+
+
+@api_financeiro_bp.get("/api/financeiro/fornecedores/<int:fornecedor_id>/regra-classificacao")
+def obter_regra_classificacao_fornecedor(fornecedor_id: int):
+    return jsonify(classificacao_financeira.obter_regra_fornecedor(fornecedor_id) or {})
+
+
+@api_financeiro_bp.put("/api/financeiro/fornecedores/<int:fornecedor_id>/regra-classificacao")
+def salvar_regra_classificacao_fornecedor(fornecedor_id: int):
+    try:
+        return jsonify(classificacao_financeira.salvar_regra_fornecedor(
+            fornecedor_id, request.get_json(silent=True) or {}, usuario_id_requisicao()
+        ))
+    except KeyError:
+        return jsonify({"error": "plano_conta_id é obrigatório", "code": "classificacao_obrigatoria"}), 400
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "regra_fornecedor_invalida"}), 400
+
+
+@api_financeiro_bp.get("/api/financeiro/contas-pagar/<int:conta_id>/memoria-classificacao")
+def memoria_classificacao_conta(conta_id: int):
+    try:
+        return jsonify(classificacao_financeira.memoria_classificacao(conta_id))
+    except LookupError as exc:
+        return jsonify({"error": str(exc), "code": "conta_nao_encontrada"}), 404
 
 
 # ─── Condições de Pagamento ────────────────────────────────
@@ -440,7 +597,10 @@ def _criar_lote(tabela: str):
     dados_lote = dict(data)
     if data.get("recorrencia"):
         dados_lote["recorrencia"] = data.get("frequencia") or "mensal"
-    ids, grupo = lancamentos_lote.criar_lote(tabela, dados_lote, parcelas)
+    try:
+        ids, grupo = lancamentos_lote.criar_lote(tabela, dados_lote, parcelas)
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc), "code": "classificacao_invalida"}), 400
     return jsonify({"ok": True, "grupo_id": grupo, "ids": ids, "n_parcelas": len(ids)}), 201
 
 

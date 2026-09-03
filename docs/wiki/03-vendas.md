@@ -33,6 +33,10 @@ comercial e registra alçada, crédito e estoque.
 
 Filtre o status, abra o detalhe, resolva pendências e somente então converta.
 Pedido finalizado é congelado; boleto emitido impede reabertura automática.
+Esta tela é somente para consulta, aprovação/reabertura conforme permissão e
+impressão/reimpressão de documentos. **Nunca recebe pagamentos.** O recebimento
+de vendas à vista é feito exclusivamente em **Caixa**; vendas a prazo são
+baixadas em **Financeiro > Contas a receber**.
 
 ## Caixa (`#/caixa`)
 

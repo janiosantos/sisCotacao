@@ -59,7 +59,7 @@ export default function PlanoContas() {
         </div>
       ) : (
         <Table>
-          <THead cols={["Código", "Nome", "Tipo", "Status", ""]} />
+          <THead cols={["Código", "Nome", "Tipo", "Natureza", "Rateio", "Status", ""]} />
           <TBody>
             {contas.map((c) => (
               <tr key={c.id} className="hover:bg-gray-50">
@@ -68,6 +68,8 @@ export default function PlanoContas() {
                 <Cell>
                   <Badge tone={c.tipo === "receita" ? "green" : "amber"}>{c.tipo}</Badge>
                 </Cell>
+                <Cell className="text-xs">{c.tipo === "despesa" ? (c.natureza_custo || "Não classificada") : "—"}</Cell>
+                <Cell className="text-xs">{c.tipo === "despesa" ? (c.politica_rateio || "Não incluir") : "—"}</Cell>
                 <Cell>
                   <Badge tone={c.ativo ? "green" : "red"}>{c.ativo ? "Ativo" : "Inativo"}</Badge>
                 </Cell>

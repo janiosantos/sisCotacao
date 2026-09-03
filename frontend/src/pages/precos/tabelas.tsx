@@ -50,16 +50,19 @@ export function Tabelas() {
         <Loading />
       ) : (
         <Table>
-          <THead cols={["Nome", "Tipo", "Margem", "Markup", "Status", ""]} />
+          <THead cols={["Nome", "Tipo", "Método", "Margem", "Markup", "Status", ""]} />
           <TBody>
             {rows.length === 0 ? (
-              <EmptyRow colSpan={6} message="Nenhuma tabela" />
+              <EmptyRow colSpan={7} message="Nenhuma tabela" />
             ) : (
               rows.map((t) => (
                 <tr key={t.id} className="hover:bg-gray-50">
                   <Cell className="font-medium">{t.nome}</Cell>
                   <Cell>
                     <Badge>{t.tipo}</Badge>
+                  </Cell>
+                  <Cell>
+                    <Badge tone={t.metodologia === "divisor" ? "blue" : "amber"}>{t.metodologia === "divisor" ? "Divisor" : "Markup custo"}</Badge>
                   </Cell>
                   <Cell>{t.margem_padrao ? `${t.margem_padrao}%` : "—"}</Cell>
                   <Cell>{t.markup ? `${t.markup}%` : "—"}</Cell>

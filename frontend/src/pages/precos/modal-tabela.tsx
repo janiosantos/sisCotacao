@@ -20,6 +20,7 @@ export function ModalTabela({
   const [tipo, setTipo] = useState("varejo");
   const [margem, setMargem] = useState("0");
   const [markup, setMarkup] = useState("0");
+  const [metodologia, setMetodologia] = useState<"divisor" | "markup_custo">("divisor");
 
   useEffect(() => {
     if (open) {
@@ -27,6 +28,7 @@ export function ModalTabela({
       setTipo(editando?.tipo ?? "varejo");
       setMargem(String(editando?.margem_padrao ?? 0));
       setMarkup(String(editando?.markup ?? 0));
+      setMetodologia(editando?.metodologia ?? "divisor");
     }
   }, [open, editando]);
 
@@ -36,6 +38,7 @@ export function ModalTabela({
       tipo,
       margem_padrao: parseFloat(margem.replace(",", ".")),
       markup: parseFloat(markup.replace(",", ".")),
+      metodologia,
     };
     if (!payload.nome) {
       toast("Informe o nome", "error");
@@ -79,13 +82,22 @@ export function ModalTabela({
           </Select>
         </Field>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Margem % (custo)">
+          <Field label="Margem % sobre a venda">
             <Input type="number" step="0.1" value={margem} onChange={(e) => setMargem(e.target.value)} />
           </Field>
-          <Field label="Markup % (custo)">
+          <Field label="Markup % sobre o custo (legado)">
             <Input type="number" step="0.1" value={markup} onChange={(e) => setMarkup(e.target.value)} />
           </Field>
         </div>
+        <Field label="Método de formação">
+          <Select value={metodologia} onChange={(e) => setMetodologia(e.target.value as "divisor" | "markup_custo")}>
+            <option value="divisor">Markup divisor (recomendado)</option>
+            <option value="markup_custo">Markup sobre o custo (compatibilidade)</option>
+          </Select>
+        </Field>
+        <p className="rounded-md bg-brand-50 px-3 py-2 text-xs leading-5 text-brand-800">
+          O método divisor considera despesas, impostos, taxas e margem sobre o preço de venda. Use o método legado apenas quando a política comercial da tabela já estiver definida como acréscimo sobre o custo.
+        </p>
       </div>
     </Modal>
   );

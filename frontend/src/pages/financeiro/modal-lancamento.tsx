@@ -1,7 +1,7 @@
 // pages/financeiro/modal-lancamento.tsx — nova conta a pagar/receber com
 // parcelamento por condição, manual, datas ou recorrência (v2.25.0).
 import { useEffect, useState } from "react";
-import { api, type CondicaoPagamento, type ParcelaCalculada } from "../../api/client";
+import { api, type CondicaoPagamento, type ContaPlano, type CentroCusto, type ParcelaCalculada } from "../../api/client";
 import { fmtDate, fmtMoney } from "../../ui/format";
 import { toast } from "../../ui/dom";
 import { Button, Field, Input, Modal, Select, Textarea } from "../../ui/ui";
@@ -35,13 +35,23 @@ export function ModalLancamento({
   const [dia, setDia] = useState("");
   const [preview, setPreview] = useState<{ parcelas: ParcelaCalculada[]; total: number; n: number } | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [contasPlano, setContasPlano] = useState<ContaPlano[]>([]);
+  const [centros, setCentros] = useState<CentroCusto[]>([]);
+  const [planoContaId, setPlanoContaId] = useState("");
+  const [centroCustoId, setCentroCustoId] = useState("");
+  const [competencia, setCompetencia] = useState(() => new Date().toISOString().slice(0, 7));
 
   useEffect(() => {
     if (!open) return;
     setPessoa(""); setDesc(""); setValor(""); setDoc(""); setObs("");
     setModo("avista"); setCondId(""); setPreview(null);
+    setPlanoContaId(""); setCentroCustoId(""); setCompetencia(new Date().toISOString().slice(0, 7));
     setEmissao(new Date().toISOString().slice(0, 10));
-    void api.listarCondicoes().then(setCondicoes).catch(() => {});
+    void Promise.all([
+      api.listarCondicoes(),
+      tabela === "pagar" ? api.listarPlanoContas("despesa", true) : Promise.resolve([] as ContaPlano[]),
+      tabela === "pagar" ? api.listarCentrosCusto() : Promise.resolve([] as CentroCusto[]),
+    ]).then(([cs, ps, centrosAtivos]) => { setCondicoes(cs); setContasPlano(ps); setCentros(centrosAtivos); }).catch(() => {});
   }, [open]);
 
   const payloadBase = () => ({
@@ -61,6 +71,10 @@ export function ModalLancamento({
     primeira: modo === "recorrente" ? emissao : undefined,
     n_ocorrencias: modo === "recorrente" ? Number(nOcorrencias) || 1 : undefined,
     dia: modo === "recorrente" && dia ? Number(dia) : undefined,
+    plano_conta_id: tabela === "pagar" ? Number(planoContaId) || undefined : undefined,
+    centro_custo_id: tabela === "pagar" ? Number(centroCustoId) || undefined : undefined,
+    competencia: tabela === "pagar" ? competencia : undefined,
+    exigir_classificacao: tabela === "pagar",
   });
 
   const calcularPreview = async () => {
@@ -82,6 +96,10 @@ export function ModalLancamento({
       toast("Informe o valor", "error");
       return;
     }
+    if (tabela === "pagar" && !planoContaId) {
+      toast("Selecione o plano de contas da despesa", "error");
+      return;
+    }
     if (modo === "condicao" && !condId) {
       toast("Escolha a condição de pagamento", "error");
       return;
@@ -97,6 +115,10 @@ export function ModalLancamento({
           descricao: desc.trim(),
           documento: doc.trim() || undefined,
           observacao: obs.trim() || undefined,
+          plano_conta_id: tabela === "pagar" ? Number(planoContaId) : undefined,
+          centro_custo_id: tabela === "pagar" && centroCustoId ? Number(centroCustoId) : undefined,
+          competencia: tabela === "pagar" ? competencia : undefined,
+          exigir_classificacao: tabela === "pagar",
         };
         if (tabela === "pagar") await api.criarPagar(body);
         else await api.criarReceber(body);
@@ -150,6 +172,27 @@ export function ModalLancamento({
             <Input type="date" value={emissao} onChange={(e) => setEmissao(e.target.value)} />
           </Field>
         </div>
+
+        {tabela === "pagar" ? (
+          <div className="grid grid-cols-1 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-4 sm:grid-cols-3">
+            <Field label="Plano de contas *">
+              <Select value={planoContaId} onChange={(e) => setPlanoContaId(e.target.value)}>
+                <option value="">Selecione a classificação…</option>
+                {contasPlano.map((c) => <option key={c.id} value={c.id}>{c.codigo} · {c.nome}</option>)}
+              </Select>
+            </Field>
+            <Field label="Competência *">
+              <Input type="month" value={competencia} onChange={(e) => setCompetencia(e.target.value)} />
+            </Field>
+            <Field label="Centro de custo">
+              <Select value={centroCustoId} onChange={(e) => setCentroCustoId(e.target.value)}>
+                <option value="">Sem centro de custo</option>
+                {centros.map((c) => <option key={c.id} value={c.id}>{c.codigo} · {c.nome}</option>)}
+              </Select>
+            </Field>
+            {planoContaId ? (() => { const conta = contasPlano.find((c) => c.id === Number(planoContaId)); return conta ? <p className="sm:col-span-3 text-xs text-slate-600">Natureza: <strong>{conta.natureza_custo || "não classificada"}</strong> · Rateio: <strong>{conta.politica_rateio || "não incluir"}</strong></p> : null; })() : null}
+          </div>
+        ) : null}
 
         <div className="rounded-md border border-gray-200 p-3">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Parcelamento</div>

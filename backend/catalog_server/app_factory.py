@@ -213,6 +213,12 @@ def _acao_da_rota(path: str, method: str) -> str | None:
         return "aprovar"
     if method == "POST" and path.startswith("/api/parceiros/bonus/") and path.endswith("/pagar"):
         return "aprovar"
+    # Classificação de despesas altera um título; aprovação de competência é
+    # uma decisão financeira e deve exigir a ação específica de aprovação.
+    if method == "POST" and path.startswith("/api/financeiro/competencias/") and path.endswith(("/status", "/fechar", "/reabrir")):
+        return "aprovar"
+    if method == "POST" and path.startswith("/api/financeiro/contas-pagar/") and path.endswith(("/classificar", "/rateio")):
+        return "editar"
     if (path.startswith("/api/orcamentos/") or path.startswith("/api/financeiro/receber/")) and path.endswith("/receber"):
         return "cadastrar"
     especifica = _ACAO_ESPECIFICA.get((method, path))

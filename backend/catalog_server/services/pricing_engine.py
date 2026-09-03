@@ -6,8 +6,8 @@ mínimo e o preço sugerido de uma variante.
 
 Regras (documentadas):
 - Custo líquido vem do módulo de Custo (tributos/créditos já tratados no Fiscal).
-- Preço por MARGEM (sobre a venda), padrão do varejo:
-      preco = custo_liquido / (1 − (despesas + comissão + taxas + margem) / 100)
+- Preço pelo DIVISOR (metodologia Sebrae da planilha de referência):
+      preco = custo_formacao / (1 − percentuais sobre a venda)
 - Preço por MARKUP (sobre o custo), quando informado no lugar da margem:
       preco = custo_liquido × (1 + markup / 100)
 - Preço mínimo = cobre custo + despesas variáveis (margem zero):
@@ -23,6 +23,8 @@ from __future__ import annotations
 
 from catalog_server.db import system_conn
 from catalog_server.services import custo_engine
+from catalog_server.services import precificacao_config
+from catalog_server.services import precificacao_metodologia
 
 
 def _tabela_do_canal(canal: str | None, tabela_id: int | None) -> dict | None:
@@ -69,15 +71,69 @@ def calcular_preco(
     taxas: float = 0.0,
     tabela_id: int | None = None,
     fornecedor_id: int | None = None,
+    embalagem_unitaria: float = 0.0,
+    frete_unitario: float = 0.0,
+    frete_pct: float = 0.0,
+    cartao_pct: float | None = None,
+    impostos_pct: float | None = None,
+    despesas_fixas_pct: float | None = None,
+    usar_referencia_atividade: bool | None = None,
+    cenario_tributario: str | None = None,
+    reforma_tributaria_pct: float | None = None,
+    competencia_value: str | None = None,
+    incluir_despesas_variaveis_rateadas: bool = False,
 ) -> dict:
     canal = canal if canal in ("varejo", "atacado", "contrato", "promocional") else None
-    comissao = max(0.0, float(comissao or 0))
-    despesas = max(0.0, float(despesas or 0))
-    taxas = max(0.0, float(taxas or 0))
-    despesas_total = round(comissao + despesas + taxas, 4)
-
     custo = custo_engine.calcular_custo(produto_id, fornecedor_id=fornecedor_id)
     tabela = _tabela_do_canal(canal, tabela_id)
+    config = precificacao_config.obter()
+    apuracao = None
+    competencia_configurada = config.get("competencia_precificacao") if config.get("usar_competencia_aprovada", True) else None
+    competencia_usada = competencia_value or competencia_configurada
+    incluir_rateio_config = bool(config.get("incluir_despesas_variaveis_rateadas"))
+    if competencia_usada or incluir_despesas_variaveis_rateadas or incluir_rateio_config:
+        from catalog_server.services import classificacao_financeira
+
+        apuracao = classificacao_financeira.apuracao_para_precificacao(competencia_usada)
+    fixas_origem = "parametro"
+    fixas_alerta = None
+    if despesas_fixas_pct is None and apuracao and (competencia_value or competencia_configurada or usar_referencia_atividade is False):
+        despesas_fixas = float(apuracao.get("despesa_fixa_pct") or 0)
+        fixas_origem = f"competencia:{apuracao['competencia']}"
+    elif despesas_fixas_pct is None:
+        if despesas:
+            despesas_fixas = float(despesas)
+        else:
+            despesas_fixas, fixas_origem, fixas_alerta = precificacao_config.despesas_fixas_pct(
+                config, usar_referencia_atividade
+            )
+    else:
+        despesas_fixas = float(despesas_fixas_pct)
+    despesas_variaveis_rateadas = 0.0
+    variaveis_origem = "nao_incluidas"
+    variaveis_alerta = None
+    if incluir_despesas_variaveis_rateadas or incluir_rateio_config:
+        if apuracao and apuracao.get("despesa_variavel_pct") is not None:
+            despesas_variaveis_rateadas = float(apuracao["despesa_variavel_pct"] or 0)
+            variaveis_origem = f"competencia:{apuracao['competencia']}"
+        else:
+            variaveis_origem = "sem_competencia_aprovada"
+            variaveis_alerta = "Despesas variáveis rateadas solicitadas, mas não há competência aprovada ou fechada."
+    cartao = float(cartao_pct) if cartao_pct is not None else (float(taxas or 0) or float(config.get("taxa_cartao_pct") or 0))
+    impostos = float(impostos_pct) if impostos_pct is not None else float(config.get("impostos_atual_pct") or 0)
+    cenario = cenario_tributario or str(config.get("cenario_tributario") or "atual")
+    reforma = (
+        float(reforma_tributaria_pct)
+        if reforma_tributaria_pct is not None
+        else float(config.get("reforma_tributaria_pct") or 0)
+    )
+    margem_final = float(margem) if margem is not None else float((tabela or {}).get("margem_padrao") or 0)
+    markup_final = float(markup) if markup is not None else float((tabela or {}).get("markup") or 0)
+    # A coluna legada de markup continua disponível, mas a metodologia padrão
+    # é o divisor. Só usa markup sobre custo quando a tabela o declara.
+    metodo_tabela = str((tabela or {}).get("metodologia") or "divisor")
+    if margem is None and markup is not None and markup > 0:
+        metodo_tabela = "markup_custo"
     base = {
         "produto_id": produto_id,
         "canal": canal,
@@ -86,51 +142,81 @@ def calcular_preco(
         "custo_base": custo.get("custo_base"),
         "custo_liquido": custo.get("custo_liquido"),
         "regime": custo.get("regime"),
-        "despesas_pct": {"comissao": comissao, "despesas": despesas, "taxas": taxas, "total": despesas_total},
+        "despesas_pct": {"comissao": max(0.0, float(comissao or 0)), "despesas": despesas_fixas, "despesas_variaveis_rateadas": despesas_variaveis_rateadas, "taxas": cartao, "total": 0.0},
+        "configuracao": {
+            "atividade": config.get("atividade"),
+            "atividade_nome": (config.get("referencia_atividade") or {}).get("nome"),
+            "despesas_fixas_origem": fixas_origem,
+            "despesa_fixa_real_pct": config.get("despesa_fixa_real_pct"),
+            "despesa_variavel_real_pct": config.get("despesa_variavel_real_pct"),
+            "despesas_variaveis_origem": variaveis_origem,
+            "competencia": apuracao.get("competencia") if apuracao else competencia_value,
+        },
+        "metodologia": "divisor" if metodo_tabela != "markup_custo" else "markup_custo",
+        "cenario_tributario": cenario,
         "preco_minimo": None,
         "preco_sugerido": None,
         "margem_efetiva_pct": None,
         "markup_efetivo_pct": None,
         "observacao": None,
+        "fiscal": custo.get("fiscal"),
     }
     if custo.get("custo_liquido") is None:
         base["observacao"] = "Sem custo de aquisição definido."
         return base
 
     custo_liq = float(custo["custo_liquido"])
-    margem_final = float(margem) if margem is not None else float((tabela or {}).get("margem_padrao") or 0)
-    markup_final = float(markup) if markup is not None else float((tabela or {}).get("markup") or 0)
+    if metodo_tabela == "markup_custo" and markup_final > 0:
+        preco = round((custo_liq + float(embalagem_unitaria or 0) + float(frete_unitario or 0)) * (1 + markup_final / 100), 2)
+        base.update({
+            "metodologia": "markup_custo",
+            "preco_sugerido": preco,
+            "preco_minimo": round(custo_liq + float(embalagem_unitaria or 0) + float(frete_unitario or 0), 2),
+            "margem_efetiva_pct": round((preco - custo_liq) / preco * 100, 2) if preco else None,
+            "markup_efetivo_pct": markup_final,
+            "observacao": "Markup sobre o custo (compatibilidade legada)",
+        })
+        return base
 
-    def _preco_com_margem(m: float) -> float:
-        divisor = 1 - (despesas_total + m) / 100
-        return round(custo_liq / divisor, 2) if divisor > 0.01 else float("nan")
-
-    if margem_final > 0:
-        preco_sugerido = _preco_com_margem(margem_final)
-        margem_efetiva = margem_final
-        markup_efetivo = round((preco_sugerido / custo_liq - 1) * 100, 2) if custo_liq > 0 else None
-        base["margem_efetiva_pct"] = margem_efetiva
-        base["markup_efetivo_pct"] = markup_efetivo
-        base["preco_sugerido"] = preco_sugerido
-        base["observacao"] = "Margem sobre a venda"
-    elif markup_final > 0:
-        preco_sugerido = round(custo_liq * (1 + markup_final / 100), 2)
-        margem_efetiva = round((preco_sugerido - custo_liq) / preco_sugerido * 100, 2) if preco_sugerido > 0 else None
-        base["margem_efetiva_pct"] = margem_efetiva
-        base["markup_efetivo_pct"] = markup_final
-        base["preco_sugerido"] = preco_sugerido
-        base["observacao"] = "Markup sobre o custo"
-    else:
-        preco_sugerido = custo_liq
-        base["margem_efetiva_pct"] = 0.0
-        base["preco_sugerido"] = preco_sugerido
-        base["observacao"] = "Sem margem/markup configurados"
-
-    preco_minimo = _preco_com_margem(0.0)
-    base["preco_minimo"] = preco_minimo
-    if preco_sugerido is None or preco_sugerido != preco_sugerido:  # NaN
-        base["preco_sugerido"] = None
-        base["observacao"] = "Despesas+margem >= 100%; ajuste os percentuais."
+    try:
+        memoria = precificacao_metodologia.calcular(
+            custo_liq,
+            embalagem_unitaria=embalagem_unitaria,
+            frete_unitario=frete_unitario,
+            frete_pct=frete_pct,
+            cartao_pct=cartao,
+            impostos_pct=impostos if cenario == "atual" else 0,
+            comissao_pct=comissao,
+            despesas_variaveis_pct=despesas_variaveis_rateadas,
+            despesas_fixas_pct=despesas_fixas,
+            margem_pct=margem_final,
+            cenario_tributario=cenario,
+            reforma_tributaria_pct=reforma,
+        )
+    except ValueError as exc:
+        base["observacao"] = str(exc)
+        return base
+    base.update({
+        "metodologia_memoria": memoria,
+        "preco_minimo": memoria.get("preco_minimo"),
+        "preco_sugerido": memoria.get("preco_sugerido"),
+        "margem_efetiva_pct": memoria.get("margem_efetiva_pct"),
+        "markup_efetivo_pct": memoria.get("markup_efetivo_pct"),
+        "despesas_pct": {
+            "comissao": comissao,
+            "despesas_variaveis_rateadas": despesas_variaveis_rateadas,
+            "despesas": despesas_fixas,
+            "taxas": cartao,
+            "total": memoria["percentuais"]["custos_percentuais"],
+        },
+        "observacao": "Markup divisor: custo de formação ÷ (1 − percentuais sobre a venda)",
+    })
+    if fixas_alerta:
+        base["metodologia_memoria"]["alertas"].append(fixas_alerta)
+    if variaveis_alerta:
+        base["metodologia_memoria"]["alertas"].append(variaveis_alerta)
+    if memoria.get("alertas"):
+        base["observacao"] = "; ".join(memoria["alertas"])
     return base
 
 

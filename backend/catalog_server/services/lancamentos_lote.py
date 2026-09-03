@@ -140,36 +140,88 @@ def criar_lote(
     pessoa_id_campo = "fornecedor_id" if tabela == "contas_pagar" else "cliente_id"
     ids: list[int] = []
     with system_conn() as conn:
+        classificacao = None
+        if tabela == "contas_pagar":
+            from catalog_server.services import classificacao_financeira
+
+            classificacao = classificacao_financeira.preparar_classificacao(
+                conn,
+                plano_conta_id=dados.get("plano_conta_id"),
+                fornecedor_id=dados.get(pessoa_id_campo),
+                competencia_value=dados.get("competencia") or dados.get("data_emissao"),
+                centro_custo_id=dados.get("centro_custo_id"),
+                origem=dados.get("origem_classificacao") or "manual",
+                exigir=bool(dados.get("exigir_classificacao")),
+            )
         for i, p in enumerate(parcelas, start=1):
             descricao = dados.get("descricao") or ""
             if n > 1:
                 descricao = f"{descricao} — parcela {i}/{n}".strip(" —")
-            cur = conn.execute(
-                f"""INSERT INTO {tabela}
-                      ({pessoa_campo}, {pessoa_id_campo}, descricao, valor, saldo,
-                       data_vencimento, data_emissao, plano_conta_id, documento,
-                       observacao, origem_tipo, origem_id, parcela, total_parcelas,
-                       grupo_id, recorrencia)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (
-                    (dados.get(pessoa_campo) or "").strip(),
-                    dados.get(pessoa_id_campo),
-                    descricao,
-                    float(p["valor"]),
-                    float(p["valor"]),
-                    p["vencimento"],
-                    (dados.get("data_emissao") or date.today().isoformat())[:10],
-                    dados.get("plano_conta_id"),
-                    dados.get("documento") or None,
-                    dados.get("observacao") or None,
-                    dados.get("origem_tipo") or "manual",
-                    dados.get("origem_id"),
-                    i,
-                    n,
-                    grupo,
-                    dados.get("recorrencia") or "",
-                ),
-            )
+            if tabela == "contas_pagar":
+                cur = conn.execute(
+                    """INSERT INTO contas_pagar
+                          (fornecedor, fornecedor_id, descricao, valor, saldo,
+                           data_vencimento, data_emissao, plano_conta_id, documento,
+                           observacao, competencia, natureza_custo_snapshot,
+                           politica_rateio_snapshot, elegivel_precificacao,
+                           componente_precificacao, centro_custo_id, origem_classificacao,
+                           status_classificacao, origem_tipo, origem_id, parcela,
+                           total_parcelas, grupo_id, recorrencia)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        (dados.get(pessoa_campo) or "").strip(),
+                        dados.get(pessoa_id_campo),
+                        descricao,
+                        float(p["valor"]),
+                        float(p["valor"]),
+                        p["vencimento"],
+                        (dados.get("data_emissao") or date.today().isoformat())[:10],
+                        classificacao["plano_conta_id"],
+                        dados.get("documento") or None,
+                        dados.get("observacao") or None,
+                        classificacao["competencia"],
+                        classificacao["natureza_custo_snapshot"],
+                        classificacao["politica_rateio_snapshot"],
+                        classificacao["elegivel_precificacao"],
+                        classificacao["componente_precificacao"],
+                        classificacao["centro_custo_id"],
+                        classificacao["origem_classificacao"],
+                        classificacao["status_classificacao"],
+                        dados.get("origem_tipo") or "manual",
+                        dados.get("origem_id"),
+                        i,
+                        n,
+                        grupo,
+                        dados.get("recorrencia") or "",
+                    ),
+                )
+            else:
+                cur = conn.execute(
+                    """INSERT INTO contas_receber
+                          (cliente, cliente_id, descricao, valor, saldo,
+                           data_vencimento, data_emissao, plano_conta_id, documento,
+                           observacao, origem_tipo, origem_id, parcela,
+                           total_parcelas, grupo_id, recorrencia)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        (dados.get(pessoa_campo) or "").strip(),
+                        dados.get(pessoa_id_campo),
+                        descricao,
+                        float(p["valor"]),
+                        float(p["valor"]),
+                        p["vencimento"],
+                        (dados.get("data_emissao") or date.today().isoformat())[:10],
+                        dados.get("plano_conta_id"),
+                        dados.get("documento") or None,
+                        dados.get("observacao") or None,
+                        dados.get("origem_tipo") or "manual",
+                        dados.get("origem_id"),
+                        i,
+                        n,
+                        grupo,
+                        dados.get("recorrencia") or "",
+                    ),
+                )
             ids.append(int(cur.lastrowid))
         conn.commit()
     return ids, grupo

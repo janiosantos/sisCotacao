@@ -19,20 +19,26 @@ class TabelaPrecoRepository:
             row = conn.execute("SELECT * FROM tabelas_preco WHERE id=?", (tabela_id,)).fetchone()
             return dict(row) if row else None
 
-    def create(self, nome: str, tipo: str = "varejo", margem: float = 0, markup: float = 0) -> int:
+    def create(
+        self, nome: str, tipo: str = "varejo", margem: float = 0,
+        markup: float = 0, metodologia: str = "divisor",
+    ) -> int:
         with system_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO tabelas_preco (nome, tipo, margem_padrao, markup) VALUES (?,?,?,?)",
-                (nome.strip(), tipo, margem, markup),
+                "INSERT INTO tabelas_preco (nome, tipo, margem_padrao, markup, metodologia) VALUES (?,?,?,?,?)",
+                (nome.strip(), tipo, margem, markup, metodologia),
             )
             return cur.lastrowid
 
-    def update(self, tabela_id: int, nome: str, tipo: str, margem: float, markup: float) -> bool:
+    def update(
+        self, tabela_id: int, nome: str, tipo: str, margem: float,
+        markup: float, metodologia: str = "divisor",
+    ) -> bool:
         with system_conn() as conn:
             cur = conn.execute(
-                "UPDATE tabelas_preco SET nome=?, tipo=?, margem_padrao=?, markup=?,"
+                "UPDATE tabelas_preco SET nome=?, tipo=?, margem_padrao=?, markup=?, metodologia=?,"
                 " atualizado_em=datetime('now') WHERE id=?",
-                (nome.strip(), tipo, margem, markup, tabela_id),
+                (nome.strip(), tipo, margem, markup, metodologia, tabela_id),
             )
             return cur.rowcount > 0
 
@@ -80,32 +86,38 @@ class TabelaPrecoRepository:
             return cur.rowcount > 0
 
     def gerar_precos(self, tabela_id: int, margem: float | None = None, markup: float | None = None) -> int:
+        # Este endpoint é legado e mantém a fórmula histórica da tela de
+        # tabelas. O reajuste auditado que consome despesas/competências usa
+        # pricing_engine.previa_reajuste/aplicar_reajuste.
+        from catalog_server.services import pricing_engine
+
         with system_conn() as conn:
             tab = conn.execute("SELECT * FROM tabelas_preco WHERE id=?", (tabela_id,)).fetchone()
             if not tab:
                 return 0
-            m = margem if margem is not None else float(tab["margem_padrao"] or 0)
-            mk = markup if markup is not None else float(tab["markup"] or 0)
             variantes = conn.execute(
                 "SELECT id, custo_unitario, preco FROM produtos_cadastro WHERE custo_unitario IS NOT NULL AND custo_unitario > 0"
             ).fetchall()
             count = 0
             for v in variantes:
                 vid = v["id"]
-                custo = float(v["custo_unitario"] or 0)
-                if mk > 0:
-                    novo_preco = custo * (1 + mk / 100)
-                elif m > 0:
-                    novo_preco = custo / (1 - m / 100)
-                else:
-                    novo_preco = float(v["preco"] or 0)
-                if novo_preco <= 0:
+                calc = pricing_engine.calcular_preco(
+                    vid,
+                    tabela_id=tabela_id,
+                    margem=margem,
+                    markup=markup,
+                    despesas_fixas_pct=0,
+                    cartao_pct=0,
+                    impostos_pct=0,
+                )
+                novo_preco = calc.get("preco_sugerido")
+                if novo_preco is None or novo_preco <= 0:
                     continue
                 conn.execute(
                     "INSERT INTO tabela_preco_itens (tabela_id, produto_id, preco, margem)"
                     " VALUES (?,?,?,?)"
                     " ON CONFLICT(tabela_id, produto_id) DO UPDATE SET preco=excluded.preco, margem=excluded.margem",
-                    (tabela_id, vid, round(novo_preco, 2), round(m, 2)),
+                    (tabela_id, vid, round(novo_preco, 2), calc.get("margem_efetiva_pct")),
                 )
                 count += 1
             return count

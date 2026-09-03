@@ -253,17 +253,38 @@ class ContasRepository:
         fornecedor_id: int | None = None, descricao: str = "",
         documento: str | None = None, plano_conta_id: int | None = None,
         observacao: str | None = None,
+        competencia_value: str | None = None,
+        centro_custo_id: int | None = None,
+        exigir_classificacao: bool = False,
+        origem_classificacao: str = "manual",
         _conn=None,
     ) -> int:
         ctx = system_conn() if _conn is None else None
         conn = _conn or ctx.__enter__()
         try:
+            from catalog_server.services import classificacao_financeira
+
+            classificacao = classificacao_financeira.preparar_classificacao(
+                conn,
+                plano_conta_id=plano_conta_id,
+                fornecedor_id=fornecedor_id,
+                competencia_value=competencia_value or data_vencimento,
+                centro_custo_id=centro_custo_id,
+                origem=origem_classificacao,
+                exigir=exigir_classificacao,
+            )
             cur = conn.execute(
                 "INSERT INTO contas_pagar (fornecedor, fornecedor_id, descricao, valor, saldo,"
-                " data_vencimento, documento, plano_conta_id, observacao)"
-                " VALUES (?,?,?,?,?,?,?,?,?)",
+                " data_vencimento, documento, plano_conta_id, observacao, competencia,"
+                " natureza_custo_snapshot, politica_rateio_snapshot, elegivel_precificacao,"
+                " componente_precificacao, centro_custo_id, origem_classificacao, status_classificacao)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (fornecedor.strip(), fornecedor_id, descricao.strip(), valor, valor,
-                 data_vencimento, documento, plano_conta_id, observacao),
+                 data_vencimento, documento, classificacao["plano_conta_id"], observacao,
+                 classificacao["competencia"], classificacao["natureza_custo_snapshot"],
+                 classificacao["politica_rateio_snapshot"], classificacao["elegivel_precificacao"],
+                 classificacao["componente_precificacao"], classificacao["centro_custo_id"],
+                 classificacao["origem_classificacao"], classificacao["status_classificacao"]),
             )
             return cur.lastrowid
         finally:
@@ -279,6 +300,12 @@ class ContasRepository:
             ).fetchone()
             if not conta:
                 raise ValueError("Conta não encontrada")
+            # Títulos novos sem conta válida não podem ser pagos: isso evita
+            # que uma despesa escape da auditoria e da apuração gerencial.
+            # Registros legados sem classificação permanecem pagáveis para
+            # permitir a migração gradual, desde que não tenham conta parcial.
+            if conta["plano_conta_id"] and conta["status_classificacao"] in ("pendente", "rejeitada"):
+                raise ValueError("Classifique e aprove a conta antes do pagamento")
             saldo_atual = float(conta["saldo"] or 0)
             if valor_pago > saldo_atual:
                 raise ValueError("Valor pago excede o saldo da conta")

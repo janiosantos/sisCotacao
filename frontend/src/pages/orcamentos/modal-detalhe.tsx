@@ -11,7 +11,6 @@ export function ModalDetalhe({
   onRejeitar,
   onReabrir,
   onExcluir,
-  onReceber,
 }: {
   d: OrcamentoDetalhe;
   onClose: () => void;
@@ -19,7 +18,6 @@ export function ModalDetalhe({
   onRejeitar: () => void;
   onReabrir: () => void;
   onExcluir: (id: number) => void;
-  onReceber: () => void;
 }) {
   const pendenteDesconto = d.desconto_status === "pendente";
   return (
@@ -36,29 +34,26 @@ export function ModalDetalhe({
               Reabrir para correção
             </Button>
           )}
-          {d.status === "finalizado" &&
-            (d.n_parcelas && d.n_parcelas > 1 ? (
-              <>
-                <a
-                  className="inline-flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700"
-                  target="_blank"
-                  rel="noreferrer"
-                  href={`/orcamentos/${d.id}/boleto`}
-                >
-                  Boleto
-                </a>
-                <a
-                  className="inline-flex items-center justify-center gap-1.5 rounded-md border border-gray-300 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  href="#/financeiro"
-                >
-                  Contas a receber
-                </a>
-              </>
-            ) : (
-                <Button variant="primary" permission={{ recurso: "caixa", acao: "cadastrar" }} onClick={onReceber}>
-                Receber
-              </Button>
-            ))}
+          {d.status === "finalizado" && d.n_parcelas && d.n_parcelas > 1 ? (
+            <>
+              <a
+                className="inline-flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700"
+                target="_blank"
+                rel="noreferrer"
+                href={`/orcamentos/${d.id}/boleto`}
+                title="Consultar e imprimir boletos das parcelas"
+              >
+                Boleto
+              </a>
+              <a
+                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-gray-300 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                href="#/financeiro"
+                title="Consultar contas a receber"
+              >
+                Contas a receber
+              </a>
+            </>
+          ) : null}
           {pendenteDesconto && (
             <>
               <Button variant="ghost" permission={{ recurso: "orcamentos", acao: "aprovar" }} onClick={onRejeitar}>

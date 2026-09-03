@@ -15,8 +15,9 @@ import { AnexoButton } from "./financeiro/anexo-button";
 import { Centros } from "./financeiro/centros";
 import { Condicoes } from "./financeiro/condicoes";
 import { ModalLancamento } from "./financeiro/modal-lancamento";
+import { ClassificacaoDespesas } from "./financeiro/classificacao";
 
-type Aba = "caixa" | "receber" | "pagar" | "condicoes" | "centros" | "adiantamentos";
+type Aba = "caixa" | "receber" | "pagar" | "condicoes" | "centros" | "adiantamentos" | "classificacao";
 
 const ABAS: { key: Aba; label: string }[] = [
   { key: "caixa", label: "Caixa" },
@@ -25,6 +26,7 @@ const ABAS: { key: Aba; label: string }[] = [
   { key: "condicoes", label: "Condições" },
   { key: "centros", label: "Centros Custo" },
   { key: "adiantamentos", label: "Adiantamentos" },
+  { key: "classificacao", label: "Classificação" },
 ];
 
 export default function Financeiro() {
@@ -52,6 +54,7 @@ export default function Financeiro() {
       {aba === "condicoes" && <Condicoes />}
       {aba === "centros" && <Centros />}
       {aba === "adiantamentos" && <Adiantamentos />}
+      {aba === "classificacao" && <ClassificacaoDespesas />}
     </div>
   );
 }

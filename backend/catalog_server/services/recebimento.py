@@ -194,17 +194,31 @@ def finalizar(recebimento_id: int, condicao_pagamento_id: int | None = None, usu
             }]
         grupo_id = lancamentos_lote.novo_grupo()
         n_parcelas = len(parcelas)
+        from catalog_server.services import classificacao_financeira
+        classificacao = classificacao_financeira.preparar_classificacao(
+            conn,
+            fornecedor_id=rec["fornecedor_id"],
+            competencia_value=date.today().strftime("%Y-%m"),
+            origem="herdada_compra",
+        )
         for i, parcela in enumerate(parcelas, start=1):
             descricao = f"Recebimento #{recebimento_id}"
             if n_parcelas > 1:
                 descricao += f" — parcela {i}/{n_parcelas}"
             conn.execute(
                 "INSERT INTO contas_pagar (fornecedor, fornecedor_id, descricao, valor, saldo,"
-                " data_vencimento, documento, status, origem_tipo, origem_id, parcela,"
-                " total_parcelas, grupo_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " data_vencimento, documento, plano_conta_id, competencia,"
+                " natureza_custo_snapshot, politica_rateio_snapshot, elegivel_precificacao,"
+                " componente_precificacao, centro_custo_id, origem_classificacao,"
+                " status_classificacao, status, origem_tipo, origem_id, parcela,"
+                 " total_parcelas, grupo_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (fornecedor["nome"] if fornecedor else "", rec["fornecedor_id"], descricao,
                  float(parcela["valor"]), float(parcela["valor"]), parcela["vencimento"],
-                 rec["documento_fiscal"], "aberto", origem_tipo, recebimento_id, i,
+                 rec["documento_fiscal"], classificacao["plano_conta_id"], classificacao["competencia"],
+                 classificacao["natureza_custo_snapshot"], classificacao["politica_rateio_snapshot"],
+                 classificacao["elegivel_precificacao"], classificacao["componente_precificacao"],
+                 classificacao["centro_custo_id"], classificacao["origem_classificacao"],
+                 classificacao["status_classificacao"], "aberto", origem_tipo, recebimento_id, i,
                  n_parcelas, grupo_id),
             )
         contas = n_parcelas

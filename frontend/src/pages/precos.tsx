@@ -7,8 +7,9 @@ import { Revisoes } from "./precos/revisoes";
 import { Promocoes } from "./precos/promocoes";
 import { Simulador } from "./precos/simulador";
 import { Historico } from "./precos/historico";
+import { ConfiguracaoPrecificacao } from "./precos/configuracao";
 
-type Aba = "tabelas" | "promocoes" | "revisoes" | "simulador" | "historico";
+type Aba = "tabelas" | "promocoes" | "revisoes" | "simulador" | "historico" | "configuracao";
 
 
 export default function Precos() {
@@ -20,6 +21,7 @@ export default function Precos() {
     { key: "revisoes", label: "Revisões" },
     { key: "simulador", label: "Simulador" },
     { key: "historico", label: "Histórico" },
+    { key: "configuracao", label: "Premissas" },
   ];
 
   return (
@@ -43,6 +45,7 @@ export default function Precos() {
       {aba === "revisoes" && <Revisoes />}
       {aba === "simulador" && <Simulador />}
       {aba === "historico" && <Historico />}
+      {aba === "configuracao" && <ConfiguracaoPrecificacao />}
     </div>
   );
 }

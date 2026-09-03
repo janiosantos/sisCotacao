@@ -421,6 +421,12 @@ export interface ContaPlano {
   tipo: string;
   pai_id: number | null;
   ativo: number | boolean;
+  natureza_custo?: string;
+  politica_rateio?: string;
+  exige_centro_custo?: number | boolean;
+  exige_competencia?: number | boolean;
+  permite_rateio?: number | boolean;
+  componente_variavel?: string | null;
 }
 
 export interface ContaPlanoPayload {
@@ -428,6 +434,12 @@ export interface ContaPlanoPayload {
   nome: string;
   tipo: "receita" | "despesa";
   pai_id?: number | null;
+  natureza_custo?: string;
+  politica_rateio?: string;
+  exige_centro_custo?: boolean;
+  exige_competencia?: boolean;
+  permite_rateio?: boolean;
+  componente_variavel?: string | null;
 }
 
 // ------------------------------------------------------------------
@@ -1621,11 +1633,34 @@ export const api = {
   listarPlanoContas: (tipo?: string, somenteAtivos = false) =>
     request<ContaPlano[]>("GET", "/api/plano-contas" + qs({ tipo, somente_ativos: somenteAtivos })),
   detalharContaPlano: (id: number) => request<ContaPlano>("GET", `/api/plano-contas/${id}`),
+  usoContaPlano: (id: number) => request<Record<string, unknown>>("GET", `/api/plano-contas/${id}/uso`),
   criarContaPlano: (data: ContaPlanoPayload) => request<{ id: number }>("POST", "/api/plano-contas", data),
   atualizarContaPlano: (id: number, data: ContaPlanoPayload) =>
     request<{ ok: boolean }>("PUT", `/api/plano-contas/${id}`, data),
   alternarAtivoContaPlano: (id: number, ativo: boolean) =>
     request<{ ok: boolean }>("PATCH", `/api/plano-contas/${id}/ativo` + qs({ ativo })),
+  listarPendenciasClassificacao: (params: { limit?: number; offset?: number } = {}) =>
+    request<{ items: ContaPagar[]; total: number; limit: number; offset: number }>("GET", "/api/financeiro/classificacao/pendencias" + qs(params)),
+  classificarContaPagar: (id: number, data: { plano_conta_id: number; competencia?: string; centro_custo_id?: number; observacao_classificacao?: string; aprovar?: boolean }) =>
+    request<ContaPagar>("POST", `/api/financeiro/contas-pagar/${id}/classificar`, data),
+  listarRateioContaPagar: (id: number) =>
+    request<{ conta_pagar_id: number; items: ContaRateio[] }>("GET", `/api/financeiro/contas-pagar/${id}/rateio`),
+  criarRateioContaPagar: (id: number, items: ContaRateioPayload[]) =>
+    request<{ conta_pagar_id: number; items: ContaRateio[] }>("POST", `/api/financeiro/contas-pagar/${id}/rateio`, { items }),
+  listarCompetenciasFinanceiras: () => request<CompetenciaFinanceira[]>("GET", "/api/financeiro/competencias"),
+  criarCompetenciaFinanceira: (data: Record<string, unknown>) => request<CompetenciaFinanceira>("POST", "/api/financeiro/competencias", data),
+  alterarStatusCompetenciaFinanceira: (competencia: string, status: string, motivo?: string) =>
+    request<CompetenciaFinanceira>("POST", `/api/financeiro/competencias/${competencia}/status`, { status, motivo }),
+  fecharCompetenciaFinanceira: (competencia: string, motivo?: string) =>
+    request<CompetenciaFinanceira>("POST", `/api/financeiro/competencias/${competencia}/fechar`, { motivo }),
+  reabrirCompetenciaFinanceira: (competencia: string, motivo: string) =>
+    request<CompetenciaFinanceira>("POST", `/api/financeiro/competencias/${competencia}/reabrir`, { motivo }),
+  apurarCompetenciaFinanceira: (competencia: string) => request<ApuracaoCompetencia>("GET", `/api/financeiro/competencias/${competencia}/apuracao`),
+  memoriaClassificacaoContaPagar: (id: number) => request<{ conta: ContaPagar; rateio: ContaRateio[] }>("GET", `/api/financeiro/contas-pagar/${id}/memoria-classificacao`),
+  obterRegraClassificacaoFornecedor: (fornecedorId: number) =>
+    request<RegraClassificacaoFornecedor | Record<string, never>>("GET", `/api/financeiro/fornecedores/${fornecedorId}/regra-classificacao`),
+  salvarRegraClassificacaoFornecedor: (fornecedorId: number, data: Record<string, unknown>) =>
+    request<RegraClassificacaoFornecedor>("PUT", `/api/financeiro/fornecedores/${fornecedorId}/regra-classificacao`, data),
 
   // orçamentos de venda (PDV)
   listarOrcamentos: (status = "", somente_meus = false) =>
@@ -1865,6 +1900,10 @@ export const api = {
     request<{ gerados: number }>("POST", `/api/tabelas-preco/${id}/gerar`, data || {}),
   calcularPreco: (varianteId: number, params: Record<string, unknown> = {}) =>
     request<CalculoPreco>("GET", `/api/precos/calcular/${varianteId}` + qs(params)),
+  configuracaoPrecificacao: () =>
+    request<ConfiguracaoPrecificacao>("GET", "/api/precos/configuracao"),
+  salvarConfiguracaoPrecificacao: (data: Partial<ConfiguracaoPrecificacao>) =>
+    request<ConfiguracaoPrecificacao>("PUT", "/api/precos/configuracao", data),
   precoEfetivo: (varianteId: number, canal?: string) =>
     request<{ preco: number; origem: string; canal: string }>("GET", `/api/precos/efetivo/${varianteId}` + qs({ canal: canal || "" })),
   previaReajusteTabela: (id: number, data: Record<string, unknown> = {}) =>
@@ -3254,6 +3293,64 @@ export interface ContaPagar {
   total_parcelas?: number;
   grupo_id?: string;
   recorrencia?: string;
+  competencia?: string | null;
+  natureza_custo_snapshot?: string | null;
+  politica_rateio_snapshot?: string | null;
+  elegivel_precificacao?: number | boolean;
+  componente_precificacao?: string | null;
+  centro_custo_id?: number | null;
+  origem_classificacao?: string;
+  status_classificacao?: string;
+}
+
+export interface ContaRateio {
+  id?: number;
+  conta_pagar_id?: number;
+  competencia: string;
+  centro_custo_id?: number | null;
+  produto_id?: number | null;
+  percentual: number;
+  valor: number;
+  politica_rateio: string;
+  elegivel_precificacao: boolean | number;
+}
+
+export type ContaRateioPayload = Omit<ContaRateio, "id" | "conta_pagar_id">;
+
+export interface CompetenciaFinanceira {
+  id: number;
+  competencia: string;
+  faturamento_base: number;
+  faturamento_fonte: string;
+  criterio_apuracao: string;
+  status: string;
+  observacao: string;
+}
+
+export interface ApuracaoCompetencia {
+  competencia: string;
+  status: string;
+  faturamento_base: number;
+  despesas_fixas: number;
+  despesas_variaveis: number;
+  custos_diretos: number;
+  despesa_fixa_pct: number | null;
+  despesa_variavel_pct: number | null;
+  pendencias_classificacao: number;
+}
+
+export interface RegraClassificacaoFornecedor {
+  id: number;
+  fornecedor_id: number;
+  plano_conta_id: number;
+  centro_custo_id: number | null;
+  competencia_padrao: string | null;
+  prioridade: number;
+  ativo: boolean | number;
+  conta_codigo?: string;
+  conta_nome?: string;
+  natureza_custo?: string;
+  politica_rateio?: string;
 }
 
 export interface ContaPayload {
@@ -3279,6 +3376,7 @@ export interface TabelaPreco {
   tipo: string;
   margem_padrao: number;
   markup: number;
+  metodologia: "divisor" | "markup_custo";
   ativo: number | boolean;
   criado_em: string;
   atualizado_em: string | null;
@@ -3289,6 +3387,39 @@ export interface TabelaPrecoPayload {
   tipo?: string;
   margem_padrao?: number;
   markup?: number;
+  metodologia?: "divisor" | "markup_custo";
+}
+
+export interface ConfiguracaoPrecificacao {
+  id: number;
+  faturamento_mensal: number;
+  despesa_fixa_mensal: number;
+  despesa_variavel_mensal: number;
+  imposto_simples_pct: number;
+  imposto_icms_pct: number;
+  imposto_pis_pct: number;
+  imposto_cofins_pct: number;
+  imposto_ir_pct: number;
+  imposto_csll_pct: number;
+  ibs_pct: number;
+  cbs_pct: number;
+  taxa_cartao_pct: number;
+  atividade: "comercio" | "servicos" | "industria";
+  usar_referencia_atividade: boolean;
+  cenario_tributario: "atual" | "reforma";
+  competencia_precificacao: string | null;
+  usar_competencia_aprovada: boolean;
+  incluir_despesas_variaveis_rateadas: boolean;
+  impostos_atual_pct: number;
+  reforma_tributaria_pct: number;
+  despesa_fixa_real_pct: number | null;
+  despesa_variavel_real_pct: number | null;
+  referencia_atividade: {
+    nome: string;
+    despesa_fixa_pct: number;
+    despesa_variavel_pct: number;
+    lucratividade_pct: number;
+  };
 }
 
 export interface TabelaPrecoItem {
@@ -3631,6 +3762,40 @@ export interface CalculoPreco {
   markup_efetivo_pct: number | null;
   observacao: string | null;
   fiscal: CalculoPrecoFiscal | null;
+  metodologia: "divisor" | "markup_custo";
+  cenario_tributario: "atual" | "reforma";
+  configuracao?: {
+    atividade: string;
+    atividade_nome: string | null;
+    despesas_fixas_origem: string;
+    despesa_fixa_real_pct: number | null;
+    despesa_variavel_real_pct: number | null;
+  };
+  metodologia_memoria?: {
+    custo_aquisicao: number;
+    adicionais: { embalagem_unitaria: number; frete_unitario: number };
+    custo_formacao: number;
+    percentuais: {
+      frete: number;
+      cartao: number;
+      impostos: number;
+      comissao: number;
+      despesas_fixas: number;
+      margem: number;
+      custos_percentuais: number;
+      tributo_fora_divisor: number;
+      total_divisor: number;
+    };
+    divisor: number;
+    markup_multiplicador: number | null;
+    preco_minimo_sem_tributos: number | null;
+    preco_minimo: number | null;
+    preco_sem_tributos: number | null;
+    tributos_valor: number;
+    preco_com_tributos: number | null;
+    preco_sugerido: number | null;
+    alertas: string[];
+  };
 }
 
 export interface ItemPreviaReajuste {

@@ -6,6 +6,8 @@ import {
   type Fornecedor,
   type FornecedorContato,
   type FornecedorPayload,
+  type ContaPlano,
+  type CentroCusto,
 } from "../../api/client";
 import { maskCep, maskDoc, maskFone, soDigitos } from "../../ui/format";
 import { toast } from "../../ui/dom";
@@ -70,10 +72,14 @@ export function ModalFornecedorForm({
   const [form, setForm] = useState<Form>(EMPTY_FORM);
   const [contatos, setContatos] = useState<FornecedorContato[]>([]);
   const [novoCtt, setNovoCtt] = useState({ nome: "", cargo: "", telefone: "", email: "" });
+  const [contasDespesa, setContasDespesa] = useState<ContaPlano[]>([]);
+  const [centrosCusto, setCentrosCusto] = useState<CentroCusto[]>([]);
+  const [regra, setRegra] = useState({ plano: "", centro: "", competencia: "", ativo: true });
 
   useEffect(() => {
     setAba("dados");
     setContatos([]);
+    setRegra({ plano: "", centro: "", competencia: "", ativo: true });
     setForm(
       fornecedor
         ? {
@@ -101,13 +107,48 @@ export function ModalFornecedorForm({
     if (fornecedor) {
       void (async () => {
         try {
-          setContatos(await api.listarContatosFornecedor(fornecedor.id));
+          const [ctts, regraAtual, contas, centros] = await Promise.all([
+            api.listarContatosFornecedor(fornecedor.id),
+            api.obterRegraClassificacaoFornecedor(fornecedor.id),
+            api.listarPlanoContas("despesa", true),
+            api.listarCentrosCusto(),
+          ]);
+          setContatos(ctts);
+          setContasDespesa(contas);
+          setCentrosCusto(centros);
+          if ("plano_conta_id" in regraAtual) {
+            setRegra({
+              plano: String(regraAtual.plano_conta_id),
+              centro: regraAtual.centro_custo_id ? String(regraAtual.centro_custo_id) : "",
+              competencia: regraAtual.competencia_padrao || "",
+              ativo: Boolean(regraAtual.ativo),
+            });
+          }
         } catch {
-          /* opcional */
+          /* A regra financeira é opcional no cadastro comercial. */
         }
       })();
     }
   }, [fornecedor]);
+
+  const salvarRegra = async () => {
+    if (!fornecedor) return;
+    if (!regra.plano) {
+      toast("Selecione a conta de despesa padrão", "error");
+      return;
+    }
+    try {
+      await api.salvarRegraClassificacaoFornecedor(fornecedor.id, {
+        plano_conta_id: Number(regra.plano),
+        centro_custo_id: regra.centro ? Number(regra.centro) : null,
+        competencia_padrao: regra.competencia || null,
+        ativo: regra.ativo,
+      });
+      toast("Regra financeira salva", "success");
+    } catch (e) {
+      toast("Erro ao salvar regra financeira: " + (e as Error).message, "error");
+    }
+  };
 
   const salvar = async () => {
     if (!form.nome.trim()) {
@@ -314,47 +355,82 @@ export function ModalFornecedorForm({
       )}
 
       {aba === "comercial" && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Categoria">
-            <Select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })}>
-              {(ctx?.categorias || []).map((c) => (
-                <option key={c.valor} value={c.valor}>
-                  {c.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Condição de pagamento padrão">
-            <Select
-              value={form.condicao_pagamento_id}
-              onChange={(e) => setForm({ ...form, condicao_pagamento_id: e.target.value })}
-            >
-              <option value="">—</option>
-              {(ctx?.condicoes_pagamento || []).map((cp) => (
-                <option key={cp.id} value={cp.id}>
-                  {cp.nome}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Prazo médio de entrega (dias)">
-            <Input
-              type="number"
-              min={0}
-              value={form.prazo_entrega_dias}
-              onChange={(e) => setForm({ ...form, prazo_entrega_dias: e.target.value })}
-            />
-          </Field>
-          <Field label="Avaliação (1–5)">
-            <Input
-              type="number"
-              min={1}
-              max={5}
-              step="0.5"
-              value={form.nota}
-              onChange={(e) => setForm({ ...form, nota: e.target.value })}
-            />
-          </Field>
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Categoria">
+              <Select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })}>
+                {(ctx?.categorias || []).map((c) => (
+                  <option key={c.valor} value={c.valor}>
+                    {c.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Condição de pagamento padrão">
+              <Select
+                value={form.condicao_pagamento_id}
+                onChange={(e) => setForm({ ...form, condicao_pagamento_id: e.target.value })}
+              >
+                <option value="">—</option>
+                {(ctx?.condicoes_pagamento || []).map((cp) => (
+                  <option key={cp.id} value={cp.id}>
+                    {cp.nome}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Prazo médio de entrega (dias)">
+              <Input
+                type="number"
+                min={0}
+                value={form.prazo_entrega_dias}
+                onChange={(e) => setForm({ ...form, prazo_entrega_dias: e.target.value })}
+              />
+            </Field>
+            <Field label="Avaliação (1–5)">
+              <Input
+                type="number"
+                min={1}
+                max={5}
+                step="0.5"
+                value={form.nota}
+                onChange={(e) => setForm({ ...form, nota: e.target.value })}
+              />
+            </Field>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h3 className="font-semibold text-slate-900">Classificação financeira herdada</h3>
+                <p className="mt-1 text-xs text-slate-600">Novas contas a pagar deste fornecedor herdam estes valores, mas continuam auditáveis e editáveis pelo financeiro.</p>
+              </div>
+              {fornecedor ? <Button size="sm" variant="primary" onClick={() => void salvarRegra()}>Salvar regra</Button> : null}
+            </div>
+            {fornecedor ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Field label="Conta de despesa *">
+                  <Select value={regra.plano} onChange={(e) => setRegra({ ...regra, plano: e.target.value })}>
+                    <option value="">Selecione…</option>
+                    {contasDespesa.map((c) => <option key={c.id} value={c.id}>{c.codigo} · {c.nome}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Centro de custo padrão">
+                  <Select value={regra.centro} onChange={(e) => setRegra({ ...regra, centro: e.target.value })}>
+                    <option value="">Sem centro</option>
+                    {centrosCusto.map((c) => <option key={c.id} value={c.id}>{c.codigo} · {c.nome}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Competência padrão">
+                  <Input type="month" value={regra.competencia} onChange={(e) => setRegra({ ...regra, competencia: e.target.value })} />
+                </Field>
+                <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-3">
+                  <input type="checkbox" checked={regra.ativo} onChange={(e) => setRegra({ ...regra, ativo: e.target.checked })} />
+                  Aplicar regra automaticamente nos recebimentos de compras
+                </label>
+              </div>
+            ) : <p className="text-xs text-slate-500">Salve o fornecedor antes de configurar a regra financeira herdada.</p>}
+          </div>
         </div>
       )}
     </Modal>

@@ -2258,6 +2258,153 @@
         }
       }
     },
+    "/api/plano-contas": {
+      "get": {
+        "tags": ["financeiro"],
+        "summary": "Lista o plano de contas com filtros de natureza e rateabilidade",
+        "parameters": [
+          {"name": "tipo", "in": "query", "schema": {"type": "string", "enum": ["receita", "despesa"]}},
+          {"name": "natureza", "in": "query", "schema": {"type": "string"}},
+          {"name": "rateavel", "in": "query", "schema": {"type": "boolean"}},
+          {"name": "somente_ativos", "in": "query", "schema": {"type": "boolean"}}
+        ],
+        "responses": {"200": {"description": "Contas do plano"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      },
+      "post": {
+        "tags": ["financeiro"],
+        "summary": "Cria conta de receita ou despesa com classificação",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PlanoContaIn"}}}},
+        "responses": {"201": {"description": "Conta criada"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
+    },
+    "/api/plano-contas/{conta_id}/uso": {
+      "get": {
+        "tags": ["financeiro"],
+        "summary": "Consulta uso histórico de uma conta do plano",
+        "parameters": [{"$ref": "#/components/parameters/ContaId"}],
+        "responses": {"200": {"description": "Uso da conta"}, "404": {"description": "Conta não encontrada"}}
+      }
+    },
+    "/api/financeiro/classificacao/pendencias": {
+      "get": {
+        "tags": ["financeiro"],
+        "summary": "Lista contas a pagar pendentes de classificação",
+        "parameters": [
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "default": 100, "maximum": 500}},
+          {"name": "offset", "in": "query", "schema": {"type": "integer", "default": 0, "minimum": 0}}
+        ],
+        "responses": {"200": {"description": "Pendências de classificação"}}
+      }
+    },
+    "/api/financeiro/contas-pagar/{conta_id}/classificar": {
+      "post": {
+        "tags": ["financeiro"],
+        "summary": "Classifica ou aprova uma conta a pagar",
+        "parameters": [{"$ref": "#/components/parameters/ContaId"}],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ClassificacaoContaPagarIn"}}}
+        },
+        "responses": {"200": {"description": "Conta classificada"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
+    },
+    "/api/financeiro/contas-pagar/{conta_id}/rateio": {
+      "get": {
+        "tags": ["financeiro"],
+        "summary": "Lista o rateio de uma conta a pagar",
+        "parameters": [{"$ref": "#/components/parameters/ContaId"}],
+        "responses": {"200": {"description": "Rateio da conta"}}
+      },
+      "post": {
+        "tags": ["financeiro"],
+        "summary": "Substitui o rateio de uma conta a pagar",
+        "parameters": [{"$ref": "#/components/parameters/ContaId"}],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RateioContaPagarIn"}}}
+        },
+        "responses": {"200": {"description": "Rateio salvo"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
+    },
+    "/api/financeiro/competencias": {
+      "get": {
+        "tags": ["financeiro"],
+        "summary": "Lista competências financeiras para precificação",
+        "responses": {"200": {"description": "Competências cadastradas"}}
+      },
+      "post": {
+        "tags": ["financeiro"],
+        "summary": "Cria ou atualiza uma competência financeira",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CompetenciaFinanceiraIn"}}}
+        },
+        "responses": {"201": {"description": "Competência criada"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
+    },
+    "/api/financeiro/competencias/{competencia}/status": {
+      "post": {
+        "tags": ["financeiro"],
+        "summary": "Altera o status de aprovação da competência",
+        "parameters": [{"$ref": "#/components/parameters/Competencia"}],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string", "enum": ["aberta", "aprovada", "fechada"]}, "motivo": {"type": "string"}}}}}
+        },
+        "responses": {"200": {"description": "Status atualizado"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
+    },
+    "/api/financeiro/competencias/{competencia}/apuracao": {
+      "get": {
+        "tags": ["financeiro"],
+        "summary": "Apura despesas elegíveis da competência",
+        "parameters": [{"$ref": "#/components/parameters/Competencia"}],
+        "responses": {"200": {"description": "Apuração da competência"}}
+      }
+    },
+    "/api/financeiro/fornecedores/{fornecedor_id}/regra-classificacao": {
+      "get": {
+        "tags": ["financeiro"],
+        "summary": "Consulta regra de classificação herdada do fornecedor",
+        "parameters": [{"$ref": "#/components/parameters/FornecedorId"}],
+        "responses": {"200": {"description": "Regra do fornecedor"}}
+      },
+      "put": {
+        "tags": ["financeiro"],
+        "summary": "Configura a classificação padrão de um fornecedor",
+        "parameters": [{"$ref": "#/components/parameters/FornecedorId"}],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RegraFornecedorFinanceiraIn"}}}
+        },
+        "responses": {"200": {"description": "Regra salva"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
+    },
+    "/api/financeiro/competencias/{competencia}/fechar": {
+      "post": {
+        "tags": ["financeiro"],
+        "summary": "Fecha a competência após validação das pendências",
+        "parameters": [{"$ref": "#/components/parameters/Competencia"}],
+        "responses": {"200": {"description": "Competência fechada"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
+    },
+    "/api/financeiro/competencias/{competencia}/reabrir": {
+      "post": {
+        "tags": ["financeiro"],
+        "summary": "Reabre uma competência fechada com motivo",
+        "parameters": [{"$ref": "#/components/parameters/Competencia"}],
+        "requestBody": {"content": {"application/json": {"schema": {"type": "object", "required": ["motivo"], "properties": {"motivo": {"type": "string"}}}}}},
+        "responses": {"200": {"description": "Competência reaberta"}, "400": {"$ref": "#/components/responses/ErroValidacao"}}
+      }
+    },
+    "/api/financeiro/contas-pagar/{conta_id}/memoria-classificacao": {
+      "get": {
+        "tags": ["financeiro"],
+        "summary": "Consulta o snapshot de classificação e o rateio do título",
+        "parameters": [{"$ref": "#/components/parameters/ContaId"}],
+        "responses": {"200": {"description": "Memória de classificação"}, "404": {"description": "Conta não encontrada"}}
+      }
+    },
     "/api/publico/produtos": {
       "get": {
         "tags": [
@@ -3204,6 +3351,45 @@
           "404": {
             "description": "N?o encontrada"
           }
+        }
+      }
+    },
+    "/api/precos/configuracao": {
+      "get": {
+        "tags": ["precos"],
+        "summary": "Consulta as premissas persistidas da formação de preço",
+        "responses": {"200": {"description": "Configuração de precificação"}}
+      },
+      "put": {
+        "tags": ["precos"],
+        "summary": "Atualiza faturamento, despesas, tributos, atividade e cenário",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"type": "object"}}}
+        },
+        "responses": {
+          "200": {"description": "Configuração atualizada"},
+          "400": {"description": "Premissa inválida"}
+        }
+      }
+    },
+    "/api/precos/calcular/{produto_id}": {
+      "get": {
+        "tags": ["precos"],
+        "summary": "Calcula preço pela metodologia do divisor e devolve memória de cálculo",
+        "parameters": [
+          {"name": "produto_id", "in": "path", "required": true, "schema": {"type": "integer"}},
+          {"name": "margem", "in": "query", "schema": {"type": "number"}},
+          {"name": "embalagem_unitaria", "in": "query", "schema": {"type": "number", "minimum": 0}},
+          {"name": "frete_unitario", "in": "query", "schema": {"type": "number", "minimum": 0}},
+          {"name": "frete_pct", "in": "query", "schema": {"type": "number", "minimum": 0, "maximum": 100}},
+          {"name": "cartao_pct", "in": "query", "schema": {"type": "number", "minimum": 0, "maximum": 100}},
+          {"name": "impostos_pct", "in": "query", "schema": {"type": "number", "minimum": 0, "maximum": 100}},
+          {"name": "cenario_tributario", "in": "query", "schema": {"type": "string", "enum": ["atual", "reforma"]}}
+        ],
+        "responses": {
+          "200": {"description": "Preço e memória de cálculo"},
+          "400": {"description": "Parâmetro inválido"}
         }
       }
     },
@@ -4765,6 +4951,24 @@
         "name": "data_fim",
         "in": "query",
         "schema": {"type": "string", "format": "date"}
+      },
+      "ContaId": {
+        "name": "conta_id",
+        "in": "path",
+        "required": true,
+        "schema": {"type": "integer", "format": "int64"}
+      },
+      "FornecedorId": {
+        "name": "fornecedor_id",
+        "in": "path",
+        "required": true,
+        "schema": {"type": "integer", "format": "int64"}
+      },
+      "Competencia": {
+        "name": "competencia",
+        "in": "path",
+        "required": true,
+        "schema": {"type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"}
       }
     },
     "responses": {
@@ -5619,6 +5823,80 @@
           "excede_por_atraso": {
             "type": "boolean"
           }
+        }
+      },
+      "ClassificacaoContaPagarIn": {
+        "type": "object",
+        "required": ["plano_conta_id"],
+        "properties": {
+          "plano_conta_id": {"type": "integer"},
+          "competencia": {"type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"},
+          "centro_custo_id": {"type": "integer", "nullable": true},
+          "aprovar": {"type": "boolean", "default": false},
+          "observacao_classificacao": {"type": "string"}
+        }
+      },
+      "PlanoContaIn": {
+        "type": "object",
+        "required": ["codigo", "nome", "tipo"],
+        "properties": {
+          "codigo": {"type": "string"},
+          "nome": {"type": "string"},
+          "tipo": {"type": "string", "enum": ["receita", "despesa"]},
+          "pai_id": {"type": "integer", "nullable": true},
+          "natureza_custo": {"type": "string"},
+          "politica_rateio": {"type": "string"},
+          "exige_centro_custo": {"type": "boolean"},
+          "exige_competencia": {"type": "boolean"},
+          "permite_rateio": {"type": "boolean"},
+          "componente_variavel": {"type": "string", "nullable": true}
+        }
+      },
+      "RateioContaPagarIn": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["percentual"],
+              "properties": {
+                "competencia": {"type": "string"},
+                "centro_custo_id": {"type": "integer", "nullable": true},
+                "produto_id": {"type": "integer", "nullable": true},
+                "percentual": {"type": "number", "minimum": 0, "maximum": 100},
+                "valor": {"type": "number"},
+                "politica_rateio": {"type": "string"},
+                "elegivel_precificacao": {"type": "boolean"}
+              }
+            }
+          }
+        }
+      },
+      "CompetenciaFinanceiraIn": {
+        "type": "object",
+        "required": ["competencia"],
+        "properties": {
+          "competencia": {"type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"},
+          "faturamento_base": {"type": "number", "minimum": 0},
+          "faturamento_fonte": {"type": "string", "enum": ["realizado", "planejado", "media_movel", "manual"]},
+          "criterio_apuracao": {"type": "string", "enum": ["competencia", "caixa", "gerencial", "planejado"]},
+          "observacao": {"type": "string"}
+        }
+      },
+      "RegraFornecedorFinanceiraIn": {
+        "type": "object",
+        "required": ["plano_conta_id"],
+        "properties": {
+          "plano_conta_id": {"type": "integer"},
+          "centro_custo_id": {"type": "integer", "nullable": true},
+          "competencia_padrao": {"type": "string", "nullable": true},
+          "prioridade": {"type": "integer", "minimum": 0},
+          "ativo": {"type": "boolean", "default": true},
+          "vigencia_inicio": {"type": "string", "format": "date", "nullable": true},
+          "vigencia_fim": {"type": "string", "format": "date", "nullable": true}
         }
       },
       "ClienteCredito": {

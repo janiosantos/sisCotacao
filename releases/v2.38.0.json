@@ -1,0 +1,42 @@
+{
+  "versao": "v2.38.0",
+  "componentes": [
+    "backend",
+    "frontend",
+    "schema"
+  ],
+  "correcoes": [
+    "Impede recebimento de pagamentos na tela Operação > Orçamentos",
+    "Mantém o recebimento de vendas à vista exclusivamente no Caixa",
+    "Remove implementação legada órfã de recebimento e adiciona regressão de UI"
+  ],
+  "melhorias": [
+    "Classificação de despesas, competência e rateio integrados ao financeiro e à precificação",
+    "Metodologia de precificação da planilha incorporada ao motor e à interface",
+    "Manual wiki integrado atualizado com a segregação entre Orçamentos, Caixa e Financeiro"
+  ],
+  "recursos": [],
+  "imagens": {
+    "backend": "siscom-backend:v2.38.0",
+    "frontend": "siscom-frontend:v2.38.0"
+  },
+  "database": {
+    "migration": 154
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "classificacao_despesas": true,
+    "competencia_precificacao": true,
+    "recebimento_exclusivo_caixa": true,
+    "database_change": true
+  },
+  "rollback": {
+    "application": "Retornar as imagens siscom-backend:v2.37.2 e siscom-frontend:v2.37.2. A versão anterior não contém as mudanças desta release.",
+    "database": "As migrations 0151–0154 são aditivas. Não executar downgrade automático; restaurar o backup prod-pre da release somente conforme o runbook e avaliar compatibilidade antes de retornar a aplicação."
+  }
+}

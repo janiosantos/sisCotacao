@@ -4,9 +4,19 @@ from flask import Blueprint, jsonify, request
 
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.repositories import preco_historico_repo, promocao_repo, revisao_repo, tabela_preco_repo
-from catalog_server.services import pricing_engine, preco_regra as preco_regra_svc
+from catalog_server.services import pricing_engine, preco_regra as preco_regra_svc, precificacao_config
 
 api_precos_bp = Blueprint("api_precos", __name__)
+
+
+def _optional_float(args, name: str) -> float | None:
+    value = args.get(name)
+    if value in (None, ""):
+        return None
+    try:
+        return float(value.replace(",", ".") if isinstance(value, str) else value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} inválido") from exc
 
 
 # ─── Simulação de preço (Motor Fiscal → Custo → Precificação) ──
@@ -14,19 +24,49 @@ api_precos_bp = Blueprint("api_precos", __name__)
 @api_precos_bp.get("/api/precos/calcular/<int:produto_id>")
 def calcular_preco(produto_id: int):
     args = request.args
-    margem = float(args["margem"]) if args.get("margem") else None
-    markup = float(args["markup"]) if args.get("markup") else None
-    return jsonify(pricing_engine.calcular_preco(
-        produto_id,
-        canal=args.get("canal"),
-        margem=margem,
-        markup=markup,
-        comissao=float(args.get("comissao") or 0),
-        despesas=float(args.get("despesas") or 0),
-        taxas=float(args.get("taxas") or 0),
-        tabela_id=args.get("tabela_id", type=int),
-        fornecedor_id=args.get("fornecedor_id", type=int),
-    ))
+    try:
+        margem = _optional_float(args, "margem")
+        markup = _optional_float(args, "markup")
+        result = pricing_engine.calcular_preco(
+            produto_id,
+            canal=args.get("canal"),
+            margem=margem,
+            markup=markup,
+            comissao=_optional_float(args, "comissao") or 0,
+            despesas=_optional_float(args, "despesas") or 0,
+            taxas=_optional_float(args, "taxas") or 0,
+            tabela_id=args.get("tabela_id", type=int),
+            fornecedor_id=args.get("fornecedor_id", type=int),
+            embalagem_unitaria=_optional_float(args, "embalagem_unitaria") or 0,
+            frete_unitario=_optional_float(args, "frete_unitario") or 0,
+            frete_pct=_optional_float(args, "frete_pct") or 0,
+            cartao_pct=_optional_float(args, "cartao_pct"),
+            impostos_pct=_optional_float(args, "impostos_pct"),
+            despesas_fixas_pct=_optional_float(args, "despesas_fixas_pct"),
+            usar_referencia_atividade=args.get("usar_referencia_atividade") in ("1", "true", "True")
+            if args.get("usar_referencia_atividade") is not None else None,
+            cenario_tributario=args.get("cenario_tributario"),
+            reforma_tributaria_pct=_optional_float(args, "reforma_tributaria_pct"),
+            competencia_value=args.get("competencia"),
+            incluir_despesas_variaveis_rateadas=args.get("incluir_despesas_variaveis_rateadas", "") in ("1", "true", "True"),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "parametro_precificacao_invalido"}), 400
+    return jsonify(result)
+
+
+@api_precos_bp.get("/api/precos/configuracao")
+def obter_configuracao_precificacao():
+    return jsonify(precificacao_config.obter())
+
+
+@api_precos_bp.put("/api/precos/configuracao")
+def salvar_configuracao_precificacao():
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(precificacao_config.salvar(data))
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "configuracao_precificacao_invalida"}), 400
 
 
 @api_precos_bp.get("/api/precos/efetivo/<int:produto_id>")
@@ -102,10 +142,14 @@ def criar_tabela():
     nome = (data.get("nome") or "").strip()
     if not nome:
         return jsonify({"error": "Informe o nome da tabela"}), 400
+    metodologia = data.get("metodologia") or "divisor"
+    if metodologia not in ("divisor", "markup_custo"):
+        return jsonify({"error": "metodologia deve ser divisor ou markup_custo"}), 400
     tabela_id = tabela_preco_repo.create(
         nome, data.get("tipo", "varejo"),
         float(data.get("margem_padrao") or 0),
         float(data.get("markup") or 0),
+        metodologia,
     )
     return jsonify({"id": tabela_id}), 201
 
@@ -116,10 +160,14 @@ def atualizar_tabela(tabela_id: int):
     nome = (data.get("nome") or "").strip()
     if not nome:
         return jsonify({"error": "Informe o nome"}), 400
+    metodologia = data.get("metodologia") or "divisor"
+    if metodologia not in ("divisor", "markup_custo"):
+        return jsonify({"error": "metodologia deve ser divisor ou markup_custo"}), 400
     if not tabela_preco_repo.update(
         tabela_id, nome, data.get("tipo", "varejo"),
         float(data.get("margem_padrao") or 0),
         float(data.get("markup") or 0),
+        metodologia,
     ):
         return jsonify({"error": "Tabela não encontrada"}), 404
     return jsonify({"ok": True})
