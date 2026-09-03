@@ -1382,6 +1382,12 @@ export const api = {
     request<{ ok: boolean }>("POST", `/api/produtos-cadastro/${produtoId}/imagens/capa`, {
       imagem_id: imagemId,
     }),
+  copiarImagensProduto: (produtoId: number, de: number) =>
+    request<{ copiadas: number; imagens: string[] }>(
+      "POST",
+      `/api/produtos-cadastro/${produtoId}/imagens/copiar`,
+      { de }
+    ),
   salvarFornecedorVariantes: (
     produtoId: number,
     fornecedorId: number,
@@ -1395,6 +1401,11 @@ export const api = {
   importarCatalogo: (formData: FormData) =>
     enviarArquivo<{ ok: boolean; produtos: number; grupos: number; criados: number; atualizados: number }>(
       "/api/produtos-cadastro/importar-catalogo",
+      formData
+    ),
+  importarPlanilha: (formData: FormData) =>
+    enviarArquivo<{ ok: boolean; total: number; criados: number; atualizados: number; erros: number; erros_detalhe: { linha: number; motivo: string }[] }>(
+      "/api/produtos-cadastro/importar-planilha",
       formData
     ),
 

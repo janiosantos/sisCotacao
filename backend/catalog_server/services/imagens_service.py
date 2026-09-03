@@ -319,6 +319,43 @@ def remover_arquivo(filename: str) -> None:
         pass
 
 
+def copiar_imagens(origem_id: int, destino_id: int, repo) -> list[str]:
+    """Copia os arquivos de imagem de um produto para outro (duplicação).
+
+    Preserva a ordem/capa do original: as cópias são adicionadas na mesma
+    ordem (o `add_imagem` atribui `ordem` crescente a partir de 0, então a
+    primeira cópia vira a capa). Os arquivos são copiados com nomes novos
+    (`copia_<uuid>`) para não colidir com o produto de origem.
+    """
+    origem = repo.get_product(origem_id)
+    if not origem:
+        return []
+    folder_src = _folder(origem_id)
+    folder_dst = _folder(destino_id)
+    if not folder_src.exists():
+        return []
+    folder_dst.mkdir(parents=True, exist_ok=True)
+    copiadas: list[str] = []
+    for im in origem.get("imagens") or []:
+        filename = im.get("filename") or ""
+        if not filename:
+            continue
+        src = Path(filename)
+        if not src.is_absolute():
+            src = IMAGES_DIR / src
+        if not src.is_file():
+            continue
+        ext = src.suffix.lower()
+        if ext not in _IMG_EXT:
+            ext = ".jpg"
+        novo_nome = f"copia_{uuid.uuid4().hex[:12]}{ext}"
+        shutil.copy2(src, folder_dst / novo_nome)
+        rel = _relpath(destino_id, novo_nome)
+        repo.add_imagem(destino_id, rel)
+        copiadas.append(rel)
+    return copiadas
+
+
 def remover_arquivos_produto(produto_id: int) -> None:
     folder = _folder(produto_id)
     if folder.exists():

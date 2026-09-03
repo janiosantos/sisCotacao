@@ -24,6 +24,7 @@ import { Badge, Button, Field, Input, Loading, Modal, PageHeader, Select } from 
 import { temPermissao } from "../perm";
 import { ModalImportarUrl } from "./produtos/modal-importar-url";
 import { ModalImportarCatalogo } from "./produtos/modal-importar-catalogo";
+import { ModalImportarPlanilha } from "./produtos/modal-importar-planilha";
 import { ModalEtiquetas } from "./produtos/modal-etiquetas";
 import { Imagens } from "./produtos/imagens";
 import { PerfilFiscalPanel } from "./produtos/perfil-fiscal-panel";
@@ -160,6 +161,7 @@ export default function Produtos() {
   const [modalUrl, setModalUrl] = useState(false);
   const [modalEtiquetas, setModalEtiquetas] = useState(false);
   const [modalImportar, setModalImportar] = useState(false);
+  const [modalImportarPlanilha, setModalImportarPlanilha] = useState(false);
   const [modalImportarLote, setModalImportarLote] = useState(false);
   const [loteProduto, setLoteProduto] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -279,6 +281,9 @@ export default function Produtos() {
         <Button variant="outline" onClick={() => setModalImportar(true)}>
           Importar catálogo
         </Button>
+        <Button variant="outline" onClick={() => setModalImportarPlanilha(true)}>
+          Importar planilha
+        </Button>
         <Button variant="outline" onClick={() => setModalImportarLote(true)}>
           Importar lote
         </Button>
@@ -371,6 +376,7 @@ export default function Produtos() {
       <ModalFamilias familias={familias} open={modalFamilias} onClose={() => setModalFamilias(false)} onChanged={carregarFamilias} />
       <ModalImportarUrl open={modalUrl} onClose={() => setModalUrl(false)} />
       <ModalImportarCatalogo open={modalImportar} onClose={() => setModalImportar(false)} />
+      <ModalImportarPlanilha open={modalImportarPlanilha} onClose={() => setModalImportarPlanilha(false)} />
       <ModalImportarLote open={modalImportarLote} onClose={() => setModalImportarLote(false)} />
       <ModalEtiquetas open={modalEtiquetas} onClose={() => setModalEtiquetas(false)} />
       {loteProduto != null && (
@@ -890,6 +896,7 @@ export function ProdutoEditor() {
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [subgrupos, setSubgrupos] = useState<Subgrupo[]>([]);
   const [produto, setProduto] = useState<ProdutoCadastro | null>(null);
+  const [dupDe, setDupDe] = useState<number | null>(null);
   const [form, setForm] = useState({ familia_id: "", marca: "", marca_id: "", external_id: "", nome: "", categoria: "", subcategoria: "", grupo_id: "", subgrupo_id: "", descricao: "", termos_busca: "" });
   const [atributos, setAtributos] = useState<FamiliaAtributo[]>([]);
   const [dados, setDados] = useState<DadosOperacionais>(DADOS_INICIAIS);
@@ -907,13 +914,14 @@ export function ProdutoEditor() {
     void (async () => {
       // Restaura rascunho duplicado (novo produto) — usado como base abaixo,
 // pois o setForm/buildAtributosState do novo produto zeraria o rascunho.
-      let rascunho: { form?: Record<string, unknown>; dados?: DadosOperacionais; valores?: Record<string, string> } | null = null;
+      let rascunho: { form?: Record<string, unknown>; dados?: DadosOperacionais; valores?: Record<string, string>; duplicado_de?: number | null } | null = null;
       if (!id) {
         try {
           const raw = sessionStorage.getItem("dup_produto");
           if (raw) {
             rascunho = JSON.parse(raw);
             sessionStorage.removeItem("dup_produto");
+            setDupDe(rascunho?.duplicado_de ?? null);
           }
         } catch {
           /* rascunho inválido — ignora */
@@ -1129,6 +1137,14 @@ export function ProdutoEditor() {
       } else {
         const res = await api.criarProdutoCadastro(payload);
         novoId = res.id;
+        if (dupDe && dupDe !== novoId) {
+          try {
+            await api.copiarImagensProduto(novoId, dupDe);
+            setDupDe(null);
+          } catch (e) {
+            toast("Produto salvo, mas falha ao copiar imagens: " + (e as Error).message, "error");
+          }
+        }
         toast("Produto salvo", "success");
       }
       location.hash = `#/produtos/${novoId}`;
@@ -1188,13 +1204,15 @@ export function ProdutoEditor() {
   const duplicar = () => {
     // Copia o cadastro como novo rascunho — inclui dados operacionais e
     // atributos (modelo produto único pós v2.26). SKU é limpo para não
-    // conflitar com o original ao salvar.
+    // conflitar com o original ao salvar. `duplicado_de` permite copiar as
+    // imagens do produto de origem após o novo produto ser salvo.
     sessionStorage.setItem(
       "dup_produto",
       JSON.stringify({
         form: { ...form, id: undefined },
         dados: { ...dados, sku: "" },
         valores,
+        duplicado_de: produto?.id ?? null,
       }),
     );
     location.hash = "#/produtos/novo";

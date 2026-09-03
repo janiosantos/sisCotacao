@@ -18,7 +18,9 @@ from catalog_server.services import sku_service
 from catalog_server.services import unidade_conversao as conv_svc
 from catalog_server.services import produto_identificador as ident_svc
 from catalog_server.services import cadastro_importacao as cadastro_svc
+from catalog_server.services import importacao_planilha
 from catalog_server.services import produto_relacao as relacao_svc
+from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.db import system_conn
 from catalog_server.utils import image_url
 
@@ -241,6 +243,31 @@ def importar_catalogo():
     return jsonify({"ok": True, **resultado}), 201
 
 
+@api_produtos_bp.post("/api/produtos-cadastro/importar-planilha")
+def importar_planilha():
+    """Importa lista de produtos de um arquivo CSV/XLSX.
+
+    Formato: 1 linha de cabeçalho com DESCRICAO (obrigatória) e colunas
+    opcionais MARCA, GRUPO, SUBGRUPO, CATEGORIA, SUBCATEGORIA, FAMILIA.
+    Produtos são criados como rascunho (ativo 0).
+    """
+    arquivo = request.files.get("file")
+    if arquivo is None:
+        return jsonify({"error": "Envie o arquivo no campo 'file'"}), 400
+    nome = arquivo.filename or ""
+    if not nome.lower().endswith((".csv", ".xlsx")):
+        return jsonify({"error": "Formato não suportado — use .csv ou .xlsx"}), 400
+    try:
+        resultado = importacao_planilha.importar(
+            arquivo.read(), nome, usuario_id=usuario_id_requisicao()
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:  # pragma: no cover
+        return jsonify({"error": f"Erro ao importar: {exc}"}), 500
+    return jsonify({"ok": True, **resultado}), 201
+
+
 # ----------------------------------------------------------------------
 # Imagens
 # ----------------------------------------------------------------------
@@ -348,6 +375,27 @@ def define_capa(produto_id: int):
     if not produto_repo.set_imagem_capa(produto_id, int(imagem_id)):
         return jsonify({"error": "Imagem não encontrada no produto"}), 404
     return jsonify({"ok": True})
+
+
+@api_produtos_bp.post("/api/produtos-cadastro/<int:produto_id>/imagens/copiar")
+def copiar_imagens(produto_id: int):
+    """Copia as imagens de outro produto (duplicação). Preserva ordem/capa."""
+    data = request.get_json(silent=True) or {}
+    origem_id = data.get("de")
+    if not origem_id or not str(origem_id).isdigit():
+        return jsonify({"error": "Informe o produto de origem (de)"}), 400
+    origem_id = int(origem_id)
+    if origem_id == produto_id:
+        return jsonify({"error": "Produto de origem e destino são o mesmo"}), 400
+    if produto_repo.get_product(produto_id) is None:
+        return jsonify({"error": "Produto não encontrado"}), 404
+    if produto_repo.get_product(origem_id) is None:
+        return jsonify({"error": "Produto de origem não encontrado"}), 404
+    copiadas = imagens_service.copiar_imagens(origem_id, produto_id, produto_repo)
+    return jsonify({
+        "copiadas": len(copiadas),
+        "imagens": [image_url(p) for p in copiadas],
+    }), 201
 
 
 # ----------------------------------------------------------------------
