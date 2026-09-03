@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import io
 
+import pytest
+
 from catalog_server.db import system_conn
 from catalog_server.services import importacao_planilha
 
@@ -100,7 +102,7 @@ def test_cabecalho_sem_descricao_erro(system_db):
 
 
 def test_xlsx_importa(system_db):
-    import openpyxl
+    openpyxl = pytest.importorskip("openpyxl")  # dependência opcional (imagem sem o pacote)
 
     wb = openpyxl.Workbook()
     ws = wb.active
