@@ -21,7 +21,7 @@ COPY releases/ releases/
 # Scripts operacionais (inclui o backup validado pela suíte backend)
 COPY scripts/ scripts/
 ARG INSTALL_TEST_DEPS=0
-RUN pip install --no-cache-dir flask python-dotenv requests beautifulsoup4 lxml colorlog fake-useragent sqlalchemy "psycopg[binary]" rq redis && \
+RUN pip install --no-cache-dir flask python-dotenv requests beautifulsoup4 lxml colorlog fake-useragent sqlalchemy "psycopg[binary]" rq redis openpyxl && \
     if [ "$INSTALL_TEST_DEPS" = "1" ]; then pip install --no-cache-dir pytest pytest-cov; fi
 EXPOSE 8000
 CMD ["python", "-m", "catalog_server.run_server", "--port", "8000", "--host", "0.0.0.0"]
