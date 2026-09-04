@@ -115,6 +115,7 @@ services:
       - DATABASE_URL=postgresql+psycopg://catalog:catalog@db:5432/catalog
       - AUTO_MIGRATE=0
       - CATALOG_ENV=staging
+      - CATALOG_SECRET=${CATALOG_STAGING_SECRET:?CATALOG_STAGING_SECRET obrigatório}
     depends_on:
       db:
         condition: service_healthy

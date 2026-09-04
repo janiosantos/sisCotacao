@@ -117,8 +117,16 @@ jobs:
 
       - name: Health gate - worker de impressão
         run: |
-          docker compose exec -T impressao-worker python -c \
-            "from catalog_server.services.impressao import impressao_service; impressao_service.status(); print('impressao-worker OK')"
+          for i in $(seq 1 10); do
+            if docker compose exec -T impressao-worker python -c \
+              "from catalog_server.services.impressao import impressao_service; impressao_service.status(); print('impressao-worker OK')"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps impressao-worker
+          docker compose logs --tail=100 impressao-worker
+          exit 1
 
       # Mesma régua de smoke da produção, contra o ambiente de staging.
       - name: Smoke tests

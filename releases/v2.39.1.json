@@ -1,0 +1,35 @@
+{
+  "versao": "v2.39.1",
+  "componentes": [
+    "backend"
+  ],
+  "correcoes": [
+    "Propaga CATALOG_SECRET ao worker dedicado de impressao em staging e producao",
+    "Evita falha imediata do health gate durante a inicializacao do worker de impressao"
+  ],
+  "melhorias": [
+    "Exibe estado e logs do worker quando o health gate esgota as tentativas"
+  ],
+  "recursos": [],
+  "imagens": {
+    "backend": "siscom-backend:v2.39.1",
+    "frontend": "siscom-frontend:v2.39.1"
+  },
+  "database": {
+    "migration": null
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "impressao_worker_health_fix": true,
+    "database_change": false
+  },
+  "rollback": {
+    "application": "Retornar as imagens anteriores e restaurar a configuracao anterior do servico impressao-worker.",
+    "database": "Nenhuma migration nesta release; manter o schema atual."
+  }
+}
