@@ -1,5 +1,7 @@
 # CONTEXTO_SESSAO — Estado do Projeto (leitura obrigatória para agentes)
 
+- **2026-09-04 (hotfix e publicacao v2.39.1 concluida)**: os runs iniciais de staging `33895893979` e producao `33921952491` passaram por build/migrations/backend, mas falharam no gate do `impressao-worker`: o servico tinha `CATALOG_ENV=staging/production` sem receber `CATALOG_SECRET`, portanto o proprio processo encerrava ao importar `config.py`. Hotfix **`85f0274`** propagou o segredo nos dois Compose, adicionou retry/diagnostico ao gate e criou o manifesto `v2.39.1`. Staging rapido **`33924974352`** ficou verde (migration, backend, impressao, smoke e reconciliacao; a suite completa de 587 backend + 45 frontend ja havia passado no run anterior). Producao **`33925069780`** ficou verde: release `v2.39.1`, schema **156/156**, 104 migrations, zero pendencias, `impressao-worker OK`, smoke aprovado e manifestos `v2.39.0`/`v2.39.1` registrados. Validacao externa: `/api/health` = `{"status":"ok"}` e `/api/pronto` = `{"pronto":true}`.
+
 - **2026-09-04 (publicacao v2.39.0 aguardando runner)**: manifesto `v2.39.0` criado e enviado no commit `584ce84` (backend + frontend + schema 156, rollback aplicativo para `v2.38.0`; migration 0156 e aditiva). Com autorizacao do usuario, foi disparado staging completo `v2.39.0-rc` no run **`33895893979`**, fixado no SHA `584ce84`. O run ficou **queued** porque o unico runner `siscom-prod` consta `offline` no GitHub; a checagem somente-leitura na VM `10.189.14.9` nao encontrou servico/processo `actions.runner` ativo. Nenhuma etapa do job iniciou e nenhum deploy, migration, restart ou rebuild ocorreu em staging/producao. Produzir somente depois de staging verde; ao restabelecer o runner, acompanhar o run existente antes de disparar producao `v2.39.0`.
 
 - **2026-09-04 (revisao pos-auditoria: CI, impressao, Gunicorn e reconciliacao)**: revisados os commits do outro agente e os logs reais dos runs `33880304870`, `33881961966`, `33886568099`, `33886741456` e `33886942648`. **`APP_VERSION` estava presente no build**; a causa das falhas em massa foi `DiskFull` no PostgreSQL/containerd do runner. O lock pendente do Gunicorn foi isolado primeiro no commit `c72e013`. No commit **`5586dd7`**: (1) CI ganhou preflight que remove somente cache BuildKit antigo/imagens orfas, exige 4 GiB livres, serializa staging/producao e reutiliza uma unica imagem de teste; PostgreSQL de teste usa `tmpfs` 2 GiB, durabilidade desativada e 1.048.576 inodes, evitando o acumulo causado por `TRUNCATE` de ~150 tabelas; (2) `APP_VERSION` passou a existir em todos os passos e staging migra antes de iniciar a aplicacao; producao verifica pendencias com a imagem nova antes do backup e corrige releases parciais; (3) migration aditiva **0156** repara `impressao_config`/`impressao_fila` em bancos cujo baseline historico nao as materializou; (4) impressao saiu do processo Gunicorn/`--preload`, ganhou `impressao-worker` dedicado, claim atomico `FOR UPDATE SKIP LOCKED`, resiliencia e health gate; (5) pool PostgreSQL passou de ate 30 para ate 10 conexoes por processo (defaults configuraveis) e nao e mais criado antes de fork; (6) `reconciliar_tudo()` passou a aplicar a divergencia no `WHERE`, eliminando os **62.615 falsos positivos zero-vs-zero**; (7) Dockerfile voltou a `uv sync --frozen` e separou a camada de dependencias da copia do codigo. Validacao: cadeia vazia→migration 156→readiness, **587 testes backend passed em 6m03s**, 45 frontend passed, typecheck/build, `py_compile`, YAML, Compose DEV/staging/producao, runtime Gunicorn/worker e blobs Bash LF verdes. A migration 0156 foi aplicada **somente em banco descartavel**. Nenhum restart/deploy/migration em DEV, staging ou producao foi executado; producao continua no schema 155 e a publicacao aguarda confirmacao explicita.
@@ -59,8 +61,8 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 4. Estado atual
 
-- **Produção (último estado confirmado)**: deploy `33825144725` concluído com a migração **0155** e o cadastro simples de parceiros. Os commits de auditoria `744c2bc`, `20afe6b`, os ajustes posteriores e a migração **0156** ainda **não foram publicados**.
-- **Schema**: DEV/staging/produção confirmados em **155**; a árvore atual possui a migração aditiva **0156** (`reparo_fila_impressao`), validada somente em PostgreSQL descartável. A **0095 foi removida** e nunca foi aplicada.
+- **Produção (último estado confirmado)**: release **v2.39.1**, deploy `33925069780`, com auditoria/hardening, worker dedicado de impressão e hotfix de configuração publicados.
+- **Schema**: staging/produção confirmados em **156/156**, com 104 migrations e zero pendências. A **0095 foi removida** e nunca foi aplicada.
 - **Hardening**: RBAC deny-by-default, gates por ação, segregação de funções, proteção do último administrador, auditoria/revogação de tokens, limite de payload, proteção SSRF, rate limit e segredos de pagamento ocultos permanecem vigentes. A suíte backend atual coleta **587 testes** e o frontend possui **45 testes**.
 - **Webhooks (P2)**: assinatura/token nativo por provedor (MP x-signature+anti-replay, Asaas access-token, EfiPay token), `webhook_log`, rechecagem (manual + periódica), baixa por notificação validada no staging (Asaas sandbox pix/boleto).
 - **Outbox (P5)**: Redis + worker RQ + scheduler; tabela `outbox` com retry/backoff/dead-letter, upsert idempotente e claim/lease concorrente; webhook 503 enfileira rechecagem.
@@ -92,8 +94,8 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 ## 6. Tarefas pendentes (priorizadas)
 
 **Alta**
-- [ ] **Validar em staging, somente após confirmação explícita**, as correções pós-auditoria (CI, Gunicorn/pool, worker de impressão, migração 0156 e reconciliação).
-- [ ] **Publicar em produção somente após staging verde e nova confirmação explícita**; produção permanece no estado do deploy `33825144725`/schema 155.
+- [x] **Validar em staging** as correções pós-auditoria — concluído em `33924974352`.
+- [x] **Publicar v2.39.1 em produção** — concluído em `33925069780`, schema 156 e gates verdes.
 - [x] **Integrar o site institucional (código)** (`C:\Users\jpsantos\Documents\Projetos\CASA_LM\site` — repo `janiosantos/casa-lm-site`, Astro) à API pública: `api.ts` usa `PUBLIC_API_ORIGIN`, CORS do backend está em allowlist e o SSR não publica dados demonstrativos. Falta validação live após publicação.
 
 **Média**
@@ -110,11 +112,9 @@ ERP/Catálogo da **Casa LM** (materiais elétricos, parafusos, ferramentas). Nom
 
 ## 7. Próximos passos sugeridos
 
-1. **Staging autorizado**: executar o workflow completo corrigido e confirmar schema 156, worker de impressão, smoke e reconciliação sem falsos positivos.
-2. **Produção autorizada**: somente depois do staging verde, preparar release/manifesto e solicitar confirmação separada para produção.
-3. **P8**: aprovar o lote de imagens por fornecedor + remoção de órfãos (dry-run pronto em `reports/*`).
-4. **P6 residual**: virtualização de tabelas e testes E2E.
-5. **P3 fiscal**: desbloquear com certificado A1/A3 + contador (homologação Focus/SEFAZ).
+1. **P8**: aprovar o lote de imagens por fornecedor + remoção de órfãos (dry-run pronto em `reports/*`).
+2. **P6 residual**: virtualização de tabelas e testes E2E.
+3. **P3 fiscal**: desbloquear com certificado A1/A3 + contador (homologação Focus/SEFAZ).
 
 ## 8. Convenções de trabalho para agentes
 
