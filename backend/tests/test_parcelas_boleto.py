@@ -25,6 +25,11 @@ def _usuario(login: str, limite_pct: float = 5.0, autoriza: bool = False) -> int
         )
         uid = int(cur.lastrowid)
         conn.commit()
+    # Os testes reutilizam ids (TRUNCATE RESTART IDENTITY) e o cache de
+    # permissão é por uid — garante estado fresco para este usuário.
+    from catalog_server import permissao
+
+    permissao.invalidar(uid)
     return uid
 
 

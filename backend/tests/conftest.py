@@ -83,6 +83,12 @@ def system_db(pg_schema, test_engine, pg_tables):
     """
     _truncate_all(test_engine, pg_tables)
     _seed_pg(test_engine)
+    # Os testes reutilizam ids (TRUNCATE RESTART IDENTITY) e o cache de
+    # permissões é por uid — limpa o cache em processo a cada teste para
+    # evitar estados velhos (vendedor sem credito.aprovar etc.) entre testes.
+    from catalog_server import permissao
+
+    permissao.invalidar()
     return None
 
 
