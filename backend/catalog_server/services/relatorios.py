@@ -149,8 +149,10 @@ def compras(data_inicio: str | None = None, data_fim: str | None = None) -> dict
             """SELECT COUNT(*) AS total,
                  COUNT(*) FILTER (WHERE status IN ('recebido','parcialmente_recebido')) AS recebidos,
                  COUNT(*) FILTER (WHERE status='cancelado') AS cancelados,
-                 COALESCE(SUM(CASE WHEN status='recebido' THEN (data_recebida::date - data_pedido::date) END) /
-                    NULLIF(COUNT(*) FILTER (WHERE status='recebido' AND data_recebida IS NOT NULL),0),0) AS lead_time_medio
+                 COALESCE(SUM(CASE WHEN status='recebido' AND data_recebida IS NOT NULL
+                     THEN (data_recebida::date - COALESCE(data_pedido::date, data_geracao::date, criado_em::date)) END) /
+                    NULLIF(COUNT(*) FILTER (WHERE status='recebido' AND data_recebida IS NOT NULL
+                        AND COALESCE(data_pedido::date, data_geracao::date, criado_em::date) IS NOT NULL),0),0) AS lead_time_medio
                FROM pedidos_compra WHERE COALESCE(data_pedido::date, data_geracao::date, criado_em::date) BETWEEN ? AND ?""",
             (inicio, fim),
         ).fetchone()

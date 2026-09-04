@@ -333,6 +333,8 @@ def registrar_movimento():
     # Gatilho contábil (v2.15.0): ajuste de estoque → lançamento quando
     # configurado (default inativo — não altera o comportamento atual).
     if tipo == "ajuste":
+        import logging
+        _log = logging.getLogger(__name__)
         try:
             contabil_gatilhos.disparar(
                 "ajuste",
@@ -342,7 +344,7 @@ def registrar_movimento():
                 origem_tipo="estoque",
             )
         except Exception:
-            pass
+            _log.warning("Falha ao contabilizar ajuste estoque %s", produto_id, exc_info=True)
     return jsonify(result), 201
 
 
@@ -686,6 +688,8 @@ def criar_movimento_fato():
     # Gatilho contábil (v2.15.0): ajuste/inventário → lançamento quando
     # configurado (default inativo — não altera o comportamento atual).
     if not r.get('duplicado') and dados.get('tipo') in ('ajuste', 'inventario'):
+        import logging
+        _log = logging.getLogger(__name__)
         try:
             contabil_gatilhos.disparar(
                 'ajuste',
@@ -695,7 +699,7 @@ def criar_movimento_fato():
                 origem_tipo=dados.get('origem_tipo', 'estoque'),
             )
         except Exception:
-            pass
+            _log.warning("Falha ao contabilizar ajuste estoque %s", dados['produto_id'], exc_info=True)
     return jsonify(r), 200 if r.get('duplicado') else 201
 
 

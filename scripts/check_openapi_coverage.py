@@ -44,26 +44,29 @@ def main() -> int:
     args = ap.parse_args()
 
     spec = json.loads(Path(args.spec).read_text(encoding="utf-8"))
-    spec_paths = set(spec.get("paths", {}))
 
     from catalog_server.app_factory import create_app
 
-    app = create_app()
-    rota_metodos: dict[str, set[str]] = {}
+    app = create_app(bootstrap=False, start_workers=False)
+    operacoes_app: set[tuple[str, str]] = set()
     for rule in app.url_map.iter_rules():
         path = _normalizar(rule.rule)
         if not path.startswith("/api/"):
             continue
         if path in _SKIP or path.startswith("/api/fornecedor/") or path.startswith("/api/publico/"):
             continue
-        rota_metodos.setdefault(path, set()).update(rule.methods or set())
+        for method in (rule.methods or set()) - {"HEAD", "OPTIONS"}:
+            operacoes_app.add((path, method.upper()))
 
-    faltando = sorted(
-        p for p, metodos in rota_metodos.items()
-        if p not in spec_paths and not any(m in ("OPTIONS", "HEAD") for m in metodos)
-    )
-    cobertas = len([p for p in rota_metodos if p in spec_paths])
-    total = len(rota_metodos)
+    operacoes_spec: set[tuple[str, str]] = set()
+    for path, item in spec.get("paths", {}).items():
+        for method in item:
+            if method.lower() in {"get", "post", "put", "patch", "delete"}:
+                operacoes_spec.add((path, method.upper()))
+
+    faltando = sorted(operacoes_app - operacoes_spec)
+    cobertas = len(operacoes_app & operacoes_spec)
+    total = len(operacoes_app)
     print(f"cobertura: {cobertas}/{total} rotas /api no OpenAPI")
     if faltando:
         print(f"sem contrato ({len(faltando)}):")

@@ -131,22 +131,24 @@ def gerar_pedidos(cotacao_id: int):
     pedidos = compras_repo.gerar_pedidos(cotacao_id, logica)
     # Gatilho contábil (v2.15.0): compra → lançamento por pedido quando
     # configurado (default inativo — não altera o comportamento atual).
-    try:
+    if pedidos:
+        import logging
+        _log = logging.getLogger(__name__)
         from datetime import datetime as _dt
-
         for ped in pedidos or []:
             total = float(ped.get("total") or 0)
             if total > 0:
-                contabil_gatilhos.disparar(
-                    "compra",
-                    evento_id=int(ped["id"]),
-                    valor=total,
-                    historico=f"Pedido de compra {ped.get('numero', '')}",
-                    periodo_competencia=_dt.now().strftime("%Y-%m"),
-                    origem_tipo="compra",
-                )
-    except Exception:
-        pass
+                try:
+                    contabil_gatilhos.disparar(
+                        "compra",
+                        evento_id=int(ped["id"]),
+                        valor=total,
+                        historico=f"Pedido de compra {ped.get('numero', '')}",
+                        periodo_competencia=_dt.now().strftime("%Y-%m"),
+                        origem_tipo="compra",
+                    )
+                except Exception:
+                    _log.warning("Falha ao contabilizar pedido %s", ped.get("id"), exc_info=True)
     return jsonify({"pedidos": pedidos})
 
 

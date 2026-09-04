@@ -49,6 +49,10 @@ def _autorizar_impressao() -> None:
     actor = usuario_id_requisicao()
     if not actor:
         abort(401, description="Sessão necessária para imprimir")
+    # Revalida se o usuário está ativo (protege contra sessões de desativados).
+    from catalog_server.repositories import usuario_repo
+    if not usuario_repo.esta_ativo(actor):
+        abort(401, description="Usuário desativado")
     if not permissao.tem_permissao(actor, "impressao", "imprimir"):
         abort(403, description="Permissão negada: impressao.imprimir")
 

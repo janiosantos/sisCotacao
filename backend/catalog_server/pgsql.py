@@ -292,13 +292,19 @@ class PgCursor:
 class PgConnection:
     """Conexão compatível com o `sqlite3.Connection` dos repositórios."""
 
+    _engines: dict[str, sqlalchemy.Engine] = {}
+
     def __init__(self, url: str) -> None:
         self._url = url
-        # connect_timeout curto: com o banco fora do ar a requisição falha
-        # rápido (503 db_indisponivel) em vez de pendurar o worker.
-        self._engine = sqlalchemy.create_engine(
-            url, pool_pre_ping=True, connect_args={"connect_timeout": 3}
-        )
+        # Engine compartilhado por URL com QueuePool para reutilização.
+        if url not in PgConnection._engines:
+            PgConnection._engines[url] = sqlalchemy.create_engine(
+                url, pool_pre_ping=True,
+                pool_size=10, max_overflow=20,
+                pool_timeout=10, pool_recycle=1800,
+                connect_args={"connect_timeout": 3},
+            )
+        self._engine = PgConnection._engines[url]
         self._conn = self._engine.raw_connection()
         self.is_pg = True
 
@@ -318,10 +324,8 @@ class PgConnection:
         self._conn.rollback()
 
     def close(self) -> None:
-        try:
-            self._conn.close()
-        finally:
-            self._engine.dispose()
+        # raw_connection.close() devolve a conexão ao pool compartilhado.
+        self._conn.close()
 
     def __enter__(self):
         return self

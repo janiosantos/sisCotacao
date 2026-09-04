@@ -24,8 +24,11 @@ def listar_pagina():
     somente_ativos = request.args.get("somente_ativos", "").lower() in ("1", "true")
     categoria = request.args.get("categoria") or None
     q = (request.args.get("q") or "").strip() or None
-    limit = min(max(int(request.args.get("limit", 50) or 50), 1), 200)
-    offset = max(int(request.args.get("offset", 0) or 0), 0)
+    try:
+        limit = min(max(int(request.args.get("limit", 50) or 50), 1), 200)
+        offset = max(int(request.args.get("offset", 0) or 0), 0)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Parâmetros limit/offset inválidos", "code": "paginacao_invalida"}), 400
     total, itens = supplier_repo.list_page(
         somente_ativos=somente_ativos, categoria=categoria, termo=q,
         limit=limit, offset=offset,

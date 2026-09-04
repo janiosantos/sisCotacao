@@ -284,7 +284,7 @@ def _autorizar_acesso() -> None:
         abort(403, description=f"Permissão negada: {recurso}.{acao}")
 
 
-def create_app() -> Flask:
+def create_app(*, bootstrap: bool = True, start_workers: bool = True) -> Flask:
     configure_health_probe_logging()
     app = Flask(__name__)
     # Limite global de request evita uploads e payloads JSON sem teto.
@@ -342,15 +342,17 @@ def create_app() -> Flask:
     app.register_blueprint(portal_bp)
     app.register_blueprint(pages_bp)
 
-    # Bootstrap explícito apenas em desenvolvimento/testes. Produção usa o
-    # fluxo de primeiro acesso com senha definida pelo operador.
+    # Bootstrap explícito apenas em desenvolvimento/testes. Produção e staging
+    # usam o fluxo de primeiro acesso com senha definida pelo operador.
     from catalog_server.repositories import usuario_repo
 
     try:
-        bootstrap_password = os.getenv("CATALOG_BOOTSTRAP_ADMIN_PASSWORD") or secrets.token_urlsafe(32)
-        if config.ENVIRONMENT != "production" and usuario_repo.count() == 0:
+        bootstrap_habilitado = os.getenv("ALLOW_BOOTSTRAP_ADMIN", "0") == "1"
+        if bootstrap and config.ENVIRONMENT in {"development", "test"} and bootstrap_habilitado \
+                and usuario_repo.count() == 0:
             from werkzeug.security import generate_password_hash
 
+            bootstrap_password = os.getenv("CATALOG_BOOTSTRAP_ADMIN_PASSWORD") or secrets.token_urlsafe(32)
             admin_id = usuario_repo.create(
                 "Administrador", "admin", generate_password_hash(bootstrap_password)
             )
@@ -527,6 +529,7 @@ def create_app() -> Flask:
 
     # Retaguarda de impressão: passa a drenar a fila de cupons assim que o
     # sistema estiver de pé.
-    impressao_service.start_worker()
+    if start_workers:
+        impressao_service.start_worker()
 
     return app

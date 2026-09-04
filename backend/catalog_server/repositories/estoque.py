@@ -300,7 +300,7 @@ class EstoqueRepository:
                         raise ValueError(
                             f"Estoque disponível insuficiente: {disponivel:g}"
                         )
-                    novo_saldo = max(0, saldo_atual - q)
+                    novo_saldo = saldo_atual - q
                 elif tipo == "ajuste":
                     novo_saldo = q
                 elif tipo == "transferencia":
@@ -311,7 +311,7 @@ class EstoqueRepository:
                         raise ValueError(
                             f"Estoque disponível insuficiente: {disponivel:g}"
                         )
-                    novo_saldo = max(0, saldo_atual - q)
+                    novo_saldo = saldo_atual - q
                 conn.execute(
                     "UPDATE estoque_saldo SET quantidade=?, custo_medio=?, atualizado_em=datetime('now')"
                     " WHERE id=?",

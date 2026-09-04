@@ -57,6 +57,15 @@ def _carregar(usuario_id: int) -> dict[str, set[str]]:
 
     acoes: dict[str, set[str]] = {}
     with system_conn() as conn:
+        # Valida se o usuário está ativo antes de compor permissões.
+        ativo = conn.execute(
+            "SELECT 1 FROM usuarios WHERE id=? AND ativo=1", (usuario_id,)
+        ).fetchone()
+        if not ativo:
+            with _lock:
+                _cache[usuario_id] = (time.monotonic(), {})
+            return {}
+
         # Perfil Administrador => superuser.
         row = conn.execute(
             "SELECT 1 FROM usuario_perfis up JOIN perfis p ON p.id=up.perfil_id"

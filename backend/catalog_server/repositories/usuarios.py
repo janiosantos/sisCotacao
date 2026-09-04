@@ -122,6 +122,15 @@ class UsuarioRepository:
 
     # ------------------------------------------------------------------
 
+    def esta_ativo(self, usuario_id: int) -> bool:
+        """Retorna True se o usuário existe e está ativo."""
+        with system_conn() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM usuarios WHERE id=? AND ativo=1",
+                (usuario_id,),
+            ).fetchone()
+            return row is not None
+
     def set_ativo(self, usuario_id: int, ativo: bool) -> bool:
         with system_conn() as conn:
             cur = conn.execute(
