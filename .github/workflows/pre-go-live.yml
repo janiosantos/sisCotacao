@@ -11,6 +11,7 @@ on:
         options:
           - inventory
           - export-images
+          - deduplicate-images
           - verify-images
           - install-gallery
           - dry-run-reset
@@ -86,6 +87,16 @@ jobs:
             -v "$GITHUB_WORKSPACE/backend/catalog_server/pre_go_live.py:/app/catalog_server/pre_go_live.py:ro" \
             -v "$GALLERY_ROOT/data:/gallery" \
             backend python -m catalog_server.pre_go_live verify-images
+
+      - name: Substitui copias por hardlinks no filesystem do host
+        if: inputs.action == 'deduplicate-images'
+        run: |
+          docker run --rm \
+            -v /home/jpsantos:/host \
+            -v "$GITHUB_WORKSPACE/deployment/galeria_produtos/relink.py:/relink.py:ro" \
+            "siscom-backend:$APP_VERSION" python /relink.py \
+            --images-dir /host/siscom/img \
+            --gallery-dir /host/galeria-produtos/data
 
       - name: Instala e inicia a aplicacao standalone
         if: inputs.action == 'install-gallery'

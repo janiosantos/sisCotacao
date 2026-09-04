@@ -11,3 +11,7 @@ nao acessa o PostgreSQL do ERP e monta os dados somente para leitura.
 O acesso do operador usa uma sessao HMAC de curta duracao emitida pelo ERP.
 A importacao usa um token de servico derivado do mesmo segredo, sem aceitar
 URLs ou caminhos arbitrarios informados pelo navegador.
+
+Se o exportador precisar copiar os arquivos porque o Docker bloqueou hardlinks
+entre bind mounts, `relink.py` deve ser executado com `/home/jpsantos` em uma
+unica montagem. Ele troca cada copia de forma atomica e pode ser repetido.

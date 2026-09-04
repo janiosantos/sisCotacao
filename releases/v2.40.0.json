@@ -14,6 +14,7 @@
   "melhorias": [
     "Preserva todo o acervo anterior com nomes por categoria, subcategoria, produto e marca",
     "Usa hardlinks quando possivel para evitar duplicar aproximadamente 16 GiB",
+    "Consolida copias em hardlinks mesmo quando bind mounts separados bloqueiam o link",
     "Galeria standalone possui busca, filtros, paginacao e navegacao por teclado",
     "Workflow separa inventario, exportacao, verificacao, instalacao, reset e limpeza Docker"
   ],

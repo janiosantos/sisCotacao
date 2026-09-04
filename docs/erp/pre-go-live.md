@@ -70,13 +70,15 @@ nao forem possiveis, exige espaco para uma copia integral antes de iniciar.
 1. `inventory`: inventario somente leitura e deteccao de tabelas nao classificadas.
 2. Trocar a senha conhecida `admin/admin123` e revisar a lista de usuarios preservados.
 3. `export-images`: exportacao integral para a galeria.
-4. `verify-images`: releitura e validacao de todos os checksums.
-5. `install-gallery`: instalacao da aplicacao standalone e health check.
-6. `dry-run-reset`: relatorio final e token vinculado ao snapshot.
-7. Confirmacao explicita do responsavel com o token apresentado.
-8. `execute-reset`: para escritores, repete a verificacao integral, valida o
+4. `deduplicate-images`: quando o Docker nao cria hardlinks entre bind mounts,
+   substitui as copias usando uma unica montagem do filesystem do host.
+5. `verify-images`: releitura e validacao de todos os checksums.
+6. `install-gallery`: instalacao da aplicacao standalone e health check.
+7. `dry-run-reset`: relatorio final e token vinculado ao snapshot.
+8. Confirmacao explicita do responsavel com o token apresentado.
+9. `execute-reset`: para escritores, repete a verificacao integral, valida o
    espaco, gera dump final, reseta em transacao, limpa as filas e valida.
-9. `docker-prune`: remove imagens sem container e cache; nunca remove volumes.
+10. `docker-prune`: remove imagens sem container e cache; nunca remove volumes.
 
 O reset usa `TRUNCATE ... RESTRICT`, sem `CASCADE`. Qualquer dependencia nova ou
 tabela publica sem classificacao interrompe a execucao antes de apagar dados.
