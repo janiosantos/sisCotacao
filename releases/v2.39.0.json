@@ -1,0 +1,47 @@
+{
+  "versao": "v2.39.0",
+  "componentes": [
+    "backend",
+    "frontend",
+    "schema"
+  ],
+  "correcoes": [
+    "Corrige autorizacao de paginas sensiveis, emissao fiscal e acoes RBAC desalinhadas",
+    "Corrige paginacao de clientes, validacao de parametros e calculos dos relatorios de vendas, compras e lead time",
+    "Corrige divergencias de estoque zero-vs-zero e preserva a rastreabilidade das movimentacoes",
+    "Materializa a fila de impressao ausente em bancos atualizados a partir de baselines antigos",
+    "Impede que falhas contabilizaveis sejam ocultadas e remove credenciais de infraestrutura versionadas"
+  ],
+  "melhorias": [
+    "Executa a aplicacao com Gunicorn e worker de impressao dedicado, resiliente e com claim atomico",
+    "Adiciona pooling PostgreSQL conservador e configuravel sem criar conexoes antes do fork",
+    "Amplia a verificacao de cobertura OpenAPI sem alterar o estado da aplicacao",
+    "Estabiliza os testes e deploys com controle de espaco, isolamento do PostgreSQL descartavel e serializacao entre staging e producao",
+    "Reforca sessao de usuarios inativos, uploads financeiros e bootstrap seguro do administrador de staging"
+  ],
+  "recursos": [],
+  "imagens": {
+    "backend": "siscom-backend:v2.39.0",
+    "frontend": "siscom-frontend:v2.39.0"
+  },
+  "database": {
+    "migration": 156
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "impressao_worker_dedicado": true,
+    "openapi_gate": true,
+    "rbac_hardening": true,
+    "reconciliacao_estoque_corrigida": true,
+    "database_change": true
+  },
+  "rollback": {
+    "application": "Retornar as imagens siscom-backend:v2.38.0 e siscom-frontend:v2.38.0. Interromper o impressao-worker dedicado ao retornar para a release anterior.",
+    "database": "A migration 0156 e aditiva e preserva filas/configuracoes existentes. Nao executar downgrade destrutivo; a aplicacao v2.38.0 pode permanecer sobre o schema 156. Restaurar backup somente se houver evidencia de corrupcao de dados."
+  }
+}
