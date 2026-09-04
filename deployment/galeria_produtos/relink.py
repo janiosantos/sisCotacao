@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import sqlite3
+from datetime import datetime, timezone
 from contextlib import closing
 from pathlib import Path
 
@@ -16,6 +17,21 @@ def _safe_path(root: Path, relative: str) -> Path:
     except ValueError as exc:
         raise RuntimeError(f"Caminho fora da raiz permitida: {relative}") from exc
     return path
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _write_json(path: Path, payload: dict) -> None:
+    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    os.replace(temporary, path)
 
 
 def relink(images_dir: Path, gallery_dir: Path) -> dict[str, int | bool]:
@@ -59,13 +75,40 @@ def relink(images_dir: Path, gallery_dir: Path) -> dict[str, int | bool]:
             if linked % 5000 == 0:
                 print(f"deduplicate-images: {linked}", flush=True)
 
-    return {
+    result = {
         "same_filesystem": True,
         "linked": linked,
         "already_linked": already_linked,
         "total": linked + already_linked,
         "freed_bytes_estimate": freed_bytes_estimate,
     }
+    manifest_path = gallery_dir / "manifest.json"
+    manifest = _read_json(manifest_path)
+    manifest.setdefault("export_hardlinks", int(manifest.get("hardlinks", 0)))
+    manifest.setdefault("export_copies", int(manifest.get("copies", 0)))
+    manifest.update(
+        {
+            "hardlinks": result["total"],
+            "copies": 0,
+            "deduplicated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    _write_json(manifest_path, manifest)
+
+    verified_path = gallery_dir / "verified.json"
+    verified = _read_json(verified_path)
+    if linked == 0 and verified.get("full_verification"):
+        verified.update(
+            {
+                "hardlinks": result["total"],
+                "copies": 0,
+                "deduplicated_at": manifest["deduplicated_at"],
+            }
+        )
+        _write_json(verified_path, verified)
+    else:
+        _write_json(verified_path, manifest)
+    return result
 
 
 def main() -> int:

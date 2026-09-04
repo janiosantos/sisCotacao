@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -31,11 +32,17 @@ class RelinkTest(unittest.TestCase):
                     ("cadastro/1/foto.jpg", "ELE/CAB/foto.jpg", 6),
                 )
                 conn.commit()
+            (gallery / "manifest.json").write_text(
+                json.dumps({"hardlinks": 0, "copies": 1}), encoding="utf-8"
+            )
 
             result = relink(images, gallery)
 
             self.assertEqual(result["linked"], 1)
             self.assertTrue(source.samefile(target))
+            manifest = json.loads((gallery / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["hardlinks"], 1)
+            self.assertEqual(manifest["copies"], 0)
 
 
 if __name__ == "__main__":
