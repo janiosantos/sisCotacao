@@ -26,9 +26,9 @@ LOGIN_RATE_LIMIT = max(1, int(os.getenv("LOGIN_RATE_LIMIT", "5")))
 LOGIN_RATE_WINDOW_SECONDS = max(30, int(os.getenv("LOGIN_RATE_WINDOW_SECONDS", "300")))
 ENVIRONMENT = os.getenv("CATALOG_ENV", "development").strip().lower()
 
-if ENVIRONMENT == "production" and SECRET_KEY == "catalog-server-local-dev":
+if ENVIRONMENT in ("production", "staging") and SECRET_KEY == "catalog-server-local-dev":
     raise RuntimeError(
-        "CATALOG_SECRET deve ser configurada com um valor forte em produção"
+        "CATALOG_SECRET deve ser configurada com um valor forte em produção/staging"
     )
 
 PAGE_SIZE = 60

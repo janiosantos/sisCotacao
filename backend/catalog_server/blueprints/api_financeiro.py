@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 
 from catalog_server.repositories import adiantamento_repo, caixa_repo, centro_custo_repo, condicao_repo, contas_repo
 from catalog_server.services import caixa_sessao, cobranca
@@ -649,7 +649,19 @@ def anexar_documento(tabela: str, conta_id: int):
     import os
     import uuid as _uuid
 
-    ext = os.path.splitext(arquivo.filename)[1] or ".pdf"
+    ext = os.path.splitext(arquivo.filename)[1].lower() or ".pdf"
+    if ext not in {".pdf", ".png", ".jpg", ".jpeg"}:
+        return jsonify({"error": "Formato de anexo não permitido (use PDF, PNG ou JPG)"}), 400
+    assinatura = arquivo.stream.read(16)
+    arquivo.stream.seek(0)
+    assinaturas = {
+        ".pdf": assinatura.startswith(b"%PDF-"),
+        ".png": assinatura.startswith(b"\x89PNG\r\n\x1a\n"),
+        ".jpg": assinatura.startswith(b"\xff\xd8\xff"),
+        ".jpeg": assinatura.startswith(b"\xff\xd8\xff"),
+    }
+    if not assinaturas[ext]:
+        return jsonify({"error": "O conteúdo não corresponde ao formato informado"}), 400
     filename = f"anexo_{tabela}_{conta_id}_{_uuid.uuid4().hex[:12]}{ext}"
     base = os.environ.get("COMPROVANTES_DIR", "/app/images/comprovantes")
     os.makedirs(base, exist_ok=True)
@@ -673,3 +685,26 @@ def listar_anexos(tabela: str, conta_id: int):
             "SELECT * FROM conta_anexo WHERE tabela=? AND conta_id=? ORDER BY id",
             (tabela, conta_id),
         ).fetchall()])
+
+
+@api_financeiro_bp.get("/api/financeiro/anexo/<tabela>/<int:conta_id>/download/<path:filename>")
+def baixar_anexo(tabela: str, conta_id: int, filename: str):
+    """Download autenticado do anexo — valida que o arquivo pertence à conta."""
+    import os
+
+    if tabela not in ("pagar", "receber"):
+        return jsonify({"error": "tabela inválida"}), 400
+    if not filename or "/" in filename or "\\" in filename:
+        return jsonify({"error": "arquivo inválido"}), 400
+    with system_conn() as conn:
+        row = conn.execute(
+            "SELECT filename FROM conta_anexo WHERE tabela=? AND conta_id=? AND filename=?",
+            (tabela, conta_id, filename),
+        ).fetchone()
+    if not row:
+        return jsonify({"error": "anexo não encontrado"}), 404
+    base = os.environ.get("COMPROVANTES_DIR", "/app/images/comprovantes")
+    caminho = os.path.join(base, filename)
+    if not os.path.isfile(caminho):
+        return jsonify({"error": "arquivo não encontrado"}), 404
+    return send_file(caminho, as_attachment=True, download_name=filename)

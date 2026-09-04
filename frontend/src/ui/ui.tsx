@@ -378,10 +378,15 @@ export function Modal({
 
   useEffect(() => {
     if (!open) return;
-    const previousFocus = document.activeElement as HTMLElement | null;
+const previousFocus = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    closeRef.current?.focus();
+    // Foco inicial: primeiro controle útil (ou data-autofocus explícito) em
+    // vez do botão Fechar — não rouba o foco de formulários com autoFocus.
+    const inicial = dialogRef.current?.querySelector<HTMLElement>(
+      '[data-autofocus], input:not([disabled]), select:not([disabled]), textarea:not([disabled])',
+    );
+    (inicial ?? closeRef.current)?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onCloseRef.current();

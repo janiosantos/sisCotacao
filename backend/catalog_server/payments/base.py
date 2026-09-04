@@ -48,7 +48,7 @@ class PaymentProvider(ABC):
     def _em_producao(self) -> bool:
         amb = (self.cfg.get("ambiente") or "").lower()
         env = os.getenv("CATALOG_ENV", "development").lower()
-        return amb == "producao" or env == "production"
+        return amb == "producao" or env in ("production", "staging")
 
     def validar_assinatura(self, payload: dict, headers: dict, query: dict | None = None) -> None:
         """Valida a autenticidade do webhook.

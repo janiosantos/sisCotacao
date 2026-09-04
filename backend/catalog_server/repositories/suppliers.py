@@ -49,6 +49,40 @@ class SupplierRepository:
 
     # ------------------------------------------------------------------
 
+    def list_page(
+        self,
+        somente_ativos: bool = False,
+        categoria: str | None = None,
+        termo: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[int, list[dict]]:
+        """Página de fornecedores com busca server-side."""
+        where: list[str] = []
+        args: list = []
+        if somente_ativos:
+            where.append("ativo = 1")
+        if categoria:
+            where.append("categoria = ?")
+            args.append(categoria)
+        if termo:
+            like = f"%{termo.strip()}%"
+            where.append(
+                "(nome ILIKE ? OR razao_social ILIKE ? OR cnpj_cpf ILIKE ?"
+                " OR cidade ILIKE ? OR representante ILIKE ?)"
+            )
+            args += [like, like, like, like, like]
+        w = (" WHERE " + " AND ".join(where)) if where else ""
+        with system_conn() as conn:
+            total = int(conn.execute(f"SELECT COUNT(*) FROM fornecedores{w}", args).fetchone()[0])
+            rows = conn.execute(
+                f"SELECT * FROM fornecedores{w} ORDER BY nome LIMIT ? OFFSET ?",
+                [*args, int(limit), int(offset)],
+            ).fetchall()
+            return total, [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+
     def get(self, fornecedor_id: int) -> dict | None:
         with system_conn() as conn:
             row = conn.execute(

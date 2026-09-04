@@ -25,6 +25,38 @@ class ClienteRepository:
 
     # ------------------------------------------------------------------
 
+    def list_page(
+        self,
+        somente_ativos: bool = False,
+        termo: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[int, list[dict]]:
+        """Página de clientes com busca server-side (listagem sem payload inteiro)."""
+        where: list[str] = []
+        args: list = []
+        if somente_ativos:
+            where.append("c.ativo = 1")
+        if termo:
+            like = f"%{termo.strip()}%"
+            where.append("(c.nome ILIKE ? OR c.doc ILIKE ? OR c.cidade ILIKE ? OR COALESCE(v.nome,'') ILIKE ?)")
+            args += [like, like, like, like]
+        w = (" WHERE " + " AND ".join(where)) if where else ""
+        with system_conn() as conn:
+            total = int(conn.execute(
+                f"SELECT COUNT(*) FROM clientes c LEFT JOIN vendedores v ON v.id=c.vendedor_id{w}",
+                args,
+            ).fetchone()[0])
+            rows = conn.execute(
+                f"SELECT c.*, v.nome AS vendedor_nome FROM clientes c"
+                f" LEFT JOIN vendedores v ON v.id=c.vendedor_id{w}"
+                f" ORDER BY c.nome LIMIT ? OFFSET ?",
+                [*args, int(limit), int(offset)],
+            ).fetchall()
+            return total, [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+
     def buscar(self, termo: str, limite: int = 10) -> list[dict]:
         termo = (termo or "").strip()
         if not termo:

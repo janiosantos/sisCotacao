@@ -11,8 +11,7 @@ from __future__ import annotations
 
 import os
 import uuid
-
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, request, send_file
 
 from catalog_server.db import system_conn
 from catalog_server.payments import service as payment_service
@@ -105,6 +104,25 @@ def anexar_comprovante(conta_id: int):
         current_app.logger.exception("Falha ao salvar comprovante")
         return jsonify({"error": "Não foi possível salvar o comprovante"}), 500
     return jsonify({"ok": True, "filename": filename})
+
+
+@api_payments_bp.get("/api/financeiro/receber/<int:conta_id>/comprovante/download/<path:filename>")
+def baixar_comprovante(conta_id: int, filename: str):
+    """Download autenticado do comprovante — valida que pertence à conta."""
+    if not filename or "/" in filename or "\\" in filename:
+        return jsonify({"error": "arquivo inválido"}), 400
+    with system_conn() as conn:
+        row = conn.execute(
+            "SELECT filename FROM conta_comprovante WHERE conta_id=? AND filename=?",
+            (conta_id, filename),
+        ).fetchone()
+    if not row:
+        return jsonify({"error": "comprovante não encontrado"}), 404
+    base = os.environ.get("COMPROVANTES_DIR", "/app/images/comprovantes")
+    caminho = os.path.join(base, filename)
+    if not os.path.isfile(caminho):
+        return jsonify({"error": "arquivo não encontrado"}), 404
+    return send_file(caminho, as_attachment=True, download_name=filename)
 
 
 # ─── Webhook (baixa automática) ─────────────────────────────

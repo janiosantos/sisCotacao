@@ -229,8 +229,12 @@ def _acao_da_rota(path: str, method: str) -> str | None:
         return especifica
     if method == "POST" and path.startswith("/api/impressao/orcamentos/"):
         return "imprimir"
-    # Emissão fiscal é uma operação distinta de cadastrar orçamento.
+# Emissão fiscal é uma operação distinta de cadastrar orçamento.
     if _rota_emissao_fiscal(path, method):
+        return "emitir"
+    # Rota independente de emissão de NF-e (api_fiscal_avancado): a emissão é
+    # a ação `emitir`, não `cadastrar` (segregação de funções fiscal).
+    if method == "POST" and path.startswith("/api/nfe/emitir/"):
         return "emitir"
     # Prefixos de config que casam qualquer sub-rota (ex.: /api/fiscal/config/5)
     if method == "PUT" and path.startswith("/api/fiscal/config/"):
@@ -482,6 +486,10 @@ def create_app() -> Flask:
 
     @app.get("/images/<path:name>")
     def images(name: str):
+        # Diretórios privados (comprovantes/anexos financeiros) nunca são
+        # servidos pela rota pública — o download passa por endpoint autenticado.
+        if name.startswith(("comprovantes/", "anexos/")):
+            abort(404, description="Não encontrado")
         return send_from_directory(config.IMAGES_DIR, name)
 
     @app.get("/api/health")

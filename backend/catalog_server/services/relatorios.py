@@ -151,13 +151,13 @@ def compras(data_inicio: str | None = None, data_fim: str | None = None) -> dict
                  COUNT(*) FILTER (WHERE status='cancelado') AS cancelados,
                  COALESCE(SUM(CASE WHEN status='recebido' THEN (data_recebida::date - data_pedido::date) END) /
                     NULLIF(COUNT(*) FILTER (WHERE status='recebido' AND data_recebida IS NOT NULL),0),0) AS lead_time_medio
-               FROM pedidos_compra WHERE COALESCE(data_pedido, criado_em::timestamptz)::date BETWEEN ? AND ?""",
+               FROM pedidos_compra WHERE COALESCE(data_pedido::date, data_geracao::date, criado_em::date) BETWEEN ? AND ?""",
             (inicio, fim),
         ).fetchone()
         valores = conn.execute(
             """SELECT COALESCE(SUM(pi.quantidade * pi.preco_unitario),0) AS comprado
                FROM pedido_itens pi JOIN pedidos_compra pc ON pc.id=pi.pedido_id
-               WHERE pc.status NOT IN ('cancelado') AND COALESCE(pc.data_pedido, pc.criado_em::timestamptz)::date BETWEEN ? AND ?""",
+               WHERE pc.status NOT IN ('cancelado') AND COALESCE(pc.data_pedido::date, pc.data_geracao::date, pc.criado_em::date) BETWEEN ? AND ?""",
             (inicio, fim),
         ).fetchone()
     return {"pedidos": int(pedidos["total"] or 0), "recebidos": int(pedidos["recebidos"] or 0),

@@ -122,8 +122,9 @@ def vendas_analitico(filters: Mapping[str, object] | None = None) -> dict:
             GROUP BY origem_id, produto_id
         ), linhas AS (
             SELECT o.id AS orcamento_id, o.criado_em,
-                   oi.produto_id, COALESCE(p.nome, oi.nome) AS produto_nome,
-                   COALESCE(oi.sku, p.sku, '') AS sku,
+                   oi.produto_id,
+                   MIN(COALESCE(p.nome, oi.nome)) AS produto_nome,
+                   MIN(COALESCE(oi.sku, p.sku, '')) AS sku,
                    p.categoria_id, COALESCE(cat.nome, 'Sem categoria') AS categoria_nome,
                    COALESCE(NULLIF(oi.marca,''), p.marca, 'Sem marca') AS marca,
                    o.usuario_id AS vendedor_id, COALESCE(u.nome, 'Nao informado') AS vendedor_nome,
@@ -147,10 +148,10 @@ def vendas_analitico(filters: Mapping[str, object] | None = None) -> dict:
             LEFT JOIN condicoes_pagamento cp ON cp.id=o.condicao_pagamento_id
             WHERE o.status IN ('finalizado','recebido')
               AND SUBSTR(o.criado_em,1,10) BETWEEN ? AND ?
-            GROUP BY o.id, o.criado_em, oi.produto_id, p.nome, oi.nome, oi.sku, p.sku,
-                     p.categoria_id, cat.nome, oi.marca, p.marca, o.usuario_id, u.nome,
-                     o.cliente_id, c.nome, o.cliente, c.segmento, o.deposito_id, dep.nome,
-                     o.modelo_documento, o.condicao_pagamento_id, cp.nome
+            GROUP BY o.id, o.criado_em, oi.produto_id, p.categoria_id, cat.nome,
+                     COALESCE(NULLIF(oi.marca,''), p.marca, 'Sem marca'),
+                     o.usuario_id, u.nome, o.cliente_id, c.nome, o.cliente, c.segmento,
+                     o.deposito_id, dep.nome, o.modelo_documento, o.condicao_pagamento_id, cp.nome
         ), agregado AS (
             SELECT {dim_id} AS dimensao_id, {dim_label} AS dimensao,
                    SUM(l.quantidade) AS quantidade,

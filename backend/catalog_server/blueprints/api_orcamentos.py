@@ -6,6 +6,7 @@ from werkzeug.security import check_password_hash
 
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.repositories.orcamentos import orcamento_repo, resumo_desconto
+from catalog_server.db import system_conn
 from catalog_server.services import venda_entrega, pagamento_venda, infra
 from catalog_server.orcamento_status import (
     STATUS_LIST,
@@ -344,7 +345,7 @@ def atualizar(orcamento_id: int):
                         descricao=f"Venda {orc.get('numero', '')}",
                         documento=orc.get("numero", ""),
                         _conn=conn,
-                    )
+)
 
                 for item in orc.get("itens", []):
                     qtd = float(item.get("quantidade") or 0)
@@ -353,29 +354,22 @@ def atualizar(orcamento_id: int):
                     vid = item.get("produto_id")
                     if not vid:
                         raise ValueError("item sem produto")
-                    if loja.bloquear_sem_estoque():
-                        estoque_repo.movimentar_fato(
-                            deposito_id=orc.get("deposito_id") or 1,
-                            produto_id=vid,
-                            tipo="saida",
-                            quantidade=qtd,
-                            idempotency_key=f"venda:{orcamento_id}:item:{item.get('id') or vid}",
-                            origem_tipo="venda",
-                            origem_id=orcamento_id,
-                            documento=orc.get("numero", ""),
-                            _conn=conn,
-                        )
-                    else:
-                        # Compatibilidade com a configuração legada que permite
-                        # venda sem saldo: ainda registra a baixa na transação.
-                        estoque_repo.movimentar(
-                            deposito_id=orc.get("deposito_id") or 1,
-                            produto_id=vid,
-                            tipo="saida",
-                            quantidade=qtd,
-                            documento=orc.get("numero", ""),
-                            _conn=conn,
-                        )
+                    # Livro de fatos para TODA saída de venda (rastreabilidade,
+                    # custo p/ CMV e idempotência). A config `bloquear_sem_estoque`
+                    # é só a regra de VALIDAÇÃO de saldo — o modelo de registro é
+                    # sempre o fato (ADR 0003).
+                    estoque_repo.movimentar_fato(
+                        deposito_id=orc.get("deposito_id") or 1,
+                        produto_id=vid,
+                        tipo="saida",
+                        quantidade=qtd,
+                        idempotency_key=f"venda:{orcamento_id}:item:{item.get('id') or vid}",
+                        origem_tipo="venda",
+                        origem_id=orcamento_id,
+                        documento=orc.get("numero", ""),
+                        permitir_saldo_negativo=not loja.bloquear_sem_estoque(),
+                        _conn=conn,
+                    )
 
                 contabil_gatilhos.disparar(
                     "venda_autorizada",
@@ -782,34 +776,46 @@ def cancelar(orcamento_id: int):
 
 @api_orcamentos_bp.post("/api/orcamentos/<int:orcamento_id>/devolver")
 def devolver(orcamento_id: int):
-    """Devolve uma venda de balcão: reverte o estoque (entrada) e cancela a venda."""
+    """Devolve uma venda de balcão: reverte o estoque (entrada) e cancela a venda.
+
+    Executa em transação única: se qualquer item falhar ao recompor o estoque,
+    faz rollback e NÃO altera contas nem o status da venda (sem confirmação
+    falsa de devolução). Cada entrada usa fato idempotente vinculado à venda.
+    """
     orc = orcamento_repo.buscar(orcamento_id)
     if orc is None:
         return jsonify({"error": "Orçamento não encontrado"}), 404
     if orc.get("status") not in ("finalizado", "recebido"):
         return jsonify({"error": "Apenas pedidos finalizados/recebidos podem ser devolvidos"}), 400
 
-    # Estorno do estoque (entrada) para cada item, invertendo a baixa feita no faturamento.
     devolvidos = 0
-    for item in orc.get("itens", []):
-        qtd = float(item.get("quantidade") or 0)
-        if qtd <= 0:
-            continue
-        vid = item.get("produto_id")
-        if not vid:
-            continue
-        try:
-            estoque_repo.movimentar(
-                deposito_id=orc.get("deposito_id") or 1, produto_id=vid,
-                tipo="entrada", quantidade=qtd,
+    with system_conn() as conn:
+        # Estorno do estoque (entrada) para cada item, invertendo a baixa feita
+        # no faturamento — fato idempotente vinculado à devolução.
+        for item in orc.get("itens", []):
+            qtd = float(item.get("quantidade") or 0)
+            if qtd <= 0:
+                continue
+            vid = item.get("produto_id")
+            if not vid:
+                continue
+            estoque_repo.movimentar_fato(
+                deposito_id=orc.get("deposito_id") or 1,
+                produto_id=vid,
+                tipo="entrada",
+                quantidade=qtd,
+                idempotency_key=f"devolucao:{orcamento_id}:item:{item.get('id') or vid}",
+                origem_tipo="devolucao",
+                origem_id=orcamento_id,
                 documento=f"DEV {orc.get('numero', '')}",
+                _conn=conn,
             )
             devolvidos += 1
-        except Exception:
-            pass
 
-    contas_repo.cancelar_por_documento(orc.get("numero", ""))
-    aplicar_transicao(orcamento_id, "devolvido")
+        contas_repo.cancelar_por_documento(orc.get("numero", ""), _conn=conn)
+        if not aplicar_transicao(orcamento_id, "devolvido", _conn=conn):
+            raise ValueError("Transição devolvido inválida")
+        conn.commit()
     return jsonify({"ok": True, "itens_devolvidos": devolvidos})
 
 

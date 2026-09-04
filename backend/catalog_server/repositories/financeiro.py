@@ -219,15 +219,20 @@ class ContasRepository:
             "saldo_restante": round(float(saldo_restante["saldo"] or 0), 2),
         }
 
-    def cancelar_por_documento(self, documento: str) -> int:
+    def cancelar_por_documento(self, documento: str, _conn=None) -> int:
         """Cancela as contas a receber ainda em aberto/parcial de um documento."""
-        with system_conn() as conn:
+        ctx = system_conn() if _conn is None else None
+        conn = _conn or ctx.__enter__()
+        try:
             cur = conn.execute(
                 "UPDATE contas_receber SET status='cancelado'"
                 " WHERE documento=? AND status IN ('aberto','parcial')",
                 (documento,),
             )
             return cur.rowcount
+        finally:
+            if ctx:
+                ctx.__exit__(None, None, None)
 
     def listar_pagar(
         self, status: str | None = None, fornecedor_id: int | None = None, vencimento_ate: str | None = None,

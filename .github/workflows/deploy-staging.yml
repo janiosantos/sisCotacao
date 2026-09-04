@@ -31,6 +31,8 @@ jobs:
     env:
       COMPOSE_PROJECT_NAME: siscom-staging
       COMPOSE_FILE: deployment/compose/docker-compose.staging.yml
+      CATALOG_STAGING_SECRET: ${{ secrets.CATALOG_STAGING_SECRET }}
+      PAYMENT_STAGING_WEBHOOK_SECRET: ${{ secrets.PAYMENT_STAGING_WEBHOOK_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5

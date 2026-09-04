@@ -34,8 +34,11 @@ class EmitenteRepository:
                 return existing["id"]
             cols = ", ".join(dados.keys())
             placeholders = ", ".join("?" for _ in dados)
-            conn.execute(f"INSERT INTO emitente ({cols}) VALUES ({placeholders})", list(dados.values()))
-            return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            cur = conn.execute(
+                f"INSERT INTO emitente ({cols}) VALUES ({placeholders}) RETURNING id",
+                list(dados.values()),
+            )
+            return int(cur.fetchone()["id"])
 
 
 class NfeSaidaRepository:

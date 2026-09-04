@@ -159,6 +159,7 @@ class EstoqueRepository:
         lote_id: int | None = None,
         usuario_id: int | None = None,
         custo_unitario: float | None = None,
+        permitir_saldo_negativo: bool = False,
         _conn=None,
     ) -> dict:
         """Fato de estoque idempotente (ADR 0003): retrida com a mesma
@@ -295,22 +296,22 @@ class EstoqueRepository:
                     if lote_id is not None:
                         self._validar_lote_saida(conn, lote_id)
                     disponivel = saldo_atual - reserva_atual
-                    if q > disponivel:
+                    if q > disponivel and not permitir_saldo_negativo:
                         raise ValueError(
                             f"Estoque disponível insuficiente: {disponivel:g}"
                         )
-                    novo_saldo = saldo_atual - q
+                    novo_saldo = max(0, saldo_atual - q)
                 elif tipo == "ajuste":
                     novo_saldo = q
                 elif tipo == "transferencia":
                     if lote_id is not None:
                         self._validar_lote_saida(conn, lote_id)
                     disponivel = saldo_atual - reserva_atual
-                    if q > disponivel:
+                    if q > disponivel and not permitir_saldo_negativo:
                         raise ValueError(
                             f"Estoque disponível insuficiente: {disponivel:g}"
                         )
-                    novo_saldo = saldo_atual - q
+                    novo_saldo = max(0, saldo_atual - q)
                 conn.execute(
                     "UPDATE estoque_saldo SET quantidade=?, custo_medio=?, atualizado_em=datetime('now')"
                     " WHERE id=?",

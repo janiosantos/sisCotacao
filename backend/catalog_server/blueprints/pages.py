@@ -40,8 +40,22 @@ _ORC_STATUS_LABEL = {
 }
 
 
+def _autorizar_impressao() -> None:
+    """Protege impressões HTML (rotas fora do gate /api): sessão + ação imprimir.
+
+    O operador abre estas páginas no próprio navegador (cookie de sessão), o
+    que impede acesso anônimo e IDOR por troca de id na URL.
+    """
+    actor = usuario_id_requisicao()
+    if not actor:
+        abort(401, description="Sessão necessária para imprimir")
+    if not permissao.tem_permissao(actor, "impressao", "imprimir"):
+        abort(403, description="Permissão negada: impressao.imprimir")
+
+
 @pages_bp.get("/etiquetas/imprimir")
 def etiquetas_imprimir():
+    _autorizar_impressao()
     raw_ids = (request.args.get("ids") or "").split(",")
     if not request.args.get("ids") or any(not x.strip().isdigit() for x in raw_ids):
         abort(400, description="Informe ids de produtos válidos para imprimir etiquetas")
@@ -56,6 +70,7 @@ def etiquetas_imprimir():
 
 @pages_bp.get("/orcamentos/<int:cotacao_id>/imprimir")
 def quote_print(cotacao_id: int):
+    _autorizar_impressao()
     data = quote_repo.get(cotacao_id)
     if data is None:
         abort(404)
@@ -68,6 +83,7 @@ def quote_print(cotacao_id: int):
 
 @pages_bp.get("/compras/pedidos/<int:pedido_id>/imprimir")
 def pedido_print(pedido_id: int):
+    _autorizar_impressao()
     pedido = compras_repo.get_pedido(pedido_id)
     if pedido is None:
         abort(404)
@@ -84,6 +100,7 @@ def pedido_print(pedido_id: int):
 
 @pages_bp.get("/orcamentos/venda/<int:orcamento_id>/imprimir")
 def orcamento_venda_print(orcamento_id: int):
+    _autorizar_impressao()
     orc = orcamento_repo.buscar(orcamento_id)
     if orc is None:
         abort(404)
@@ -112,6 +129,7 @@ def orcamento_venda_print(orcamento_id: int):
 @pages_bp.get("/orcamentos/<int:orcamento_id>/boleto")
 def orcamento_boleto(orcamento_id: int):
     """Impressão do(s) boleto(s) das parcelas de uma venda a prazo."""
+    _autorizar_impressao()
     orc = orcamento_repo.buscar(orcamento_id)
     if orc is None:
         abort(404)

@@ -18,6 +18,21 @@ def listar():
     ))
 
 
+@api_suppliers_bp.get("/api/fornecedores/pagina")
+def listar_pagina():
+    """Listagem paginada com busca server-side (contrato novo, não quebra o antigo)."""
+    somente_ativos = request.args.get("somente_ativos", "").lower() in ("1", "true")
+    categoria = request.args.get("categoria") or None
+    q = (request.args.get("q") or "").strip() or None
+    limit = min(max(int(request.args.get("limit", 50) or 50), 1), 200)
+    offset = max(int(request.args.get("offset", 0) or 0), 0)
+    total, itens = supplier_repo.list_page(
+        somente_ativos=somente_ativos, categoria=categoria, termo=q,
+        limit=limit, offset=offset,
+    )
+    return jsonify({"itens": itens, "total": total, "limit": limit, "offset": offset})
+
+
 @api_suppliers_bp.get("/api/fornecedores/<int:fornecedor_id>")
 def detalhar(fornecedor_id: int):
     f = supplier_repo.get(fornecedor_id)
