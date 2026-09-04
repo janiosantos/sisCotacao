@@ -22,10 +22,8 @@ COPY releases/ releases/
 # Scripts operacionais (inclui o backup validado pela suíte backend)
 COPY scripts/ scripts/
 ARG INSTALL_TEST_DEPS=0
-ENV UV_PROJECT_ENVIRONMENT="/usr/local"
-RUN pip install --no-cache-dir uv && \
-    uv sync --frozen --no-dev --no-install-project && \
-    if [ "$INSTALL_TEST_DEPS" = "1" ]; then uv sync --frozen --no-install-project; fi
+RUN pip install --no-cache-dir flask python-dotenv requests beautifulsoup4 lxml colorlog fake-useragent sqlalchemy "psycopg[binary]" rq redis openpyxl gunicorn && \
+    if [ "$INSTALL_TEST_DEPS" = "1" ]; then pip install --no-cache-dir pytest pytest-cov; fi
 EXPOSE 8000
 CMD ["gunicorn", "--preload", "--bind", "0.0.0.0:8000", "--workers", "3", "--threads", "4", \
      "--timeout", "60", "--graceful-timeout", "30", "catalog_server.run_server:app"]
