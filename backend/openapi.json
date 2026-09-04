@@ -466,6 +466,106 @@
         }
       }
     },
+    "/api/produtos/imagens/galeria/status": {
+      "get": {
+        "tags": [
+          "produtos"
+        ],
+        "summary": "Obtém uma sessão curta para a galeria preservada",
+        "responses": {
+          "200": {
+            "description": "Disponibilidade e URL assinada da galeria",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "available",
+                    "url",
+                    "max_selection"
+                  ],
+                  "properties": {
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "max_selection": {
+                      "type": "integer",
+                      "example": 12
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/produtos-cadastro/{produto_id}/imagens/galeria": {
+      "post": {
+        "tags": [
+          "produtos"
+        ],
+        "summary": "Importa imagens selecionadas na galeria preservada",
+        "parameters": [
+          {
+            "name": "produto_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "image_ids"
+                ],
+                "properties": {
+                  "image_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 12,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Imagens copiadas e registradas no produto"
+          },
+          "400": {
+            "description": "Seleção, formato, tamanho ou checksum inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Produto ou imagem não encontrado"
+          },
+          "503": {
+            "description": "Galeria indisponível"
+          }
+        }
+      }
+    },
     "/api/estoque/saldo": {
       "get": {
         "tags": [

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Galeria de produtos | Casa LM</title>
+    <link rel="stylesheet" href="./app.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Acervo preservado</p>
+        <h1>Galeria de produtos</h1>
+        <p class="subtitle">Localize fotos do catálogo anterior e reutilize-as no novo cadastro.</p>
+      </div>
+      <div class="selection" aria-live="polite">
+        <strong id="selection-count">0 selecionadas</strong>
+        <button id="confirm-selection" class="button primary" disabled>Usar no produto</button>
+      </div>
+    </header>
+
+    <main>
+      <form id="filters" class="filters" role="search">
+        <label class="search">
+          <span>Pesquisar por nome, marca ou categoria</span>
+          <input id="query" name="q" type="search" autocomplete="off" placeholder="Ex.: cabo flexível 2,5 mm" />
+        </label>
+        <label><span>Categoria</span><select id="category"><option value="">Todas</option></select></label>
+        <label><span>Subcategoria</span><select id="subcategory"><option value="">Todas</option></select></label>
+        <label><span>Marca</span><select id="brand"><option value="">Todas</option></select></label>
+        <button class="button" type="submit">Pesquisar</button>
+      </form>
+
+      <div class="result-bar">
+        <p id="result-summary">Carregando acervo...</p>
+        <p class="keyboard-help">Setas navegam, Espaço seleciona e Enter confirma.</p>
+      </div>
+      <section id="gallery" class="gallery" aria-label="Imagens encontradas" aria-busy="true"></section>
+      <div id="empty" class="empty" hidden>
+        <strong>Nenhuma imagem encontrada</strong>
+        <p>Tente reduzir os filtros ou pesquisar por outro termo.</p>
+      </div>
+      <nav class="pagination" aria-label="Paginação da galeria">
+        <button id="previous" class="button" type="button">Anterior</button>
+        <span id="page-label">Página 1</span>
+        <button id="next" class="button" type="button">Próxima</button>
+      </nav>
+    </main>
+
+    <div id="auth-error" class="dialog" role="alertdialog" aria-modal="true" hidden>
+      <div>
+        <h2>Sessão expirada</h2>
+        <p>Feche esta janela e abra novamente a galeria pelo cadastro do produto.</p>
+      </div>
+    </div>
+    <script src="./app.js" defer></script>
+  </body>
+</html>

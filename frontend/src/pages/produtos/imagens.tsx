@@ -1,5 +1,5 @@
 // pages/produtos/imagens.tsx — galeria de imagens do produto (upload, URL, capa, exclusão).
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type ProdutoCadastro } from "../../api/client";
 import { toast } from "../../ui/dom";
 import { Button, Input } from "../../ui/ui";
@@ -7,7 +7,11 @@ import { Button, Input } from "../../ui/ui";
 export function Imagens({ produto, setProduto }: { produto: ProdutoCadastro; setProduto: (p: ProdutoCadastro) => void }) {
   const [url, setUrl] = useState("");
   const [baixando, setBaixando] = useState(false);
+  const [importandoGaleria, setImportandoGaleria] = useState(false);
+  const [galeriaDisponivel, setGaleriaDisponivel] = useState(false);
   const uploadRef = useRef<HTMLInputElement>(null);
+  const galeriaPopup = useRef<Window | null>(null);
+  const galeriaOrigin = useRef("");
 
   const refresh = async () => {
     try {
@@ -53,9 +57,64 @@ export function Imagens({ produto, setProduto }: { produto: ProdutoCadastro; set
 
   const imgs = produto.imagens || [];
 
+  useEffect(() => {
+    api.statusGaleriaProdutos().then((value) => setGaleriaDisponivel(value.available)).catch(() => setGaleriaDisponivel(false));
+  }, []);
+
+  useEffect(() => {
+    const onMessage = async (event: MessageEvent) => {
+      if (
+        event.origin !== galeriaOrigin.current ||
+        event.source !== galeriaPopup.current ||
+        event.data?.type !== "siscom-gallery-selection" ||
+        !Array.isArray(event.data.imageIds)
+      ) return;
+      const imageIds = event.data.imageIds.filter(
+        (value: unknown): value is number => Number.isInteger(value) && Number(value) > 0
+      );
+      if (!imageIds.length) return;
+      setImportandoGaleria(true);
+      try {
+        const result = await api.importarImagensGaleria(produto.id, imageIds);
+        await refresh();
+        const complemento = result.deduplicadas ? `; ${result.deduplicadas} já existia(m)` : "";
+        toast(`${result.total} imagem(ns) adicionada(s)${complemento}`, "success");
+      } catch (error) {
+        toast("Erro ao importar da galeria: " + (error as Error).message, "error");
+      } finally {
+        setImportandoGaleria(false);
+        galeriaPopup.current = null;
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [produto.id]);
+
+  const abrirGaleria = async () => {
+    try {
+      const status = await api.statusGaleriaProdutos();
+      setGaleriaDisponivel(status.available);
+      if (!status.available) {
+        toast("A galeria preservada ainda não está disponível", "error");
+        return;
+      }
+      const target = new URL(status.url, window.location.href);
+      target.searchParams.set("return_origin", window.location.origin);
+      galeriaOrigin.current = target.origin;
+      galeriaPopup.current = window.open(
+        target.toString(),
+        "siscom-galeria-produtos",
+        "popup=yes,width=1320,height=860,resizable=yes,scrollbars=yes"
+      );
+      if (!galeriaPopup.current) toast("Permita pop-ups para abrir a galeria", "error");
+    } catch (error) {
+      toast("Não foi possível abrir a galeria: " + (error as Error).message, "error");
+    }
+  };
+
   return (
     <div>
-      <div className="mb-3 flex gap-2">
+      <div className="mb-3 flex flex-wrap gap-2">
         <label className="inline-flex cursor-pointer items-center justify-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
           Enviar arquivos
           <input ref={uploadRef} type="file" accept="image/*" multiple hidden onChange={onUpload} />
@@ -64,7 +123,19 @@ export function Imagens({ produto, setProduto }: { produto: ProdutoCadastro; set
         <Button variant="primary" onClick={() => void baixarUrl()} disabled={baixando}>
           {baixando ? "Baixando…" : "Baixar da internet"}
         </Button>
+        <Button
+          variant="secondary"
+          onClick={() => void abrirGaleria()}
+          disabled={!galeriaDisponivel || importandoGaleria}
+          title={galeriaDisponivel ? "Selecionar imagens preservadas do catálogo anterior" : "Galeria ainda não instalada"}
+        >
+          {importandoGaleria ? "Importando…" : "Escolher da galeria"}
+        </Button>
       </div>
+
+      <p className="mb-4 text-xs text-gray-500">
+        A galeria preserva as fotos do catálogo anterior. Pesquise pelo nome, categoria, subcategoria ou marca e selecione até 12 imagens.
+      </p>
 
       {imgs.length === 0 ? (
         <p className="py-8 text-center text-sm text-gray-400">Nenhuma imagem. Envie arquivos ou informe a URL de uma página do produto.</p>

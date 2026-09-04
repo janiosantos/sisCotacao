@@ -1,0 +1,30 @@
+name: siscom-galeria
+
+services:
+  galeria-produtos:
+    container_name: siscom-galeria-produtos
+    image: siscom-galeria-produtos:${GALLERY_VERSION:-local}
+    build: .
+    user: "${GALLERY_UID:-1000}:${GALLERY_GID:-1000}"
+    environment:
+      - GALLERY_SESSION_SECRET=${GALLERY_SESSION_SECRET:?GALLERY_SESSION_SECRET obrigatoria}
+      - GALLERY_DATA_DIR=/data
+      - GALLERY_BASE_PATH=/galeria
+      - GALLERY_PORT=8091
+    volumes:
+      - ../data:/data:ro
+    expose:
+      - "8091"
+    networks:
+      - siscom
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/galeria/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+networks:
+  siscom:
+    external: true
+    name: ${SISCOM_NETWORK:-siscom_default}

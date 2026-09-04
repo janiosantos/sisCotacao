@@ -546,6 +546,10 @@ class ProdutoRepository:
         filename: str,
     ) -> int:
         with system_conn() as conn:
+            conn.execute(
+                "SELECT id FROM produtos_cadastro WHERE id=? FOR UPDATE",
+                (produto_id,),
+            )
             row = conn.execute(
                 "SELECT COALESCE(MAX(ordem), -1) + 1 AS n FROM imagens_produto WHERE produto_id=?",
                 (produto_id,),
@@ -556,6 +560,29 @@ class ProdutoRepository:
                 (produto_id, filename, row["n"]),
             )
             return cur.lastrowid
+
+    def add_imagens(self, produto_id: int, filenames: list[str]) -> list[int]:
+        """Registra varias imagens em uma unica transacao e preserva a ordem."""
+        if not filenames:
+            return []
+        with system_conn() as conn:
+            conn.execute(
+                "SELECT id FROM produtos_cadastro WHERE id=? FOR UPDATE",
+                (produto_id,),
+            )
+            row = conn.execute(
+                "SELECT COALESCE(MAX(ordem), -1) + 1 AS n FROM imagens_produto WHERE produto_id=?",
+                (produto_id,),
+            ).fetchone()
+            first_order = int(row["n"])
+            ids: list[int] = []
+            for offset, filename in enumerate(filenames):
+                cur = conn.execute(
+                    "INSERT INTO imagens_produto (produto_id, filename, ordem) VALUES (?,?,?)",
+                    (produto_id, filename, first_order + offset),
+                )
+                ids.append(int(cur.lastrowid))
+            return ids
 
     def delete_imagem(self, imagem_id: int) -> dict | None:
         with system_conn() as conn:

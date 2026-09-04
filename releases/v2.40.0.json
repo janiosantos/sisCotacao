@@ -1,0 +1,49 @@
+{
+  "versao": "v2.40.0",
+  "componentes": [
+    "backend",
+    "frontend",
+    "deployment"
+  ],
+  "correcoes": [
+    "Reset pre-go-live usa lista positiva, RESTRICT e recusa tabelas sem classificacao",
+    "Dry-run bloqueia a senha de teste conhecida do administrador",
+    "Importacao da galeria valida origem interna, tamanho, formato e SHA-256",
+    "Registros de varias imagens sao persistidos em uma unica transacao"
+  ],
+  "melhorias": [
+    "Preserva todo o acervo anterior com nomes por categoria, subcategoria, produto e marca",
+    "Usa hardlinks quando possivel para evitar duplicar aproximadamente 16 GiB",
+    "Galeria standalone possui busca, filtros, paginacao e navegacao por teclado",
+    "Workflow separa inventario, exportacao, verificacao, instalacao, reset e limpeza Docker"
+  ],
+  "recursos": [
+    "Selecao de ate 12 imagens da galeria diretamente no cadastro do produto",
+    "Backup final validado e token de confirmacao vinculado ao snapshot",
+    "Revogacao de sessoes antigas e limpeza da fila Redis depois do reset",
+    "Limpeza opcional apenas de imagens Docker nao utilizadas e cache de build"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.40.0",
+    "frontend": "siscom-frontend:v2.40.0"
+  },
+  "database": {
+    "migration": 156
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "pre_go_live_reset": true,
+    "standalone_product_gallery": true,
+    "gallery_keyboard_navigation": true,
+    "database_change": false
+  },
+  "rollback": {
+    "application": "Retornar as imagens v2.39.1; o acervo externo da galeria permanece intacto.",
+    "database": "Nao ha migration nesta release. Antes do reset, o workflow gera dump completo com SHA-256."
+  }
+}

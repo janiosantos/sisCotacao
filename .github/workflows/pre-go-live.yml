@@ -1,0 +1,189 @@
+name: Preparacao go-live producao
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Etapa controlada a executar"
+        required: true
+        default: inventory
+        type: choice
+        options:
+          - inventory
+          - export-images
+          - verify-images
+          - install-gallery
+          - dry-run-reset
+          - execute-reset
+          - docker-prune
+      confirmation:
+        description: "Token do dry-run (obrigatorio somente para execute-reset)"
+        required: false
+        type: string
+
+concurrency:
+  group: siscom-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  maintenance:
+    runs-on: [self-hosted, siscom-prod]
+    env:
+      COMPOSE_PROJECT_NAME: siscom
+      COMPOSE_FILE: deployment/compose/docker-compose.prod.yml
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      CATALOG_SECRET: ${{ secrets.CATALOG_SECRET }}
+      GALLERY_ROOT: /home/jpsantos/galeria-produtos
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Resolve a imagem ativa sem alterar containers
+        run: |
+          ACTIVE_IMAGE=$(docker ps \
+            --filter label=com.docker.compose.project=siscom \
+            --filter label=com.docker.compose.service=backend \
+            --format '{{.Image}}' | head -n 1)
+          case "$ACTIVE_IMAGE" in
+            siscom-backend:*) APP_VERSION=${ACTIVE_IMAGE#siscom-backend:} ;;
+            *) echo "ERRO: imagem ativa do backend nao identificada: $ACTIVE_IMAGE"; exit 1 ;;
+          esac
+          export APP_VERSION
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          docker compose config --quiet
+          docker compose exec -T backend sh -c 'test "$CATALOG_ENV" = production'
+
+      - name: Prepara diretorios externos da galeria
+        if: inputs.action != 'docker-prune'
+        run: |
+          mkdir -p "$GALLERY_ROOT/data" "$GALLERY_ROOT/app"
+          chmod 750 "$GALLERY_ROOT" "$GALLERY_ROOT/data" "$GALLERY_ROOT/app"
+
+      - name: Inventario somente leitura
+        if: inputs.action == 'inventory'
+        run: |
+          docker compose run --rm --no-deps -T \
+            -v "$GITHUB_WORKSPACE/backend/catalog_server/pre_go_live.py:/app/catalog_server/pre_go_live.py:ro" \
+            -v "$GALLERY_ROOT/data:/gallery:ro" \
+            backend python -m catalog_server.pre_go_live inventory
+
+      - name: Exporta todas as imagens para a galeria
+        if: inputs.action == 'export-images'
+        run: |
+          docker compose run --rm --no-deps -T \
+            -v "$GITHUB_WORKSPACE/backend/catalog_server/pre_go_live.py:/app/catalog_server/pre_go_live.py:ro" \
+            -v "$GALLERY_ROOT/data:/gallery" \
+            backend python -m catalog_server.pre_go_live export-images
+
+      - name: Verifica integralmente os checksums da galeria
+        if: inputs.action == 'verify-images'
+        run: |
+          docker compose run --rm --no-deps -T \
+            -v "$GITHUB_WORKSPACE/backend/catalog_server/pre_go_live.py:/app/catalog_server/pre_go_live.py:ro" \
+            -v "$GALLERY_ROOT/data:/gallery" \
+            backend python -m catalog_server.pre_go_live verify-images
+
+      - name: Instala e inicia a aplicacao standalone
+        if: inputs.action == 'install-gallery'
+        run: |
+          docker compose run --rm --no-deps -T \
+            -v "$GITHUB_WORKSPACE/backend/catalog_server/pre_go_live.py:/app/catalog_server/pre_go_live.py:ro" \
+            -v "$GALLERY_ROOT/data:/gallery:ro" \
+            backend python -m catalog_server.pre_go_live dry-run-reset >/dev/null
+          cp -a deployment/galeria_produtos/. "$GALLERY_ROOT/app/"
+          GALLERY_SESSION_SECRET="$CATALOG_SECRET" \
+          GALLERY_VERSION="${GITHUB_SHA::12}" \
+          GALLERY_UID="$(id -u)" \
+          GALLERY_GID="$(id -g)" \
+          SISCOM_NETWORK="siscom_default" \
+            docker compose -f "$GALLERY_ROOT/app/docker-compose.yml" \
+            --project-directory "$GALLERY_ROOT/app" up -d --build --wait
+          docker inspect --format '{{.State.Health.Status}}' siscom-galeria-produtos
+
+      - name: Gera plano e token do reset
+        if: inputs.action == 'dry-run-reset'
+        run: |
+          docker compose run --rm --no-deps -T \
+            -v "$GITHUB_WORKSPACE/backend/catalog_server/pre_go_live.py:/app/catalog_server/pre_go_live.py:ro" \
+            -v "$GALLERY_ROOT/data:/gallery:ro" \
+            backend python -m catalog_server.pre_go_live dry-run-reset
+
+      - name: Valida autorizacao destrutiva
+        if: inputs.action == 'execute-reset'
+        env:
+          RESET_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if ! printf '%s' "$RESET_CONFIRMATION" | grep -Eq '^[a-f0-9]{64}$'; then
+            echo "ERRO: informe o token hexadecimal de 64 caracteres emitido pelo dry-run."
+            exit 1
+          fi
+          test "$(docker inspect --format '{{.State.Health.Status}}' siscom-galeria-produtos)" = "healthy"
+
+      - name: Para escritores, gera backup final e executa o reset
+        if: inputs.action == 'execute-reset'
+        env:
+          RESET_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          restart_services() {
+            docker compose up -d backend worker scheduler impressao-worker
+          }
+          trap restart_services EXIT
+          docker compose stop backend worker scheduler impressao-worker
+          docker compose run --rm --no-deps -T \
+            -v "$GITHUB_WORKSPACE/backend/catalog_server/pre_go_live.py:/app/catalog_server/pre_go_live.py:ro" \
+            -v "$GALLERY_ROOT/data:/gallery" \
+            backend python -m catalog_server.pre_go_live verify-images
+          mkdir -p /home/jpsantos/siscom/backups
+          DB_BYTES=$(docker compose exec -T db psql -U "$POSTGRES_USER" \
+            -d "${POSTGRES_DB:-catalog}" -Atc \
+            "SELECT pg_database_size(current_database())")
+          FREE_BYTES=$(df -PB1 /home/jpsantos/siscom/backups | awk 'NR==2 {print $4}')
+          REQUIRED_BYTES=$((DB_BYTES + 1073741824))
+          if [ "$FREE_BYTES" -lt "$REQUIRED_BYTES" ]; then
+            echo "ERRO: espaco insuficiente para o backup final."
+            echo "Livre=$FREE_BYTES; minimo=$REQUIRED_BYTES; banco=$DB_BYTES"
+            exit 1
+          fi
+          BACKUP="/home/jpsantos/siscom/backups/pre-go-live-$(date -u +%Y%m%d-%H%M%S).dump"
+          docker compose exec -T db pg_dump \
+            -U "$POSTGRES_USER" -d "${POSTGRES_DB:-catalog}" -Fc > "$BACKUP"
+          sha256sum "$BACKUP" > "$BACKUP.sha256"
+          test -s "$BACKUP"
+          docker compose exec -T db pg_restore --list < "$BACKUP" >/dev/null
+          echo "Backup final criado e validado: $BACKUP"
+          test "$(docker compose exec -T redis redis-cli FLUSHDB)" = "OK"
+          test "$(docker compose exec -T redis redis-cli DBSIZE)" = "0"
+          docker compose run --rm --no-deps -T \
+            -v "$GITHUB_WORKSPACE/backend/catalog_server/pre_go_live.py:/app/catalog_server/pre_go_live.py:ro" \
+            -v "$GALLERY_ROOT/data:/gallery:ro" \
+            backend python -m catalog_server.pre_go_live reset \
+            --confirmation "$RESET_CONFIRMATION"
+
+      - name: Valida aplicacao apos reset
+        if: inputs.action == 'execute-reset'
+        run: |
+          for i in $(seq 1 30); do
+            if curl -ksfSL https://localhost/api/pronto >/dev/null 2>&1; then
+              echo "SISCOM pronto apos reset"
+              exit 0
+            fi
+            sleep 3
+          done
+          docker compose ps
+          docker compose logs --tail=100 backend
+          exit 1
+
+      - name: Remove somente imagens Docker sem container e cache de build
+        if: inputs.action == 'docker-prune'
+        run: |
+          echo "Uso antes da limpeza:"
+          docker system df
+          docker image prune --all --force
+          docker builder prune --all --force
+          echo "Uso depois da limpeza:"
+          docker system df
+          echo "Volumes e containers nao foram removidos."

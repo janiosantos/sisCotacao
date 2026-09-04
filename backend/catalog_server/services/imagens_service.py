@@ -249,6 +249,26 @@ def salvar_uploads(produto_id: int, files, repo) -> list[str]:
     return saved
 
 
+def salvar_conteudo_galeria(
+    produto_id: int,
+    content: bytes,
+    extension: str,
+    digest: str,
+    gallery_image_id: int,
+) -> str | None:
+    """Salva uma imagem validada da galeria, sem confiar em caminho externo."""
+    if _conteudo_duplicado(produto_id, content):
+        return None
+    folder = _folder(produto_id)
+    folder.mkdir(parents=True, exist_ok=True)
+    extension = extension if extension in _IMG_EXT else ".jpg"
+    name = f"galeria_{gallery_image_id}_{digest[:12]}{extension}"
+    target = folder / name
+    target.write_bytes(content)
+    relative = _relpath(produto_id, name)
+    return relative
+
+
 def baixar_de_url(produto_id: int, url: str, repo) -> tuple[list[dict], list[str]]:
     """Baixa imagens de uma URL (página de produto ou imagem direta).
 

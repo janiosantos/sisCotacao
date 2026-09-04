@@ -20,6 +20,7 @@ from catalog_server.services import produto_identificador as ident_svc
 from catalog_server.services import cadastro_importacao as cadastro_svc
 from catalog_server.services import importacao_planilha
 from catalog_server.services import produto_relacao as relacao_svc
+from catalog_server.services import galeria_service
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.db import system_conn
 from catalog_server.utils import image_url
@@ -296,6 +297,43 @@ def baixar_imagens_url(produto_id: int):
         "total": len(baixadas),
         "erros": erros,
     })
+
+
+@api_produtos_bp.get("/api/produtos/imagens/galeria/status")
+def galeria_status():
+    usuario_id = usuario_id_requisicao()
+    if usuario_id is None:
+        return jsonify({"error": "Sessao nao autenticada"}), 401
+    return jsonify(galeria_service.status(usuario_id))
+
+
+@api_produtos_bp.post("/api/produtos-cadastro/<int:produto_id>/imagens/galeria")
+def importar_imagens_galeria(produto_id: int):
+    if produto_repo.get_product(produto_id) is None:
+        return jsonify({"error": "Produto nao encontrado"}), 404
+    data = request.get_json(silent=True) or {}
+    values = data.get("image_ids")
+    if not isinstance(values, list) or any(
+        isinstance(value, bool) or not str(value).isdigit() for value in values
+    ):
+        return jsonify({"error": "image_ids deve ser uma lista de IDs numericos"}), 400
+    try:
+        result = galeria_service.importar(
+            produto_id, [int(value) for value in values], produto_repo
+        )
+    except galeria_service.GalleryImageNotFound as exc:
+        return jsonify({"error": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except galeria_service.GalleryUnavailable as exc:
+        return jsonify({"error": str(exc)}), 503
+    return jsonify(
+        {
+            "imagens": [image_url(path) for path in result["saved"]],
+            "total": len(result["saved"]),
+            "deduplicadas": result["deduplicated"],
+        }
+    ), 201
 
 
 # ----------------------------------------------------------------------

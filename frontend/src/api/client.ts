@@ -1380,6 +1380,17 @@ export const api = {
       `/api/produtos-cadastro/${produtoId}/imagens-url`,
       { url }
     ),
+  statusGaleriaProdutos: () =>
+    request<{ available: boolean; url: string; max_selection: number }>(
+      "GET",
+      "/api/produtos/imagens/galeria/status"
+    ),
+  importarImagensGaleria: (produtoId: number, imageIds: number[]) =>
+    request<{ imagens: string[]; total: number; deduplicadas: number }>(
+      "POST",
+      `/api/produtos-cadastro/${produtoId}/imagens/galeria`,
+      { image_ids: imageIds }
+    ),
   listarIrmaos: (produtoId: number) =>
     request<{ id: number; nome: string; marca: string; sku: string; descricao: string; atributos: Record<string, string> }[]>(
       "GET",

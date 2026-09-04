@@ -80,6 +80,20 @@ describe("request", () => {
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
     await expect(api.listarPagar({})).rejects.toThrow("Servidor indisponível");
   });
+
+  it("usa contratos tipados para sessão e importação da galeria", async () => {
+    fetchMock
+      .mockResolvedValueOnce(res(200, { available: true, url: "/galeria/?session=x", max_selection: 12 }))
+      .mockResolvedValueOnce(res(201, { imagens: ["/images/foto.jpg"], total: 1, deduplicadas: 0 }));
+
+    const status = await api.statusGaleriaProdutos();
+    expect(status.available).toBe(true);
+    await api.importarImagensGaleria(42, [7]);
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/produtos/imagens/galeria/status");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/produtos-cadastro/42/imagens/galeria");
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ image_ids: [7] });
+  });
 });
 
 describe("mensagemErro", () => {

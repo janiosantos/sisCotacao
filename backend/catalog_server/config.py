@@ -22,6 +22,11 @@ DEBUG = os.getenv("CATALOG_DEBUG", "0") == "1"
 OPEN_BROWSER = os.getenv("CATALOG_OPEN_BROWSER", "1") == "1"
 
 SECRET_KEY = os.getenv("CATALOG_SECRET", "catalog-server-local-dev")
+GALLERY_SESSION_SECRET = os.getenv("GALLERY_SESSION_SECRET", SECRET_KEY)
+GALLERY_PUBLIC_URL = os.getenv("GALLERY_PUBLIC_URL", "/galeria/")
+GALLERY_INTERNAL_URL = os.getenv(
+    "GALLERY_INTERNAL_URL", "http://siscom-galeria-produtos:8091/galeria"
+).rstrip("/")
 LOGIN_RATE_LIMIT = max(1, int(os.getenv("LOGIN_RATE_LIMIT", "5")))
 LOGIN_RATE_WINDOW_SECONDS = max(30, int(os.getenv("LOGIN_RATE_WINDOW_SECONDS", "300")))
 ENVIRONMENT = os.getenv("CATALOG_ENV", "development").strip().lower()
