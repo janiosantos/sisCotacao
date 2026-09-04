@@ -22,6 +22,7 @@ COPY releases/ releases/
 # Scripts operacionais (inclui o backup validado pela suíte backend)
 COPY scripts/ scripts/
 ARG INSTALL_TEST_DEPS=0
+ENV UV_PROJECT_ENVIRONMENT="/usr/local"
 RUN pip install --no-cache-dir uv && \
     uv sync --frozen --no-dev --no-install-project && \
     if [ "$INSTALL_TEST_DEPS" = "1" ]; then uv sync --frozen --no-install-project; fi
