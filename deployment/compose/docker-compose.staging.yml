@@ -108,6 +108,18 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  impressao-worker:
+    image: siscom-backend-staging:${APP_VERSION:?APP_VERSION obrigatório}
+    command: ["python", "-u", "-m", "catalog_server.jobs.impressao_worker"]
+    environment:
+      - DATABASE_URL=postgresql+psycopg://catalog:catalog@db:5432/catalog
+      - AUTO_MIGRATE=0
+      - CATALOG_ENV=staging
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   scheduler:
     image: siscom-backend-staging:${APP_VERSION:?APP_VERSION obrigatório}
     command: ["python", "-u", "-m", "catalog_server.jobs.scheduler"]

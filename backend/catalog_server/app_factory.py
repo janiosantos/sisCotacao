@@ -48,7 +48,6 @@ from catalog_server.blueprints import (
 )
 from catalog_server.services import quote_service
 from catalog_server.services.access_log import configure_health_probe_logging
-from catalog_server.services.impressao import impressao_service
 from catalog_server.db import system_conn
 
 
@@ -284,7 +283,7 @@ def _autorizar_acesso() -> None:
         abort(403, description=f"Permissão negada: {recurso}.{acao}")
 
 
-def create_app(*, bootstrap: bool = True, start_workers: bool = True) -> Flask:
+def create_app(*, bootstrap: bool = True, start_workers: bool = False) -> Flask:
     configure_health_probe_logging()
     app = Flask(__name__)
     # Limite global de request evita uploads e payloads JSON sem teto.
@@ -527,9 +526,12 @@ def create_app(*, bootstrap: bool = True, start_workers: bool = True) -> Flask:
     def payload_grande_demais(e):
         return {"error": "Payload ou arquivo excede o limite permitido", "code": "payload_too_large"}, 413
 
-    # Retaguarda de impressão: passa a drenar a fila de cupons assim que o
-    # sistema estiver de pé.
+    # Compatibilidade para execucoes locais explicitas. Nos ambientes Docker,
+    # a fila e drenada pelo servico dedicado `impressao-worker`, nunca pelo
+    # processo web/Gunicorn.
     if start_workers:
+        from catalog_server.services.impressao import impressao_service
+
         impressao_service.start_worker()
 
     return app

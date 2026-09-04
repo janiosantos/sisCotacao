@@ -1,0 +1,2 @@
+# Scripts executados nos runners Linux devem manter terminadores POSIX.
+*.sh text eol=lf

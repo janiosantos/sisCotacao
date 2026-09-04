@@ -89,6 +89,24 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  impressao-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-u", "-m", "catalog_server.jobs.impressao_worker"]
+    volumes:
+      - ./backend/catalog_server:/app/catalog_server
+      - ./images:/app/images
+    environment:
+      - DATABASE_URL=postgresql+psycopg://catalog:catalog@db:5432/catalog
+      - AUTO_MIGRATE=0
+      - IMAGES_DIR=/app/images
+      - TZ=America/Sao_Paulo
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   scheduler:
     build:
       context: .

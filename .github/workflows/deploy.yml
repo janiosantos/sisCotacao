@@ -20,6 +20,12 @@ on:
           - frontend
           - schema
 
+# O runner e o daemon Docker sao compartilhados com staging. Serializar os
+# workflows protege build, tagging, migracao e limpeza de cache.
+concurrency:
+  group: siscom-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     # Executa no self-hosted runner instalado no próprio servidor de produção.
@@ -60,22 +66,25 @@ jobs:
           V="${{ inputs.versao }}"
           if [ -z "$V" ]; then V="$(git describe --tags --always 2>/dev/null || echo dev)"; fi
           echo "tag=$V" >> "$GITHUB_OUTPUT"
+          echo "APP_VERSION=$V" >> "$GITHUB_ENV"
 
-      - name: Backup de segurança (somente se houver migration pendente)
-        if: steps.comp.outputs.migracoes == 'true'
+      - name: Preflight de espaco do Docker
         run: |
-          mkdir -p /home/jpsantos/siscom/backups
-          PENDING=$(docker compose -f deployment/compose/docker-compose.prod.yml exec -T backend \
-                      python -m migrations check 2>/dev/null \
-                      | sed -n 's/.*pendentes: \([0-9]*\).*/\1/p')
-          echo "migrações pendentes: ${PENDING:-0}"
-          if [ "${PENDING:-0}" != "0" ]; then
-            docker compose -f deployment/compose/docker-compose.prod.yml exec -T db pg_dump -U catalog -d catalog -Fc \
-              > "/home/jpsantos/siscom/backups/prod-pre-$(date +%Y%m%d-%H%M%S).dump"
-            echo "backup de segurança criado em /home/jpsantos/siscom/backups/"
-          else
-            echo "sem migrations pendentes; pulando backup"
+          # Nao remove containers, volumes ou imagens versionadas.
+          docker builder prune --all --force --filter 'until=24h'
+          docker image prune --force
+          DOCKER_ROOT="$(docker info --format '{{.DockerRootDir}}')"
+          DISPONIVEL_KB="$(df -Pk "$DOCKER_ROOT" | awk 'NR==2 {print $4}')"
+          if [ "${DISPONIVEL_KB:-0}" -lt 4194304 ]; then
+            docker builder prune --all --force
+            DISPONIVEL_KB="$(df -Pk "$DOCKER_ROOT" | awk 'NR==2 {print $4}')"
           fi
+          df -h "$DOCKER_ROOT"
+          if [ "${DISPONIVEL_KB:-0}" -lt 4194304 ]; then
+            echo "ERRO: menos de 4 GiB livres no filesystem do Docker."
+            exit 1
+          fi
+          docker compose -f deployment/compose/docker-compose.prod.yml config --quiet
 
       - name: Salva imagem atual (para rollback)
         if: steps.comp.outputs.backend == 'true'
@@ -83,41 +92,64 @@ jobs:
 
       - name: Build imagem do backend
         if: steps.comp.outputs.backend == 'true'
-        env:
-          APP_VERSION: ${{ steps.version.outputs.tag }}
         run: docker compose -f deployment/compose/docker-compose.prod.yml build backend
 
       - name: Build imagem do frontend
         if: steps.comp.outputs.frontend == 'true'
-        env:
-          APP_VERSION: ${{ steps.version.outputs.tag }}
         run: docker compose -f deployment/compose/docker-compose.prod.yml build frontend
+
+      - name: Backup de segurança (somente se houver migration pendente)
+        if: steps.comp.outputs.migracoes == 'true'
+        run: |
+          mkdir -p /home/jpsantos/siscom/backups
+          # A checagem usa a imagem NOVA, pois a imagem atualmente em execucao
+          # ainda nao conhece as migrations desta release.
+          PENDING=$(docker compose -f deployment/compose/docker-compose.prod.yml run --rm --no-deps backend \
+                      python -m migrations check 2>/dev/null \
+                      | sed -n 's/.*pendentes: \([0-9]*\).*/\1/p')
+          if [ -z "$PENDING" ]; then
+            echo "ERRO: nao foi possivel determinar as migrations pendentes."
+            exit 1
+          fi
+          echo "migrações pendentes: $PENDING"
+          if [ "$PENDING" != "0" ]; then
+            docker compose -f deployment/compose/docker-compose.prod.yml exec -T db \
+              pg_dump -U "$POSTGRES_USER" -d "${POSTGRES_DB:-catalog}" -Fc \
+              > "/home/jpsantos/siscom/backups/prod-pre-$(date +%Y%m%d-%H%M%S).dump"
+            echo "backup de segurança criado em /home/jpsantos/siscom/backups/"
+          else
+            echo "sem migrations pendentes; pulando backup"
+          fi
 
       # Regra 03: release imutável — além do latest, cada versão fica etiquetada
       # para diagnóstico e rollback pontual (qualquer tag, não só prev).
-      # A build do compose já etiqueta a versão (image: ...:${APP_VERSION}); aqui
-      # apenas movemos `latest` para a versão recém-buildada. NUNCA o contrário
-      # (latest -> versão) — isso sobrescreveria a imagem nova com a antiga.
+      # A build do compose ja etiqueta o componente alterado com a versao. Para
+      # releases parciais, o componente nao alterado recebe um alias imutavel da
+      # imagem atual para que `compose up` nunca tente buscar uma tag inexistente.
       - name: Etiqueta imagens com a versão da release
         run: |
-          docker tag "siscom-backend:${{ steps.version.outputs.tag }}" siscom-backend:latest
-          docker tag "siscom-frontend:${{ steps.version.outputs.tag }}" siscom-frontend:latest
+          if [ "${{ steps.comp.outputs.backend }}" = "true" ]; then
+            docker tag "siscom-backend:${{ steps.version.outputs.tag }}" siscom-backend:latest
+          else
+            docker tag siscom-backend:latest "siscom-backend:${{ steps.version.outputs.tag }}"
+          fi
+          if [ "${{ steps.comp.outputs.frontend }}" = "true" ]; then
+            docker tag "siscom-frontend:${{ steps.version.outputs.tag }}" siscom-frontend:latest
+          else
+            docker tag siscom-frontend:latest "siscom-frontend:${{ steps.version.outputs.tag }}"
+          fi
 
       - name: Para o backend (janela de manutenção — DDL sem tráfego)
         if: steps.comp.outputs.migracoes == 'true'
-        run: docker compose -f deployment/compose/docker-compose.prod.yml stop backend
+        run: docker compose -f deployment/compose/docker-compose.prod.yml stop backend worker scheduler impressao-worker
 
       - name: Aplica migrações pendentes (container one-off com a imagem nova)
         if: steps.comp.outputs.migracoes == 'true'
-        env:
-          APP_VERSION: ${{ steps.version.outputs.tag }}
         run: |
-          docker compose -f deployment/compose/docker-compose.prod.yml run --rm backend \
+          docker compose -f deployment/compose/docker-compose.prod.yml run --rm --no-deps backend \
             python -m catalog_server.versioning apply --origem deploy
 
       - name: Deploy (sobe containers)
-        env:
-          APP_VERSION: ${{ steps.version.outputs.tag }}
         run: docker compose -f deployment/compose/docker-compose.prod.yml up -d
 
       - name: Health gate - migrações + backend
@@ -133,6 +165,11 @@ jobs:
           done
           echo "backend não subiu após deploy"; \
             docker compose -f deployment/compose/docker-compose.prod.yml logs backend; exit 1
+
+      - name: Health gate - worker de impressão
+        run: |
+          docker compose -f deployment/compose/docker-compose.prod.yml exec -T impressao-worker python -c \
+            "from catalog_server.services.impressao import impressao_service; impressao_service.status(); print('impressao-worker OK')"
 
       # Regra 12: smoke pós-deploy — falha em qualquer checagem falha o deploy.
       - name: Smoke tests

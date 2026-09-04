@@ -148,6 +148,18 @@
         condition: service_healthy
     restart: unless-stopped
 
+  impressao-worker:
+    image: siscom-backend:${APP_VERSION:?APP_VERSION obrigatório}
+    command: ["python", "-u", "-m", "catalog_server.jobs.impressao_worker"]
+    environment:
+      - CATALOG_ENV=production
+      - AUTO_MIGRATE=0
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER obrigatório}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatório}@db:5432/${POSTGRES_DB:-catalog}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   scheduler:
     image: siscom-backend:${APP_VERSION:?APP_VERSION obrigatório}
     command: ["python", "-u", "-m", "catalog_server.jobs.scheduler"]

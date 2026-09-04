@@ -28,7 +28,9 @@ idiomas conhecidos para o dialeto Postgres antes de executar:
 """
 from __future__ import annotations
 
+import os
 import re
+import threading
 
 import sqlalchemy
 
@@ -293,18 +295,26 @@ class PgConnection:
     """Conexão compatível com o `sqlite3.Connection` dos repositórios."""
 
     _engines: dict[str, sqlalchemy.Engine] = {}
+    _engines_lock = threading.Lock()
 
     def __init__(self, url: str) -> None:
         self._url = url
-        # Engine compartilhado por URL com QueuePool para reutilização.
-        if url not in PgConnection._engines:
-            PgConnection._engines[url] = sqlalchemy.create_engine(
-                url, pool_pre_ping=True,
-                pool_size=10, max_overflow=20,
-                pool_timeout=10, pool_recycle=1800,
-                connect_args={"connect_timeout": 3},
-            )
-        self._engine = PgConnection._engines[url]
+        # Cada processo possui seu proprio pool. Os limites conservadores
+        # evitam que 3 workers Gunicorn + jobs esgotem o PostgreSQL.
+        with PgConnection._engines_lock:
+            if url not in PgConnection._engines:
+                pool_size = max(1, int(os.getenv("DB_POOL_SIZE", "5")))
+                max_overflow = max(0, int(os.getenv("DB_MAX_OVERFLOW", "5")))
+                PgConnection._engines[url] = sqlalchemy.create_engine(
+                    url,
+                    pool_pre_ping=True,
+                    pool_size=pool_size,
+                    max_overflow=max_overflow,
+                    pool_timeout=max(1, int(os.getenv("DB_POOL_TIMEOUT", "10"))),
+                    pool_recycle=max(60, int(os.getenv("DB_POOL_RECYCLE", "1800"))),
+                    connect_args={"connect_timeout": 3},
+                )
+            self._engine = PgConnection._engines[url]
         self._conn = self._engine.raw_connection()
         self.is_pg = True
 

@@ -617,14 +617,12 @@ class EstoqueRepository:
             "     AND m.produto_id=s.produto_id"
             " ) d ON TRUE"
         )
-        where: list[str] = []
+        where: list[str] = ["COALESCE(d.derivado,0) <> s.quantidade"]
         args: list = []
         if deposito_id is not None:
             where.append("s.deposito_id = ?")
             args.append(deposito_id)
-        if where:
-            sql += " WHERE " + " AND ".join(where)
-        sql += " AND COALESCE(d.derivado,0) <> s.quantidade"
+        sql += " WHERE " + " AND ".join(where)
         with system_conn() as conn:
             return [dict(r) for r in conn.execute(sql, args).fetchall()]
 

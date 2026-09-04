@@ -54,6 +54,20 @@ def test_reconciliar_tudo_identifica_divergencia():
         conn.commit()
     div = estoque_repo.reconciliar_tudo(did)
     assert any(d["produto_id"] == vid for d in div)
+    div_global = estoque_repo.reconciliar_tudo()
+    assert any(d["deposito_id"] == did and d["produto_id"] == vid for d in div_global)
+
+
+def test_reconciliar_tudo_global_omite_saldo_consistente():
+    did, vid = _setup()
+    estoque_repo.movimentar_fato(did, vid, "entrada", 5)
+
+    div = estoque_repo.reconciliar_tudo()
+
+    assert not any(
+        d["deposito_id"] == did and d["produto_id"] == vid
+        for d in div
+    )
 
 
 def test_api_inventario(system_db):

@@ -108,3 +108,15 @@ def test_api_reimprimir(system_db):
     r = client.post(f"/api/impressao/fila/{job}/reimprimir", headers=h)
     assert r.status_code == 202, r.get_json()
     assert client.get("/api/impressao/fila", headers=h).status_code == 200
+
+
+def test_claim_da_fila_e_atomico(system_db):
+    primeiro_id = impressao_service.enfileirar({"numero": "O-3"})
+    segundo_id = impressao_service.enfileirar({"numero": "O-4"})
+
+    primeiro = impressao_service._pegar_pendente()
+    segundo = impressao_service._pegar_pendente()
+
+    assert primeiro and primeiro["id"] == primeiro_id
+    assert segundo and segundo["id"] == segundo_id
+    assert impressao_service._pegar_pendente() is None

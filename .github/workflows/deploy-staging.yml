@@ -25,12 +25,19 @@ on:
           - rapido
           - completo
 
+# Staging e producao compartilham o mesmo runner/daemon Docker. Nunca executa
+# builds ou limpezas concorrentes com o workflow de producao.
+concurrency:
+  group: siscom-deploy
+  cancel-in-progress: false
+
 jobs:
   staging:
     runs-on: [self-hosted, siscom-prod]
     env:
       COMPOSE_PROJECT_NAME: siscom-staging
       COMPOSE_FILE: deployment/compose/docker-compose.staging.yml
+      APP_VERSION: ${{ inputs.app_version }}
       CATALOG_STAGING_SECRET: ${{ secrets.CATALOG_STAGING_SECRET }}
       PAYMENT_STAGING_WEBHOOK_SECRET: ${{ secrets.PAYMENT_STAGING_WEBHOOK_SECRET }}
     steps:
@@ -38,6 +45,36 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ inputs.branch }}
+
+      - name: Preflight de espaco do Docker
+        run: |
+          # Remove somente cache de build antigo e imagens sem tag. Containers,
+          # volumes e imagens versionadas de producao nao sao removidos.
+          docker builder prune --all --force --filter 'until=24h'
+          docker image prune --force
+
+          DOCKER_ROOT="$(docker info --format '{{.DockerRootDir}}')"
+          DISPONIVEL_KB="$(df -Pk "$DOCKER_ROOT" | awk 'NR==2 {print $4}')"
+          if [ "${DISPONIVEL_KB:-0}" -lt 4194304 ]; then
+            echo "Espaco ainda baixo; removendo o restante do cache de build nao utilizado."
+            docker builder prune --all --force
+            DISPONIVEL_KB="$(df -Pk "$DOCKER_ROOT" | awk 'NR==2 {print $4}')"
+          fi
+          df -h "$DOCKER_ROOT"
+          docker system df
+          if [ "${DISPONIVEL_KB:-0}" -lt 4194304 ]; then
+            echo "ERRO: menos de 4 GiB livres no filesystem do Docker."
+            exit 1
+          fi
+          docker compose config --quiet
+
+      - name: Build da imagem de testes
+        if: github.event.inputs.modo != 'rapido'
+        run: |
+          CI_IMAGE="siscom-backend:ci-${GITHUB_RUN_ID}"
+          echo "CI_BACKEND_IMAGE=$CI_IMAGE" >> "$GITHUB_ENV"
+          docker build --quiet --build-arg INSTALL_TEST_DEPS=1 \
+            -t "$CI_IMAGE" -f backend/Dockerfile . >/dev/null
 
       # GATE de CI: a branch não builda nem sobe se os testes falharem.
       # (modo=rapido pula as suítes — iteração rápida; smoke continua como gate).
@@ -54,19 +91,19 @@ jobs:
         run: bash deployment/scripts/test-frontend.sh
 
       - name: Build das imagens de staging
-        env:
-          APP_VERSION: ${{ inputs.app_version }}
         run: docker compose build
 
-      - name: Sobe o stack de staging
-        env:
-          APP_VERSION: ${{ inputs.app_version }}
-        run: docker compose up -d
+      - name: Sobe a infraestrutura de staging
+        run: docker compose up -d --wait db redis
 
       - name: Migrações no banco vazio de staging (teste real da cadeia)
         run: |
-          docker compose exec -T backend \
+          docker compose stop backend worker scheduler impressao-worker || true
+          docker compose run --rm --no-deps backend \
             python -m catalog_server.versioning apply --origem staging
+
+      - name: Sobe a aplicação de staging
+        run: docker compose up -d --wait
 
       - name: Health gate - staging
         run: |
@@ -77,6 +114,11 @@ jobs:
             sleep 3
           done
           echo "staging não subiu"; docker compose logs backend; exit 1
+
+      - name: Health gate - worker de impressão
+        run: |
+          docker compose exec -T impressao-worker python -c \
+            "from catalog_server.services.impressao import impressao_service; impressao_service.status(); print('impressao-worker OK')"
 
       # Mesma régua de smoke da produção, contra o ambiente de staging.
       - name: Smoke tests
@@ -91,4 +133,8 @@ jobs:
 
       - name: Limpa imagens órfãs
         if: always()
-        run: docker image prune -f
+        run: |
+          if [ -n "${CI_BACKEND_IMAGE:-}" ]; then
+            docker image rm "$CI_BACKEND_IMAGE" >/dev/null 2>&1 || true
+          fi
+          docker image prune -f

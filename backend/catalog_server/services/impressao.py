@@ -14,21 +14,23 @@ Drivers disponíveis (registry `_DRIVERS`):
   - `arquivo`    : grava os bytes em um arquivo (IMPRESSAO_ARQUIVO ou
                     ./cupom_impresso.bin) — útil para depuração sem impressora.
 
-A fila em `impressao_fila` é processada por um worker em thread: o sistema
-fica aguardando e drenando trabalhos sem interação — ao clicar em Imprimir o
-cupom vai direto ao driver, sem diálogo de impressora.
+A fila em `impressao_fila` é processada pelo serviço dedicado
+`impressao-worker`: ao clicar em Imprimir o cupom vai direto ao driver, sem
+diálogo de impressora e sem acoplar processamento ao servidor web.
 """
 from __future__ import annotations
 
 import json
+import logging
 import os
 import socket
 import threading
-import time
 from pathlib import Path
 from typing import Any
 
 from catalog_server.db import system_conn
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Builder ESC/POS
@@ -197,7 +199,7 @@ class ImpressaoService:
 
     def __init__(self) -> None:
         self._worker: threading.Thread | None = None
-        self._rodando = True
+        self._parar = threading.Event()
 
     # ------------------------------------------------------------------
 
@@ -282,27 +284,54 @@ class ImpressaoService:
     # ------------------------------------------------------------------
 
     def _drenar_fila(self) -> None:
-        while self._rodando:
-            job = self._pegar_pendente()
+        while not self._parar.is_set():
+            try:
+                job = self._pegar_pendente()
+            except Exception:  # noqa: BLE001
+                # O worker pode iniciar enquanto uma migration aditiva ainda
+                # esta sendo aplicada. Ele permanece vivo e tenta novamente.
+                logger.exception("Falha ao consultar a fila de impressao")
+                self._parar.wait(30)
+                continue
             if job is None:
-                time.sleep(0.5)
+                self._parar.wait(0.5)
                 continue
             try:
                 orc = json.loads(job["payload"])
                 self._imprimir_agora(orc)
                 self._marcar(job["id"], "ok", None)
             except Exception as exc:  # noqa: BLE001
-                self._marcar(job["id"], "erro", str(exc))
+                try:
+                    self._marcar(job["id"], "erro", str(exc))
+                except Exception:  # noqa: BLE001
+                    # Uma indisponibilidade momentanea do banco nao pode
+                    # encerrar definitivamente o consumidor.
+                    logger.exception(
+                        "Falha ao registrar erro do job de impressao %s",
+                        job.get("id"),
+                    )
+                    self._parar.wait(5)
 
     def _pegar_pendente(self) -> dict | None:
         with system_conn() as conn:
             row = conn.execute(
-                "SELECT * FROM impressao_fila WHERE status='pendente' ORDER BY id LIMIT 1"
+                """
+                WITH proximo AS (
+                    SELECT id
+                    FROM impressao_fila
+                    WHERE status='pendente'
+                    ORDER BY id
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 1
+                )
+                UPDATE impressao_fila AS fila
+                SET status='processando'
+                FROM proximo
+                WHERE fila.id=proximo.id
+                RETURNING fila.*
+                """
             ).fetchone()
-            if row is None:
-                return None
-            conn.execute("UPDATE impressao_fila SET status='processando' WHERE id=?", (row["id"],))
-            return dict(row)
+            return dict(row) if row is not None else None
 
     def _marcar(self, job_id: int, status: str, erro: str | None) -> None:
         with system_conn() as conn:
@@ -324,8 +353,17 @@ class ImpressaoService:
     def start_worker(self) -> None:
         if self._worker and self._worker.is_alive():
             return
+        self._parar.clear()
         self._worker = threading.Thread(target=self._drenar_fila, daemon=True)
         self._worker.start()
+
+    def run_worker(self) -> None:
+        """Executa o consumidor no processo dedicado ate receber SIGTERM."""
+        self._parar.clear()
+        self._drenar_fila()
+
+    def stop_worker(self) -> None:
+        self._parar.set()
 
 
 impressao_service = ImpressaoService()
