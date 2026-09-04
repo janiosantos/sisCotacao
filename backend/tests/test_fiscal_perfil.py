@@ -81,10 +81,22 @@ def test_api_sem_token_bloqueada(app_client_token):
 
 
 @pytest.fixture()
-def app_client_token():
+def app_client_token(system_db):
     from catalog_server.app_factory import create_app
+    from werkzeug.security import generate_password_hash
 
+    with system_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO usuarios (nome, login, senha_hash) VALUES (%s,%s,%s) RETURNING id",
+            ("Admin Fiscal", "admin_fiscal", generate_password_hash("x")),
+        )
+        uid = int(cur.fetchone()["id"])
+        conn.execute(
+            "INSERT INTO usuario_perfis (usuario_id, perfil_id) SELECT %s, id FROM perfis WHERE nome='Administrador'",
+            (uid,),
+        )
+        conn.commit()
     app = create_app()
     c = app.test_client()
-    tok = auth_token.criar_token({"id": 1, "login": "t", "perfil": "admin"})
+    tok = auth_token.criar_token({"id": uid, "login": "admin_fiscal"})
     return c, {"Authorization": f"Bearer {tok}"}
