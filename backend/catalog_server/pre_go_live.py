@@ -304,6 +304,35 @@ def _gallery_verification(gallery_dir: Path) -> dict[str, Any] | None:
     return data
 
 
+def check_gallery(gallery_dir: Path) -> dict[str, Any]:
+    proof = _gallery_verification(gallery_dir)
+    if proof is None:
+        raise RuntimeError("Galeria sem comprovacao valida ou com banco SQLite divergente")
+
+    exported_files = int(proof.get("exported_files", -1))
+    verification = proof.get("full_verification") or {}
+    checked_files = int(verification.get("checked_files", -1))
+    source_checked_files = int(verification.get("source_checked_files", -1))
+    error_count = int(verification.get("error_count", -1))
+    if exported_files <= 0:
+        raise RuntimeError("Galeria vazia ou com manifesto de exportacao invalido")
+    if error_count != 0 or checked_files != exported_files:
+        raise RuntimeError("A galeria ainda nao passou pela verificacao integral")
+    if source_checked_files != exported_files:
+        raise RuntimeError("As origens nao foram comparadas integralmente com a galeria")
+
+    return {
+        "ready": True,
+        "exported_files": exported_files,
+        "checked_files": checked_files,
+        "source_checked_files": source_checked_files,
+        "checked_bytes": int(verification.get("checked_bytes", 0)),
+        "database_sha256": proof["database_sha256"],
+        "hardlinks": int(proof.get("hardlinks", 0)),
+        "copies": int(proof.get("copies", 0)),
+    }
+
+
 def inventory(images_dir: Path, gallery_dir: Path) -> dict[str, Any]:
     with system_conn() as conn:
         tables = _public_tables(conn)
@@ -768,7 +797,15 @@ def reset_database(images_dir: Path, gallery_dir: Path, confirmation: str) -> di
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Preparacao controlada do go-live SISCOM")
     parser.add_argument(
-        "action", choices=("inventory", "export-images", "verify-images", "dry-run-reset", "reset")
+        "action",
+        choices=(
+            "inventory",
+            "export-images",
+            "verify-images",
+            "check-gallery",
+            "dry-run-reset",
+            "reset",
+        ),
     )
     parser.add_argument("--images-dir", default=os.getenv("IMAGES_DIR", "/app/images"))
     parser.add_argument("--gallery-dir", default=os.getenv("GALLERY_DATA_DIR", "/gallery"))
@@ -780,6 +817,7 @@ def main(argv: list[str] | None = None) -> int:
         "inventory": lambda: inventory(images_dir, gallery_dir),
         "export-images": lambda: export_images(images_dir, gallery_dir),
         "verify-images": lambda: verify_images(gallery_dir, images_dir),
+        "check-gallery": lambda: check_gallery(gallery_dir),
         "dry-run-reset": lambda: dry_run(images_dir, gallery_dir),
         "reset": lambda: reset_database(images_dir, gallery_dir, args.confirmation),
     }

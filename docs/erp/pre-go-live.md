@@ -73,7 +73,9 @@ nao forem possiveis, exige espaco para uma copia integral antes de iniciar.
 4. `deduplicate-images`: quando o Docker nao cria hardlinks entre bind mounts,
    substitui as copias usando uma unica montagem do filesystem do host.
 5. `verify-images`: releitura e validacao de todos os checksums.
-6. `install-gallery`: instalacao da aplicacao standalone e health check.
+6. `install-gallery`: valida o selo criptografico da exportacao, instala a aplicacao
+   standalone e executa o health check. Esta etapa independe da senha administrativa;
+   ela nao altera o banco do ERP.
 7. `dry-run-reset`: relatorio final e token vinculado ao snapshot.
 8. Confirmacao explicita do responsavel com o token apresentado.
 9. `execute-reset`: para escritores, repete a verificacao integral, valida o

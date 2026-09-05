@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
 from werkzeug.security import generate_password_hash
 
 from catalog_server import pre_go_live
@@ -160,3 +161,20 @@ def test_dry_run_recusa_senha_conhecida_do_admin(system_db, tmp_path):
         assert "senha de teste conhecida" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("Dry-run deveria recusar a credencial admin/admin123")
+
+
+def test_check_gallery_exige_verificacao_integral(system_db, tmp_path):
+    images_dir = tmp_path / "erp-images"
+    gallery_dir = tmp_path / "galeria"
+    _seed_product_with_image(images_dir)
+    pre_go_live.export_images(images_dir, gallery_dir)
+
+    with pytest.raises(RuntimeError, match="verificacao integral"):
+        pre_go_live.check_gallery(gallery_dir)
+
+    pre_go_live.verify_images(gallery_dir, images_dir)
+    result = pre_go_live.check_gallery(gallery_dir)
+    assert result["ready"] is True
+    assert result["exported_files"] == 1
+    assert result["checked_files"] == 1
+    assert result["source_checked_files"] == 1
