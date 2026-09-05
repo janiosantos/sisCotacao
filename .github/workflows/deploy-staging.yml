@@ -1,5 +1,5 @@
 name: Deploy Staging (siscom)
-run-name: Staging ${{ inputs.release_version }} @ ${{ github.ref_name }} (${{ inputs.modo }})
+run-name: Staging ${{ inputs.incremento }} @ ${{ github.ref_name }} (${{ inputs.modo }})
 
 # Valida uma branch em ambiente paralelo à produção, no próprio servidor:
 # projeto Docker separado (siscom-staging), banco vazio que nasce e é
@@ -7,11 +7,15 @@ run-name: Staging ${{ inputs.release_version }} @ ${{ github.ref_name }} (${{ in
 on:
   workflow_dispatch:
     inputs:
-      release_version:
-        description: 'Versão final planejada (ex.: v2.40.1)'
+      incremento:
+        description: 'Incremento em relação à última versão publicada'
         required: true
-        default: 'v2.40.1'
-        type: string
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
       modo:
         description: 'rápido pula as suítes de teste (iteração); completo roda o CI'
         required: true
@@ -47,13 +51,10 @@ jobs:
       - name: Valida release e define identificação do build
         id: release
         env:
-          RELEASE_VERSION: ${{ inputs.release_version }}
+          RELEASE_BUMP: ${{ inputs.incremento }}
           DEPLOY_MODE: ${{ inputs.modo }}
         run: |
-          if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "ERRO: versão deve seguir vMAJOR.MINOR.PATCH (ex.: v2.40.1)."
-            exit 1
-          fi
+          RELEASE_VERSION="$(python scripts/release_control.py next --bump "$RELEASE_BUMP")"
           if git rev-parse -q --verify "refs/tags/$RELEASE_VERSION" >/dev/null; then
             echo "ERRO: a versão final $RELEASE_VERSION já possui tag e não pode ser reutilizada."
             exit 1
@@ -100,6 +101,8 @@ jobs:
             echo "sha=$GITHUB_SHA"
           } >> "$GITHUB_OUTPUT"
           echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "Incremento selecionado: $RELEASE_BUMP"
+          echo "Versão calculada: $RELEASE_VERSION"
           echo "Código candidato: $GITHUB_SHA"
           echo "Imagem de staging: $APP_VERSION"
 
@@ -227,7 +230,8 @@ jobs:
             echo "- **Imagem frontend:** \`$FRONTEND_IMAGE\`"
             echo "- **Versão final planejada:** \`$RELEASE_VERSION\`"
             echo ""
-            echo "Abra **Actions > Deploy produção (siscom)** e informe somente a tag acima."
+            echo "Abra **Actions > Deploy produção (siscom)** e clique em **Run workflow**."
+            echo "A candidata aprovada mais recente será selecionada automaticamente, sem digitação."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Registra execução rápida como não promovível
@@ -248,4 +252,4 @@ jobs:
           if [ -n "${CI_BACKEND_IMAGE:-}" ]; then
             docker image rm "$CI_BACKEND_IMAGE" >/dev/null 2>&1 || true
           fi
-          docker image prune -f
+          docker image prune -f || true

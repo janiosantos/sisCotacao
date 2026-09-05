@@ -18,7 +18,7 @@
     "Staging completo cria release candidate imutavel e producao promove exatamente as imagens aprovadas"
   ],
   "recursos": [
-    "Deploy autonomo em dois passos pela interface do GitHub Actions",
+    "Deploy autonomo em dois passos pela interface do GitHub Actions, sem digitar versoes ou tags",
     "Validacao da candidata por run, workflow, resultado e SHA antes de acessar producao",
     "Componentes de deploy definidos automaticamente pelo manifesto"
   ],
@@ -40,6 +40,8 @@
     "product_import_error_workbook": true,
     "immutable_release_candidate": true,
     "promote_staging_images": true,
+    "automatic_semver_increment": true,
+    "automatic_rc_selection": true,
     "database_change": false
   },
   "rollback": {

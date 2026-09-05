@@ -239,13 +239,17 @@ O ambiente de desenvolvimento roda **em dois hosts em paralelo** (o serviço nã
 
 ### Promoção imutável e autônoma (vigente a partir da v2.40.1)
 
-- Staging é acionado manualmente com `release_version=vX.Y.Z`; a branch é escolhida
-  no seletor **Use workflow from** do GitHub Actions.
+- A última tag final `vX.Y.Z` é o baseline SemVer. Durante o desenvolvimento,
+  `python scripts/release_control.py next --bump patch|minor|major` calcula o nome
+  obrigatório do próximo manifesto, sem criar tag nem publicar ambiente.
+- Staging é acionado manualmente escolhendo somente `incremento=patch|minor|major`;
+  a versão é calculada do baseline e a branch vem de **Use workflow from**.
 - Apenas staging em modo `completo` pode criar a tag anotada
   `vX.Y.Z-rc.<run_id>.<tentativa>`. A anotação registra os IDs de conteúdo das imagens
   backend/frontend efetivamente testadas. Modo `rapido` nunca cria candidata.
-- Produção recebe somente `release_candidate`; não aceita branch, SHA avulso,
-  versão livre ou escolha manual de componentes.
+- Produção não recebe campos livres: seleciona automaticamente a tentativa mais
+  recente do único ciclo RC ainda não publicado. Não aceita branch, SHA avulso,
+  versão livre ou escolha manual de componentes; ciclos concorrentes são bloqueados.
 - O workflow produtivo valida formato e anotação da tag, run/attempt de staging
   concluído com sucesso, igualdade do SHA, manifesto e IDs das imagens Docker. Depois
   promove as mesmas imagens de staging, sem rebuild.

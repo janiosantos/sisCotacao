@@ -12,9 +12,9 @@ sobrescritos por dump/restore.
 - Staging completo cria automaticamente a tag anotada
   `vX.Y.Z-rc.<GITHUB_RUN_ID>.<TENTATIVA>` somente depois de migrations, testes, build,
   health, impressão, smoke e reconciliação ficarem verdes.
-- Produção aceita somente essa tag candidata, consulta o run pela API do GitHub,
-  confirma workflow, conclusão e SHA, valida o manifesto e promove as mesmas
-  imagens testadas.
+- Produção seleciona automaticamente a tentativa mais recente do único ciclo
+  candidato ainda não publicado, consulta o run pela API do GitHub, confirma
+  workflow, conclusão e SHA, valida o manifesto e promove as mesmas imagens.
 - Se houver migration pendente, faz `pg_dump` em
   `/home/jpsantos/siscom/backups/prod-pre-<timestamp>.dump` antes da aplicação.
 - A tag final `vX.Y.Z` é criada automaticamente somente depois de health, worker
@@ -39,19 +39,46 @@ configure seu próprio usuário como aprovador; nesse caso haverá uma confirma�
 adicional antes de qualquer operação produtiva.
 
 ## Fazer um deploy sem depender de terminal ou agente
-1. Garanta que a mudança e `releases/vX.Y.Z.json` estejam commitados no `main`.
+1. Garanta que a mudança e o manifesto da próxima versão estejam commitados no `main`.
 2. Abra **GitHub → Actions → Deploy Staging (siscom) → Run workflow**.
-3. Em **Use workflow from**, escolha `main`; informe `vX.Y.Z` em
-   `release_version`, selecione `completo` e execute.
-4. Quando o run ficar verde, abra o **Summary** e copie a tag exibida em
-   **Tag para produção**, por exemplo `v2.40.1-rc.33999999999.1`.
-5. Abra **GitHub → Actions → Deploy produção (siscom) → Run workflow**; cole a
-   tag no único campo `release_candidate` e execute.
-6. Acompanhe o Summary. Ao final, a tag definitiva `vX.Y.Z` estará criada e o
+3. Em **Use workflow from**, escolha `main`; selecione apenas o incremento
+   `patch`, `minor` ou `major`, mantenha `completo` e execute.
+4. O workflow calcula a versão e mostra no Summary a candidata criada, por
+   exemplo `v2.40.1-rc.33999999999.1`. Não é preciso copiar ou digitar a tag.
+5. Abra **GitHub → Actions → Deploy produção (siscom) → Run workflow**, escolha
+   `main` em **Use workflow from** e apenas clique em **Run workflow**.
+6. A produção seleciona e valida automaticamente a RC aprovada mais recente.
+   Ao final, a tag definitiva `vX.Y.Z` estará criada e o
    painel **Admin → Atualizações** mostrará apenas essa release.
 
 O modo `rapido` atualiza o staging para testes exploratórios, mas não roda a suíte
 completa e, por segurança, **não cria tag candidata promovível**.
+
+### Como a versão é incrementada
+
+A fonte da verdade é a maior tag final no formato estrito `vMAJOR.MINOR.PATCH`.
+Tags antigas com sufixos livres, como `v1.6.4-estavel`, não entram no cálculo.
+Partindo de `v2.40.0`:
+
+| Incremento selecionado | Versão calculada |
+|---|---|
+| `patch` | `v2.40.1` |
+| `minor` | `v2.41.0` |
+| `major` | `v3.0.0` |
+
+Durante o desenvolvimento, o responsável pode consultar antecipadamente o nome
+do manifesto sem criar tags nem alterar ambientes:
+
+```bash
+python scripts/release_control.py next --bump patch
+```
+
+O staging exige que `releases/<versão-calculada>.json` exista e corresponda à
+versão e às imagens esperadas. Só pode existir um ciclo de RC não publicado por
+vez; novas tentativas do mesmo ciclo são permitidas e produção escolhe a de maior
+`run_id/tentativa`. Isso elimina listas estáticas e entradas livres: o GitHub
+Actions não suporta preencher dinamicamente opções de um dropdown a partir das
+tags durante a abertura do formulário.
 
 ## Padrão de migração (importante)
 - **Classificação de risco**: todo arquivo `.py` declara `RISCO` no topo:
@@ -235,8 +262,8 @@ MUDANCA = {
 
 #### Publicar (autorização explícita)
 
-A publicação nunca é automática. A tela de produção possui somente o campo
-`release_candidate`; versão e componentes são lidos do manifesto versionado.
+A publicação nunca é automática. A tela de produção não possui campos: a RC é
+resolvida automaticamente e versão/componentes são lidos do manifesto versionado.
 O pipeline aplica internamente o seguinte mapeamento:
 
 | Componente | Promove backend | Promove frontend | Migrações |
@@ -254,9 +281,9 @@ altera **assinatura de API**, o manifesto deve listar `backend + frontend`
 Fluxo completo:
 1. Implemente em dev; commit com código, migration `00XX_*.py` (com `RISCO`)
    e o manifesto `releases/vX.Y.Z.json`.
-2. Execute staging completo e copie a tag candidata criada no Summary.
-3. Autorize produção informando a candidata; o pipeline registra somente o
-   manifesto da versão promovida.
+2. Execute staging completo escolhendo o incremento SemVer.
+3. Autorize produção com um segundo clique; o pipeline seleciona a candidata e
+   registra somente o manifesto da versão promovida.
 4. Confira no painel **Admin → Atualizações**: versão, estado e notas.
 
 > Tags são evidências imutáveis, não gatilhos automáticos. A candidata nasce

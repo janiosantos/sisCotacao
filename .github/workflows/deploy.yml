@@ -1,15 +1,10 @@
 name: Deploy produção (siscom)
-run-name: Produção ${{ inputs.release_candidate }}
+run-name: Produção - promove RC aprovada mais recente
 
 # Publicação SOMENTE mediante autorização explícita (Run workflow), usando uma
 # tag candidata criada após o staging completo. Não há gatilho automático por tag.
 on:
   workflow_dispatch:
-    inputs:
-      release_candidate:
-        description: 'Tag aprovada exibida no resumo do staging (ex.: v2.40.1-rc.123456789.1)'
-        required: true
-        type: string
 
 permissions:
   actions: read
@@ -40,13 +35,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.release_candidate }}
           fetch-depth: 0
+
+      - name: Seleciona automaticamente a candidata aprovada mais recente
+        id: candidate
+        run: |
+          RC_TAG="$(python scripts/release_control.py candidate)"
+          git checkout --detach "$RC_TAG"
+          echo "rc_tag=$RC_TAG" >> "$GITHUB_OUTPUT"
+          echo "Candidata selecionada automaticamente: $RC_TAG"
 
       - name: Valida tag candidata e manifesto
         id: release
         env:
-          RC_TAG: ${{ inputs.release_candidate }}
+          RC_TAG: ${{ steps.candidate.outputs.rc_tag }}
           WORKFLOW_REF: ${{ github.ref }}
         run: |
           if [ "$WORKFLOW_REF" != "refs/heads/main" ]; then
@@ -54,7 +56,7 @@ jobs:
             exit 1
           fi
           if [[ ! "$RC_TAG" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+)-rc\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "ERRO: informe uma tag candidata gerada pelo staging (vX.Y.Z-rc.RUN_ID.TENTATIVA)."
+            echo "ERRO: a candidata selecionada não segue vX.Y.Z-rc.RUN_ID.TENTATIVA."
             exit 1
           fi
           RELEASE_VERSION="${BASH_REMATCH[1]}"
@@ -334,4 +336,4 @@ jobs:
 
       - name: Limpa imagens órfãs
         if: always()
-        run: docker image prune -f
+        run: docker image prune -f || true

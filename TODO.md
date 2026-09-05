@@ -166,13 +166,13 @@ A suíte backend integral não foi declarada como aprovada nesta auditoria.
 Status: **✅ corrigido no código; nenhum deploy executado.**
 
 - [x] Staging completo cria tag candidata anotada somente depois de todos os gates.
-- [x] Produção recebe apenas a candidata e valida run, tentativa, workflow, SHA e manifesto.
+- [x] Produção seleciona automaticamente a RC pendente mais recente e valida run, tentativa, workflow, SHA e manifesto.
 - [x] Candidata de produção deve pertencer ao histórico de `main`.
 - [x] Produção promove os mesmos IDs de imagem testados, sem rebuild.
 - [x] Componentes são derivados do manifesto e a tag final nasce após os gates produtivos.
 - [x] Histórico registra exclusivamente a versão promovida.
 
-Validação: `actionlint` nos dois workflows, 21 testes backend direcionados,
-`py_compile`, JSON do manifesto e Compose de staging/produção verdes. O próximo
-passo operacional é o próprio usuário executar staging completo para v2.40.1 e,
-se verde, informar a candidata no workflow de produção.
+Validação: `actionlint` nos dois workflows e 27 testes backend combinados, incluindo
+6 testes do controle de release; `py_compile`, JSON do manifesto e Compose verdes. O próximo
+passo operacional é o próprio usuário executar staging completo com incremento
+`patch` e, se verde, clicar no workflow de produção sem informar tag.
