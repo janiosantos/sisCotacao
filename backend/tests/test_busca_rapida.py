@@ -43,7 +43,7 @@ def test_exata_rankeada_primeiro(system_db):
 
 def test_termo_textual(system_db):
     pid, did, _ = _setup(system_db)
-    r = catalog_repo.busca_rapida("cabo flex", deposito_id=did)
+    r = catalog_repo.busca_rapida("cabo flexivel", deposito_id=did)
     assert r and r[0]["id"] == pid
     assert r[0]["rank"] == 3
 

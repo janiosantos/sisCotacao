@@ -26,7 +26,11 @@ def resolver(conn: _Conn, nome: str) -> int | None:
     nome = (nome or "").strip()
     if not nome:
         return None
-    row = conn.execute("SELECT id FROM marcas WHERE nome=?", (nome,)).fetchone()
+    row = conn.execute(
+        "SELECT id FROM marcas"
+        " WHERE f_unaccent(LOWER(nome))=f_unaccent(LOWER(?))",
+        (nome,),
+    ).fetchone()
     if row is not None:
         return row["id"]
     return conn.execute(

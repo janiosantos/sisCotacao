@@ -1,8 +1,10 @@
 """API do cadastro de produtos (famílias, produtos, variações e imagens)."""
 from __future__ import annotations
 
+from io import BytesIO
+
 import requests
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 
 from catalog_server import categorias as cat_svc, unidades as unidades_svc
 from catalog_server.importar_catalogo import importar_json_conteudo
@@ -248,7 +250,7 @@ def importar_catalogo():
 def importar_planilha():
     """Importa lista de produtos de um arquivo CSV/XLSX.
 
-    Formato: 1 linha de cabeçalho com DESCRICAO (obrigatória) e colunas
+    Formato: 1 linha de cabeçalho com DESCRIÇÃO, DESCRICAO, NOME ou PRODUTO e colunas
     opcionais MARCA, GRUPO, SUBGRUPO, CATEGORIA, SUBCATEGORIA, FAMILIA.
     Produtos são criados como rascunho (ativo 0).
     """
@@ -267,6 +269,23 @@ def importar_planilha():
     except Exception as exc:  # pragma: no cover
         return jsonify({"error": f"Erro ao importar: {exc}"}), 500
     return jsonify({"ok": True, **resultado}), 201
+
+
+@api_produtos_bp.get("/api/produtos-cadastro/importacoes/<int:importacao_id>/erros.xlsx")
+def baixar_erros_importacao_planilha(importacao_id: int):
+    try:
+        relatorio = importacao_planilha.gerar_planilha_erros(importacao_id)
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "importacao_sem_erros"}), 409
+    if relatorio is None:
+        return jsonify({"error": "Importação não encontrada", "code": "nao_encontrado"}), 404
+    conteudo, nome = relatorio
+    return send_file(
+        BytesIO(conteudo),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=nome,
+    )
 
 
 # ----------------------------------------------------------------------

@@ -416,6 +416,151 @@
         }
       }
     },
+    "/api/produtos-cadastro/importar-planilha": {
+      "post": {
+        "tags": [
+          "produtos"
+        ],
+        "summary": "Importa produtos de CSV ou XLSX com rejeição isolada por linha",
+        "description": "Aceita DESCRIÇÃO, DESCRICAO, NOME ou PRODUTO como coluna principal. As linhas válidas são criadas como rascunho; linhas inválidas não interrompem o lote e geram relatório de correção.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Lote processado integral ou parcialmente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "importacao_id",
+                    "duplicado",
+                    "total",
+                    "criados",
+                    "atualizados",
+                    "erros",
+                    "erros_detalhe"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "importacao_id": {
+                      "type": "integer"
+                    },
+                    "duplicado": {
+                      "type": "boolean",
+                      "description": "Indica que o mesmo conteúdo já havia sido processado e o resultado auditado foi reutilizado"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "criados": {
+                      "type": "integer"
+                    },
+                    "atualizados": {
+                      "type": "integer",
+                      "description": "Produtos já existentes e ignorados"
+                    },
+                    "erros": {
+                      "type": "integer"
+                    },
+                    "erros_detalhe": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "linha": {
+                            "type": "integer"
+                          },
+                          "motivo": {
+                            "type": "string"
+                          },
+                          "sugestao": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "relatorio_erros_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Arquivo ou cabeçalho inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/produtos-cadastro/importacoes/{importacao_id}/erros.xlsx": {
+      "get": {
+        "tags": [
+          "produtos"
+        ],
+        "summary": "Baixa as linhas rejeitadas com motivo e sugestão",
+        "parameters": [
+          {
+            "name": "importacao_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Planilha XLSX pronta para correção e reimportação",
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Importação não encontrada"
+          },
+          "409": {
+            "description": "Importação sem linhas rejeitadas"
+          }
+        }
+      }
+    },
     "/api/produtos-cadastro/parse-url": {
       "post": {
         "tags": [

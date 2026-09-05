@@ -1442,10 +1442,22 @@ export const api = {
       formData
     ),
   importarPlanilha: (formData: FormData) =>
-    enviarArquivo<{ ok: boolean; total: number; criados: number; atualizados: number; erros: number; erros_detalhe: { linha: number; motivo: string }[] }>(
+    enviarArquivo<{
+      ok: boolean;
+      importacao_id: number;
+      duplicado: boolean;
+      total: number;
+      criados: number;
+      atualizados: number;
+      erros: number;
+      erros_detalhe: { linha: number; motivo: string; sugestao: string }[];
+      relatorio_erros_url: string | null;
+    }>(
       "/api/produtos-cadastro/importar-planilha",
       formData
     ),
+  baixarErrosImportacaoProdutos: (importacaoId: number) =>
+    requestBlob(`/api/produtos-cadastro/importacoes/${importacaoId}/erros.xlsx`),
 
   // Marcas
   listarMarcas: (somenteAtivas = false) =>

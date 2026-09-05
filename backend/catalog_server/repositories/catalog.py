@@ -102,13 +102,16 @@ class CatalogRepository:
         else:
             order_sql = _order_abc(ordenar, extra="p.id")
         if categoria:
-            where.append("cat.nome=?")
+            where.append("f_unaccent(LOWER(cat.nome))=f_unaccent(LOWER(?))")
             params.append(categoria)
         if subcategoria:
-            where.append("sub.nome=?")
+            where.append("f_unaccent(LOWER(sub.nome))=f_unaccent(LOWER(?))")
             params.append(subcategoria)
         if grupo:
-            where.append("(grp.codigo ILIKE ? OR grp.nome ILIKE ?)")
+            where.append(
+                "(f_unaccent(grp.codigo) ILIKE f_unaccent(?)"
+                " OR f_unaccent(grp.nome) ILIKE f_unaccent(?))"
+            )
             params += [grupo, grupo]
         if classe:
             where.append("p.classe_abc=?")
@@ -208,19 +211,26 @@ class CatalogRepository:
         where = ["p.ativo=1"]
         params: list = []
         if categoria:
-            where.append("cat.nome=?")
+            where.append("f_unaccent(LOWER(cat.nome))=f_unaccent(LOWER(?))")
             params.append(categoria)
         if subcategoria:
-            where.append("sub.nome=?")
+            where.append("f_unaccent(LOWER(sub.nome))=f_unaccent(LOWER(?))")
             params.append(subcategoria)
         if grupo:
-            where.append("(grp.codigo ILIKE ? OR grp.nome ILIKE ?)")
+            where.append(
+                "(f_unaccent(grp.codigo) ILIKE f_unaccent(?)"
+                " OR f_unaccent(grp.nome) ILIKE f_unaccent(?))"
+            )
             params += [grupo, grupo]
         if em_linha:
             where.append("p.em_linha=1")
         if q:
             like = f"%{q}%"
-            where.append("(p.nome LIKE ? OR p.marca LIKE ? OR p.sku LIKE ? OR p.ean LIKE ?)")
+            where.append(
+                "(f_unaccent(p.nome) ILIKE f_unaccent(?)"
+                " OR f_unaccent(p.marca) ILIKE f_unaccent(?)"
+                " OR p.sku ILIKE ? OR p.ean ILIKE ?)"
+            )
             params += [like, like, like, like]
         with system_conn() as conn:
             rows = conn.execute(
@@ -342,13 +352,16 @@ SELECT p.id, p.sku, p.preco, p.marca, p.external_id,
                          WHEN EXISTS (SELECT 1 FROM produto_identificador i
                                       WHERE i.produto_id=p.id AND i.ativo AND i.valor=?) THEN 1
                          WHEN p.sku ILIKE ? THEN 2
-                         WHEN p.nome ILIKE ? OR p.marca ILIKE ? THEN 3
+                         WHEN f_unaccent(p.nome) ILIKE f_unaccent(?)
+                           OR f_unaccent(p.marca) ILIKE f_unaccent(?) THEN 3
                          ELSE 4
                        END AS rank
                 FROM produtos_cadastro p
                 LEFT JOIN categorias cat ON cat.id=p.categoria_id
                 LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id
-                WHERE p.ean=? OR p.sku=? OR p.sku ILIKE ? OR p.nome ILIKE ? OR p.marca ILIKE ?
+                WHERE p.ean=? OR p.sku=? OR p.sku ILIKE ?
+                   OR f_unaccent(p.nome) ILIKE f_unaccent(?)
+                   OR f_unaccent(p.marca) ILIKE f_unaccent(?)
                    OR EXISTS (SELECT 1 FROM produto_identificador i
                               WHERE i.produto_id=p.id AND i.ativo
                                 AND (i.valor=? OR i.valor LIKE ?))

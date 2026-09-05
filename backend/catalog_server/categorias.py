@@ -25,7 +25,11 @@ def resolve_categoria(conn: _Conn, categoria: str) -> int | None:
     nome = _clean(categoria)
     if not nome:
         return None
-    row = conn.execute("SELECT id FROM categorias WHERE nome=?", (nome,)).fetchone()
+    row = conn.execute(
+        "SELECT id FROM categorias"
+        " WHERE f_unaccent(LOWER(nome))=f_unaccent(LOWER(?))",
+        (nome,),
+    ).fetchone()
     if row is not None:
         return row["id"]
     return conn.execute(
@@ -45,7 +49,8 @@ def resolve_subcategoria(
     if not categoria_id or not nome:
         return None
     row = conn.execute(
-        "SELECT id FROM subcategorias WHERE categoria_id=? AND nome=?",
+        "SELECT id FROM subcategorias WHERE categoria_id=?"
+        " AND f_unaccent(LOWER(nome))=f_unaccent(LOWER(?))",
         (categoria_id, nome),
     ).fetchone()
     if row is not None:
