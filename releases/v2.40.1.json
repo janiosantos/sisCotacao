@@ -14,7 +14,8 @@
     "Nginx local resolve novamente o endereco do Vite apos rebuilds sem retornar 502",
     "Pre-venda nao reutiliza cliente ou indicador entre atendimentos e nao salva rascunho silenciosamente",
     "Aviso de credito aparece somente para cliente identificado em venda a prazo com valor positivo",
-    "Qualquer resposta 401 em chamadas JSON, downloads ou uploads encerra a sessao e retorna ao login"
+    "Qualquer resposta 401 em chamadas JSON, downloads ou uploads encerra a sessao e retorna ao login",
+    "Workflows de staging e producao provisionam o Python usado pelo controle de release no runner"
   ],
   "melhorias": [
     "Coluna principal da planilha aceita DESCRICAO, NOME ou PRODUTO, com ou sem acento",

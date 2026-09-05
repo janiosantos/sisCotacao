@@ -37,6 +37,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configura Python do controle de release
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
       - name: Seleciona automaticamente a candidata aprovada mais recente
         id: candidate
         run: |
