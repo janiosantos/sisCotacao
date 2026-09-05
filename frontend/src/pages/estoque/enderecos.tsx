@@ -1,8 +1,9 @@
 // pages/estoque/enderecos.tsx — endereçamento (EST-007): posições, saldo por posição e movimentação logada.
 import { useEffect, useState } from "react";
-import { api, type EnderecoPosicao } from "../../api/client";
+import { api, type EnderecoPosicao, type ProdutoResumo } from "../../api/client";
 import { toast } from "../../ui/dom";
 import { Badge, Button, Cell, EmptyRow, Field, Input, Select, Table, TBody, THead } from "../../ui/ui";
+import { ProductSearch } from "../../ui/product-search";
 
 export function Enderecos({ depositos }: { depositos: { id: number; nome: string }[] }) {
   const [rows, setRows] = useState<EnderecoPosicao[]>([]);
@@ -12,6 +13,7 @@ export function Enderecos({ depositos }: { depositos: { id: number; nome: string
   const [itensPos, setItensPos] = useState<number | null>(null);
   const [itens, setItens] = useState<{ produto_id: number; sku: string; produto_nome: string; quantidade: number; primaria: boolean }[]>([]);
   const [mv, setMv] = useState({ produto: "", quantidade: "", de: "", para: "" });
+  const [produtoMovimento, setProdutoMovimento] = useState<ProdutoResumo | null>(null);
 
   const buscar = async () => {
     try {
@@ -74,6 +76,7 @@ export function Enderecos({ depositos }: { depositos: { id: number; nome: string
       });
       toast("Movimentado", "success");
       setMv({ produto: "", quantidade: "", de: "", para: "" });
+      setProdutoMovimento(null);
       await buscar();
       if (itensPos) await verEstoque(itensPos);
     } catch (e) {
@@ -103,8 +106,19 @@ export function Enderecos({ depositos }: { depositos: { id: number; nome: string
       <div className="rounded-md border border-gray-200 bg-white p-3">
         <div className="mb-2 text-xs font-semibold text-gray-500">Movimentar entre posições</div>
         <div className="flex flex-wrap items-end gap-3">
-          <Field label="Produto (ID)">
-            <Input className="w-20" inputMode="numeric" value={mv.produto} onChange={(e) => setMv((s) => ({ ...s, produto: e.target.value }))} />
+          <Field label="Produto" className="min-w-72 flex-1">
+            <ProductSearch
+              selected={produtoMovimento}
+              depositoId={Number(dep) || undefined}
+              onSelect={(item) => {
+                setProdutoMovimento(item);
+                setMv((atual) => ({ ...atual, produto: String(item.id) }));
+              }}
+              onClear={() => {
+                setProdutoMovimento(null);
+                setMv((atual) => ({ ...atual, produto: "" }));
+              }}
+            />
           </Field>
           <Field label="Quantidade">
             <Input className="w-20" inputMode="decimal" value={mv.quantidade} onChange={(e) => setMv((s) => ({ ...s, quantidade: e.target.value }))} />

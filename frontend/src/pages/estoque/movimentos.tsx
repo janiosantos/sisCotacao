@@ -1,10 +1,11 @@
 // pages/estoque/movimentos.tsx - módulo Estoque (Movimentos).
 
 import { useEffect, useState } from "react";
-import { api, type Deposito, type MovimentoItem, type MovimentoPayload } from "../../api/client";
+import { api, type Deposito, type MovimentoItem, type MovimentoPayload, type ProdutoResumo } from "../../api/client";
 import { fmtDate } from "../../ui/format";
 import { toast } from "../../ui/dom";
 import { Badge, Button, Cell, EmptyRow, Field, Input, Loading, Modal, Select, Table, TBody, THead, Textarea } from "../../ui/ui";
+import { ProductSearch } from "../../ui/product-search";
 
 export function Movimentos({ depositos }: { depositos: Deposito[] }) {
   const [rows, setRows] = useState<MovimentoItem[]>([]);
@@ -13,6 +14,7 @@ export function Movimentos({ depositos }: { depositos: Deposito[] }) {
   const [tipo, setTipo] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ deposito_id: "", tipo: "entrada", produto_id: "", quantidade: "", documento: "", observacao: "" });
+  const [produto, setProduto] = useState<ProdutoResumo | null>(null);
 
   const carregar = async () => {
     try {
@@ -45,6 +47,8 @@ export function Movimentos({ depositos }: { depositos: Deposito[] }) {
     try {
       await api.registrarMovimento(payload);
       setModalOpen(false);
+      setProduto(null);
+      setForm({ deposito_id: form.deposito_id, tipo: "entrada", produto_id: "", quantidade: "", documento: "", observacao: "" });
       toast("Movimento registrado", "success");
       await carregar();
     } catch (e) {
@@ -140,8 +144,19 @@ export function Movimentos({ depositos }: { depositos: Deposito[] }) {
               <option value="ajuste">Ajuste</option>
             </Select>
           </Field>
-          <Field label="Produto (ID)">
-            <Input type="number" min={1} value={form.produto_id} onChange={(e) => setForm({ ...form, produto_id: e.target.value })} />
+          <Field label="Produto">
+            <ProductSearch
+              selected={produto}
+              depositoId={Number(form.deposito_id) || undefined}
+              onSelect={(item) => {
+                setProduto(item);
+                setForm((atual) => ({ ...atual, produto_id: String(item.id) }));
+              }}
+              onClear={() => {
+                setProduto(null);
+                setForm((atual) => ({ ...atual, produto_id: "" }));
+              }}
+            />
           </Field>
           <Field label="Quantidade">
             <Input type="number" min="0.01" step="any" value={form.quantidade} onChange={(e) => setForm({ ...form, quantidade: e.target.value })} />

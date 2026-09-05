@@ -1,10 +1,11 @@
 // pages/estoque/lotes.tsx - módulo Estoque (Lotes) — rastreabilidade (EST-008).
 
 import { useEffect, useState } from "react";
-import { api, type Deposito, type LoteItem, type LotePayload, type RecallItem } from "../../api/client";
+import { api, type Deposito, type LoteItem, type LotePayload, type ProdutoResumo, type RecallItem } from "../../api/client";
 import { fmtDate, fmtMoney } from "../../ui/format";
 import { toast } from "../../ui/dom";
 import { Badge, Button, Cell, EmptyRow, Field, Input, Loading, Modal, Select, Table, TBody, THead } from "../../ui/ui";
+import { ProductSearch } from "../../ui/product-search";
 
 function statusLote(l: LoteItem): string {
   if (l.data_validade && l.data_validade.slice(0, 10) <= new Date().toISOString().slice(0, 10)) return "vencido";
@@ -18,6 +19,7 @@ export function Lotes({ depositos }: { depositos: Deposito[] }) {
   const [recall, setRecall] = useState<RecallItem[] | null>(null);
   const [recallProduto, setRecallProduto] = useState("");
   const [form, setForm] = useState({ deposito_id: "", produto_id: "", codigo: "", quantidade: "", fabricacao: "", validade: "", origem: "avulsa", documento: "", custo_unitario: "", observacao: "" });
+  const [produto, setProduto] = useState<ProdutoResumo | null>(null);
 
   const carregar = async () => {
     try {
@@ -53,6 +55,7 @@ export function Lotes({ depositos }: { depositos: Deposito[] }) {
     try {
       await api.criarLote(payload);
       setModalOpen(false);
+      setProduto(null);
       toast("Lote criado", "success");
       await carregar();
     } catch (e) {
@@ -177,8 +180,19 @@ export function Lotes({ depositos }: { depositos: Deposito[] }) {
               ))}
             </Select>
           </Field>
-          <Field label="Produto (ID)">
-            <Input type="number" min={1} value={form.produto_id} onChange={(e) => setForm({ ...form, produto_id: e.target.value })} />
+          <Field label="Produto">
+            <ProductSearch
+              selected={produto}
+              depositoId={Number(form.deposito_id) || undefined}
+              onSelect={(item) => {
+                setProduto(item);
+                setForm((atual) => ({ ...atual, produto_id: String(item.id) }));
+              }}
+              onClear={() => {
+                setProduto(null);
+                setForm((atual) => ({ ...atual, produto_id: "" }));
+              }}
+            />
           </Field>
           <Field label="Código do lote">
             <Input value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} />

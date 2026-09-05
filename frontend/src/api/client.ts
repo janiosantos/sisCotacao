@@ -21,6 +21,8 @@ export interface ProdutoResumo {
   unidade_venda?: string;
   embalagem_qtd?: number | null;
   ncm?: string;
+  category?: string;
+  subcategory?: string;
 }
 
 export interface Atributo {
@@ -425,6 +427,8 @@ export interface UsuarioPayload {
 export interface UsuarioAtual extends Usuario {
   autenticado: boolean;
   token?: string;
+  sessao_expira_em?: number;
+  app_version?: string;
 }
 
 export interface PerfilAcesso {
@@ -1057,8 +1061,34 @@ export function setToken(t: string | null): void {
   if (t) sessionStorage.setItem("sis_token", t);
   else sessionStorage.removeItem("sis_token");
 }
-function getToken(): string | null {
+export function getToken(): string | null {
   return _apiToken;
+}
+
+export const AUTH_EXPIRED_EVENT = "auth:expired";
+
+export function tokenExpiration(token = getToken()): number | null {
+  if (!token) return null;
+  try {
+    const data = token.split(".")[0];
+    const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="))) as { exp?: number };
+    return typeof payload.exp === "number" ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+export function encerrarSessaoExpirada(): void {
+  const tinhaToken = !!getToken();
+  setToken(null);
+  if (tinhaToken && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
+  }
+}
+
+function tratarNaoAutorizado(status: number): void {
+  if (status === 401) encerrarSessaoExpirada();
 }
 
 // Timeout padrão das chamadas: sem isso, uma requisição emitida no momento
@@ -1169,13 +1199,7 @@ async function request<T>(
       json,
     );
     if (res.status === 401) {
-      // Só força re-login se HAVIA token (expirou). Sem token, deixa o erro
-      // propagar para que o gate de sessão mostre a tela de login (evita loop).
-      // A navegação é agendada para que o chamador consiga tratar o ApiError.
-      if (getToken()) {
-        setToken(null);
-        window.setTimeout(() => window.location.reload(), 0);
-      }
+      tratarNaoAutorizado(res.status);
     }
     throw err;
   }
@@ -1201,7 +1225,12 @@ async function requestBlob(path: string): Promise<Blob> {
       detail = (json.error as string) || detail;
       code = json.code as string | undefined;
     } catch { /* resposta não-JSON */ }
-    throw new ApiError(res.status, detail, code);
+    tratarNaoAutorizado(res.status);
+    throw new ApiError(
+      res.status,
+      res.status === 401 ? "Sua sessão expirou. Faça login novamente." : detail,
+      code,
+    );
   }
   return res.blob();
 }
@@ -1245,7 +1274,13 @@ async function enviarArquivo<T>(
     } catch {
       /* resposta não-JSON */
     }
-    throw new ApiError(res.status, detail, code, json);
+    tratarNaoAutorizado(res.status);
+    throw new ApiError(
+      res.status,
+      res.status === 401 ? "Sua sessão expirou. Faça login novamente." : detail,
+      code,
+      json,
+    );
   }
   return (await res.json()) as T;
 }
@@ -2855,6 +2890,8 @@ export interface BuscaRapidaItem {
   rank: number;
   disponivel: number;
   disponibilidade?: { fisico: number; reservado: number; disponivel: number } | null;
+  categoria?: string | null;
+  subcategoria?: string | null;
 }
 
 export interface DashboardExecutivo {

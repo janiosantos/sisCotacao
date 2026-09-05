@@ -5,6 +5,7 @@ import { api, type Deposito } from "../../api/client";
 import { fmtDate } from "../../ui/format";
 import { toast } from "../../ui/dom";
 import { Badge, Button, Cell, Field, Input, Modal, Select, Table, TBody, THead } from "../../ui/ui";
+import { ProductSearch } from "../../ui/product-search";
 import { InventarioCiclo as InventarioCicloView } from "./inventario-ciclo";
 
 interface InventarioRow {
@@ -47,6 +48,7 @@ function InventarioSimples({ depositos, onCiclos }: { depositos: Deposito[]; onC
   const [invId, setInvId] = useState<number | null>(null);
   const [itens, setItens] = useState<InventarioItem[]>([]);
   const [contados, setContados] = useState<Record<number, string>>({});
+  const [produtoFoco, setProdutoFoco] = useState<number | null>(null);
 
   const carregar = async () => {
     try {
@@ -81,6 +83,7 @@ function InventarioSimples({ depositos, onCiclos }: { depositos: Deposito[]; onC
     try {
       const it = (await api.itensInventario(id)) as InventarioItem[];
       setItens(it);
+      setProdutoFoco(null);
       setContados(Object.fromEntries(it.map((i) => [i.id, String(i.quantidade_contada ?? i.quantidade_sistema)])));
     } catch {
       toast("Erro ao carregar itens", "error");
@@ -106,6 +109,13 @@ function InventarioSimples({ depositos, onCiclos }: { depositos: Deposito[]; onC
       toast("Erro: " + (e as Error).message, "error");
     }
   };
+
+  const itensVisiveis = produtoFoco == null
+    ? itens.slice(0, 100)
+    : [
+        ...itens.filter((item) => item.produto_id === produtoFoco),
+        ...itens.filter((item) => item.produto_id !== produtoFoco).slice(0, 99),
+      ];
 
   return (
     <div>
@@ -172,11 +182,29 @@ function InventarioSimples({ depositos, onCiclos }: { depositos: Deposito[]; onC
         wide
         footer={<Button onClick={() => setModalOpen(false)}>Fechar</Button>}
       >
+        <div className="mb-3 rounded-lg border border-brand-100 bg-brand-50/40 p-2">
+          <ProductSearch
+            clearOnSelect
+            onSelect={(produto) => {
+              const item = itens.find((atual) => atual.produto_id === produto.id);
+              if (!item) {
+                toast("Este produto não faz parte do inventário", "warn");
+                return;
+              }
+              setProdutoFoco(produto.id);
+              window.setTimeout(() => {
+                const input = document.getElementById(`inventario-contagem-${item.id}`) as HTMLInputElement | null;
+                input?.focus();
+                input?.select();
+              }, 0);
+            }}
+          />
+        </div>
         <Table>
           <THead cols={["Produto", "Localização", "Sistema", "Contado", ""]} />
           <TBody>
-            {itens.slice(0, 100).map((i) => (
-              <tr key={i.id} className="hover:bg-gray-50">
+            {itensVisiveis.map((i) => (
+              <tr key={i.id} className={i.produto_id === produtoFoco ? "bg-brand-50" : "hover:bg-gray-50"}>
                 <Cell>
                   <span className="font-medium">{i.produto_nome}</span>
                   {i.sku ? <div className="font-mono text-xs text-gray-400">{i.sku}</div> : null}
@@ -185,6 +213,7 @@ function InventarioSimples({ depositos, onCiclos }: { depositos: Deposito[]; onC
                 <Cell>{i.quantidade_sistema}</Cell>
                 <Cell>
                   <Input
+                    id={`inventario-contagem-${i.id}`}
                     type="number"
                     step="any"
                     value={contados[i.id] ?? ""}

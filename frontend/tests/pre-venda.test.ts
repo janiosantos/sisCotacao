@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBusca, produtoDaBuscaRapida, resolverBuscaAoEnter } from "../src/pages/pre-venda";
+import { deveConsultarCredito, parseBusca, produtoDaBuscaRapida, resolverBuscaAoEnter } from "../src/pages/pre-venda";
 
 describe("parseBusca do PDV", () => {
   it("separa quantidade e produto", () => {
@@ -16,6 +16,21 @@ describe("parseBusca do PDV", () => {
 
   it("não permite quantidade zero", () => {
     expect(parseBusca("0*cabo")).toEqual({ qtd: 1, termo: "cabo" });
+  });
+});
+
+describe("exibição de crédito no PDV", () => {
+  const vista = { id: 1, nome: "À vista", parcelas: [{ dias: 0, percentual: 100 }] };
+  const prazo = { id: 2, nome: "30/60", parcelas: [{ dias: 30, percentual: 50 }, { dias: 60, percentual: 50 }] };
+
+  it("não consulta crédito sem total ou em venda à vista", () => {
+    expect(deveConsultarCredito(22, 0, prazo)).toBe(false);
+    expect(deveConsultarCredito(22, 100, vista)).toBe(false);
+  });
+
+  it("consulta somente cliente identificado em venda a prazo", () => {
+    expect(deveConsultarCredito(1, 100, prazo)).toBe(false);
+    expect(deveConsultarCredito(22, 100, prazo)).toBe(true);
   });
 });
 

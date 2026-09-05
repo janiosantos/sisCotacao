@@ -9,10 +9,12 @@ import {
   type Invite,
   type MatrizComparacao,
   type MatrizItem,
+  type ProdutoResumo,
 } from "../api/client";
 import { fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
 import { Badge, Button, Card, Input, Loading, Select, StatCard } from "../ui/ui";
+import { ProductSearch } from "../ui/product-search";
 import { LinksPanel } from "./compras/links-panel";
 import { AguardandoRespostas } from "./compras/aguardando-respostas";
 import { EtapaPedidos } from "./compras/etapa-pedidos";
@@ -446,6 +448,21 @@ function EtapaLista({
             <p className="mt-1 text-xs text-gray-500">Revise os itens e quantidades antes de escolher os fornecedores.</p>
           </div>
           <Badge tone={draft.itens.length ? "blue" : "gray"}>{draft.itens.length} item(ns)</Badge>
+        </div>
+        <div className="mb-3 rounded-lg border border-brand-100 bg-brand-50/40 p-2">
+          <ProductSearch
+            clearOnSelect
+            placeholder="Leitura rápida: bipe o código e pressione Enter"
+            onSelect={(produto: ProdutoResumo) => adicionar({
+              id: produto.id,
+              name: produto.name,
+              sku: produto.sku,
+              brand: produto.brand,
+              category: produto.category,
+              price: produto.price,
+              imagem_url: produto.imagem_url,
+            })}
+          />
         </div>
         <div className="mb-3">
           <Input aria-label="Apelido da cotação" placeholder="Apelido amigável (ex.: Parafusos Agosto)" value={draft.apelido} onChange={(e) => { const next = { ...draft, apelido: e.target.value }; setDraft(next); salvar(next, cotacaoId); }} />

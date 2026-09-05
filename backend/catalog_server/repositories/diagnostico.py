@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from catalog_server.db import system_conn
+from catalog_server.repositories.busca import codigo_adicional_sql
 
 
 class DiagnosticoRepository:
@@ -26,9 +27,15 @@ class DiagnosticoRepository:
             where.append("d.revisado = ?")
             args.append(int(revisado))
         if termo:
-            where.append("(p.nome LIKE ? OR p.marca LIKE ? OR p.sku LIKE ? OR p.ean LIKE ?)")
+            where.append(
+                "(f_unaccent(p.nome) ILIKE f_unaccent(?) "
+                "OR f_unaccent(p.marca) ILIKE f_unaccent(?) "
+                "OR f_unaccent(p.sku) ILIKE f_unaccent(?) "
+                "OR f_unaccent(p.ean) ILIKE f_unaccent(?) "
+                f"OR {codigo_adicional_sql('p.id')})"
+            )
             like = f"%{termo}%"
-            args.extend([like, like, like, like])
+            args.extend([like, like, like, like, like])
         if where:
             sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY d.n_variantes DESC, p.nome LIMIT ?"

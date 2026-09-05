@@ -4,6 +4,7 @@ import uuid
 
 from catalog_server.db import system_conn
 from catalog_server.estoque.movimento import MovimentoEstoque
+from catalog_server.repositories.busca import codigo_adicional_sql
 
 
 class EstoqueRepository:
@@ -50,9 +51,14 @@ class EstoqueRepository:
             where.append("p.familia_id = ?")
             args.append(familia_id)
         if termo:
-            where.append("(p.nome LIKE ? OR p.sku LIKE ? OR p.marca LIKE ?)")
+            where.append(
+                "(f_unaccent(p.nome) ILIKE f_unaccent(?) "
+                "OR f_unaccent(p.sku) ILIKE f_unaccent(?) "
+                "OR f_unaccent(p.marca) ILIKE f_unaccent(?) "
+                f"OR {codigo_adicional_sql('p.id')})"
+            )
             like = f"%{termo}%"
-            args.extend([like, like, like])
+            args.extend([like, like, like, like])
         if where:
             sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY p.nome, p.sku"

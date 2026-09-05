@@ -1,9 +1,10 @@
 // pages/produtos/relacoes.tsx — relações entre produtos (MDM-005): equivalentes,
 // substitutos, acessórios, complementares e componentes de kit.
 import { useEffect, useState } from "react";
-import { api, type ProdutoRelacionado } from "../../api/client";
+import { api, type ProdutoRelacionado, type ProdutoResumo } from "../../api/client";
 import { toast } from "../../ui/dom";
 import { Button, Field, Input, Loading, Select } from "../../ui/ui";
+import { ProductSearch } from "../../ui/product-search";
 
 const TIPO_LABEL: Record<string, string> = {
   equivalente: "Equivalente",
@@ -20,6 +21,7 @@ export function Relacoes({ produtoId }: { produtoId: number }) {
   const [fator, setFator] = useState("1");
   const [prioridade, setPrioridade] = useState("1");
   const [salvando, setSalvando] = useState(false);
+  const [produtoRelacionado, setProdutoRelacionado] = useState<ProdutoResumo | null>(null);
 
   const carregar = async () => {
     setRows(null);
@@ -56,6 +58,7 @@ export function Relacoes({ produtoId }: { produtoId: number }) {
       });
       toast("Relação salva", "success");
       setRelacionadoId("");
+      setProdutoRelacionado(null);
       setFator("1");
       await carregar();
     } catch (e) {
@@ -121,8 +124,19 @@ export function Relacoes({ produtoId }: { produtoId: number }) {
               ))}
             </Select>
           </Field>
-          <Field label="Produto relacionado (ID)">
-            <Input type="number" min={1} value={relacionadoId} onChange={(e) => setRelacionadoId(e.target.value)} placeholder="ex.: 12345" />
+          <Field label="Produto relacionado" className="col-span-2 sm:col-span-2">
+            <ProductSearch
+              selected={produtoRelacionado}
+              excludeIds={[produtoId]}
+              onSelect={(item) => {
+                setProdutoRelacionado(item);
+                setRelacionadoId(String(item.id));
+              }}
+              onClear={() => {
+                setProdutoRelacionado(null);
+                setRelacionadoId("");
+              }}
+            />
           </Field>
           <Field label="Fator (qtd por unidade)">
             <Input inputMode="decimal" value={fator} onChange={(e) => setFator(e.target.value)} />

@@ -5,9 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import { api, type Cliente, type FiscalResultado, type ProdutoResumo } from "../../api/client";
 import { toast } from "../../ui/dom";
 import { Button, Field, Input, Loading, Select } from "../../ui/ui";
+import { ProductSearch } from "../../ui/product-search";
 
 export function Simulador() {
-  const [busca, setBusca] = useState("");
   const [cliBusca, setCliBusca] = useState("");
   const [uf, setUf] = useState("");
   const [tipoCliente, setTipoCliente] = useState("");
@@ -19,7 +19,6 @@ export function Simulador() {
   const [valor, setValor] = useState("100");
   const [desconto, setDesconto] = useState("0");
 
-  const [sugProd, setSugProd] = useState<ProdutoResumo[]>([]);
   const [sugCli, setSugCli] = useState<Cliente[]>([]);
   const [selecionada, setSelecionada] = useState<ProdutoResumo | null>(null);
   const [clienteId, setClienteId] = useState<number | null>(null);
@@ -28,23 +27,7 @@ export function Simulador() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
 
-  const timerP = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const timerC = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  useEffect(() => {
-    clearTimeout(timerP.current);
-    if (!busca.trim()) {
-      setSugProd([]);
-      return;
-    }
-    timerP.current = setTimeout(() => {
-      void api
-        .listarProdutos({ q: busca.trim(), limit: 8, agrupado: 0 })
-        .then((res) => setSugProd(res.items.filter((i): i is ProdutoResumo => "price" in i)))
-        .catch(() => setSugProd([]));
-    }, 200);
-    return () => clearTimeout(timerP.current);
-  }, [busca]);
 
   useEffect(() => {
     clearTimeout(timerC.current);
@@ -96,7 +79,17 @@ export function Simulador() {
     <div>
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Field label="Produto" className="min-w-[260px]">
-          <Input placeholder="Nome, SKU…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+          <ProductSearch
+            selected={selecionada}
+            onSelect={(produto) => {
+              setSelecionada(produto);
+              setResultado(null);
+            }}
+            onClear={() => {
+              setSelecionada(null);
+              setResultado(null);
+            }}
+          />
         </Field>
         <Field label="Cliente (opcional)" className="min-w-[200px]">
           <Input placeholder="Nome, CPF…" value={cliBusca} onChange={(e) => setCliBusca(e.target.value)} />
@@ -147,28 +140,6 @@ export function Simulador() {
           Simular
         </Button>
       </div>
-
-      {sugProd.length > 0 ? (
-        <div className="mb-3 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
-          {sugProd.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => {
-                setSelecionada(p);
-                setSugProd([]);
-                setResultado(null);
-              }}
-              className="flex w-full items-center justify-between px-4 py-2 text-left text-sm hover:bg-gray-50"
-            >
-              <span className="font-medium">
-                {p.name}
-                {p.sku ? <span className="ml-2 font-mono text-xs text-gray-400">{p.sku}</span> : null}
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
 
       {sugCli.length > 0 ? (
         <div className="mb-3 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">

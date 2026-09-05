@@ -5,7 +5,8 @@ quebrada em palavras; a relevância é pela **cobertura** (quantas palavras do
 termo a descricao contém):
 
 - **1 palavra**: casa se a palavra estiver na descricao OU no sku/ean (busca
-  por código). Ranking: descricao prefixo > sku/ean exato > contém.
+  por código). Ranking: código exato (inclusive identificadores adicionais)
+  > descricao prefixo > contém.
 - **2+ palavras**: exige texto completo na descricao OU **pelo menos 2 palavras**
   na descricao OU o código (sku/ean) contendo o texto completo — evita que
   "cabo flexivel azul" traga "Caixa Azul" (1/3). ORDER BY **cobertura DESC** →
@@ -35,6 +36,15 @@ def _cobertura(alias: str, n: int) -> str:
     )
 
 
+def codigo_adicional_sql(produto_ref: str) -> str:
+    """Condição parametrizada para código adicional ativo (parâmetro: termo LIKE)."""
+    return (
+        "EXISTS (SELECT 1 FROM produto_identificador pi_busca "
+        f"WHERE pi_busca.produto_id={produto_ref} AND pi_busca.ativo "
+        "AND f_unaccent(pi_busca.valor) ILIKE f_unaccent(?))"
+    )
+
+
 def montar_busca(q: str, alias: str = "p") -> tuple[str, list, str, list]:
     """Monta (where_sql, where_params, order_expr, order_params).
 
@@ -55,19 +65,29 @@ def montar_busca(q: str, alias: str = "p") -> tuple[str, list, str, list]:
             f"f_unaccent({P}.descricao) ILIKE f_unaccent(?)"
             f" OR f_unaccent({P}.sku) ILIKE f_unaccent(?)"
             f" OR f_unaccent({P}.ean) ILIKE f_unaccent(?)"
+            " OR EXISTS ("
+            "SELECT 1 FROM produto_identificador pi_busca "
+            f"WHERE pi_busca.produto_id={P}.id AND pi_busca.ativo "
+            "AND f_unaccent(pi_busca.valor) ILIKE f_unaccent(?)"
+            ")"
             ")"
         )
-        where_params = [qpat, qpat, qpat]
+        where_params = [qpat, qpat, qpat, qpat]
         rank = (
             f"CASE"
+            f" WHEN f_unaccent({P}.sku) = f_unaccent(?) THEN 100"
+            f" WHEN f_unaccent({P}.ean) = f_unaccent(?) THEN 99"
+            " WHEN EXISTS ("
+            "SELECT 1 FROM produto_identificador pi_rank "
+            f"WHERE pi_rank.produto_id={P}.id AND pi_rank.ativo "
+            "AND f_unaccent(pi_rank.valor) = f_unaccent(?)"
+            ") THEN 98"
             f" WHEN f_unaccent({P}.descricao) ILIKE f_unaccent(?) || '%' THEN 90"
-            f" WHEN f_unaccent({P}.sku) = f_unaccent(?) THEN 85"
-            f" WHEN f_unaccent({P}.ean) = f_unaccent(?) THEN 80"
             f" WHEN f_unaccent({P}.sku) ILIKE f_unaccent(?) || '%' THEN 70"
             f" WHEN f_unaccent({P}.descricao) ILIKE '%' || f_unaccent(?) || '%' THEN 60"
             f" ELSE 20 END"
         )
-        order_params = [q, q, q, q, q]
+        order_params = [q, q, q, q, q, q]
         order_expr = f"{rank} DESC, {P}.nome COLLATE NOCASE, {P}.id"
         return where_sql, where_params, order_expr, order_params
 
@@ -79,9 +99,14 @@ def montar_busca(q: str, alias: str = "p") -> tuple[str, list, str, list]:
         f" OR ({cov}) >= 2"
         f" OR f_unaccent({P}.sku) ILIKE f_unaccent(?)"
         f" OR f_unaccent({P}.ean) ILIKE f_unaccent(?)"
+        " OR EXISTS ("
+        "SELECT 1 FROM produto_identificador pi_busca "
+        f"WHERE pi_busca.produto_id={P}.id AND pi_busca.ativo "
+        "AND f_unaccent(pi_busca.valor) ILIKE f_unaccent(?)"
+        ")"
         ")"
     )
-    where_params = [qpat] + token_params + [qpat, qpat]
+    where_params = [qpat] + token_params + [qpat, qpat, qpat]
 
     order_sql = (
         f"({cov}) DESC,"

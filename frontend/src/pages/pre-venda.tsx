@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
-  type BuscaRapidaItem,
   type Cliente,
   type CondicaoPagamento,
   type OrcamentoDetalhe,
@@ -14,7 +13,10 @@ import {
 import { fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
 import { usuarioCorrente } from "./login";
-import { Button } from "../ui/ui";
+import { Button, Modal } from "../ui/ui";
+import { navigateWithoutBlocking, registerNavigationBlocker } from "../navigation-guard";
+import { produtoDaBuscaRapida, resolverBuscaAoEnter } from "../ui/product-search-utils";
+export { produtoDaBuscaRapida, resolverBuscaAoEnter } from "../ui/product-search-utils";
 import { DataBox } from "../ui/data-box";
 import { ModalCadastroCliente } from "./pre-venda/modal-cadastro-cliente";
 import { ModalBuscaCliente } from "./pre-venda/modal-busca-cliente";
@@ -64,38 +66,21 @@ function calculosPdv(linhas: LinhaPdv[], vDescModo: "pct" | "valor", vDesconto: 
   return { base, subtotal, descontoItens, descontoGeral, descontoTotal, pct, total: Math.max(0, subtotal - descontoGeral) };
 }
 
-export function produtoDaBuscaRapida(item: BuscaRapidaItem): ProdutoResumo {
-  const promocional = Number(item.preco_promocional || 0);
-  const preco = promocional > 0 && promocional < Number(item.preco || 0) ? promocional : Number(item.preco || 0);
-  return {
-    id: item.id,
-    sku: item.sku || "",
-    name: item.nome || "",
-    spec: item.descricao || "",
-    brand: item.marca || "",
-    price: preco,
-    imagem_url: item.imagem_url || undefined,
-    unidade_venda: item.unidade_venda || "",
-    ncm: item.ncm || "",
-  };
-}
-
-export function resolverBuscaAoEnter(itens: BuscaRapidaItem[]): {
-  produto?: ProdutoResumo;
-  sugestoes: ProdutoResumo[];
-  codigoExato: boolean;
-} {
-  const exatos = itens.filter((item) => item.rank <= 1);
-  const selecionaveis = (exatos.length ? exatos : itens).map(produtoDaBuscaRapida);
-  if (selecionaveis.length === 1) {
-    return { produto: selecionaveis[0], sugestoes: [], codigoExato: exatos.length === 1 };
-  }
-  return { sugestoes: selecionaveis, codigoExato: false };
-}
-
 function condicaoEhPrazo(condicao: CondicaoPagamento): boolean {
   const parcelas = condicao.parcelas || [];
   return parcelas.length >= 2 || (parcelas.length === 1 && Number(parcelas[0].dias || 0) > 0);
+}
+
+export function deveConsultarCredito(
+  clienteId: number | null,
+  total: number,
+  condicao?: CondicaoPagamento,
+): boolean {
+  return clienteId != null
+    && clienteId !== CLIENTE_PADRAO.id
+    && total > 0
+    && !!condicao
+    && condicaoEhPrazo(condicao);
 }
 
 
@@ -106,11 +91,8 @@ export default function PreVenda() {
   const [focoLista, setFocoLista] = useState(-1);
   const [qtdDigitada, setQtdDigitada] = useState(1);
 
-  const [cliente, setCliente] = useState(() => sessionStorage.getItem("pdv_cliente") || CLIENTE_PADRAO.nome);
-  const [clienteId, setClienteId] = useState<number | null>(() => {
-    const saved = sessionStorage.getItem("pdv_cliente_id");
-    return saved ? Number(saved) : CLIENTE_PADRAO.id;
-  });
+  const [cliente, setCliente] = useState(CLIENTE_PADRAO.nome);
+  const [clienteId, setClienteId] = useState<number | null>(CLIENTE_PADRAO.id);
 
   const [obs, setObs] = useState("");
   const [desconto, setDesconto] = useState("");
@@ -125,16 +107,7 @@ export default function PreVenda() {
   const [modalCadCliente, setModalCadCliente] = useState<string | null>(null);
   const [modalBuscaCliente, setModalBuscaCliente] = useState(false);
   const [modalBuscaParceiro, setModalBuscaParceiro] = useState(false);
-  const [parceiro, setParceiro] = useState<ParceiroIndicacao | null>(() => {
-    const saved = sessionStorage.getItem("pdv_parceiro");
-    if (!saved) return null;
-    try {
-      const p = JSON.parse(saved);
-      return p && p.id ? (p as ParceiroIndicacao) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [parceiro, setParceiro] = useState<ParceiroIndicacao | null>(null);
   const [modalAutorizar, setModalAutorizar] = useState<
     { id: number | null; descontoPct?: number; limitePct?: number; modo: "autorizar" | "finalizar" } | null
   >(null);
@@ -145,6 +118,8 @@ export default function PreVenda() {
   // Desconto acima da alçada já autorizado por um gerente (nesta composição).
   // Qualquer alteração de itens/desconto expira essa autorização.
   const [descontoAutorizado, setDescontoAutorizado] = useState(false);
+  const [sujo, setSujo] = useState(false);
+  const [destinoPendente, setDestinoPendente] = useState<string | null>(null);
 
   const buscaRef = useRef<HTMLInputElement>(null);
   const descontoRef = useRef<HTMLInputElement>(null);
@@ -155,6 +130,7 @@ export default function PreVenda() {
   const parceiroEnviadoRef = useRef<number | null | undefined>(undefined);
   const buscaTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const buscaRequestRef = useRef(0);
+  const creditoRequestRef = useRef(0);
 
   const [linhaAtiva, setLinhaAtiva] = useState<number | null>(null);
   const [hora, setHora] = useState(() => new Date().toLocaleTimeString("pt-BR"));
@@ -179,12 +155,17 @@ export default function PreVenda() {
     }
   }, [clienteId, condicoes, condicoesVisiveis, condicaoId]);
 
-  // Reavalia o aviso de crédito quando o total da venda muda.
+  // Crédito só faz parte da decisão quando a condição escolhida é a prazo.
   useEffect(() => {
-    if (clienteId == null || clienteId === CLIENTE_PADRAO.id) return;
-    const t = setTimeout(() => void carregarAvisoCredito(clienteId, cliente), 400);
+    const condicao = condicoes.find((item) => String(item.id) === condicaoId);
+    if (!deveConsultarCredito(clienteId, c.total, condicao)) {
+      ++creditoRequestRef.current;
+      setAvisoCredito(null);
+      return;
+    }
+    const t = setTimeout(() => void carregarAvisoCredito(clienteId!, cliente, c.total), 400);
     return () => clearTimeout(t);
-  }, [c.total]);
+  }, [c.total, cliente, clienteId, condicaoId, condicoes]);
 
   // Limite de alçada do vendedor atual (temporariamente se aplica a todos,
   // inclusive admin, até existirem grupos/permissões).
@@ -275,6 +256,7 @@ export default function PreVenda() {
     }
     const alvo = atualizado ? next.findIndex((l) => l.produto_id != null && l.produto_id === p.id) : next.length - 1;
     setLinhas(next);
+    setSujo(true);
     setQtdDigitada(1);
     setLinhaAtiva(alvo);
     setSugestoes([]);
@@ -326,42 +308,42 @@ export default function PreVenda() {
       .catch(() => toast("Não foi possível pesquisar o produto", "error"));
   };
 
-const selecionarCliente = (cli: Cliente) => {
+  const selecionarCliente = (cli: Cliente) => {
     setCliente(cli.nome);
     setClienteId(cli.id);
-    sessionStorage.setItem("pdv_cliente", cli.nome);
-    sessionStorage.setItem("pdv_cliente_id", String(cli.id));
+    setSujo(true);
     if (cli.id === CLIENTE_PADRAO.id) {
       const vista = condicoes.find((cd) => !condicaoEhPrazo(cd));
       setCondicaoId(vista ? String(vista.id) : "");
     }
     buscaRef.current?.focus();
-    void carregarAvisoCredito(cli.id, cli.nome);
   };
 
   const selecionarParceiro = (p: ParceiroIndicacao) => {
     setParceiro(p);
-    sessionStorage.setItem("pdv_parceiro", JSON.stringify({ id: p.id, nome_exibicao: p.nome_exibicao }));
+    setSujo(true);
     buscaRef.current?.focus();
   };
 
   const limparParceiro = () => {
     setParceiro(null);
-    sessionStorage.removeItem("pdv_parceiro");
+    setSujo(true);
     buscaRef.current?.focus();
   };
 
-  const carregarAvisoCredito = (id: number, nome: string) => {
+  const carregarAvisoCredito = (id: number, nome: string, total: number) => {
     if (id === CLIENTE_PADRAO.id) {
       setAvisoCredito(null);
       return;
     }
+    const requestId = ++creditoRequestRef.current;
     void api
-      .situacaoCliente(id, c.total)
+      .situacaoCliente(id, total)
       .then((s) => {
+        if (requestId !== creditoRequestRef.current) return;
         if (s.excede_limite) {
           setAvisoCredito({
-            texto: `${nome}: venda de ${fmtMoney(c.total)} supera o limite disponível de ${fmtMoney(s.limite_disponivel)}.`,
+            texto: `${nome}: venda a prazo de ${fmtMoney(total)} supera o limite disponível de ${fmtMoney(s.limite_disponivel)}.`,
             severidade: "warn",
           });
         } else if (s.excede_por_atraso) {
@@ -378,6 +360,7 @@ const selecionarCliente = (cli: Cliente) => {
 
   const removerLinha = (i: number) => {
     setLinhas((arr) => arr.filter((_, j) => j !== i));
+    setSujo(true);
     setLinhaAtiva(null);
     buscaRef.current?.focus();
   };
@@ -392,6 +375,7 @@ const selecionarCliente = (cli: Cliente) => {
   };
 
   const onQtyChange = (i: number, raw: string) => {
+    setSujo(true);
     setLinhas((arr) =>
       arr.map((l, j) => {
         if (j !== i) return l;
@@ -455,8 +439,7 @@ const selecionarCliente = (cli: Cliente) => {
         setEditandoId(res.id);
         setEditandoNumero(res.numero);
       }
-      sessionStorage.setItem("pdv_cliente", cliente.trim());
-      sessionStorage.setItem("pdv_cliente_id", clienteId != null ? String(clienteId) : String(CLIENTE_PADRAO.id));
+      setSujo(false);
       return res;
     })();
     persistirInFlightRef.current = p;
@@ -478,8 +461,10 @@ const selecionarCliente = (cli: Cliente) => {
     // Nova pré-venda começa no cliente padrão (CONSUMIDOR).
     setCliente(CLIENTE_PADRAO.nome);
     setClienteId(CLIENTE_PADRAO.id);
-    sessionStorage.setItem("pdv_cliente", CLIENTE_PADRAO.nome);
-    sessionStorage.setItem("pdv_cliente_id", String(CLIENTE_PADRAO.id));
+    setParceiro(null);
+    parceiroEnviadoRef.current = undefined;
+    setAvisoCredito(null);
+    setSujo(false);
     buscaRef.current?.focus();
   };
 
@@ -596,55 +581,24 @@ const selecionarCliente = (cli: Cliente) => {
     limparTela();
   };
 
-  // ── Auto-save: persistir o rascunho a cada mudança (debounce) ──
-  const persistirRef = useRef(persistir);
-  persistirRef.current = persistir;
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
+  // Navegação interna usa modal explícito; fechar/recarregar a aba mantém o
+  // aviso nativo do navegador. Nenhum estado do pedido é salvo em cache.
   useEffect(() => {
-    if (linhas.length === 0) return;
-    clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = setTimeout(() => {
-      void persistirRef.current().catch(() => {});
-    }, 500);
-    return () => clearTimeout(autoSaveTimer.current);
-  }, [linhas, cliente, clienteId, obs, desconto, descModo, condicaoId]);
-
-  // ── Ao sair da tela: salvar (manter) ou descartar (excluir) o pedido ──
-  const editandoIdRef = useRef<number | null>(null);
-  const linhasRef = useRef<LinhaPdv[]>([]);
-  useEffect(() => {
-    editandoIdRef.current = editandoId;
-    linhasRef.current = linhas;
-  }, [editandoId, linhas]);
-
-  useEffect(() => {
-    const temPedido = () => linhasRef.current.length > 0;
-    const aoSair = () => {
-      if (!temPedido()) return;
-      const manter = window.confirm(
-        "Há um pedido em andamento.\n\nClique em OK para SALVAR (manter o rascunho) ou em Cancelar para DESCARTAR (excluir) o pedido."
-      );
-      if (!manter && editandoIdRef.current != null) {
-        void api.excluirOrcamento(editandoIdRef.current).catch(() => {});
-      }
-    };
-    const onHash = () => {
-      if (location.hash !== "#/pre-venda") aoSair();
-    };
     const onUnload = (e: BeforeUnloadEvent) => {
-      if (temPedido()) {
+      if (sujo && linhas.length) {
         e.preventDefault();
         e.returnValue = "";
       }
     };
-    window.addEventListener("hashchange", onHash);
+    const unregister = sujo && linhas.length
+      ? registerNavigationBlocker((destination) => setDestinoPendente(destination))
+      : () => {};
     window.addEventListener("beforeunload", onUnload);
     return () => {
-      window.removeEventListener("hashchange", onHash);
+      unregister();
       window.removeEventListener("beforeunload", onUnload);
     };
-  }, []);
+  }, [linhas.length, sujo]);
 
   const acaoAtalho = async (f: number) => {
     switch (f) {
@@ -707,6 +661,7 @@ const selecionarCliente = (cli: Cliente) => {
     }
     setDescModo(modo);
     setDesconto(v);
+    setSujo(true);
     // A autorização por senha NÃO é solicitada durante a digitação: ela é
     // pedida apenas ao Salvar ou Finalizar (ver salvar/finalizarOrcamento).
   };
@@ -745,6 +700,8 @@ const selecionarCliente = (cli: Cliente) => {
     setEditandoId(id);
     setEditandoNumero(d.numero || "");
     if (d.condicao_pagamento_id != null) setCondicaoId(String(d.condicao_pagamento_id));
+    parceiroEnviadoRef.current = undefined;
+    setSujo(false);
     setModalLocalizar(false);
     buscaRef.current?.focus();
   };
@@ -752,7 +709,7 @@ const selecionarCliente = (cli: Cliente) => {
   const linhaAtual = linhaAtiva != null ? linhas[linhaAtiva] : undefined;
 
   return (
-    <div className="flex min-h-[100dvh] flex-col">
+    <div className="flex min-h-full flex-col">
       {/* ── Cabeçalho do sistema ─────────────────────────── */}
       <header className="flex flex-shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-gray-300 bg-[#e4e4e4] px-2 py-1.5 text-xs text-gray-800 sm:px-4 sm:text-sm">
         <div>
@@ -1029,7 +986,10 @@ const selecionarCliente = (cli: Cliente) => {
           <select
             ref={condRef}
             value={condicaoId}
-            onChange={(e) => setCondicaoId(e.target.value)}
+            onChange={(e) => {
+              setCondicaoId(e.target.value);
+              setSujo(true);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -1049,7 +1009,10 @@ const selecionarCliente = (cli: Cliente) => {
           <input
             ref={obsRef}
             value={obs}
-            onChange={(e) => setObs(e.target.value)}
+            onChange={(e) => {
+              setObs(e.target.value);
+              setSujo(true);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -1140,6 +1103,50 @@ const selecionarCliente = (cli: Cliente) => {
           }}
         />
       )}
+      <Modal
+        open={destinoPendente !== null}
+        onClose={() => setDestinoPendente(null)}
+        title="Pré-venda não salva"
+        footer={
+          <>
+            <Button onClick={() => setDestinoPendente(null)}>Continuar editando</Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                const destino = destinoPendente;
+                setDestinoPendente(null);
+                setSujo(false);
+                if (destino) navigateWithoutBlocking(destino);
+              }}
+            >
+              Descartar e sair
+            </Button>
+            <Button
+              variant="primary"
+              disabled={salvando}
+              onClick={() => {
+                const destino = destinoPendente;
+                setSalvando(true);
+                void persistir().then((res) => {
+                  if (!res || !destino) return;
+                  toast(`${res.numero} salvo`, "success");
+                  setDestinoPendente(null);
+                  navigateWithoutBlocking(destino);
+                }).catch((e) => {
+                  toast("Erro ao salvar: " + (e as Error).message, "error");
+                }).finally(() => setSalvando(false));
+              }}
+            >
+              Salvar e sair
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600">
+          As alterações atuais ainda não foram salvas. Você pode salvar o rascunho,
+          descartar estas alterações ou continuar editando.
+        </p>
+      </Modal>
     </div>
   );
 }

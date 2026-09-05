@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from flask import Blueprint, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -37,7 +39,12 @@ def usuario_atual():
     user = usuario_repo.get(payload["sub"])
     if not user:
         return jsonify({"autenticado": False}), 200
-    return jsonify({"autenticado": True, **user})
+    return jsonify({
+        "autenticado": True,
+        **user,
+        "sessao_expira_em": int(payload.get("exp") or 0),
+        "app_version": os.getenv("APP_VERSION") or "dev",
+    })
 
 
 @api_usuarios_bp.post("/api/usuarios")
@@ -222,6 +229,7 @@ def login():
     login_rate_limit.limpar(ip, login_str)
     session[SESSION_KEY] = user["id"]
     token = auth_token.criar_token(user)
+    token_payload = auth_token.validar_token(token) or {}
     atual = usuario_repo.get(user["id"]) or user
     return jsonify(
         {
@@ -235,6 +243,8 @@ def login():
             "perfil_ids": atual.get("perfil_ids") or [],
             "overrides": atual.get("overrides") or {},
             "permissoes": atual.get("permissoes") or [],
+            "sessao_expira_em": int(token_payload.get("exp") or 0),
+            "app_version": os.getenv("APP_VERSION") or "dev",
         }
     )
 

@@ -13,6 +13,11 @@ export function estaAutenticado(): boolean {
   return !!atual?.autenticado;
 }
 
+export function invalidarSessaoLocal(): void {
+  atual = null;
+  setToken(null);
+}
+
 export async function carregarSessao(): Promise<boolean> {
   try {
     atual = await api.usuarioAtual();
@@ -38,8 +43,7 @@ export async function entrar(login: string, senha: string): Promise<boolean> {
 
 export async function sair(): Promise<void> {
   try { await api.logout(); } catch { /* off-line */ }
-  atual = null;
-  setToken(null);
+  invalidarSessaoLocal();
 }
 
 export function renderLogin($app: HTMLElement): void {

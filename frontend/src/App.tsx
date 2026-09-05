@@ -38,12 +38,15 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ROUTES } from "./routes";
-import { carregarSessao, entrar, sair, usuarioCorrente } from "./pages/login";
+import { carregarSessao, entrar, invalidarSessaoLocal, sair, usuarioCorrente } from "./pages/login";
+import { AUTH_EXPIRED_EVENT } from "./api/client";
 import { startupAuth } from "./auth";
 import { Manutencao, estaOffline } from "./manutencao";
+import { shouldBlockNavigation } from "./navigation-guard";
 import { countItens, injectOverlay as injectCartOverlay, toggle as toggleCart } from "./cart";
 import { Button, ErrorState, Loading } from "./ui/ui";
 import { podeVisualizar } from "./perm";
+import { OperationalStatusBar } from "./ui/operational-status-bar";
 
 const ManualPage = lazy(() => import("./pages/manual"));
 
@@ -128,12 +131,17 @@ function useHashRoute(): string {
   const [hash, setHash] = useState(() => location.hash || "#/dashboard");
   useEffect(() => {
     const onHash = () => {
-      setHash(location.hash || "#/dashboard");
+      const destination = location.hash || "#/dashboard";
+      if (destination !== hash && shouldBlockNavigation(destination)) {
+        history.replaceState(null, "", `${location.pathname}${location.search}${hash}`);
+        return;
+      }
+      setHash(destination);
       window.scrollTo(0, 0);
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
-  }, []);
+  }, [hash]);
   return hash;
 }
 
@@ -232,6 +240,16 @@ export default function App() {
   const [menuAberto, setMenuAberto] = useState(false);
   const [buscaModulo, setBuscaModulo] = useState("");
   const [gruposAbertos, setGruposAbertos] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const expirar = () => {
+      invalidarSessaoLocal();
+      if (location.hash === "#/manual") history.replaceState(null, "", "#/dashboard");
+      setAuthed(false);
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, expirar);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, expirar);
+  }, []);
 
   useEffect(() => {
     injectCartOverlay();
@@ -497,6 +515,7 @@ export default function App() {
           )}
           </div>
         </main>
+        <OperationalStatusBar usuario={usuario} />
       </div>
     </div>
     </>

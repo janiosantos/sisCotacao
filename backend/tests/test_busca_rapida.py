@@ -57,6 +57,17 @@ def test_ean_adicional_ativo_encontra_produto_com_formatacao(system_db):
     assert "imagem_url" in resultado[0]
 
 
+def test_codigo_adicional_tambem_filtra_catalogo_e_estoque(system_db):
+    pid, did, _ = _setup(system_db)
+
+    produtos, total = catalog_repo.list_products(q="FORN-123", agrupado=False)
+    saldo = estoque_repo.saldo(deposito_id=did, termo="forn-123")
+
+    assert total == 1
+    assert produtos[0]["id"] == pid
+    assert [item["produto_id"] for item in saldo] == [pid]
+
+
 def test_busca_rapida_nao_oferece_produto_inativo(system_db):
     pid, _, _ = _setup(system_db)
     with system_conn() as conn:

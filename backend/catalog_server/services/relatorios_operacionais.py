@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from typing import Mapping
 
 from catalog_server.db import system_conn
+from catalog_server.repositories.busca import codigo_adicional_sql
 
 
 class RelatorioOperacionalError(ValueError):
@@ -62,6 +63,17 @@ def _float(value) -> float:
     return round(float(value or 0), 2)
 
 
+def _ids_por_codigo_adicional(termo: str) -> set[int]:
+    like = f"%{termo}%"
+    with system_conn() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT produto_id FROM produto_identificador "
+            "WHERE ativo AND f_unaccent(valor) ILIKE f_unaccent(?)",
+            (like,),
+        ).fetchall()
+    return {int(row["produto_id"]) for row in rows}
+
+
 def _vendas_base(filters: Mapping[str, object]) -> tuple[str, list[object]]:
     where = ["1=1"]
     args: list[object] = []
@@ -86,8 +98,14 @@ def _vendas_base(filters: Mapping[str, object]) -> tuple[str, list[object]]:
     termo = str(filters.get("q") or "").strip()
     if termo:
         like = f"%{termo}%"
-        where.append("(l.produto_nome ILIKE ? OR l.sku ILIKE ? OR l.cliente_nome ILIKE ? OR l.marca ILIKE ?)")
-        args.extend([like, like, like, like])
+        where.append(
+            "(f_unaccent(l.produto_nome) ILIKE f_unaccent(?) "
+            "OR f_unaccent(l.sku) ILIKE f_unaccent(?) "
+            "OR f_unaccent(l.cliente_nome) ILIKE f_unaccent(?) "
+            "OR f_unaccent(l.marca) ILIKE f_unaccent(?) "
+            f"OR {codigo_adicional_sql('l.produto_id')})"
+        )
+        args.extend([like, like, like, like, like])
     return " AND ".join(where), args
 
 
@@ -185,7 +203,10 @@ def vendas_analitico(filters: Mapping[str, object] | None = None) -> dict:
             "COALESCE(SUM(l.receita_bruta),0) AS receita_bruta, COALESCE(SUM(l.desconto),0) AS desconto, "
             "COALESCE(SUM(l.receita_liquida),0) AS receita_liquida, COALESCE(SUM(c.cmv),0) AS cmv "
             "FROM linhas l LEFT JOIN custo c ON c.orcamento_id=l.orcamento_id AND c.produto_id=l.produto_id "
-            f"WHERE {where}", tuple(args),
+            # ``base`` já contém o filtro em ``agregado`` e o resumo o aplica
+            # novamente sobre ``linhas`` para preservar DISTINCT de pedidos e
+            # clientes. Portanto os parâmetros do filtro também se repetem.
+            f"WHERE {where}", tuple([*args, *where_args]),
         ).fetchone()
         rows = conn.execute(
             f"{base} SELECT dimensao_id, dimensao, quantidade, pedidos, clientes, receita_bruta, desconto, receita_liquida, cmv, "
@@ -226,8 +247,13 @@ def compras_analitico(filters: Mapping[str, object] | None = None) -> dict:
     termo = str(filters.get("q") or "").strip()
     if termo:
         like = f"%{termo}%"
-        where.append("(fornecedor_nome ILIKE ? OR produto_nome ILIKE ? OR sku ILIKE ? OR numero ILIKE ?)")
-        args.extend([like, like, like, like])
+        where.append(
+            "(f_unaccent(fornecedor_nome) ILIKE f_unaccent(?) "
+            "OR f_unaccent(produto_nome) ILIKE f_unaccent(?) "
+            "OR f_unaccent(sku) ILIKE f_unaccent(?) OR numero ILIKE ? "
+            f"OR {codigo_adicional_sql('linhas.produto_id')})"
+        )
+        args.extend([like, like, like, like, like])
     base = """
         WITH recebido AS (
             SELECT ri.pedido_item_id, SUM(COALESCE(ri.qtd_aceita,0)) AS quantidade_recebida
@@ -315,8 +341,12 @@ def estoque_analitico(filters: Mapping[str, object] | None = None) -> dict:
     termo = str(filters.get("q") or "").strip()
     if termo:
         like = f"%{termo}%"
-        where.append("(p.nome ILIKE ? OR COALESCE(p.sku,'') ILIKE ?)")
-        args.extend([like, like])
+        where.append(
+            "(f_unaccent(p.nome) ILIKE f_unaccent(?) "
+            "OR f_unaccent(COALESCE(p.sku,'')) ILIKE f_unaccent(?) "
+            f"OR {codigo_adicional_sql('p.produto_id')})"
+        )
+        args.extend([like, like, like])
     situacao = str(filters.get("situacao") or "").strip().lower()
     if situacao not in {"", "normal", "ruptura", "reposicao", "excesso"}:
         raise RelatorioOperacionalError("situacao deve ser normal, ruptura, reposicao ou excesso")
@@ -383,7 +413,12 @@ def necessidade_compra(filters: Mapping[str, object] | None = None) -> dict:
         itens = [item for item in itens if (item.get("classe_abc") or "C") == classe]
     termo = str(filters.get("q") or "").strip().lower()
     if termo:
-        itens = [item for item in itens if termo in f"{item.get('nome') or ''} {item.get('sku') or ''}".lower()]
+        ids_codigo = _ids_por_codigo_adicional(termo)
+        itens = [
+            item for item in itens
+            if termo in f"{item.get('nome') or ''} {item.get('sku') or ''}".lower()
+            or int(item.get("produto_id") or 0) in ids_codigo
+        ]
     somente = str(filters.get("somente_necessidade") or "").strip().lower()
     if somente in {"1", "true", "sim"}:
         itens = [item for item in itens if float(item.get("sugestao") or 0) > 0]

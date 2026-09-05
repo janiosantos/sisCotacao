@@ -394,6 +394,25 @@ def test_logout_revoga_token_emitido(system_db):
     assert client.get("/api/usuarios/atual", headers=headers).status_code == 401
 
 
+def test_usuario_atual_expoe_expiracao_e_versao(system_db, monkeypatch):
+    uid = _criar_usuario("statussessao")
+    _vincular(uid, "Administrador")
+    from catalog_server import auth_token
+    from catalog_server.app_factory import create_app
+
+    monkeypatch.setenv("APP_VERSION", "v-teste")
+    token = auth_token.criar_token({"id": uid, "login": "statussessao"}, ttl=300)
+    response = create_app().test_client().get(
+        "/api/usuarios/atual",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["app_version"] == "v-teste"
+    assert data["sessao_expira_em"] > 0
+
+
 def test_token_legado_sem_versao_e_rejeitado(system_db):
     uid = _criar_usuario("tokenlegado")
     _vincular(uid, "Administrador")

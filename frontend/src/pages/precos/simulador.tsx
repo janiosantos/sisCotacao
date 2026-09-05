@@ -1,10 +1,11 @@
 // pages/precos/simulador.tsx - formação de preço pelo método divisor.
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { api, type CalculoPreco, type ProdutoResumo } from "../../api/client";
 import { fmtMoney } from "../../ui/format";
 import { toast } from "../../ui/dom";
 import { Badge, Button, Card, Field, Input, Loading, Select, StatCard, Table, TBody } from "../../ui/ui";
+import { ProductSearch } from "../../ui/product-search";
 
 function pct(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
@@ -18,7 +19,6 @@ function optionalNumber(value: string): number | undefined {
 }
 
 export function Simulador() {
-  const [busca, setBusca] = useState("");
   const [canal, setCanal] = useState("varejo");
   const [margem, setMargem] = useState("");
   const [comissao, setComissao] = useState("");
@@ -29,26 +29,10 @@ export function Simulador() {
   const [impostos, setImpostos] = useState("");
   const [usarReferencia, setUsarReferencia] = useState(true);
   const [cenario, setCenario] = useState<"atual" | "reforma">("atual");
-  const [sugestoes, setSugestoes] = useState<ProdutoResumo[]>([]);
   const [selecionada, setSelecionada] = useState<ProdutoResumo | null>(null);
   const [resultado, setResultado] = useState<CalculoPreco | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  useEffect(() => {
-    clearTimeout(timer.current);
-    if (!busca.trim()) {
-      setSugestoes([]);
-      return;
-    }
-    timer.current = setTimeout(() => {
-      void api.listarProdutos({ q: busca.trim(), limit: 8, agrupado: 0 }).then((res) => {
-        setSugestoes(res.items.filter((i): i is ProdutoResumo => "price" in i));
-      }).catch(() => setSugestoes([]));
-    }, 200);
-    return () => clearTimeout(timer.current);
-  }, [busca]);
 
   const calcular = async () => {
     if (!selecionada) {
@@ -94,12 +78,22 @@ export function Simulador() {
       <Card className="p-5">
         <div className="mb-4 flex items-center justify-between gap-3"><div><h3 className="font-semibold text-slate-900">1. Escolha o item e o cenário</h3><p className="mt-1 text-xs text-slate-500">Deixe margem vazia para usar a margem padrão da tabela selecionada.</p></div><Badge tone="gray">Sem gravação</Badge></div>
         <div className="grid gap-3 lg:grid-cols-[minmax(260px,2fr)_150px_190px]">
-          <Field label="Produto, SKU ou marca"><Input placeholder="Digite pelo menos 2 caracteres…" value={busca} onChange={(e) => setBusca(e.target.value)} /></Field>
+          <Field label="Produto, código ou marca">
+            <ProductSearch
+              selected={selecionada}
+              onSelect={(produto) => {
+                setSelecionada(produto);
+                setResultado(null);
+              }}
+              onClear={() => {
+                setSelecionada(null);
+                setResultado(null);
+              }}
+            />
+          </Field>
           <Field label="Canal"><Select value={canal} onChange={(e) => setCanal(e.target.value)}><option value="varejo">Varejo</option><option value="atacado">Atacado</option><option value="contrato">Contrato</option><option value="promocional">Promocional</option></Select></Field>
           <Field label="Cenário tributário"><Select value={cenario} onChange={(e) => setCenario(e.target.value as "atual" | "reforma")}><option value="atual">Tributos atuais</option><option value="reforma">IBS/CBS fora do divisor</option></Select></Field>
         </div>
-        {sugestoes.length > 0 ? <div className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white shadow-sm">{sugestoes.map((p) => <button key={p.id} type="button" onClick={() => { setSelecionada(p); setSugestoes([]); setResultado(null); }} className="flex w-full items-center justify-between px-4 py-3 text-left text-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"> <span><span className="font-medium text-slate-900">{p.name}</span>{p.sku ? <span className="ml-2 font-mono text-xs text-slate-500">{p.sku}</span> : null}</span><span className="text-xs text-slate-500">{p.brand ? `${p.brand} · ` : ""}{fmtMoney(p.price)}</span></button>)}</div> : null}
-        {selecionada ? <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700"><span>Item selecionado: <strong>{selecionada.name}</strong></span>{selecionada.sku ? <span className="font-mono text-xs text-slate-500">{selecionada.sku}</span> : null}</div> : null}
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">

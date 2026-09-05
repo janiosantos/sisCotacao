@@ -86,3 +86,34 @@ def test_resumo_vendas_nao_duplica_pedido_ou_cliente_por_produto(system_db):
         assert False, "limite acima do teto nao deveria ser aceito"
     except relatorios.RelatorioOperacionalError:
         pass
+
+
+def test_vendas_filtra_codigo_adicional_sem_quebrar_parametros(system_db):
+    with system_conn() as conn:
+        produto = conn.execute(
+            "INSERT INTO produtos_cadastro (nome, ativo, sku, preco) VALUES (%s,1,%s,10) RETURNING id",
+            ("Produto por código", "REL-COD"),
+        ).fetchone()["id"]
+        conn.execute(
+            "INSERT INTO produto_identificador (produto_id, tipo, valor) VALUES (%s,%s,%s)",
+            (produto, "fornecedor", "COD-REL-123"),
+        )
+        pedido = conn.execute(
+            "INSERT INTO orcamentos (numero, status, criado_em) VALUES (%s,'finalizado',%s) RETURNING id",
+            ("REL-COD-1", "2026-09-01 10:00:00"),
+        ).fetchone()["id"]
+        conn.execute(
+            "INSERT INTO orcamento_itens (orcamento_id, produto_id, nome, quantidade, preco_unitario, subtotal) "
+            "VALUES (%s,%s,%s,1,10,10)",
+            (pedido, produto, "Produto por código"),
+        )
+        conn.commit()
+
+    resultado = relatorios.vendas_analitico({
+        "data_inicio": "2026-09-01",
+        "data_fim": "2026-09-01",
+        "q": "COD-REL-123",
+    })
+
+    assert resultado["paginacao"]["total"] == 1
+    assert resultado["resumo"]["pedidos"] == 1

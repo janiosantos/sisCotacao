@@ -163,7 +163,7 @@
         "tags": [
           "auth"
         ],
-        "summary": "Encerra a sessão local (token é client-side)",
+        "summary": "Encerra a sessão e revoga os tokens emitidos do usuário",
         "responses": {
           "200": {
             "description": "OK"
@@ -520,6 +520,29 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/usuarios/atual": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Valida a sessão e retorna usuário, permissões, expiração e versão implantada",
+        "responses": {
+          "200": {
+            "description": "Sessão autenticada ou resposta autenticado=false quando não há Bearer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NaoAutenticado"
           }
         }
       }
@@ -3813,7 +3836,7 @@
         "tags": [
           "catalogo"
         ],
-        "summary": "Busca do PDV com identificadores exatos antes da pesquisa textual",
+        "summary": "Busca operacional de produtos com identificadores exatos antes da pesquisa textual",
         "parameters": [
           {
             "name": "q",
@@ -6622,6 +6645,14 @@
             "type": "string",
             "nullable": true
           },
+          "categoria": {
+            "type": "string",
+            "nullable": true
+          },
+          "subcategoria": {
+            "type": "string",
+            "nullable": true
+          },
           "rank": {
             "type": "integer",
             "description": "0=EAN/SKU legado exato; 1=identificador ativo exato; 2+=busca parcial/textual"
@@ -6688,12 +6719,26 @@
           "login": {
             "type": "string"
           },
-          "perfil": {
+          "perfil_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "permissoes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sessao_expira_em": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Instante Unix em segundos em que o token expira"
+          },
+          "app_version": {
             "type": "string",
-            "enum": [
-              "admin",
-              "vendedor"
-            ]
+            "description": "Versão imutável implantada ou dev"
           }
         }
       },

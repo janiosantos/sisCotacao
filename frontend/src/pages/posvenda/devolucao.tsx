@@ -1,9 +1,10 @@
 // pages/posvenda/devolucao.tsx — devolução / troca de produtos (pós-venda).
 import { useEffect, useState } from "react";
-import { api } from "../../api/client";
+import { api, type ProdutoResumo } from "../../api/client";
 import { fmtDate } from "../../ui/format";
 import { toast } from "../../ui/dom";
 import { Badge, Button, Cell, Field, Input, Select, Table, TBody, THead } from "../../ui/ui";
+import { ProductSearch } from "../../ui/product-search";
 
 interface DevolucaoRow {
   id: number;
@@ -20,6 +21,7 @@ interface DevolucaoRow {
 export function Devolucao() {
   const [rows, setRows] = useState<DevolucaoRow[]>([]);
   const [form, setForm] = useState({ orc: "", var: "", qtd: "1", tipo: "devolucao", motivo: "" });
+  const [produto, setProduto] = useState<ProdutoResumo | null>(null);
 
   const carregar = async () => {
     try {
@@ -50,6 +52,7 @@ export function Devolucao() {
       });
       toast("Devolução registrada (estoque atualizado)", "success");
       setForm({ orc: "", var: "", qtd: "1", tipo: "devolucao", motivo: "" });
+      setProduto(null);
       await carregar();
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
@@ -62,8 +65,18 @@ export function Devolucao() {
         <Field label="Orçamento (ID)">
           <Input type="number" placeholder="opcional" value={form.orc} onChange={(e) => setForm({ ...form, orc: e.target.value })} className="w-28" />
         </Field>
-        <Field label="Produto (ID)">
-          <Input type="number" value={form.var} onChange={(e) => setForm({ ...form, var: e.target.value })} className="w-28" />
+        <Field label="Produto" className="min-w-72 flex-1">
+          <ProductSearch
+            selected={produto}
+            onSelect={(item) => {
+              setProduto(item);
+              setForm((atual) => ({ ...atual, var: String(item.id) }));
+            }}
+            onClear={() => {
+              setProduto(null);
+              setForm((atual) => ({ ...atual, var: "" }));
+            }}
+          />
         </Field>
         <Field label="Quantidade">
           <Input type="number" step="any" value={form.qtd} onChange={(e) => setForm({ ...form, qtd: e.target.value })} className="w-24" />

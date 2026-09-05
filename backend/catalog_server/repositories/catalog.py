@@ -225,13 +225,9 @@ class CatalogRepository:
         if em_linha:
             where.append("p.em_linha=1")
         if q:
-            like = f"%{q}%"
-            where.append(
-                "(f_unaccent(p.nome) ILIKE f_unaccent(?)"
-                " OR f_unaccent(p.marca) ILIKE f_unaccent(?)"
-                " OR p.sku ILIKE ? OR p.ean ILIKE ?)"
-            )
-            params += [like, like, like, like]
+            wq, pq, _, _ = montar_busca(q)
+            where.append(wq)
+            params += pq
         with system_conn() as conn:
             rows = conn.execute(
                 f"SELECT p.classe_abc AS c, COUNT(*) AS n FROM produtos_cadastro p{joins}"

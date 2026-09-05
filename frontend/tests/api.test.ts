@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, limparCacheApi, mensagemErro } from "../src/api/client";
+import {
+  api,
+  ApiError,
+  AUTH_EXPIRED_EVENT,
+  getToken,
+  limparCacheApi,
+  mensagemErro,
+  setToken,
+  tokenExpiration,
+} from "../src/api/client";
 
 // Contrato de erro da API (P6): toda falha lança ApiError com status/code.
 
@@ -16,6 +25,41 @@ function res(status: number, body: unknown, extra?: Record<string, string>) {
 beforeEach(() => {
   fetchMock.mockReset();
   limparCacheApi();
+  setToken(null);
+});
+
+describe("sessão", () => {
+  it("decodifica a expiração do token", () => {
+    const payload = btoa(JSON.stringify({ exp: 123456 })).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+    expect(tokenExpiration(`${payload}.assinatura`)).toBe(123456000);
+  });
+
+  it("encerra a sessão e emite evento em 401 JSON", async () => {
+    setToken("token.ativo");
+    const listener = vi.fn();
+    window.addEventListener(AUTH_EXPIRED_EVENT, listener);
+    fetchMock.mockResolvedValue(res(401, { error: "expirado" }));
+
+    await expect(api.listarPagar({})).rejects.toMatchObject({ status: 401 });
+
+    expect(getToken()).toBeNull();
+    expect(listener).toHaveBeenCalledOnce();
+    window.removeEventListener(AUTH_EXPIRED_EVENT, listener);
+  });
+
+  it("aplica o mesmo encerramento a download e upload", async () => {
+    const listener = vi.fn();
+    window.addEventListener(AUTH_EXPIRED_EVENT, listener);
+    fetchMock.mockResolvedValue(res(401, { error: "expirado" }));
+
+    setToken("token.download");
+    await expect(api.exportarRelatorio("estoque")).rejects.toMatchObject({ status: 401 });
+    setToken("token.upload");
+    await expect(api.importarPlanilha(new FormData())).rejects.toMatchObject({ status: 401 });
+
+    expect(listener).toHaveBeenCalledTimes(2);
+    window.removeEventListener(AUTH_EXPIRED_EVENT, listener);
+  });
 });
 
 describe("request", () => {

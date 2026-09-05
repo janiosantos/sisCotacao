@@ -11,13 +11,18 @@
     "Reenvio do mesmo arquivo reutiliza o resultado auditado sem duplicar produtos",
     "Historico de publicacao registra somente o manifesto da versao promovida",
     "Pre-venda localiza qualquer identificador ativo e processa o Enter imediato do leitor de codigo de barras",
-    "Nginx local resolve novamente o endereco do Vite apos rebuilds sem retornar 502"
+    "Nginx local resolve novamente o endereco do Vite apos rebuilds sem retornar 502",
+    "Pre-venda nao reutiliza cliente ou indicador entre atendimentos e nao salva rascunho silenciosamente",
+    "Aviso de credito aparece somente para cliente identificado em venda a prazo com valor positivo",
+    "Qualquer resposta 401 em chamadas JSON, downloads ou uploads encerra a sessao e retorna ao login"
   ],
   "melhorias": [
     "Coluna principal da planilha aceita DESCRICAO, NOME ou PRODUTO, com ou sem acento",
     "Taxonomias, marcas, deduplicacao e buscas principais de produto ignoram diferencas de acentuacao",
     "Linhas rejeitadas geram uma planilha XLSX reimportavel com motivo e sugestao",
-    "Staging completo cria release candidate imutavel e producao promove exatamente as imagens aprovadas"
+    "Staging completo cria release candidate imutavel e producao promove exatamente as imagens aprovadas",
+    "Busca por codigo de barras padronizada nas operacoes de compras, estoque, inventario, fiscal, precos, etiquetas, promocoes, devolucao e historico",
+    "Rodape operacional informa usuario, versao, comunicacao autenticada com API e banco e tempo restante da sessao"
   ],
   "recursos": [
     "Deploy autonomo em dois passos pela interface do GitHub Actions, sem digitar versoes ou tags",
@@ -46,6 +51,9 @@
     "automatic_rc_selection": true,
     "pdv_active_identifier_search": true,
     "dynamic_dev_vite_dns": true,
+    "universal_product_barcode_search": true,
+    "pdv_no_silent_cache": true,
+    "session_operational_status": true,
     "database_change": false
   },
   "rollback": {

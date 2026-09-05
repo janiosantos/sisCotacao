@@ -201,3 +201,19 @@ Status: **✅ corrigido e validado no DEV; nenhum deploy executado.**
 - [x] Configuração validada com `nginx -t` e raiz novamente em HTTP 200.
 - [x] Vite recriado isoladamente; após a janela de inicialização, a raiz voltou
   automaticamente a 200 sem reload/restart do Nginx.
+
+## Busca universal e segurança da Pré-venda — 2026-09-05
+
+Status: **✅ implementado e validado no DEV; nenhum deploy executado.**
+
+- [x] Busca por código ativo aplicada aos seletores e filtros operacionais de produto.
+- [x] Componente acessível com leitor, Enter, setas, Home/End, Escape e feedback de erro/vazio.
+- [x] Cliente e indicador não são reaproveitados entre pré-vendas e não há autosave/cache local.
+- [x] Saída com alterações oferece continuar, descartar ou salvar o rascunho.
+- [x] Crédito aparece somente para cliente identificado em venda efetivamente a prazo.
+- [x] Resposta 401 encerra a sessão em chamadas comuns, downloads e uploads.
+- [x] Rodapé exibe usuário, versão, API/BD e contagem regressiva da sessão.
+- [x] OpenAPI, manual, manifesto e regressões atualizados.
+
+Validação: 54 testes frontend, typecheck/build, 8 regressões backend em banco
+isolado, `py_compile`, JSON, `git diff --check` e smoke autenticado no navegador.

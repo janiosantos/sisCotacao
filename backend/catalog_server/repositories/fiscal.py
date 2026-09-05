@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from catalog_server.db import system_conn
+from catalog_server.repositories.busca import codigo_adicional_sql
 
 
 class CfopRepository:
@@ -95,9 +96,13 @@ class FiscalConfigRepository:
         )
         args: list = []
         if termo:
-            sql += " WHERE (p.nome LIKE ? OR p.sku LIKE ? OR f.ncm LIKE ?)"
+            sql += (
+                " WHERE (f_unaccent(p.nome) ILIKE f_unaccent(?) "
+                "OR f_unaccent(p.sku) ILIKE f_unaccent(?) OR f.ncm ILIKE ? "
+                f"OR {codigo_adicional_sql('p.id')})"
+            )
             like = f"%{termo}%"
-            args.extend([like, like, like])
+            args.extend([like, like, like, like])
         sql += " ORDER BY p.nome, p.sku LIMIT ? OFFSET ?"
         args.extend([limit, page * limit])
         with system_conn() as conn:
@@ -159,8 +164,12 @@ class FiscalConfigRepository:
             args.append(produto_id)
         if termo:
             like = f"%{termo}%"
-            conds.append("(p.nome LIKE ? OR p.sku LIKE ? OR h.ncm LIKE ?)")
-            args += [like, like, like]
+            conds.append(
+                "(f_unaccent(p.nome) ILIKE f_unaccent(?) "
+                "OR f_unaccent(p.sku) ILIKE f_unaccent(?) OR h.ncm ILIKE ? "
+                f"OR {codigo_adicional_sql('p.id')})"
+            )
+            args += [like, like, like, like]
         if conds:
             sql += " WHERE " + " AND ".join(conds)
         sql += " ORDER BY h.id DESC LIMIT ?"

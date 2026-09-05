@@ -4,6 +4,7 @@ import { api, type InventarioCiclo, type InventarioCicloDetalhe } from "../../ap
 import { fmtDateTime } from "../../ui/format";
 import { toast } from "../../ui/dom";
 import { Badge, Button, Field, Input, Loading, Select } from "../../ui/ui";
+import { ProductSearch } from "../../ui/product-search";
 
 function statusBadge(status: string) {
   const cor: Record<string, "green" | "amber" | "red" | "gray" | "blue"> = {
@@ -156,6 +157,26 @@ export function InventarioCiclo({ depositos }: { depositos: { id: number; nome: 
               )}
             </div>
           </div>
+          {detalhe.status === "em_andamento" ? (
+            <div className="mb-3 rounded-lg border border-brand-100 bg-brand-50/40 p-2">
+              <ProductSearch
+                clearOnSelect
+                depositoId={Number(dep) || undefined}
+                onSelect={(produto) => {
+                  const item = detalhe.contagens.find((atual) => atual.produto_id === produto.id);
+                  if (!item) {
+                    toast("Este produto não faz parte deste ciclo", "warn");
+                    return;
+                  }
+                  window.setTimeout(() => {
+                    const input = document.getElementById(`ciclo-contagem-${produto.id}`) as HTMLInputElement | null;
+                    input?.focus();
+                    input?.select();
+                  }, 0);
+                }}
+              />
+            </div>
+          ) : null}
           <div className="divide-y divide-gray-100">
             {detalhe.contagens.map((g) => (
               <div key={g.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
@@ -172,7 +193,7 @@ export function InventarioCiclo({ depositos }: { depositos: { id: number; nome: 
                 {statusBadge(g.status)}
                 {g.status === "pendente" && (
                   <span className="flex items-center gap-1">
-                    <Input className="w-24" inputMode="decimal" value={contagem[g.produto_id] ?? ""}
+                    <Input id={`ciclo-contagem-${g.produto_id}`} className="w-24" inputMode="decimal" value={contagem[g.produto_id] ?? ""}
                       onChange={(e) => setContagem((s) => ({ ...s, [g.produto_id]: e.target.value }))}
                       placeholder="contado" aria-label={`quantidade contada de ${g.produto_nome}`} />
                     <Input className="w-40" value={obs[g.produto_id] ?? ""}
