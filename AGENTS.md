@@ -237,6 +237,26 @@ O ambiente de desenvolvimento roda **em dois hosts em paralelo** (o serviço nã
 
 ## 6. Pipeline, Release Manifest e fluxo completo
 
+### Promoção imutável e autônoma (vigente a partir da v2.40.1)
+
+- Staging é acionado manualmente com `release_version=vX.Y.Z`; a branch é escolhida
+  no seletor **Use workflow from** do GitHub Actions.
+- Apenas staging em modo `completo` pode criar a tag anotada
+  `vX.Y.Z-rc.<run_id>.<tentativa>`. A anotação registra os IDs de conteúdo das imagens
+  backend/frontend efetivamente testadas. Modo `rapido` nunca cria candidata.
+- Produção recebe somente `release_candidate`; não aceita branch, SHA avulso,
+  versão livre ou escolha manual de componentes.
+- O workflow produtivo valida formato e anotação da tag, run/attempt de staging
+  concluído com sucesso, igualdade do SHA, manifesto e IDs das imagens Docker. Depois
+  promove as mesmas imagens de staging, sem rebuild.
+- Componentes são derivados de `releases/vX.Y.Z.json`; `deployment` implica
+  backend + frontend + verificação de migrations. Manifesto com componente não
+  suportado pelo pipeline é bloqueado.
+- A tag final `vX.Y.Z` nasce somente após migrations, health, impressão, smoke e
+  registro exclusivo do manifesto ficarem verdes. Criar/pushar tags manualmente
+  nunca dispara deploy.
+- Procedimento do usuário final de publicação: `docs/deployment/DEPLOY.md`.
+
 Ordem de produção: **Backup → Migration Job (nunca dentro do `compose up`) → Health Check → Backend rollout → Frontend rollout → Smoke Tests**.
 
 Imagens Docker empacotam release imutável e são **taggeadas com a versão** (`siscom-backend:vX.Y.Z`). O PostgreSQL é serviço persistente — atualizar containers nunca o recria.

@@ -1,0 +1,49 @@
+{
+  "versao": "v2.40.1",
+  "componentes": [
+    "backend",
+    "frontend",
+    "deployment"
+  ],
+  "correcoes": [
+    "Importacao de produtos nao interrompe o lote quando uma linha possui erro",
+    "Codigos automaticos de grupo e subgrupo nao colidem quando os oito primeiros caracteres sao iguais",
+    "Reenvio do mesmo arquivo reutiliza o resultado auditado sem duplicar produtos",
+    "Historico de publicacao registra somente o manifesto da versao promovida"
+  ],
+  "melhorias": [
+    "Coluna principal da planilha aceita DESCRICAO, NOME ou PRODUTO, com ou sem acento",
+    "Taxonomias, marcas, deduplicacao e buscas principais de produto ignoram diferencas de acentuacao",
+    "Linhas rejeitadas geram uma planilha XLSX reimportavel com motivo e sugestao",
+    "Staging completo cria release candidate imutavel e producao promove exatamente as imagens aprovadas"
+  ],
+  "recursos": [
+    "Deploy autonomo em dois passos pela interface do GitHub Actions",
+    "Validacao da candidata por run, workflow, resultado e SHA antes de acessar producao",
+    "Componentes de deploy definidos automaticamente pelo manifesto"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.40.1",
+    "frontend": "siscom-frontend:v2.40.1"
+  },
+  "database": {
+    "migration": 156
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "partial_product_import": true,
+    "product_import_error_workbook": true,
+    "immutable_release_candidate": true,
+    "promote_staging_images": true,
+    "database_change": false
+  },
+  "rollback": {
+    "application": "Retornar as imagens siscom-backend:v2.40.0 e siscom-frontend:v2.40.0; nao ha alteracao de schema.",
+    "database": "Nenhuma migration nesta release; manter o schema 156."
+  }
+}

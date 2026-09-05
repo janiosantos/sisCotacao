@@ -1,4 +1,5 @@
 name: Deploy Staging (siscom)
+run-name: Staging ${{ inputs.release_version }} @ ${{ github.ref_name }} (${{ inputs.modo }})
 
 # Valida uma branch em ambiente paralelo à produção, no próprio servidor:
 # projeto Docker separado (siscom-staging), banco vazio que nasce e é
@@ -6,15 +7,10 @@ name: Deploy Staging (siscom)
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: 'Branch a validar'
+      release_version:
+        description: 'Versão final planejada (ex.: v2.40.1)'
         required: true
-        default: 'main'
-        type: string
-      app_version:
-        description: 'APP_VERSION exibido no painel'
-        required: true
-        default: 'v2.35.0-rc'
+        default: 'v2.40.1'
         type: string
       modo:
         description: 'rápido pula as suítes de teste (iteração); completo roda o CI'
@@ -24,6 +20,9 @@ on:
         options:
           - rapido
           - completo
+
+permissions:
+  contents: write
 
 # Staging e producao compartilham o mesmo runner/daemon Docker. Nunca executa
 # builds ou limpezas concorrentes com o workflow de producao.
@@ -37,14 +36,72 @@ jobs:
     env:
       COMPOSE_PROJECT_NAME: siscom-staging
       COMPOSE_FILE: deployment/compose/docker-compose.staging.yml
-      APP_VERSION: ${{ inputs.app_version }}
       CATALOG_STAGING_SECRET: ${{ secrets.CATALOG_STAGING_SECRET }}
       PAYMENT_STAGING_WEBHOOK_SECRET: ${{ secrets.PAYMENT_STAGING_WEBHOOK_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+
+      - name: Valida release e define identificação do build
+        id: release
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          DEPLOY_MODE: ${{ inputs.modo }}
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERRO: versão deve seguir vMAJOR.MINOR.PATCH (ex.: v2.40.1)."
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/$RELEASE_VERSION" >/dev/null; then
+            echo "ERRO: a versão final $RELEASE_VERSION já possui tag e não pode ser reutilizada."
+            exit 1
+          fi
+          MANIFEST="releases/$RELEASE_VERSION.json"
+          python - "$MANIFEST" "$RELEASE_VERSION" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          path = pathlib.Path(sys.argv[1])
+          version = sys.argv[2]
+          if not path.is_file():
+              raise SystemExit(f"ERRO: manifesto obrigatório não encontrado: {path}")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          if data.get("versao") != version:
+              raise SystemExit(f"ERRO: manifesto declara {data.get('versao')!r}, esperado {version!r}")
+          components = data.get("componentes")
+          if not isinstance(components, list) or not components:
+              raise SystemExit("ERRO: manifesto deve declarar ao menos um componente")
+          allowed = {"backend", "frontend", "schema", "deployment"}
+          unknown = sorted(set(components) - allowed)
+          if unknown:
+              raise SystemExit(f"ERRO: componentes sem deploy neste pipeline: {', '.join(unknown)}")
+          selected = set(components)
+          images = data.get("imagens") or {}
+          if selected & {"backend", "schema", "deployment"}:
+              if images.get("backend") != f"siscom-backend:{version}":
+                  raise SystemExit("ERRO: tag da imagem backend no manifesto não corresponde à versão")
+          if selected & {"frontend", "deployment"}:
+              if images.get("frontend") != f"siscom-frontend:{version}":
+                  raise SystemExit("ERRO: tag da imagem frontend no manifesto não corresponde à versão")
+          PY
+
+          RC_TAG="$RELEASE_VERSION-rc.$GITHUB_RUN_ID.$GITHUB_RUN_ATTEMPT"
+          if [ "$DEPLOY_MODE" = "completo" ]; then
+            APP_VERSION="$RC_TAG"
+          else
+            APP_VERSION="$RELEASE_VERSION-dev.$GITHUB_RUN_ID"
+          fi
+          {
+            echo "release_version=$RELEASE_VERSION"
+            echo "rc_tag=$RC_TAG"
+            echo "sha=$GITHUB_SHA"
+          } >> "$GITHUB_OUTPUT"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "Código candidato: $GITHUB_SHA"
+          echo "Imagem de staging: $APP_VERSION"
 
       - name: Preflight de espaco do Docker
         run: |
@@ -138,6 +195,52 @@ jobs:
       # Gate de reconciliação: saldos divergentes dos movimentos falham o staging.
       - name: Gate - reconciliação de estoque
         run: bash deployment/scripts/check-reconciliacao.sh
+
+      - name: Publica tag da release candidate aprovada
+        if: github.event.inputs.modo == 'completo'
+        env:
+          RC_TAG: ${{ steps.release.outputs.rc_tag }}
+          RELEASE_VERSION: ${{ steps.release.outputs.release_version }}
+        run: |
+          git config user.name "siscom-release-bot"
+          git config user.email "siscom-release-bot@users.noreply.github.com"
+          if git rev-parse -q --verify "refs/tags/$RC_TAG" >/dev/null; then
+            echo "ERRO: a tag candidata $RC_TAG já existe; a tentativa não é reutilizável."
+            exit 1
+          fi
+          BACKEND_IMAGE="$(docker image inspect --format '{{.Id}}' "siscom-backend-staging:$RC_TAG")"
+          FRONTEND_IMAGE="$(docker image inspect --format '{{.Id}}' "siscom-frontend-staging:$RC_TAG")"
+          TAG_MESSAGE="$(printf '%s\n%s\n%s\n%s\n%s' \
+            "Release candidate $RELEASE_VERSION aprovada no staging" \
+            "staging_run_id=$GITHUB_RUN_ID" \
+            "staging_run_attempt=$GITHUB_RUN_ATTEMPT" \
+            "backend_image=$BACKEND_IMAGE" \
+            "frontend_image=$FRONTEND_IMAGE")"
+          git tag -a "$RC_TAG" "$GITHUB_SHA" -m "$TAG_MESSAGE"
+          git push origin "refs/tags/$RC_TAG"
+          {
+            echo "## Release candidate aprovada"
+            echo ""
+            echo "- **Tag para produção:** \`$RC_TAG\`"
+            echo "- **Commit validado:** \`$GITHUB_SHA\`"
+            echo "- **Imagem backend:** \`$BACKEND_IMAGE\`"
+            echo "- **Imagem frontend:** \`$FRONTEND_IMAGE\`"
+            echo "- **Versão final planejada:** \`$RELEASE_VERSION\`"
+            echo ""
+            echo "Abra **Actions > Deploy produção (siscom)** e informe somente a tag acima."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Registra execução rápida como não promovível
+        if: github.event.inputs.modo == 'rapido'
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.release_version }}
+        run: |
+          {
+            echo "## Staging rápido concluído"
+            echo ""
+            echo "A versão \`$RELEASE_VERSION\` **não recebeu tag candidata**, pois as suítes completas foram ignoradas."
+            echo "Execute novamente em modo \`completo\` antes de promover para produção."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Limpa imagens órfãs
         if: always()

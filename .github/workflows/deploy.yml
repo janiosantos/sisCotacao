@@ -1,24 +1,19 @@
 name: Deploy produção (siscom)
+run-name: Produção ${{ inputs.release_candidate }}
 
-# Publicação SOMENTE mediante autorização explícita (Run workflow),
-# escolhendo versão e componentes. Não há mais gatilho automático por tag.
+# Publicação SOMENTE mediante autorização explícita (Run workflow), usando uma
+# tag candidata criada após o staging completo. Não há gatilho automático por tag.
 on:
   workflow_dispatch:
     inputs:
-      versao:
-        description: 'Versão da release (ex.: v1.5.1)'
+      release_candidate:
+        description: 'Tag aprovada exibida no resumo do staging (ex.: v2.40.1-rc.123456789.1)'
         required: true
         type: string
-      componentes:
-        description: 'O que publicar'
-        required: true
-        default: 'todos'
-        type: choice
-        options:
-          - todos
-          - backend
-          - frontend
-          - schema
+
+permissions:
+  actions: read
+  contents: write
 
 # O runner e o daemon Docker sao compartilhados com staging. Serializar os
 # workflows protege build, tagging, migracao e limpeza de cache.
@@ -30,6 +25,9 @@ jobs:
   deploy:
     # Executa no self-hosted runner instalado no próprio servidor de produção.
     runs-on: [self-hosted, siscom-prod]
+    environment:
+      name: production
+      url: https://siscom.casalm.com.br:6173
     env:
       COMPOSE_PROJECT_NAME: siscom   # mantém o volume siscom_postgres-data (dados intactos)
       # Credenciais exigidas pelo docker-compose.prod.yml (senha do volume atual = catalog).
@@ -41,32 +39,138 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.release_candidate }}
+          fetch-depth: 0
 
-      - name: Define componentes do deploy
-        id: comp
+      - name: Valida tag candidata e manifesto
+        id: release
+        env:
+          RC_TAG: ${{ inputs.release_candidate }}
+          WORKFLOW_REF: ${{ github.ref }}
         run: |
-          C="${{ inputs.componentes }}"
-          if [ -z "$C" ]; then C="todos"; fi   # push de tag publica tudo
-          echo "componentes=$C" >> "$GITHUB_OUTPUT"
-          # schema implica rebuild do backend: as migrações vivem na imagem.
-          case "$C" in
-            todos)    B=true;  F=true;  M=true  ;;
-            backend)  B=true;  F=false; M=true  ;;
-            schema)   B=true;  F=false; M=true  ;;
-            frontend) B=false; F=true;  M=false ;;
-            *) echo "componentes inválidos: $C"; exit 1 ;;
-          esac
-          echo "backend=$B"  >> "$GITHUB_OUTPUT"
-          echo "frontend=$F" >> "$GITHUB_OUTPUT"
-          echo "migracoes=$M" >> "$GITHUB_OUTPUT"
+          if [ "$WORKFLOW_REF" != "refs/heads/main" ]; then
+            echo "ERRO: execute o workflow de produção usando 'Use workflow from: main'."
+            exit 1
+          fi
+          if [[ ! "$RC_TAG" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+)-rc\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "ERRO: informe uma tag candidata gerada pelo staging (vX.Y.Z-rc.RUN_ID.TENTATIVA)."
+            exit 1
+          fi
+          RELEASE_VERSION="${BASH_REMATCH[1]}"
+          STAGING_RUN_ID="${BASH_REMATCH[2]}"
+          STAGING_RUN_ATTEMPT="${BASH_REMATCH[3]}"
+          if [ "$(git cat-file -t "refs/tags/$RC_TAG" 2>/dev/null || true)" != "tag" ]; then
+            echo "ERRO: $RC_TAG não é uma tag anotada válida."
+            exit 1
+          fi
+          CANDIDATE_SHA="$(git rev-list -n 1 "$RC_TAG")"
+          if [ "$(git rev-parse HEAD)" != "$CANDIDATE_SHA" ]; then
+            echo "ERRO: checkout não corresponde ao commit da tag candidata."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$CANDIDATE_SHA" origin/main; then
+            echo "ERRO: o commit candidato ainda não pertence ao histórico de main."
+            echo "Faça o merge e execute novamente o staging completo a partir de main."
+            exit 1
+          fi
+          TAG_MESSAGE="$(git for-each-ref --format='%(contents)' "refs/tags/$RC_TAG")"
+          TAG_RUN_ID="$(printf '%s\n' "$TAG_MESSAGE" | sed -n 's/^staging_run_id=//p')"
+          TAG_RUN_ATTEMPT="$(printf '%s\n' "$TAG_MESSAGE" | sed -n 's/^staging_run_attempt=//p')"
+          if [ "$TAG_RUN_ID" != "$STAGING_RUN_ID" ] || [ "$TAG_RUN_ATTEMPT" != "$STAGING_RUN_ATTEMPT" ]; then
+            echo "ERRO: metadados da tag candidata não correspondem ao run informado no nome."
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/$RELEASE_VERSION" >/dev/null; then
+            echo "ERRO: a versão final $RELEASE_VERSION já foi publicada."
+            exit 1
+          fi
 
-      - name: Resolve versão da imagem
-        id: version
+          export RELEASE_VERSION
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+
+          version = os.environ["RELEASE_VERSION"]
+          path = pathlib.Path("releases") / f"{version}.json"
+          if not path.is_file():
+              raise SystemExit(f"ERRO: manifesto obrigatório não encontrado: {path}")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          if data.get("versao") != version:
+              raise SystemExit(f"ERRO: manifesto declara {data.get('versao')!r}, esperado {version!r}")
+          components = data.get("componentes")
+          if not isinstance(components, list) or not components:
+              raise SystemExit("ERRO: manifesto deve declarar ao menos um componente")
+          allowed = {"backend", "frontend", "schema", "deployment"}
+          unknown = sorted(set(components) - allowed)
+          if unknown:
+              raise SystemExit(f"ERRO: componentes sem deploy neste pipeline: {', '.join(unknown)}")
+          selected = set(components)
+          backend = bool(selected & {"backend", "schema", "deployment"})
+          frontend = bool(selected & {"frontend", "deployment"})
+          migrations = bool(selected & {"backend", "schema", "deployment"})
+          images = data.get("imagens") or {}
+          if backend and images.get("backend") != f"siscom-backend:{version}":
+              raise SystemExit("ERRO: tag da imagem backend no manifesto não corresponde à versão")
+          if frontend and images.get("frontend") != f"siscom-frontend:{version}":
+              raise SystemExit("ERRO: tag da imagem frontend no manifesto não corresponde à versão")
+          output = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+          with output.open("a", encoding="utf-8") as stream:
+              stream.write(f"componentes={','.join(components)}\n")
+              stream.write(f"backend={str(backend).lower()}\n")
+              stream.write(f"frontend={str(frontend).lower()}\n")
+              stream.write(f"migracoes={str(migrations).lower()}\n")
+          PY
+
+          {
+            echo "release_version=$RELEASE_VERSION"
+            echo "rc_tag=$RC_TAG"
+            echo "staging_run_id=$STAGING_RUN_ID"
+            echo "staging_run_attempt=$STAGING_RUN_ATTEMPT"
+            echo "sha=$CANDIDATE_SHA"
+          } >> "$GITHUB_OUTPUT"
+          echo "APP_VERSION=$RELEASE_VERSION" >> "$GITHUB_ENV"
+
+      - name: Confirma aprovação do mesmo commit no staging completo
+        env:
+          CANDIDATE_SHA: ${{ steps.release.outputs.sha }}
+          STAGING_RUN_ID: ${{ steps.release.outputs.staging_run_id }}
+          STAGING_RUN_ATTEMPT: ${{ steps.release.outputs.staging_run_attempt }}
+          GH_TOKEN: ${{ github.token }}
+          GH_API_URL: ${{ github.api_url }}
+          GH_REPOSITORY: ${{ github.repository }}
         run: |
-          V="${{ inputs.versao }}"
-          if [ -z "$V" ]; then V="$(git describe --tags --always 2>/dev/null || echo dev)"; fi
-          echo "tag=$V" >> "$GITHUB_OUTPUT"
-          echo "APP_VERSION=$V" >> "$GITHUB_ENV"
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          run_id = os.environ["STAGING_RUN_ID"]
+          request = urllib.request.Request(
+              f"{os.environ['GH_API_URL']}/repos/{os.environ['GH_REPOSITORY']}/actions/runs/{run_id}",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=20) as response:
+              run = json.load(response)
+          workflow_path = str(run.get("path") or "").split("@", 1)[0]
+          if workflow_path != ".github/workflows/deploy-staging.yml":
+              raise SystemExit(f"ERRO: run {run_id} não pertence ao workflow de staging")
+          if run.get("event") != "workflow_dispatch" or run.get("conclusion") != "success":
+              raise SystemExit(f"ERRO: run {run_id} não é um staging manual concluído com sucesso")
+          if int(run.get("run_attempt") or 0) != int(os.environ["STAGING_RUN_ATTEMPT"]):
+              raise SystemExit(f"ERRO: tentativa aprovada do run {run_id} não corresponde à tag candidata")
+          if run.get("head_sha") != os.environ["CANDIDATE_SHA"]:
+              raise SystemExit(
+                  f"ERRO: SHA do staging ({run.get('head_sha')}) difere da candidata "
+                  f"({os.environ['CANDIDATE_SHA']})"
+              )
+          print(f"Staging {run_id} confirmado para o SHA {run['head_sha']}")
+          PY
 
       - name: Preflight de espaco do Docker
         run: |
@@ -87,19 +191,44 @@ jobs:
           docker compose -f deployment/compose/docker-compose.prod.yml config --quiet
 
       - name: Salva imagem atual (para rollback)
-        if: steps.comp.outputs.backend == 'true'
-        run: docker tag siscom-backend:latest siscom-backend:prev || true
+        run: |
+          if [ "${{ steps.release.outputs.backend }}" = "true" ]; then
+            docker tag siscom-backend:latest siscom-backend:prev || true
+          fi
+          if [ "${{ steps.release.outputs.frontend }}" = "true" ]; then
+            docker tag siscom-frontend:latest siscom-frontend:prev || true
+          fi
 
-      - name: Build imagem do backend
-        if: steps.comp.outputs.backend == 'true'
-        run: docker compose -f deployment/compose/docker-compose.prod.yml build backend
-
-      - name: Build imagem do frontend
-        if: steps.comp.outputs.frontend == 'true'
-        run: docker compose -f deployment/compose/docker-compose.prod.yml build frontend
+      - name: Promove as mesmas imagens aprovadas no staging
+        env:
+          RC_TAG: ${{ steps.release.outputs.rc_tag }}
+        run: |
+          TAG_MESSAGE="$(git for-each-ref --format='%(contents)' "refs/tags/$RC_TAG")"
+          EXPECTED_BACKEND="$(printf '%s\n' "$TAG_MESSAGE" | sed -n 's/^backend_image=//p')"
+          EXPECTED_FRONTEND="$(printf '%s\n' "$TAG_MESSAGE" | sed -n 's/^frontend_image=//p')"
+          ACTUAL_BACKEND="$(docker image inspect --format '{{.Id}}' "siscom-backend-staging:$RC_TAG")"
+          ACTUAL_FRONTEND="$(docker image inspect --format '{{.Id}}' "siscom-frontend-staging:$RC_TAG")"
+          if [ -z "$EXPECTED_BACKEND" ] || [ "$EXPECTED_BACKEND" != "$ACTUAL_BACKEND" ]; then
+            echo "ERRO: ID da imagem backend difere da candidata aprovada."
+            exit 1
+          fi
+          if [ -z "$EXPECTED_FRONTEND" ] || [ "$EXPECTED_FRONTEND" != "$ACTUAL_FRONTEND" ]; then
+            echo "ERRO: ID da imagem frontend difere da candidata aprovada."
+            exit 1
+          fi
+          if [ "${{ steps.release.outputs.backend }}" = "true" ]; then
+            docker tag "siscom-backend-staging:$RC_TAG" "siscom-backend:$APP_VERSION"
+          else
+            docker tag siscom-backend:latest "siscom-backend:$APP_VERSION"
+          fi
+          if [ "${{ steps.release.outputs.frontend }}" = "true" ]; then
+            docker tag "siscom-frontend-staging:$RC_TAG" "siscom-frontend:$APP_VERSION"
+          else
+            docker tag siscom-frontend:latest "siscom-frontend:$APP_VERSION"
+          fi
 
       - name: Backup de segurança (somente se houver migration pendente)
-        if: steps.comp.outputs.migracoes == 'true'
+        if: steps.release.outputs.migracoes == 'true'
         run: |
           mkdir -p /home/jpsantos/siscom/backups
           # A checagem usa a imagem NOVA, pois a imagem atualmente em execucao
@@ -121,30 +250,17 @@ jobs:
             echo "sem migrations pendentes; pulando backup"
           fi
 
-      # Regra 03: release imutável — além do latest, cada versão fica etiquetada
-      # para diagnóstico e rollback pontual (qualquer tag, não só prev).
-      # A build do compose ja etiqueta o componente alterado com a versao. Para
-      # releases parciais, o componente nao alterado recebe um alias imutavel da
-      # imagem atual para que `compose up` nunca tente buscar uma tag inexistente.
       - name: Etiqueta imagens com a versão da release
         run: |
-          if [ "${{ steps.comp.outputs.backend }}" = "true" ]; then
-            docker tag "siscom-backend:${{ steps.version.outputs.tag }}" siscom-backend:latest
-          else
-            docker tag siscom-backend:latest "siscom-backend:${{ steps.version.outputs.tag }}"
-          fi
-          if [ "${{ steps.comp.outputs.frontend }}" = "true" ]; then
-            docker tag "siscom-frontend:${{ steps.version.outputs.tag }}" siscom-frontend:latest
-          else
-            docker tag siscom-frontend:latest "siscom-frontend:${{ steps.version.outputs.tag }}"
-          fi
+          docker tag "siscom-backend:$APP_VERSION" siscom-backend:latest
+          docker tag "siscom-frontend:$APP_VERSION" siscom-frontend:latest
 
       - name: Para o backend (janela de manutenção — DDL sem tráfego)
-        if: steps.comp.outputs.migracoes == 'true'
+        if: steps.release.outputs.migracoes == 'true'
         run: docker compose -f deployment/compose/docker-compose.prod.yml stop backend worker scheduler impressao-worker
 
       - name: Aplica migrações pendentes (container one-off com a imagem nova)
-        if: steps.comp.outputs.migracoes == 'true'
+        if: steps.release.outputs.migracoes == 'true'
         run: |
           docker compose -f deployment/compose/docker-compose.prod.yml run --rm --no-deps backend \
             python -m catalog_server.versioning apply --origem deploy
@@ -192,7 +308,29 @@ jobs:
         run: |
           docker compose -f deployment/compose/docker-compose.prod.yml exec -T backend \
             python -m catalog_server.versioning publicar \
-            --componentes "${{ steps.comp.outputs.componentes }}"
+            --componentes "${{ steps.release.outputs.componentes }}" \
+            --versao "$APP_VERSION"
+
+      - name: Publica tag final somente após os gates
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.release_version }}
+          RC_TAG: ${{ steps.release.outputs.rc_tag }}
+        run: |
+          git config user.name "siscom-release-bot"
+          git config user.email "siscom-release-bot@users.noreply.github.com"
+          git tag -a "$RELEASE_VERSION" "${{ steps.release.outputs.sha }}" \
+            -m "Release $RELEASE_VERSION promovida de $RC_TAG"
+          git push origin "refs/tags/$RELEASE_VERSION"
+          docker image rm "siscom-backend-staging:$RC_TAG" >/dev/null 2>&1 || true
+          docker image rm "siscom-frontend-staging:$RC_TAG" >/dev/null 2>&1 || true
+          {
+            echo "## Produção publicada"
+            echo ""
+            echo "- **Versão:** \`$RELEASE_VERSION\`"
+            echo "- **Candidata:** \`$RC_TAG\`"
+            echo "- **Commit:** \`${{ steps.release.outputs.sha }}\`"
+            echo "- **Componentes:** \`${{ steps.release.outputs.componentes }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Limpa imagens órfãs
         if: always()

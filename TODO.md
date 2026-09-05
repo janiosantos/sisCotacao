@@ -160,3 +160,19 @@ Verificação: frontend `typecheck` e 39 testes passaram; backend direcionado
 (`test_abc_historica.py`, `test_motor_reposicao.py`, `test_infra.py`,
 `test_recebimento_documento.py`, `test_relatorios.py`) passou com 37 testes.
 A suíte backend integral não foi declarada como aprovada nesta auditoria.
+
+## Correção do fluxo de release — 2026-09-05
+
+Status: **✅ corrigido no código; nenhum deploy executado.**
+
+- [x] Staging completo cria tag candidata anotada somente depois de todos os gates.
+- [x] Produção recebe apenas a candidata e valida run, tentativa, workflow, SHA e manifesto.
+- [x] Candidata de produção deve pertencer ao histórico de `main`.
+- [x] Produção promove os mesmos IDs de imagem testados, sem rebuild.
+- [x] Componentes são derivados do manifesto e a tag final nasce após os gates produtivos.
+- [x] Histórico registra exclusivamente a versão promovida.
+
+Validação: `actionlint` nos dois workflows, 21 testes backend direcionados,
+`py_compile`, JSON do manifesto e Compose de staging/produção verdes. O próximo
+passo operacional é o próprio usuário executar staging completo para v2.40.1 e,
+se verde, informar a candidata no workflow de produção.

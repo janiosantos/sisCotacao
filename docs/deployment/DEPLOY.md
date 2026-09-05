@@ -1,21 +1,24 @@
 # Deploy em produção (siscom)
 
 Pipeline de deploy com **GitHub Actions + self-hosted runner** no próprio servidor.
-Imagens são buildadas **no servidor** (sem registry, sem transferência de ~90MB); o
-banco **nunca para** (migrações aplicadas online no startup do backend). Dados de
-produção **nunca são sobrescritos** por dump/restore.
+As imagens são construídas e testadas no staging e depois promovidas com o mesmo
+ID de conteúdo para produção, sem registry ou rebuild. Migrações são executadas em uma
+etapa explícita, fora do startup da aplicação. Dados de produção nunca são
+sobrescritos por dump/restore.
 
 ## Visão geral
-- Trigger: `git tag vX.Y.Z` + `git push --tags` (ou `workflow_dispatch` manual).
-- Runner `siscom-prod` (instalado no servidor) executa `.github/workflows/deploy.yml`:
-  1. `checkout`
-  2. Se houver migration **pendente**, faz `pg_dump` de segurança em
-     `/home/jpsantos/siscom/backups/prod-pre-<timestamp>.dump`
-  3. `docker compose build` (incremental, cache de layers)
-  4. `docker compose up -d` (backend sobe e aplica migrações online; volume
-     `siscom_postgres-data` preservado → dados intactos)
-  5. Health gate: `pg_migrations status` + `curl` em `/api/health` no backend (até 30×3s)
-  6. `docker image prune -f`
+- A publicação é sempre manual por `workflow_dispatch`; criar ou enviar uma tag
+  manualmente não dispara deploy.
+- Staging completo cria automaticamente a tag anotada
+  `vX.Y.Z-rc.<GITHUB_RUN_ID>.<TENTATIVA>` somente depois de migrations, testes, build,
+  health, impressão, smoke e reconciliação ficarem verdes.
+- Produção aceita somente essa tag candidata, consulta o run pela API do GitHub,
+  confirma workflow, conclusão e SHA, valida o manifesto e promove as mesmas
+  imagens testadas.
+- Se houver migration pendente, faz `pg_dump` em
+  `/home/jpsantos/siscom/backups/prod-pre-<timestamp>.dump` antes da aplicação.
+- A tag final `vX.Y.Z` é criada automaticamente somente depois de health, worker
+  de impressão, smoke e registro do histórico ficarem verdes.
 - Rollback de imagem: `docker tag siscom-backend:prev siscom-backend:latest &&
   docker compose -f docker-compose.prod.yml up -d`
 
@@ -28,16 +31,27 @@ bash scripts/ci/setup-runner.sh <runner_registration_token>
 ```
 (O token de registro expira em ~1h; se expirar, gere um novo.)
 
-## Fazer um deploy
-1. **Mudança de estrutura** = nova migration em `backend/migrations/versions/0061_*.py`
-   (nunca editar 0052–0060). Ver abaixo o padrão.
-2. Commitar e subir para `main`/branch.
-3. Taggear e empurrar:
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
-4. Acompanhar em GitHub → Actions → job `deploy` (roda no servidor).
+O repositório pode manter **Settings → Actions → General → Workflow permissions**
+em somente leitura. Os workflows solicitam de forma explícita e limitada apenas
+`contents: write` para criar tags e, na produção, `actions: read` para validar o
+run de staging. Em **Settings → Environments → production**, opcionalmente
+configure seu próprio usuário como aprovador; nesse caso haverá uma confirmação
+adicional antes de qualquer operação produtiva.
+
+## Fazer um deploy sem depender de terminal ou agente
+1. Garanta que a mudança e `releases/vX.Y.Z.json` estejam commitados no `main`.
+2. Abra **GitHub → Actions → Deploy Staging (siscom) → Run workflow**.
+3. Em **Use workflow from**, escolha `main`; informe `vX.Y.Z` em
+   `release_version`, selecione `completo` e execute.
+4. Quando o run ficar verde, abra o **Summary** e copie a tag exibida em
+   **Tag para produção**, por exemplo `v2.40.1-rc.33999999999.1`.
+5. Abra **GitHub → Actions → Deploy produção (siscom) → Run workflow**; cole a
+   tag no único campo `release_candidate` e execute.
+6. Acompanhe o Summary. Ao final, a tag definitiva `vX.Y.Z` estará criada e o
+   painel **Admin → Atualizações** mostrará apenas essa release.
+
+O modo `rapido` atualiza o staging para testes exploratórios, mas não roda a suíte
+completa e, por segurança, **não cria tag candidata promovível**.
 
 ## Padrão de migração (importante)
 - **Classificação de risco**: todo arquivo `.py` declara `RISCO` no topo:
@@ -221,17 +235,13 @@ MUDANCA = {
 
 #### Publicar (autorização explícita)
 
-A publicação **nunca é automática**: acontece em
-GitHub → Actions → **"Deploy produção (siscom)"** → **Run workflow**, com:
+A publicação nunca é automática. A tela de produção possui somente o campo
+`release_candidate`; versão e componentes são lidos do manifesto versionado.
+O pipeline aplica internamente o seguinte mapeamento:
 
-- `versao` — ex.: `v1.5.1` (vira o `APP_VERSION`);
-- `componentes` — `todos`, `backend`, `frontend` ou `schema`.
-
-Mapeamento dos componentes (seguro por construção):
-
-| Componente | Build backend | Build frontend | Migrações |
+| Componente | Promove backend | Promove frontend | Migrações |
 |---|---|---|---|
-| `todos` | ✅ | ✅ | ✅ |
+| manifesto com `deployment` | ✅ | ✅ | ✅ |
 | `backend` | ✅ | — | ✅ |
 | `schema` | ✅ (as migrações vivem na imagem) | — | ✅ |
 | `frontend` | — | ✅ | — |
@@ -243,14 +253,14 @@ altera **assinatura de API**, o manifesto deve listar `backend + frontend`
 
 Fluxo completo:
 1. Implemente em dev; commit com código, migration `00XX_*.py` (com `RISCO`)
-   **e** o manifesto `releases/vX.Y.Z.json`.
-2. Quando quiser lançar, autorize o workflow com a versão e os componentes.
-3. O pipeline aplica as migrações pendentes e registra **um evento por
-   manifesto publicado, na sequência** — visível no Histórico.
+   e o manifesto `releases/vX.Y.Z.json`.
+2. Execute staging completo e copie a tag candidata criada no Summary.
+3. Autorize produção informando a candidata; o pipeline registra somente o
+   manifesto da versão promovida.
 4. Confira no painel **Admin → Atualizações**: versão, estado e notas.
 
-> O gatilho por tag `v*` foi **removido** após a v1.5.0. Publicar é sempre via
-> **Run workflow** — tags passam a ser apenas registro documental, se você quiser.
+> Tags são evidências imutáveis, não gatilhos automáticos. A candidata nasce
+> depois do staging verde e a definitiva nasce depois da produção verde.
 
 ### Indisponibilidade e modo manutenção
 

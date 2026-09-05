@@ -258,18 +258,22 @@ def apply_updates(
 def registrar_publicacao(
     componentes_deploy: list[str],
     usuario: str | None = None,
+    versao: str | None = None,
 ) -> list[str]:
     """Registra no Histórico os manifestos cobertos pelo escopo publicado.
 
     Regra do subconjunto: um manifesto fecha quando TODOS os componentes que
     ele declara estão contidos nos `componentes_deploy` (ou quando o deploy é
-    'todos'). Publicação parcial de um manifesto misto não o fecha.
+    'todos'). Se ``versao`` for informada, nenhum outro manifesto pendente é
+    registrado. Publicação parcial de um manifesto misto não o fecha.
     """
     versao_app = os.getenv("APP_VERSION") or "dev"
     agora = _schema_version()
     escopo = set(componentes_deploy)
     publicadas: list[str] = []
     for m in listar_manifestos_pendentes():
+        if versao is not None and m.get("versao") != versao:
+            continue
         comps = set(m.get("componentes") or [])
         if comps and not comps <= escopo:
             continue
@@ -361,7 +365,12 @@ def _main() -> int:
     p_pub.add_argument(
         "--componentes",
         default="todos",
-        help="'todos' ou CSV: backend,frontend,schema",
+        help="'todos' ou CSV: backend,frontend,schema,deployment",
+    )
+    p_pub.add_argument(
+        "--versao",
+        default=None,
+        help="registra somente o manifesto desta versão",
     )
     p_pub.add_argument("--usuario", default=None)
 
@@ -382,7 +391,7 @@ def _main() -> int:
             if args.componentes.strip().lower() == "todos"
             else [c.strip() for c in args.componentes.split(",") if c.strip()]
         )
-        publicadas = registrar_publicacao(comps, usuario=args.usuario)
+        publicadas = registrar_publicacao(comps, usuario=args.usuario, versao=args.versao)
         print(json.dumps({"ok": True, "releases_registradas": publicadas}))
         return 0
     except Exception as e:  # noqa: BLE001
