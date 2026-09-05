@@ -2844,11 +2844,15 @@ export interface BuscaRapidaItem {
   ean?: string | null;
   nome: string;
   marca?: string | null;
+  descricao?: string | null;
+  ncm?: string | null;
+  imagem_url?: string | null;
   preco: number;
   preco_promocional?: number | null;
   unidade_venda?: string | null;
   fator_conversao?: number | null;
   tem_promocao?: boolean;
+  rank: number;
   disponivel: number;
   disponibilidade?: { fisico: number; reservado: number; disponivel: number } | null;
 }

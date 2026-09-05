@@ -3808,6 +3808,64 @@
         }
       }
     },
+    "/api/produtos/busca-rapida": {
+      "get": {
+        "tags": [
+          "catalogo"
+        ],
+        "summary": "Busca do PDV com identificadores exatos antes da pesquisa textual",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "deposito_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Produtos ativos ordenados por correspondência exata e relevância",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "produtos"
+                  ],
+                  "properties": {
+                    "produtos": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BuscaRapidaProduto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/produtos/importar/preview": {
       "post": {
         "tags": [
@@ -6513,6 +6571,66 @@
       }
     },
     "schemas": {
+      "BuscaRapidaProduto": {
+        "type": "object",
+        "required": [
+          "id",
+          "sku",
+          "nome",
+          "preco",
+          "rank",
+          "disponivel"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "ean": {
+            "type": "string",
+            "nullable": true
+          },
+          "nome": {
+            "type": "string"
+          },
+          "marca": {
+            "type": "string",
+            "nullable": true
+          },
+          "descricao": {
+            "type": "string",
+            "nullable": true
+          },
+          "ncm": {
+            "type": "string",
+            "nullable": true
+          },
+          "imagem_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "preco": {
+            "type": "number"
+          },
+          "preco_promocional": {
+            "type": "number",
+            "nullable": true
+          },
+          "unidade_venda": {
+            "type": "string",
+            "nullable": true
+          },
+          "rank": {
+            "type": "integer",
+            "description": "0=EAN/SKU legado exato; 1=identificador ativo exato; 2+=busca parcial/textual"
+          },
+          "disponivel": {
+            "type": "number"
+          }
+        }
+      },
       "Erro": {
         "type": "object",
         "properties": {

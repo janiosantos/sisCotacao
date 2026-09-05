@@ -41,6 +41,31 @@ def test_exata_rankeada_primeiro(system_db):
     assert r2[0]["rank"] == 1  # código fornecedor
 
 
+def test_ean_adicional_ativo_encontra_produto_com_formatacao(system_db):
+    pid, did, _ = _setup(system_db)
+    with system_conn() as conn:
+        conn.execute(
+            "INSERT INTO produto_identificador (produto_id, tipo, valor) VALUES (%s,%s,%s)",
+            (pid, "ean", "7899674038869"),
+        )
+        conn.commit()
+
+    resultado = catalog_repo.busca_rapida("789 9674 038869", deposito_id=did)
+
+    assert resultado[0]["id"] == pid
+    assert resultado[0]["rank"] == 1
+    assert "imagem_url" in resultado[0]
+
+
+def test_busca_rapida_nao_oferece_produto_inativo(system_db):
+    pid, _, _ = _setup(system_db)
+    with system_conn() as conn:
+        conn.execute("UPDATE produtos_cadastro SET ativo=0 WHERE id=%s", (pid,))
+        conn.commit()
+
+    assert catalog_repo.busca_rapida("FORN-123") == []
+
+
 def test_termo_textual(system_db):
     pid, did, _ = _setup(system_db)
     r = catalog_repo.busca_rapida("cabo flexivel", deposito_id=did)

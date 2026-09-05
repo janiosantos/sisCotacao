@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
+  type BuscaRapidaItem,
   type Cliente,
   type CondicaoPagamento,
   type OrcamentoDetalhe,
@@ -61,6 +62,35 @@ function calculosPdv(linhas: LinhaPdv[], vDescModo: "pct" | "valor", vDesconto: 
   const descontoTotal = Math.max(0, descontoItens + descontoGeral);
   const pct = base > 0 ? (descontoTotal / base) * 100 : 0;
   return { base, subtotal, descontoItens, descontoGeral, descontoTotal, pct, total: Math.max(0, subtotal - descontoGeral) };
+}
+
+export function produtoDaBuscaRapida(item: BuscaRapidaItem): ProdutoResumo {
+  const promocional = Number(item.preco_promocional || 0);
+  const preco = promocional > 0 && promocional < Number(item.preco || 0) ? promocional : Number(item.preco || 0);
+  return {
+    id: item.id,
+    sku: item.sku || "",
+    name: item.nome || "",
+    spec: item.descricao || "",
+    brand: item.marca || "",
+    price: preco,
+    imagem_url: item.imagem_url || undefined,
+    unidade_venda: item.unidade_venda || "",
+    ncm: item.ncm || "",
+  };
+}
+
+export function resolverBuscaAoEnter(itens: BuscaRapidaItem[]): {
+  produto?: ProdutoResumo;
+  sugestoes: ProdutoResumo[];
+  codigoExato: boolean;
+} {
+  const exatos = itens.filter((item) => item.rank <= 1);
+  const selecionaveis = (exatos.length ? exatos : itens).map(produtoDaBuscaRapida);
+  if (selecionaveis.length === 1) {
+    return { produto: selecionaveis[0], sugestoes: [], codigoExato: exatos.length === 1 };
+  }
+  return { sugestoes: selecionaveis, codigoExato: false };
 }
 
 function condicaoEhPrazo(condicao: CondicaoPagamento): boolean {
@@ -199,10 +229,10 @@ export default function PreVenda() {
     setQtdDigitada(qtd);
     buscaTimer.current = setTimeout(() => {
       void api
-        .listarProdutos({ q: termo, limit: 8, agrupado: 0 })
+        .buscaRapida(termo, undefined, 8)
         .then((res) => {
           if (requestId !== buscaRequestRef.current) return;
-          setSugestoes(res.items.map((i) => i as ProdutoResumo));
+          setSugestoes(res.produtos.map(produtoDaBuscaRapida));
           setFocoLista(-1);
         })
         .catch(() => {
@@ -212,8 +242,12 @@ export default function PreVenda() {
     return () => clearTimeout(buscaTimer.current);
   }, [busca]);
 
-  const adicionar = (p: ProdutoResumo) => {
-    const qtd = qtdDigitada;
+  const adicionar = (
+    p: ProdutoResumo,
+    quantidade = qtdDigitada,
+    focoDepois: "quantidade" | "busca" = "quantidade"
+  ) => {
+    const qtd = quantidade;
     let atualizado = false;
     const next = linhas.map((l) => {
       if (l.produto_id != null && l.produto_id === p.id) {
@@ -247,7 +281,7 @@ export default function PreVenda() {
     setFocoLista(-1);
     setBusca("");
     setTimeout(() => {
-      const el = qtdCentralRef.current;
+      const el = focoDepois === "busca" ? buscaRef.current : qtdCentralRef.current;
       el?.focus();
       el?.select();
     }, 0);
@@ -265,6 +299,31 @@ export default function PreVenda() {
         }
       })
       .catch(() => {});
+  };
+
+  const buscarAoEnter = (valor: string) => {
+    const { qtd, termo } = parseBusca(valor);
+    if (!termo) return;
+    clearTimeout(buscaTimer.current);
+    const requestId = ++buscaRequestRef.current;
+    setQtdDigitada(qtd);
+    void api
+      .buscaRapida(termo, undefined, 8)
+      .then((res) => {
+        if (requestId !== buscaRequestRef.current) return;
+        const resultado = resolverBuscaAoEnter(res.produtos);
+        if (resultado.produto) {
+          adicionar(resultado.produto, qtd, resultado.codigoExato ? "busca" : "quantidade");
+          return;
+        }
+        setSugestoes(resultado.sugestoes);
+        setFocoLista(resultado.sugestoes.length ? 0 : -1);
+        if (!resultado.sugestoes.length) {
+          toast("Produto não localizado pelo código ou descrição informada", "warn");
+          buscaRef.current?.focus();
+        }
+      })
+      .catch(() => toast("Não foi possível pesquisar o produto", "error"));
   };
 
 const selecionarCliente = (cli: Cliente) => {
@@ -762,7 +821,11 @@ const selecionarCliente = (cli: Cliente) => {
             <input
               ref={buscaRef}
               value={busca}
-              onChange={(e) => setBusca(e.target.value)}
+              onChange={(e) => {
+                setBusca(e.target.value);
+                setSugestoes([]);
+                setFocoLista(-1);
+              }}
               placeholder="Código / nome (ex.: 3*Cabo) · ENTER adiciona"
               role="combobox"
               aria-label="Pesquisar produto"
@@ -781,6 +844,8 @@ const selecionarCliente = (cli: Cliente) => {
                   } else if (!busca.trim()) {
                     descontoRef.current?.focus();
                     descontoRef.current?.select();
+                  } else {
+                    buscarAoEnter(busca);
                   }
                 } else if (e.key === "ArrowDown") {
                   e.preventDefault();

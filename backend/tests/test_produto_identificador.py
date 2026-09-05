@@ -93,6 +93,17 @@ def test_buscar_por_identificador(system_db):
     assert any(x["id"] == pid for x in r)
 
 
+def test_buscar_identificador_ignora_caixa_e_produto_inativo(system_db):
+    pid = _produto(system_db)
+    ident_svc.salvar(pid, "fabricante", "FAB-ABC", None, "manual", None)
+    assert any(x["id"] == pid for x in ident_svc.buscar("fab-abc"))
+
+    with system_conn() as conn:
+        conn.execute("UPDATE produtos_cadastro SET ativo=0 WHERE id=%s", (pid,))
+        conn.commit()
+    assert ident_svc.buscar("FAB-ABC") == []
+
+
 def test_buscar_por_sku_legado(system_db):
     pid = _produto(system_db, sku="SKU-ABC")
     r = ident_svc.buscar("sku-abc")  # case-insensitive exato

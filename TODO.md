@@ -176,3 +176,17 @@ Validação: `actionlint` nos dois workflows e 27 testes backend combinados, inc
 6 testes do controle de release; `py_compile`, JSON do manifesto e Compose verdes. O próximo
 passo operacional é o próprio usuário executar staging completo com incremento
 `patch` e, se verde, clicar no workflow de produção sem informar tag.
+
+## Correção da leitura de códigos no PDV — 2026-09-05
+
+Status: **✅ corrigido e validado no DEV; nenhum deploy executado.**
+
+- [x] Pré-venda usa a busca rápida que inclui `produto_identificador` ativo.
+- [x] Enter imediato do leitor não depende do debounce de sugestões.
+- [x] Código exato único adiciona o produto e devolve foco para a próxima leitura.
+- [x] Código ambíguo exige seleção; sugestões antigas não são lançadas.
+- [x] Busca exclui produto inativo e devolve imagem, NCM e descrição ao PDV.
+- [x] OpenAPI, manual e testes backend/frontend atualizados.
+
+Evidência local: EAN adicional `7899674038869` encontrou o produto 9965 e o
+incluiu por `R$ 420,82`; 18 testes backend e 49 frontend passaram.

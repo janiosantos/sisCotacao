@@ -332,25 +332,30 @@ SELECT p.id, p.sku, p.preco, p.marca, p.external_id,
         return out
 
     def busca_rapida(self, q: str, limite: int = 20, deposito_id: int | None = None) -> list[dict]:
-        """Busca rápida do PDV (VEN-002): exata por EAN/SKU/código fornecedor
-        primeiro (ranking), depois termo no nome/marca/atributos. Traz saldo."""
+        """Busca rápida do PDV: qualquer identificador exato precede o texto."""
         q = (q or "").strip()
         if not q:
             return []
         limite = min(max(limite, 1), 100)
         q_digits = "".join(ch for ch in q if ch.isdigit())
+        # Evita que uma busca textual encontre todos os produtos com EAN vazio.
+        q_gtin = q_digits if len(q_digits) in (8, 12, 13, 14) else "__SEM_GTIN__"
         q_like = f"%{q}%"
         with system_conn() as conn:
             rows = conn.execute(
                 """
                 SELECT p.id, p.sku, p.ean, p.nome, p.marca, p.preco, p.preco_promocional,
-                       p.unidade_venda, p.fator_conversao, p.ativo,
+                       p.unidade_venda, p.fator_conversao, p.ativo, p.ncm, p.descricao,
                        cat.nome AS categoria, sub.nome AS subcategoria,
+                       (SELECT im.filename FROM imagens_produto im
+                        WHERE im.produto_id=p.id
+                        ORDER BY im.ordem, im.id LIMIT 1) AS imagem_filename,
                        (p.preco_promocional > 0 AND p.preco_promocional < p.preco) AS tem_promocao,
                        CASE
-                         WHEN p.ean=? OR p.sku=? THEN 0
+                         WHEN p.ean=? OR p.sku ILIKE ? THEN 0
                          WHEN EXISTS (SELECT 1 FROM produto_identificador i
-                                      WHERE i.produto_id=p.id AND i.ativo AND i.valor=?) THEN 1
+                                      WHERE i.produto_id=p.id AND i.ativo
+                                        AND (i.valor ILIKE ? OR i.valor=?)) THEN 1
                          WHEN p.sku ILIKE ? THEN 2
                          WHEN f_unaccent(p.nome) ILIKE f_unaccent(?)
                            OR f_unaccent(p.marca) ILIKE f_unaccent(?) THEN 3
@@ -359,21 +364,26 @@ SELECT p.id, p.sku, p.preco, p.marca, p.external_id,
                 FROM produtos_cadastro p
                 LEFT JOIN categorias cat ON cat.id=p.categoria_id
                 LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id
-                WHERE p.ean=? OR p.sku=? OR p.sku ILIKE ?
-                   OR f_unaccent(p.nome) ILIKE f_unaccent(?)
-                   OR f_unaccent(p.marca) ILIKE f_unaccent(?)
-                   OR EXISTS (SELECT 1 FROM produto_identificador i
-                              WHERE i.produto_id=p.id AND i.ativo
-                                AND (i.valor=? OR i.valor LIKE ?))
+                WHERE p.ativo=1 AND (
+                       p.ean=? OR p.sku ILIKE ? OR p.sku ILIKE ?
+                    OR f_unaccent(p.nome) ILIKE f_unaccent(?)
+                    OR f_unaccent(p.marca) ILIKE f_unaccent(?)
+                    OR EXISTS (SELECT 1 FROM produto_identificador i
+                               WHERE i.produto_id=p.id AND i.ativo
+                                 AND (i.valor ILIKE ? OR i.valor=? OR i.valor ILIKE ?))
+                )
                 ORDER BY rank, p.nome
                 LIMIT ?
                 """,
-                (q_digits, q, q, q_like, q_like, q_like,
-                 q_digits, q, q_like, q_like, q_like, q, q_like, limite),
+                (
+                    q_gtin, q, q, q_gtin, q_like, q_like, q_like,
+                    q_gtin, q, q_like, q_like, q_like, q, q_gtin, q_like, limite,
+                ),
             ).fetchall()
             itens = []
             for r in rows:
                 item = dict(r)
+                item["imagem_url"] = image_url(item.pop("imagem_filename", None))
                 item["disponibilidade"] = None
                 item["disponivel"] = 0.0
                 if deposito_id:

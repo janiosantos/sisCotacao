@@ -97,24 +97,25 @@ def buscar(termo: str, limite: int = 20) -> list[dict]:
     if not termo:
         return []
     termo_digits = "".join(ch for ch in termo if ch.isdigit())
-    if limite > 100:
-        limite = 100
+    termo_gtin = termo_digits if len(termo_digits) in (8, 12, 13, 14) else "__SEM_GTIN__"
+    limite = min(max(limite, 1), 100)
     with system_conn() as conn:
         rows = conn.execute(
             """
             SELECT DISTINCT p.id, p.nome, p.sku, p.ean
             FROM (
                 SELECT produto_id FROM produto_identificador
-                WHERE ativo AND (valor=? OR valor=?)
+                WHERE ativo AND (valor ILIKE ? OR valor=?)
                 UNION ALL
                 SELECT id AS produto_id FROM produtos_cadastro WHERE ean=?
                 UNION ALL
                 SELECT id AS produto_id FROM produtos_cadastro WHERE sku ILIKE ?
             ) t
             JOIN produtos_cadastro p ON p.id=t.produto_id
+            WHERE p.ativo=1
             ORDER BY p.nome
             LIMIT ?
             """,
-            (termo, termo_digits, termo_digits, termo, limite),
+            (termo, termo_gtin, termo_gtin, termo, limite),
         ).fetchall()
         return [dict(r) for r in rows]

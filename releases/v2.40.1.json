@@ -9,7 +9,8 @@
     "Importacao de produtos nao interrompe o lote quando uma linha possui erro",
     "Codigos automaticos de grupo e subgrupo nao colidem quando os oito primeiros caracteres sao iguais",
     "Reenvio do mesmo arquivo reutiliza o resultado auditado sem duplicar produtos",
-    "Historico de publicacao registra somente o manifesto da versao promovida"
+    "Historico de publicacao registra somente o manifesto da versao promovida",
+    "Pre-venda localiza qualquer identificador ativo e processa o Enter imediato do leitor de codigo de barras"
   ],
   "melhorias": [
     "Coluna principal da planilha aceita DESCRICAO, NOME ou PRODUTO, com ou sem acento",
@@ -42,6 +43,7 @@
     "promote_staging_images": true,
     "automatic_semver_increment": true,
     "automatic_rc_selection": true,
+    "pdv_active_identifier_search": true,
     "database_change": false
   },
   "rollback": {
