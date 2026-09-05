@@ -190,3 +190,14 @@ Status: **✅ corrigido e validado no DEV; nenhum deploy executado.**
 
 Evidência local: EAN adicional `7899674038869` encontrou o produto 9965 e o
 incluiu por `R$ 420,82`; 18 testes backend e 49 frontend passaram.
+
+## Correção do 502 local após rebuild — 2026-09-05
+
+Status: **✅ corrigido e validado no DEV; nenhum deploy executado.**
+
+- [x] Confirmado que backend e `/api/pronto` estavam saudáveis.
+- [x] Identificado IP obsoleto do Vite mantido pelo Nginx após recriação.
+- [x] Upstream do Vite alterado para resolução dinâmica pelo DNS Docker.
+- [x] Configuração validada com `nginx -t` e raiz novamente em HTTP 200.
+- [x] Vite recriado isoladamente; após a janela de inicialização, a raiz voltou
+  automaticamente a 200 sem reload/restart do Nginx.
