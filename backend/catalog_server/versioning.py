@@ -338,7 +338,7 @@ _RISCO_CLI = {
     "todos": None,
 }
 
-_COMPONENTES_TODOS = ["backend", "frontend", "schema"]
+_COMPONENTES_TODOS = ["backend", "frontend", "schema", "deployment"]
 
 
 def _main() -> int:
