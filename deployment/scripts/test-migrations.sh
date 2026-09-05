@@ -25,10 +25,12 @@ docker run -d --name "$PG" --network "$NET" \
   -c full_page_writes=off >/dev/null
 
 for i in $(seq 1 30); do
-  if docker exec "$PG" pg_isready -U catalog >/dev/null 2>&1; then break; fi
+  # O initdb sobe um servidor temporario antes de criar o banco solicitado.
+  # Uma consulta real evita aceitar essa janela como readiness definitivo.
+  if docker exec "$PG" psql -U catalog -d catalog -Atqc 'SELECT 1' >/dev/null 2>&1; then break; fi
   sleep 2
 done
-if ! docker exec "$PG" pg_isready -U catalog >/dev/null 2>&1; then
+if ! docker exec "$PG" psql -U catalog -d catalog -Atqc 'SELECT 1' >/dev/null 2>&1; then
   echo "[migrations] PostgreSQL não ficou pronto; diagnóstico do container:"
   docker logs "$PG" 2>&1 || true
   df -h "$(docker info --format '{{.DockerRootDir}}')" || true
