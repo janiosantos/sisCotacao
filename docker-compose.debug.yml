@@ -1,0 +1,25 @@
+# Override exclusivo para depuracao local pelo VS Code.
+# Uso: docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d --build backend
+services:
+  backend:
+    command:
+      - python
+      - -m
+      - debugpy
+      - --listen
+      - 0.0.0.0:5678
+      - --wait-for-client
+      - -m
+      - catalog_server.run_server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    environment:
+      CATALOG_DEBUG: "0"
+      CATALOG_OPEN_BROWSER: "0"
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "127.0.0.1:5678:5678"
+    healthcheck:
+      start_period: 120s

@@ -73,6 +73,18 @@ Depois de aplicar um patch:
 - Python: `py_compile` nos arquivos alterados.
 - Frontend: `npm run typecheck` (a partir de `frontend/`).
 
+## Depuração Flask no Docker
+
+- `debugpy` é dependência **somente de desenvolvimento** e deve permanecer no
+  grupo `dev` do `pyproject.toml`; nunca instalar/expor no Compose de staging ou produção.
+- Para breakpoints, usar `.vscode/launch.json` + `docker-compose.debug.yml`.
+  O mapeamento obrigatório é `backend/` no host para `/app` no container.
+- A porta `5678` deve ser publicada somente em `127.0.0.1`, nunca em `0.0.0.0`
+  no host.
+- Após depurar, restaurar o Gunicorn pela tarefa VS Code
+  `Docker: restaurar backend Gunicorn`; depuração usa processo Flask único e
+  não representa a topologia concorrente de produção.
+
 ## Protocolo obrigatório do agente
 
 Estas regras valem para OpenCode, Codex e qualquer outro agente que altere este
