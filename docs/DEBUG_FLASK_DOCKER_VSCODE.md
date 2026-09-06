@@ -9,7 +9,8 @@ producao continua usando Gunicorn e nao instala nem expoe o `debugpy`.
 2. Coloque um breakpoint em um arquivo dentro de `backend/catalog_server/`.
 3. Abra **Executar e Depurar** (`Ctrl+Shift+D`).
 4. Selecione **Docker: Flask (debugpy)** e pressione `F5`.
-5. A tarefa prepara o container, publica `127.0.0.1:5678` e o VS Code conecta.
+5. A tarefa prepara o container, espera o `debugpy` abrir `127.0.0.1:5678` e
+   so entao o VS Code conecta.
 6. Acesse normalmente `http://localhost:8080` e execute a acao que passa pela
    linha marcada.
 
@@ -17,7 +18,9 @@ Na primeira execucao, o build instala a dependencia de desenvolvimento. Nas
 seguintes, as camadas Docker permanecem em cache. O servidor inicia sem esperar
 o VS Code: isso preserva o uso normal da interface enquanto o depurador nao
 esta anexado. Depois de conectar, qualquer requisicao que alcance um breakpoint
-sera interrompida.
+em uma **linha executavel** sera interrompida. Nao use a linha `def`: ela foi
+executada durante o import do modulo, antes da requisicao. Por exemplo, use uma
+linha dentro de `ProdutoRepository.list_familias()` ou `list_products()`.
 
 Para investigar exclusivamente a inicializacao do Flask, adicione
 temporariamente `--wait-for-client` apos `--listen` em
@@ -27,8 +30,8 @@ responde e o frontend fica sem API.
 
 ## Mapeamento e seguranca
 
-- Codigo no computador: `${workspaceFolder}/backend`.
-- Codigo no container: `/app`.
+- Codigo no computador: `${workspaceFolder}/backend/catalog_server`.
+- Codigo no container: `/app/catalog_server`.
 - Porta de depuracao: `5678`, vinculada somente a `127.0.0.1`.
 - Apenas um processo Flask e iniciado, sem reloader e sem workers Gunicorn.
 - Banco e demais servicos Docker continuam os mesmos do DEV local.
@@ -43,7 +46,10 @@ producao.
 ## Diagnostico rapido
 
 Se o breakpoint ficar cinza, confira se o VS Code abriu a raiz do projeto e se
-o arquivo esta dentro de `backend/`. Para conferir o listener:
+o arquivo esta dentro de `backend/catalog_server/`. Apos pressionar `F5`, a
+barra de depuracao deve indicar uma sessao ativa. Se a tarefa falhar antes do
+attach, ela informara que a porta nao abriu; nao prossiga com a navegacao ate
+ela concluir. Para conferir o listener:
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.debug.yml logs backend

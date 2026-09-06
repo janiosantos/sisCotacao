@@ -4,18 +4,15 @@
     {
       "label": "Docker: iniciar Flask com debugpy",
       "type": "process",
-      "command": "docker",
+      "command": "powershell.exe",
       "args": [
-        "compose",
-        "-f",
-        "${workspaceFolder}/docker-compose.yml",
-        "-f",
-        "${workspaceFolder}/docker-compose.debug.yml",
-        "up",
-        "-d",
-        "--build",
-        "--no-deps",
-        "backend"
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/start_debugpy.ps1",
+        "-Workspace",
+        "${workspaceFolder}"
       ],
       "problemMatcher": [],
       "presentation": {
