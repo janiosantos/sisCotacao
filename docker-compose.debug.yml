@@ -4,6 +4,7 @@ services:
   backend:
     command:
       - python
+      - -Xfrozen_modules=off
       - -m
       - debugpy
       - --listen

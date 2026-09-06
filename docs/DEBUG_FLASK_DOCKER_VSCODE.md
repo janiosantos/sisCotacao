@@ -13,6 +13,8 @@ producao continua usando Gunicorn e nao instala nem expoe o `debugpy`.
    so entao o VS Code conecta.
 6. Acesse normalmente `http://localhost:8080` e execute a acao que passa pela
    linha marcada.
+7. Ao encerrar a sessao de depuracao, o VS Code restaura automaticamente o
+   backend normal em Gunicorn.
 
 Na primeira execucao, o build instala a dependencia de desenvolvimento. Nas
 seguintes, as camadas Docker permanecem em cache. O servidor inicia sem esperar
@@ -34,14 +36,17 @@ responde e o frontend fica sem API.
 - Codigo no container: `/app/catalog_server`.
 - Porta de depuracao: `5678`, vinculada somente a `127.0.0.1`.
 - Apenas um processo Flask e iniciado, sem reloader e sem workers Gunicorn.
+- O Python usa `-Xfrozen_modules=off`, necessario para breakpoints confiaveis
+  com o Python 3.14 da imagem.
 - Banco e demais servicos Docker continuam os mesmos do DEV local.
 
 ## Restaurar o servidor normal
 
-Ao terminar, execute no VS Code **Terminal > Executar Tarefa > Docker: restaurar
-backend Gunicorn**. O comando recria somente o backend DEV com a configuracao
-normal de `docker-compose.yml`; nao executa migrations e nao toca em staging ou
-producao.
+Ao interromper a sessao pelo VS Code, a tarefa de restauracao e executada
+automaticamente. Se o editor for encerrado de forma abrupta, execute
+**Terminal > Executar Tarefa > Docker: restaurar backend Gunicorn**. O comando
+recria somente o backend DEV com a configuracao normal de
+`docker-compose.yml`; nao executa migrations e nao toca em staging ou producao.
 
 ## Diagnostico rapido
 

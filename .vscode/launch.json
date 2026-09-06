@@ -17,7 +17,8 @@
       ],
       "justMyCode": true,
       "subProcess": false,
-      "preLaunchTask": "Docker: iniciar Flask com debugpy"
+      "preLaunchTask": "Docker: iniciar Flask com debugpy",
+      "postDebugTask": "Docker: restaurar backend Gunicorn"
     }
   ]
 }
