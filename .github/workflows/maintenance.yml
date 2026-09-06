@@ -19,22 +19,53 @@ on:
           - padronizar_descricoes
           - normalizar_subcategorias
           - reclassificar_cabos
+          - create-test-user
           - webhook-test
 
 jobs:
   maintenance:
     if: github.event.inputs.task != 'webhook-test'
     runs-on: [self-hosted, siscom-prod]
+    environment:
+      name: production
     env:
-      COMPOSE_PROJECT_NAME: siscom   # mantém o volume siscom_postgres-data (dados intactos)
+      SISCOM_TEST_USER_PASSWORD: ${{ secrets.SISCOM_TEST_USER_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Executa tarefa de manutenção no container backend
+      - name: Localiza o backend ativo de produção
+        id: backend
         run: |
-          docker compose -f docker-compose.prod.yml exec -T backend \
-            python -m catalog_server.maintenance ${{ github.event.inputs.task }}
+          mapfile -t containers < <(docker ps \
+            --filter label=com.docker.compose.project=siscom \
+            --filter label=com.docker.compose.service=backend \
+            --format '{{.ID}}')
+          if [ "${#containers[@]}" -ne 1 ]; then
+            echo "ERRO: esperado 1 backend de produção ativo; encontrados ${#containers[@]}."
+            exit 1
+          fi
+          echo "container=${containers[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Executa tarefa existente de manutenção
+        if: github.event.inputs.task != 'create-test-user'
+        run: |
+          docker exec "${{ steps.backend.outputs.container }}" \
+            python -m catalog_server.maintenance "${{ github.event.inputs.task }}"
+
+      - name: Cria usuário de teste com RBAC e auditoria
+        if: github.event.inputs.task == 'create-test-user'
+        env:
+          BACKEND_CONTAINER: ${{ steps.backend.outputs.container }}
+        run: |
+          if [ -z "$SISCOM_TEST_USER_PASSWORD" ]; then
+            echo "ERRO: secret SISCOM_TEST_USER_PASSWORD não configurada no ambiente production."
+            exit 1
+          fi
+          docker exec -i \
+            -e SISCOM_MAINTENANCE_PASSWORD="$SISCOM_TEST_USER_PASSWORD" \
+            "$BACKEND_CONTAINER" python - create-test-user \
+            < backend/catalog_server/maintenance_users.py
 
   # Valida a assinatura/token dos webhooks de pagamento no STAGING pela rede
   # interna, passando pelo listener HTTPS :443 do frontend. O host publica essa
