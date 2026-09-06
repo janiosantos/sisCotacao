@@ -14,9 +14,16 @@ producao continua usando Gunicorn e nao instala nem expoe o `debugpy`.
    linha marcada.
 
 Na primeira execucao, o build instala a dependencia de desenvolvimento. Nas
-seguintes, as camadas Docker permanecem em cache. O `--wait-for-client` impede
-que a aplicacao execute antes de o depurador conectar, permitindo breakpoints
-inclusive durante a criacao do Flask.
+seguintes, as camadas Docker permanecem em cache. O servidor inicia sem esperar
+o VS Code: isso preserva o uso normal da interface enquanto o depurador nao
+esta anexado. Depois de conectar, qualquer requisicao que alcance um breakpoint
+sera interrompida.
+
+Para investigar exclusivamente a inicializacao do Flask, adicione
+temporariamente `--wait-for-client` apos `--listen` em
+`docker-compose.debug.yml`, conecte o VS Code e remova a opcao ao terminar.
+Nao a deixe como padrao: enquanto espera o cliente, o endpoint de health nao
+responde e o frontend fica sem API.
 
 ## Mapeamento e seguranca
 
