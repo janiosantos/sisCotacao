@@ -229,12 +229,30 @@ class ProdutoRepository:
         familia_id: int | None = None,
         categoria: str = "",
         subcategoria: str = "",
+        grupo_id: int | None = None,
+        subgrupo_id: int | None = None,
+        categoria_id: int | None = None,
+        subcategoria_id: int | None = None,
+        status_cadastro: str = "",
         offset: int = 0,
         limit: int = 60,
     ) -> tuple[list[dict], int]:
         q = (q or "").strip()
         with system_conn() as conn:
-            return self._browse(conn, q, familia_id, categoria, subcategoria, offset, limit)
+            return self._browse(
+                conn,
+                q,
+                familia_id,
+                categoria,
+                subcategoria,
+                grupo_id,
+                subgrupo_id,
+                categoria_id,
+                subcategoria_id,
+                status_cadastro,
+                offset,
+                limit,
+            )
 
     def _browse(
         self,
@@ -243,12 +261,19 @@ class ProdutoRepository:
         familia_id: int | None = None,
         categoria: str = "",
         subcategoria: str = "",
+        grupo_id: int | None = None,
+        subgrupo_id: int | None = None,
+        categoria_id: int | None = None,
+        subcategoria_id: int | None = None,
+        status_cadastro: str = "",
         offset: int = 0,
         limit: int = 60,
     ) -> tuple[list[dict], int]:
         joins_cat = " LEFT JOIN familias f ON f.id=p.familia_id" \
             " LEFT JOIN categorias cat ON cat.id=p.categoria_id" \
-            " LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id"
+            " LEFT JOIN subcategorias sub ON sub.id=p.subcategoria_id" \
+            " LEFT JOIN grupos g ON g.id=p.grupo_id" \
+            " LEFT JOIN subgrupos sg ON sg.id=p.subgrupo_id"
         where = ["1=1"]
         params: list = []
         order_params: list = []
@@ -268,6 +293,21 @@ class ProdutoRepository:
         if subcategoria:
             where.append("sub.nome=?")
             params.append(subcategoria)
+        if grupo_id:
+            where.append("p.grupo_id=?")
+            params.append(grupo_id)
+        if subgrupo_id:
+            where.append("p.subgrupo_id=?")
+            params.append(subgrupo_id)
+        if categoria_id:
+            where.append("p.categoria_id=?")
+            params.append(categoria_id)
+        if subcategoria_id:
+            where.append("p.subcategoria_id=?")
+            params.append(subcategoria_id)
+        if status_cadastro:
+            where.append("COALESCE(p.status_cadastro, 'publicado')=?")
+            params.append(status_cadastro)
         where_sql = " AND ".join(where)
 
         total = conn.execute(
@@ -288,9 +328,14 @@ class ProdutoRepository:
         order = order_by or "p.nome COLLATE NOCASE, p.id"
         return conn.execute(
             f"""
-            SELECT p.*, f.nome AS familia_nome,
+            SELECT p.*, COALESCE(p.atualizado_em, '') AS versao_edicao,
+                   f.nome AS familia_nome,
                    COALESCE(cat.nome,'') AS categoria,
                    COALESCE(sub.nome,'') AS subcategoria,
+                   COALESCE(g.codigo,'') AS grupo_codigo,
+                   COALESCE(g.nome,'') AS grupo,
+                   COALESCE(sg.codigo,'') AS subgrupo_codigo,
+                   COALESCE(sg.nome,'') AS subgrupo,
                    (CASE WHEN p.preco IS NOT NULL AND p.preco > 0
                          THEN p.preco END) AS price_min,
                    (CASE WHEN p.preco IS NOT NULL AND p.preco > 0
@@ -361,7 +406,12 @@ class ProdutoRepository:
         dados = dados or {}
         atributos = atributos or {}
         with system_conn() as conn:
-            categoria_id, subcategoria_id = categorias.resolve(conn, categoria, subcategoria)
+            categoria_id, subcategoria_id = categorias.resolve(
+                conn, categoria, subcategoria, subgrupo_id
+            )
+            grupo_id, subgrupo_id, categoria_id, subcategoria_id = categorias.validar_hierarquia(
+                conn, grupo_id, subgrupo_id, categoria_id, subcategoria_id
+            )
             marca_id = marcas.resolver(conn, marca)
             cur = conn.execute(
                 "INSERT INTO produtos_cadastro"
@@ -447,7 +497,12 @@ class ProdutoRepository:
         dados = dados or {}
         atributos = atributos or {}
         with system_conn() as conn:
-            categoria_id, subcategoria_id = categorias.resolve(conn, categoria, subcategoria)
+            categoria_id, subcategoria_id = categorias.resolve(
+                conn, categoria, subcategoria, subgrupo_id
+            )
+            grupo_id, subgrupo_id, categoria_id, subcategoria_id = categorias.validar_hierarquia(
+                conn, grupo_id, subgrupo_id, categoria_id, subcategoria_id
+            )
             marca_id = marcas.resolver(conn, marca)
             novo_sku = dados.get("sku") or ""
             if novo_sku:
@@ -530,7 +585,9 @@ class ProdutoRepository:
         histórico e referências de estoque/preço/fornecedores."""
         with system_conn() as conn:
             cur = conn.execute(
-                "UPDATE produtos_cadastro SET ativo=0 WHERE id=?", (produto_id,)
+                "UPDATE produtos_cadastro SET ativo=0, status_cadastro='bloqueado',"
+                " atualizado_em=NOW() WHERE id=?",
+                (produto_id,),
             )
             if cur.rowcount == 0:
                 return False, {}

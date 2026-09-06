@@ -1,0 +1,47 @@
+{
+  "versao": "v2.40.2",
+  "componentes": [
+    "backend",
+    "frontend"
+  ],
+  "correcoes": [
+    "Busca administrativa encontra produtos de qualquer status pelo nome, descricao, marca, sinonimos e codigos ativos",
+    "Troca de grupo ou subgrupo limpa os niveis dependentes no cadastro de produto",
+    "Categoria e subcategoria passam a respeitar a cadeia de grupo e subgrupo validada no backend",
+    "Exclusao logica sincroniza status bloqueado e indicador ativo"
+  ],
+  "melhorias": [
+    "Filtros administrativos por status, grupo, subgrupo, categoria e subcategoria",
+    "Grade acessivel de edicao rapida por teclado para nome, marca, preco, unidade, taxonomia e status",
+    "Atualizacao em lote atomica, auditada e protegida contra edicao concorrente",
+    "Cadastro de categorias permite definir e corrigir o subgrupo responsavel"
+  ],
+  "recursos": [
+    "Aplicacao coletiva de status aos produtos selecionados",
+    "Contagem administrativa de produtos inclui rascunhos, itens em revisao e bloqueados"
+  ],
+  "imagens": {
+    "backend": "siscom-backend:v2.40.2",
+    "frontend": "siscom-frontend:v2.40.2"
+  },
+  "database": {
+    "migration": 156
+  },
+  "api": {
+    "versao": "v1"
+  },
+  "requires": {
+    "postgres": ">=16"
+  },
+  "features": {
+    "product_admin_all_status_search": true,
+    "product_hierarchy_filters": true,
+    "product_atomic_quick_edit": true,
+    "category_subgroup_management": true,
+    "database_change": false
+  },
+  "rollback": {
+    "application": "Retornar as imagens siscom-backend:v2.40.1 e siscom-frontend:v2.40.1; nao ha alteracao de schema.",
+    "database": "Nenhuma migration nesta release; manter o schema 156. Alteracoes cadastrais realizadas pela grade permanecem como dados de negocio auditados."
+  }
+}

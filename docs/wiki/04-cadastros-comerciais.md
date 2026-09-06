@@ -7,9 +7,20 @@ fornecedor, preço e fiscal. **Para que serve?** Evitar que vendas e compras
 trabalhem com descrição, unidade ou identificação errada. **Papel:** fonte para
 Catálogo, PDV, Compras, Estoque, Fiscal e Relatórios.
 
-Cadastre dados gerais, variações, identificadores, fornecedores e parâmetros por
-depósito. Revise completude e perfil fiscal antes de publicar. Etiquetas devem
-ser geradas a partir do cadastro correto.
+Na lista administrativa, a pesquisa considera nome, descrição, marca, sinônimos,
+SKU, EAN e demais códigos ativos, sem esconder rascunhos, itens em revisão ou
+bloqueados. Combine os filtros **Status**, **Grupo**, **Subgrupo**, **Categoria**
+e **Subcategoria** para revisar uma linha específica do catálogo.
+
+Use **Edição rápida** para alterar nome, marca, preço, unidade, classificação e
+status de várias linhas. A navegação entre células funciona com `Tab`; marcar
+linhas permite aplicar um status coletivo. O salvamento é atômico: se uma linha
+estiver inválida ou tiver sido alterada por outro usuário, nenhuma linha do lote
+é gravada. O destaque amarelo identifica mudanças ainda não salvas.
+
+No editor completo, cadastre dados gerais, identificadores, fornecedores e
+parâmetros por depósito. Revise completude e perfil fiscal antes de publicar.
+Etiquetas devem ser geradas a partir do cadastro correto.
 
 ## Clientes (`#/clientes`)
 
@@ -36,8 +47,12 @@ permite recebimento do próprio pedido.
 
 ## Categorias (`#/categorias`) e Unidades (`#/unidades`)
 
-Categorias organizam catálogo e relatórios. Unidades padronizam UN, CX, PCT, RL
-e conversões. Não exclua uma unidade/categoria usada sem avaliar impactos.
+Categorias organizam catálogo e relatórios e devem pertencer à cadeia **Grupo →
+Subgrupo → Categoria → Subcategoria**. Ao criar uma categoria, informe seu grupo
+e subgrupo. A tela também permite reparar categorias antigas sem vínculo; ao
+mudar o subgrupo de uma categoria, seus produtos acompanham a classificação.
+Unidades padronizam UN, CX, PCT, RL e conversões. Não exclua uma unidade ou
+categoria usada sem avaliar impactos.
 
 ## Auditoria
 

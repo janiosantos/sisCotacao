@@ -1,6 +1,7 @@
 """Busca de produtos por termo — ILIKE + pg_trgm (sem produtos_fts).
 
-Foco na **descricao padronizada** (Nome + características + Marca). A entrada é
+Foco no texto administrativo completo (nome, descricao padronizada, marca e
+sinonimos). A entrada é
 quebrada em palavras; a relevância é pela **cobertura** (quantas palavras do
 termo a descricao contém):
 
@@ -28,10 +29,18 @@ def tokens(q: str) -> list[str]:
     return out
 
 
+def _texto_pesquisavel(alias: str) -> str:
+    return (
+        f"(COALESCE({alias}.nome, '') || ' ' || COALESCE({alias}.descricao, '') || ' ' || "
+        f"COALESCE({alias}.marca, '') || ' ' || COALESCE({alias}.termos_busca, ''))"
+    )
+
+
 def _cobertura(alias: str, n: int) -> str:
-    """Expressão SQL: nº de palavras do termo presentes na descricao."""
+    """Expressao SQL: numero de palavras presentes no texto administrativo."""
+    texto = _texto_pesquisavel(alias)
     return " + ".join(
-        f"(CASE WHEN f_unaccent({alias}.descricao) ILIKE f_unaccent(?) THEN 1 ELSE 0 END)"
+        f"(CASE WHEN f_unaccent({texto}) ILIKE f_unaccent(?) THEN 1 ELSE 0 END)"
         for _ in range(n)
     )
 
@@ -58,11 +67,12 @@ def montar_busca(q: str, alias: str = "p") -> tuple[str, list, str, list]:
     qpat = f"%{q}%"
     token_params = [f"%{t}%" for t in toks]
     N = len(toks)
+    texto = _texto_pesquisavel(P)
 
     if N == 1:
         where_sql = (
             "("
-            f"f_unaccent({P}.descricao) ILIKE f_unaccent(?)"
+            f"f_unaccent({texto}) ILIKE f_unaccent(?)"
             f" OR f_unaccent({P}.sku) ILIKE f_unaccent(?)"
             f" OR f_unaccent({P}.ean) ILIKE f_unaccent(?)"
             " OR EXISTS ("
@@ -82,20 +92,21 @@ def montar_busca(q: str, alias: str = "p") -> tuple[str, list, str, list]:
             f"WHERE pi_rank.produto_id={P}.id AND pi_rank.ativo "
             "AND f_unaccent(pi_rank.valor) = f_unaccent(?)"
             ") THEN 98"
+            f" WHEN f_unaccent({P}.nome) ILIKE f_unaccent(?) || '%' THEN 92"
             f" WHEN f_unaccent({P}.descricao) ILIKE f_unaccent(?) || '%' THEN 90"
             f" WHEN f_unaccent({P}.sku) ILIKE f_unaccent(?) || '%' THEN 70"
-            f" WHEN f_unaccent({P}.descricao) ILIKE '%' || f_unaccent(?) || '%' THEN 60"
+            f" WHEN f_unaccent({texto}) ILIKE '%' || f_unaccent(?) || '%' THEN 60"
             f" ELSE 20 END"
         )
-        order_params = [q, q, q, q, q, q]
+        order_params = [q, q, q, q, q, q, q]
         order_expr = f"{rank} DESC, {P}.nome COLLATE NOCASE, {P}.id"
         return where_sql, where_params, order_expr, order_params
 
     cov = _cobertura(P, N)
-    # WHERE (2+ palavras): texto completo na descricao OU cobertura >= 2 OU código.
+    # WHERE (2+ palavras): texto completo no cadastro OU cobertura >= 2 OU codigo.
     where_sql = (
         "("
-        f"f_unaccent({P}.descricao) ILIKE f_unaccent(?)"
+        f"f_unaccent({texto}) ILIKE f_unaccent(?)"
         f" OR ({cov}) >= 2"
         f" OR f_unaccent({P}.sku) ILIKE f_unaccent(?)"
         f" OR f_unaccent({P}.ean) ILIKE f_unaccent(?)"
@@ -110,10 +121,11 @@ def montar_busca(q: str, alias: str = "p") -> tuple[str, list, str, list]:
 
     order_sql = (
         f"({cov}) DESC,"
+        f"(CASE WHEN f_unaccent({P}.nome) ILIKE f_unaccent(?) || '%' THEN 1 ELSE 0 END) DESC,"
         f"(CASE WHEN f_unaccent({P}.descricao) ILIKE f_unaccent(?) || '%' THEN 1 ELSE 0 END) DESC,"
         f"(CASE WHEN f_unaccent({P}.sku) = f_unaccent(?) THEN 1 ELSE 0 END) DESC,"
         f"(CASE WHEN f_unaccent({P}.ean) = f_unaccent(?) THEN 1 ELSE 0 END) DESC,"
         f"{P}.nome COLLATE NOCASE, {P}.id"
     )
-    order_params = token_params + [q, q, q]
+    order_params = token_params + [q, q, q, q]
     return where_sql, where_params, order_sql, order_params

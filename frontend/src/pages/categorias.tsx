@@ -1,7 +1,7 @@
 ﻿// pages/categorias.tsx — árvore de categorias/subcategorias + produtos (React + Tailwind).
 
 import { useEffect, useState } from "react";
-import { api, type CategoriaTree, type ProdutoSubcategoria } from "../api/client";
+import { api, type CategoriaTree, type Grupo, type ProdutoSubcategoria, type Subgrupo } from "../api/client";
 import { toast } from "../ui/dom";
 import { Button, Cell, EmptyRow, Input, Loading, PageHeader, Select, Table, TBody, THead } from "../ui/ui";
 
@@ -9,11 +9,17 @@ const PROD_LIMITE = 60;
 
 export default function Categorias() {
   const [categorias, setCategorias] = useState<CategoriaTree[]>([]);
+  const [grupos, setGrupos] = useState<Grupo[]>([]);
+  const [subgrupos, setSubgrupos] = useState<Subgrupo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [catAtiva, setCatAtiva] = useState<number | null>(null);
   const [subAtiva, setSubAtiva] = useState<number | null>(null);
   const [rename, setRename] = useState("");
+  const [catSubgrupo, setCatSubgrupo] = useState("");
+  const [novaCat, setNovaCat] = useState("");
+  const [novoGrupo, setNovoGrupo] = useState("");
+  const [novoSubgrupo, setNovoSubgrupo] = useState("");
   const [novaSub, setNovaSub] = useState("");
   const [subEdits, setSubEdits] = useState<Record<number, string>>({});
   const [produtos, setProdutos] = useState<ProdutoSubcategoria[]>([]);
@@ -25,7 +31,13 @@ export default function Categorias() {
 
   const carregar = async () => {
     try {
-      setCategorias((await api.listarCategoriasTree()) || []);
+      const [tree, gruposCarregados] = await Promise.all([api.listarCategoriasTree(), api.listarGrupos()]);
+      const subgruposCarregados = (
+        await Promise.all(gruposCarregados.map((grupo) => api.listarSubgrupos(grupo.id)))
+      ).flat();
+      setCategorias(tree || []);
+      setGrupos(gruposCarregados);
+      setSubgrupos(subgruposCarregados);
     } catch {
       toast("Erro ao carregar categorias", "error");
     } finally {
@@ -41,8 +53,11 @@ export default function Categorias() {
   const sub = cat?.subcategorias.find((s) => s.id === subAtiva);
 
   useEffect(() => {
-    if (cat) setRename(cat.nome);
-  }, [catAtiva]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (cat) {
+      setRename(cat.nome);
+      setCatSubgrupo(cat.subgrupo_id ? String(cat.subgrupo_id) : "");
+    }
+  }, [cat?.id, cat?.nome, cat?.subgrupo_id]);
 
   const selecionarCat = (id: number) => {
     setExpanded((prev) => {
@@ -77,23 +92,25 @@ export default function Categorias() {
   };
 
   const criarCategoria = async () => {
-    const nome = window.prompt("Nome da nova categoria:");
-    if (nome && nome.trim()) {
-      try {
-        await api.criarCategoria(nome.trim());
-        toast("Categoria criada", "success");
-        await carregar();
-      } catch (e) {
-        toast("Erro: " + (e as Error).message, "error");
-      }
+    if (!novaCat.trim() || !novoSubgrupo) {
+      toast("Informe o nome, o grupo e o subgrupo da categoria", "error");
+      return;
+    }
+    try {
+      await api.criarCategoria(novaCat.trim(), Number(novoSubgrupo));
+      setNovaCat("");
+      toast("Categoria criada", "success");
+      await carregar();
+    } catch (e) {
+      toast("Erro: " + (e as Error).message, "error");
     }
   };
 
   const renomearCategoria = async () => {
-    if (!cat || !rename.trim() || rename.trim() === cat.nome) return;
+    if (!cat || !rename.trim()) return;
     try {
-      await api.atualizarCategoria(cat.id, rename.trim());
-      toast("Categoria renomeada", "success");
+      await api.atualizarCategoria(cat.id, rename.trim(), catSubgrupo ? Number(catSubgrupo) : null);
+      toast("Categoria atualizada", "success");
       await carregar();
     } catch (e) {
       toast("Erro: " + (e as Error).message, "error");
@@ -181,9 +198,21 @@ export default function Categorias() {
           <div className="rounded-lg border border-gray-200 bg-white p-3">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-500">{categorias.length} categorias</span>
-              <Button size="sm" variant="primary" onClick={criarCategoria}>
-                + Nova
-              </Button>
+            </div>
+            <div className="mb-3 space-y-2 rounded-md border border-gray-200 bg-gray-50 p-2">
+              <label className="block text-xs font-semibold text-gray-600" htmlFor="nova-categoria">Nova categoria</label>
+              <Input id="nova-categoria" placeholder="Nome da categoria" value={novaCat} onChange={(e) => setNovaCat(e.target.value)} />
+              <Select value={novoGrupo} onChange={(e) => { setNovoGrupo(e.target.value); setNovoSubgrupo(""); }} aria-label="Grupo da nova categoria">
+                <option value="">Selecione o grupo</option>
+                {grupos.map((grupo) => <option key={grupo.id} value={grupo.id}>{grupo.codigo} - {grupo.nome}</option>)}
+              </Select>
+              <Select value={novoSubgrupo} disabled={!novoGrupo} onChange={(e) => setNovoSubgrupo(e.target.value)} aria-label="Subgrupo da nova categoria">
+                <option value="">Selecione o subgrupo</option>
+                {subgrupos.filter((subgrupo) => subgrupo.grupo_id === Number(novoGrupo)).map((subgrupo) => (
+                  <option key={subgrupo.id} value={subgrupo.id}>{subgrupo.codigo} - {subgrupo.nome}</option>
+                ))}
+              </Select>
+              <Button size="sm" variant="primary" className="w-full" onClick={() => void criarCategoria()}>Criar categoria</Button>
             </div>
             <div className="space-y-1">
               {categorias.map((c) => {
@@ -201,6 +230,9 @@ export default function Categorias() {
                       <span className="flex-1 text-left font-medium">{c.nome}</span>
                       <span className="text-xs text-gray-400">{total}</span>
                     </button>
+                    <p className="ml-7 truncate text-[10px] text-gray-400">
+                      {c.grupo_nome && c.subgrupo_nome ? `${c.grupo_nome} / ${c.subgrupo_nome}` : "Sem grupo/subgrupo vinculado"}
+                    </p>
                     {aberta && (
                       <div className="ml-4 space-y-0.5">
                         {c.subcategorias.map((s) => (
@@ -275,10 +307,10 @@ export default function Categorias() {
                 </div>
 
                 <Table>
-                  <THead cols={[<input type="checkbox" className="h-4 w-4 rounded border-gray-300" readOnly checked={selecionados.size === produtos.length && produtos.length > 0} />, "Produto", "Marca", "External ID", "Menor preço"]} />
+                  <THead cols={[<input type="checkbox" className="h-4 w-4 rounded border-gray-300" readOnly checked={selecionados.size === produtos.length && produtos.length > 0} />, "Produto", "Marca", "Status", "External ID", "Menor preço"]} />
                   <TBody>
                     {produtos.length === 0 ? (
-                      <EmptyRow colSpan={5} message="Nenhum produto nesta subcategoria." />
+                      <EmptyRow colSpan={6} message="Nenhum produto nesta subcategoria." />
                     ) : (
                       produtos.map((p) => (
                         <tr key={p.id} className="hover:bg-gray-50">
@@ -297,6 +329,7 @@ export default function Categorias() {
                           </Cell>
                           <Cell>{p.nome}</Cell>
                           <Cell className="text-xs">{p.marca || ""}</Cell>
+                          <Cell className="text-xs">{p.status_cadastro === "em_revisao" ? "Em revisao" : p.status_cadastro || "Publicado"}</Cell>
                           <Cell className="text-xs text-gray-500">{p.external_id || ""}</Cell>
                           <Cell>{p.price_min != null ? `R$ ${p.price_min.toFixed(2)}` : "—"}</Cell>
                         </tr>
@@ -325,10 +358,20 @@ export default function Categorias() {
                     {cat.subcategorias.length} subcategorias · {cat.subcategorias.reduce((a, s) => a + s.product_count, 0)} produtos
                   </span>
                 </div>
-                <div className="mb-4 flex gap-2">
-                  <Input value={rename} onChange={(e) => setRename(e.target.value)} className="max-w-xs" />
+                <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(180px,1fr)_minmax(220px,1fr)_auto_auto]">
+                  <Input aria-label="Nome da categoria" value={rename} onChange={(e) => setRename(e.target.value)} />
+                  <Select aria-label="Subgrupo da categoria" value={catSubgrupo} onChange={(e) => setCatSubgrupo(e.target.value)}>
+                    <option value="">Sem grupo/subgrupo</option>
+                    {grupos.map((grupo) => (
+                      <optgroup key={grupo.id} label={`${grupo.codigo} - ${grupo.nome}`}>
+                        {subgrupos.filter((subgrupo) => subgrupo.grupo_id === grupo.id).map((subgrupo) => (
+                          <option key={subgrupo.id} value={subgrupo.id}>{subgrupo.codigo} - {subgrupo.nome}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </Select>
                   <Button size="sm" onClick={() => void renomearCategoria()}>
-                    Renomear
+                    Salvar
                   </Button>
                   <Button size="sm" variant="danger" onClick={() => void excluirCategoria()}>
                     Excluir categoria

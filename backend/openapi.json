@@ -416,6 +416,60 @@
         }
       }
     },
+    "/api/produtos-cadastro": {
+      "get": {
+        "tags": ["produtos"],
+        "summary": "Lista administrativa de produtos em todos os status",
+        "description": "Busca sem acento por nome, descrição, marca, sinônimos, SKU, EAN e identificadores ativos. Os filtros hierárquicos usam IDs estáveis.",
+        "parameters": [
+          {"name": "q", "in": "query", "schema": {"type": "string"}},
+          {"name": "status_cadastro", "in": "query", "schema": {"$ref": "#/components/schemas/ProdutoStatusCadastro"}},
+          {"name": "grupo_id", "in": "query", "schema": {"type": "integer"}},
+          {"name": "subgrupo_id", "in": "query", "schema": {"type": "integer"}},
+          {"name": "categoria_id", "in": "query", "schema": {"type": "integer"}},
+          {"name": "subcategoria_id", "in": "query", "schema": {"type": "integer"}},
+          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 60}}
+        ],
+        "responses": {
+          "200": {
+            "description": "Página de produtos administrativos",
+            "content": {"application/json": {"schema": {
+              "type": "object",
+              "required": ["items", "total", "offset", "limit"],
+              "properties": {
+                "items": {"type": "array", "items": {"$ref": "#/components/schemas/ProdutoCadastroResumo"}},
+                "total": {"type": "integer"},
+                "offset": {"type": "integer"},
+                "limit": {"type": "integer"}
+              }
+            }}}
+          },
+          "400": {"$ref": "#/components/responses/ErroValidacao"}
+        }
+      }
+    },
+    "/api/produtos-cadastro/lote": {
+      "patch": {
+        "tags": ["produtos"],
+        "summary": "Atualiza produtos em lote de forma atômica",
+        "description": "Valida a cadeia taxonômica, as transições de status e a versão de edição de até 200 produtos. Uma falha desfaz todo o lote.",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {
+            "type": "object",
+            "required": ["items"],
+            "properties": {"items": {"type": "array", "minItems": 1, "maxItems": 200, "items": {"$ref": "#/components/schemas/ProdutoEdicaoLote"}}}
+          }}}
+        },
+        "responses": {
+          "200": {"description": "Lote atualizado e auditado"},
+          "400": {"$ref": "#/components/responses/ErroValidacao"},
+          "404": {"description": "Produto não encontrado"},
+          "409": {"description": "Um produto foi alterado após a carga da grade"}
+        }
+      }
+    },
     "/api/produtos-cadastro/importar-planilha": {
       "post": {
         "tags": [
@@ -6594,6 +6648,39 @@
       }
     },
     "schemas": {
+      "ProdutoStatusCadastro": {
+        "type": "string",
+        "enum": ["rascunho", "em_revisao", "publicado", "bloqueado"]
+      },
+      "ProdutoCadastroResumo": {
+        "type": "object",
+        "required": ["id", "nome", "ativo", "status_cadastro", "versao_edicao"],
+        "properties": {
+          "id": {"type": "integer"},
+          "nome": {"type": "string"},
+          "marca": {"type": "string"},
+          "sku": {"type": "string"},
+          "preco": {"type": "number"},
+          "unidade_venda": {"type": "string"},
+          "grupo_id": {"type": "integer", "nullable": true},
+          "subgrupo_id": {"type": "integer", "nullable": true},
+          "categoria_id": {"type": "integer", "nullable": true},
+          "subcategoria_id": {"type": "integer", "nullable": true},
+          "grupo": {"type": "string"},
+          "subgrupo": {"type": "string"},
+          "categoria": {"type": "string"},
+          "subcategoria": {"type": "string"},
+          "ativo": {"type": "integer", "enum": [0, 1]},
+          "status_cadastro": {"$ref": "#/components/schemas/ProdutoStatusCadastro"},
+          "versao_edicao": {"type": "string", "description": "Token otimista devolvido sem alteração no PATCH em lote"}
+        }
+      },
+      "ProdutoEdicaoLote": {
+        "allOf": [
+          {"$ref": "#/components/schemas/ProdutoCadastroResumo"},
+          {"type": "object", "required": ["marca", "preco", "unidade_venda", "grupo_id", "subgrupo_id", "categoria_id", "subcategoria_id"]}
+        ]
+      },
       "BuscaRapidaProduto": {
         "type": "object",
         "required": [

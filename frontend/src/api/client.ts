@@ -750,16 +750,44 @@ export interface ItemListaCadastro {
   familia_nome: string | null;
   categoria: string;
   subcategoria: string;
+  categoria_id: number | null;
+  subcategoria_id: number | null;
+  grupo_id: number | null;
+  subgrupo_id: number | null;
+  grupo?: string;
+  subgrupo?: string;
+  grupo_codigo?: string;
+  subgrupo_codigo?: string;
   price_min: number | null;
   price_max: number | null;
   preco?: number | null;
+  unidade_venda?: string;
   sku?: string;
   descricao?: string;
   imagem_url: string | null;
   classe_abc: string | null;
   em_linha: number;
+  ativo: number | boolean;
+  status_cadastro: StatusCadastroProduto;
+  versao_edicao: string;
   criado_em: string;
   atualizado_em: string | null;
+}
+
+export type StatusCadastroProduto = "rascunho" | "em_revisao" | "publicado" | "bloqueado";
+
+export interface ProdutoEdicaoLote {
+  id: number;
+  versao_edicao: string;
+  nome: string;
+  marca: string;
+  preco: number;
+  unidade_venda: string;
+  grupo_id: number | null;
+  subgrupo_id: number | null;
+  categoria_id: number | null;
+  subcategoria_id: number | null;
+  status_cadastro: StatusCadastroProduto;
 }
 
 export interface ListaCadastro {
@@ -886,6 +914,8 @@ export interface ProdutoCadastro {
   descricao: string;
   categoria: string;
   subcategoria: string;
+  categoria_id?: number | null;
+  subcategoria_id?: number | null;
   grupo_id?: number | null;
   subgrupo_id?: number | null;
   grupo?: string;
@@ -1395,6 +1425,12 @@ export const api = {
     request<unknown>("GET", "/api/produtos-cadastro" + qs(params)).then((value) =>
       validarObjeto<ListaCadastro>(value, "/api/produtos-cadastro", ["items", "total", "offset", "limit"])
     ),
+  atualizarProdutosLote: (items: ProdutoEdicaoLote[]) =>
+    request<{ ok: boolean; atualizados: number; ids: number[] }>(
+      "PATCH",
+      "/api/produtos-cadastro/lote",
+      { items },
+    ),
   detalharProdutoCadastro: (id: number) =>
     request<ProdutoCadastro>("GET", `/api/produtos-cadastro/${id}`),
   criarProdutoCadastro: (payload: ProdutoCadastroPayload) =>
@@ -1541,8 +1577,10 @@ export const api = {
   request: <T>(method: Metodo, path: string, body?: unknown) =>
     request<T>(method, path, body),
   listarCategoriasTree: () => request<CategoriaTree[]>("GET", "/api/categorias-tree"),
-  criarCategoria: (nome: string) => request<{ id: number }>("POST", "/api/categorias", { nome }),
-  atualizarCategoria: (id: number, nome: string) => request("PUT", `/api/categorias/${id}`, { nome }),
+  criarCategoria: (nome: string, subgrupoId?: number | null) =>
+    request<{ id: number }>("POST", "/api/categorias", { nome, subgrupo_id: subgrupoId ?? null }),
+  atualizarCategoria: (id: number, nome: string, subgrupoId?: number | null) =>
+    request("PUT", `/api/categorias/${id}`, { nome, subgrupo_id: subgrupoId ?? null }),
   excluirCategoria: (id: number) => request("DELETE", `/api/categorias/${id}`),
   criarSubcategoria: (catId: number, nome: string) =>
     request<{ id: number }>("POST", `/api/categorias/${catId}/subcategorias`, { nome }),
@@ -2397,7 +2435,18 @@ export interface CategoriaTree {
   nome: string;
   ativo: boolean;
   subgrupo_id?: number | null;
-  subcategorias: { id: number; nome: string; ativo: boolean; product_count: number }[];
+  subgrupo_nome?: string | null;
+  subgrupo_codigo?: string | null;
+  grupo_id?: number | null;
+  grupo_nome?: string | null;
+  grupo_codigo?: string | null;
+  subcategorias: {
+    id: number;
+    nome: string;
+    ativo: boolean;
+    product_count: number;
+    active_product_count?: number;
+  }[];
 }
 
 export interface ConversaoUnidade {
@@ -2663,6 +2712,8 @@ export interface ProdutoSubcategoria {
   external_id: string | null;
   familia_id: number | null;
   price_min: number | null;
+  status_cadastro?: StatusCadastroProduto;
+  ativo?: number | boolean;
 }
 
 export interface ListaProdutosSubcategoria {

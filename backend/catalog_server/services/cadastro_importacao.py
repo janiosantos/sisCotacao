@@ -26,6 +26,21 @@ TRANSICOES: dict[str, set[str]] = {
 }
 
 
+def validar_transicao_status(origem: str | None, destino: str) -> None:
+    origem = (origem or "publicado").strip().lower()
+    destino = (destino or "").strip().lower()
+    if destino not in STATUS_VALIDOS:
+        raise ValueError("status_cadastro invalido")
+    if origem != destino and destino not in TRANSICOES.get(origem, set()):
+        raise ValueError(f"transicao invalida: {origem} -> {destino}")
+
+
+def ativo_para_status(status: str) -> int:
+    if status not in _ATIVO_POR_STATUS:
+        raise ValueError("status_cadastro invalido")
+    return _ATIVO_POR_STATUS[status]
+
+
 def set_status_cadastro(produto_id: int, novo: str, usuario_id: int | None = None) -> str:
     novo = (novo or "").strip().lower()
     if novo not in STATUS_VALIDOS:
@@ -39,12 +54,11 @@ def set_status_cadastro(produto_id: int, novo: str, usuario_id: int | None = Non
         origem = (atual["status_cadastro"] or "publicado")
         if origem == novo:
             return novo
-        if novo not in TRANSICOES.get(origem, set()):
-            raise ValueError(f"transi��o inv�lida: {origem} -> {novo}")
+        validar_transicao_status(origem, novo)
         conn.execute(
             "UPDATE produtos_cadastro SET status_cadastro=?, ativo=?, atualizado_em=NOW() "
             "WHERE id=?",
-            (novo, _ATIVO_POR_STATUS[novo], produto_id),
+            (novo, ativo_para_status(novo), produto_id),
         )
     return novo
 

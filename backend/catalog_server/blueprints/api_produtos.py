@@ -23,6 +23,7 @@ from catalog_server.services import cadastro_importacao as cadastro_svc
 from catalog_server.services import importacao_planilha
 from catalog_server.services import produto_relacao as relacao_svc
 from catalog_server.services import galeria_service
+from catalog_server.services import produtos_lote
 from catalog_server.blueprints.api_usuarios import usuario_id_requisicao
 from catalog_server.db import system_conn
 from catalog_server.utils import image_url
@@ -103,11 +104,19 @@ def delete_familia(familia_id: int):
 def list_products():
     offset = max(0, request.args.get("offset", 0, type=int))
     limit = min(200, max(1, request.args.get("limit", 60, type=int)))
+    status_cadastro = (request.args.get("status_cadastro") or "").strip().lower()
+    if status_cadastro and status_cadastro not in cadastro_svc.STATUS_VALIDOS:
+        return jsonify({"error": "status_cadastro invalido"}), 400
     items, total = produto_repo.list_products(
         q=(request.args.get("q") or "").strip(),
         familia_id=request.args.get("familia_id", type=int),
         categoria=(request.args.get("categoria") or "").strip(),
         subcategoria=(request.args.get("subcategoria") or "").strip(),
+        grupo_id=request.args.get("grupo_id", type=int),
+        subgrupo_id=request.args.get("subgrupo_id", type=int),
+        categoria_id=request.args.get("categoria_id", type=int),
+        subcategoria_id=request.args.get("subcategoria_id", type=int),
+        status_cadastro=status_cadastro,
         offset=offset,
         limit=limit,
     )
@@ -124,21 +133,36 @@ def create_product():
     nome = (data.get("nome") or "").strip()
     if not nome:
         return jsonify({"error": "Informe o nome base do produto"}), 400
-    produto_id = produto_repo.create_product(
-        int(familia_id) if familia_id else None,
-        nome,
-        (data.get("marca") or "").strip(),
-        (data.get("descricao") or "").strip(),
-        (data.get("categoria") or "").strip(),
-        (data.get("subcategoria") or "").strip(),
-        (data.get("termos_busca") or "").strip(),
-        external_id=data.get("external_id"),
-        grupo_id=int(data["grupo_id"]) if data.get("grupo_id") else None,
-        subgrupo_id=int(data["subgrupo_id"]) if data.get("subgrupo_id") else None,
-        dados=data.get("dados") or data,
-        atributos=data.get("atributos"),
-    )
+    try:
+        produto_id = produto_repo.create_product(
+            int(familia_id) if familia_id else None,
+            nome,
+            (data.get("marca") or "").strip(),
+            (data.get("descricao") or "").strip(),
+            (data.get("categoria") or "").strip(),
+            (data.get("subcategoria") or "").strip(),
+            (data.get("termos_busca") or "").strip(),
+            external_id=data.get("external_id"),
+            grupo_id=int(data["grupo_id"]) if data.get("grupo_id") else None,
+            subgrupo_id=int(data["subgrupo_id"]) if data.get("subgrupo_id") else None,
+            dados=data.get("dados") or data,
+            atributos=data.get("atributos"),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"id": produto_id}), 201
+
+
+@api_produtos_bp.patch("/api/produtos-cadastro/lote")
+def update_products_batch():
+    data = request.get_json(silent=True) or {}
+    try:
+        resultado = produtos_lote.atualizar_produtos(
+            data.get("items"), usuario_id=usuario_id_requisicao()
+        )
+    except produtos_lote.LoteErro as exc:
+        return jsonify({"error": str(exc), "code": exc.codigo}), exc.status
+    return jsonify(resultado)
 
 
 @api_produtos_bp.get("/api/produtos-cadastro/<int:produto_id>")
@@ -156,21 +180,24 @@ def update_product(produto_id: int):
     nome = (data.get("nome") or "").strip()
     if not nome:
         return jsonify({"error": "Informe o nome base do produto"}), 400
-    ok, resultado = produto_repo.update_product(
-        produto_id,
-        int(familia_id) if familia_id else None,
-        nome,
-        (data.get("marca") or "").strip(),
-        (data.get("descricao") or "").strip(),
-        (data.get("categoria") or "").strip(),
-        (data.get("subcategoria") or "").strip(),
-        (data.get("termos_busca") or "").strip(),
-        external_id=data.get("external_id"),
-        grupo_id=int(data["grupo_id"]) if data.get("grupo_id") else None,
-        subgrupo_id=int(data["subgrupo_id"]) if data.get("subgrupo_id") else None,
-        dados=data.get("dados") or data,
-        atributos=data.get("atributos"),
-    )
+    try:
+        ok, resultado = produto_repo.update_product(
+            produto_id,
+            int(familia_id) if familia_id else None,
+            nome,
+            (data.get("marca") or "").strip(),
+            (data.get("descricao") or "").strip(),
+            (data.get("categoria") or "").strip(),
+            (data.get("subcategoria") or "").strip(),
+            (data.get("termos_busca") or "").strip(),
+            external_id=data.get("external_id"),
+            grupo_id=int(data["grupo_id"]) if data.get("grupo_id") else None,
+            subgrupo_id=int(data["subgrupo_id"]) if data.get("subgrupo_id") else None,
+            dados=data.get("dados") or data,
+            atributos=data.get("atributos"),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if not ok:
         return jsonify({"error": "Produto não encontrado"}), 404
     return jsonify({"ok": True, **resultado})
@@ -492,7 +519,13 @@ def criar_categoria():
     nome = (data.get("nome") or "").strip()
     if not nome:
         return jsonify({"error": "Informe o nome da categoria"}), 400
-    cat_id = cat_svc.criar_categoria(nome)
+    subgrupo_id = data.get("subgrupo_id")
+    try:
+        cat_id = cat_svc.criar_categoria(
+            nome, int(subgrupo_id) if subgrupo_id not in (None, "") else None
+        )
+    except (TypeError, ValueError) as exc:
+        return jsonify({"error": str(exc)}), 400
     if not cat_id:
         return jsonify({"error": "Erro ao criar categoria"}), 400
     return jsonify({"id": cat_id}), 201
@@ -504,7 +537,19 @@ def atualizar_categoria(categoria_id: int):
     nome = (data.get("nome") or "").strip()
     if not nome:
         return jsonify({"error": "Informe o nome da categoria"}), 400
-    if not cat_svc.atualizar_categoria(categoria_id, nome):
+    try:
+        if "subgrupo_id" in data:
+            subgrupo_id = data.get("subgrupo_id")
+            atualizado = cat_svc.atualizar_categoria(
+                categoria_id,
+                nome,
+                int(subgrupo_id) if subgrupo_id not in (None, "") else None,
+            )
+        else:
+            atualizado = cat_svc.atualizar_categoria(categoria_id, nome)
+    except (TypeError, ValueError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    if not atualizado:
         return jsonify({"error": "Categoria nao encontrada"}), 404
     return jsonify({"ok": True})
 
@@ -615,7 +660,10 @@ def reclassificar():
         return jsonify({"error": "Informe os produtos"}), 400
     if not categoria and not subcategoria:
         return jsonify({"error": "Informe categoria ou subcategoria de destino"}), 400
-    count = cat_svc.reclassificar_produtos(produto_ids, categoria, subcategoria)
+    try:
+        count = cat_svc.reclassificar_produtos(produto_ids, categoria, subcategoria)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"ok": True, "count": count})
 
 

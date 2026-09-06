@@ -17,6 +17,7 @@ import {
   type UnidadeCompra,
   type SaldoItem,
   type CategoriaTree,
+  type StatusCadastroProduto,
 } from "../api/client";
 import { fmtMoney } from "../ui/format";
 import { toast } from "../ui/dom";
@@ -35,8 +36,28 @@ import { StatusCadastro } from "./produtos/status-cadastro";
 import { Relacoes } from "./produtos/relacoes";
 import { RegrasPreco } from "./produtos/regras-preco";
 import { ParametrosEstoque } from "./produtos/parametros-estoque";
+import { EdicaoRapidaProdutos } from "./produtos/edicao-rapida";
 
 const PAGE = 60;
+
+const STATUS_CADASTRO: { value: StatusCadastroProduto | ""; label: string }[] = [
+  { value: "", label: "Todos os status" },
+  { value: "rascunho", label: "Rascunho" },
+  { value: "em_revisao", label: "Em revisao" },
+  { value: "publicado", label: "Publicado" },
+  { value: "bloqueado", label: "Bloqueado" },
+];
+
+function statusCadastroLabel(status: string): string {
+  return STATUS_CADASTRO.find((item) => item.value === status)?.label || "Publicado";
+}
+
+function statusCadastroTone(status: string): "gray" | "green" | "red" | "amber" | "blue" {
+  if (status === "publicado") return "green";
+  if (status === "bloqueado") return "red";
+  if (status === "em_revisao") return "amber";
+  return "gray";
+}
 
 interface DadosOperacionais {
   sku: string;
@@ -150,8 +171,17 @@ function validarValorAtributo(tipo: string, validacao: string | undefined, valor
 
 export default function Produtos() {
   const [familias, setFamilias] = useState<Familia[]>([]);
-  const [categoriasTree, setCategoriasTree] = useState<Record<string, string[]>>({});
-  const [filters, setFilters] = useState({ q: "", categoria: "", subcategoria: "" });
+  const [categoriasTree, setCategoriasTree] = useState<CategoriaTree[]>([]);
+  const [grupos, setGrupos] = useState<Grupo[]>([]);
+  const [todosSubgrupos, setTodosSubgrupos] = useState<Subgrupo[]>([]);
+  const [filters, setFilters] = useState({
+    q: "",
+    status_cadastro: "",
+    grupo_id: "",
+    subgrupo_id: "",
+    categoria_id: "",
+    subcategoria_id: "",
+  });
   const [busca, setBusca] = useState("");
   const [items, setItems] = useState<ItemListaCadastro[]>([]);
   const [total, setTotal] = useState(0);
@@ -165,6 +195,8 @@ export default function Produtos() {
   const [modalImportarLote, setModalImportarLote] = useState(false);
   const [loteProduto, setLoteProduto] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [visualizacao, setVisualizacao] = useState<"cards" | "grade">("cards");
+  const [gradeSuja, setGradeSuja] = useState(false);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -178,10 +210,24 @@ export default function Produtos() {
 
   useEffect(() => {
     void carregarFamilias();
-    void api
-      .listarCategorias()
-      .then(setCategoriasTree)
-      .catch(() => setCategoriasTree({}));
+    void (async () => {
+      try {
+        const [tree, gruposCarregados] = await Promise.all([
+          api.listarCategoriasTree(),
+          api.listarGrupos(),
+        ]);
+        const subgruposCarregados = (
+          await Promise.all(gruposCarregados.map((grupo) => api.listarSubgrupos(grupo.id)))
+        ).flat();
+        setCategoriasTree(tree);
+        setGrupos(gruposCarregados);
+        setTodosSubgrupos(subgruposCarregados);
+      } catch {
+        setCategoriasTree([]);
+        setGrupos([]);
+        setTodosSubgrupos([]);
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -190,8 +236,11 @@ export default function Produtos() {
     api
       .listarProdutosCadastro({
         q: filters.q,
-        categoria: filters.categoria || undefined,
-        subcategoria: filters.subcategoria || undefined,
+        status_cadastro: filters.status_cadastro || undefined,
+        grupo_id: filters.grupo_id || undefined,
+        subgrupo_id: filters.subgrupo_id || undefined,
+        categoria_id: filters.categoria_id || undefined,
+        subcategoria_id: filters.subcategoria_id || undefined,
         offset: (page - 1) * PAGE,
         limit: PAGE,
       })
@@ -214,13 +263,35 @@ export default function Produtos() {
     clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
       const q = v.trim();
-      if (q.length > 0 && q.length < 3) {
-        setFilters((f) => (f.q === "" ? f : { ...f, q: "" }));
-      } else {
-        setFilters((f) => ({ ...f, q }));
-        setPage(1);
+      if (gradeSuja && !window.confirm("Ha alteracoes nao salvas na grade. Descartar e fazer a busca?")) {
+        setBusca(filters.q);
+        return;
       }
+      setGradeSuja(false);
+      setFilters((f) => ({ ...f, q }));
+      setPage(1);
     }, 300);
+  };
+
+  const alterarFiltros = (mudancas: Partial<typeof filters>) => {
+    if (gradeSuja && !window.confirm("Ha alteracoes nao salvas na grade. Descartar e trocar os filtros?")) return false;
+    setGradeSuja(false);
+    setFilters((atuais) => ({ ...atuais, ...mudancas }));
+    setPage(1);
+    return true;
+  };
+
+  const mudarPagina = (novaPagina: number) => {
+    if (gradeSuja && !window.confirm("Ha alteracoes nao salvas na grade. Descartar e trocar de pagina?")) return;
+    setGradeSuja(false);
+    setPage(novaPagina);
+  };
+
+  const trocarVisualizacao = (nova: "cards" | "grade") => {
+    if (nova === visualizacao) return;
+    if (gradeSuja && !window.confirm("Ha alteracoes nao salvas na grade. Descartar e sair da edicao rapida?")) return;
+    setGradeSuja(false);
+    setVisualizacao(nova);
   };
 
   const excluir = async (id: number) => {
@@ -240,62 +311,119 @@ export default function Produtos() {
     }
   };
 
-  const subcategorias = filters.categoria ? categoriasTree[filters.categoria] || [] : [];
+  const subgruposFiltro = filters.grupo_id
+    ? todosSubgrupos.filter((sub) => sub.grupo_id === Number(filters.grupo_id))
+    : todosSubgrupos;
+  const categoriasFiltro = categoriasTree.filter((categoria) => {
+    if (filters.subgrupo_id) return categoria.subgrupo_id === Number(filters.subgrupo_id);
+    if (filters.grupo_id) return categoria.grupo_id === Number(filters.grupo_id);
+    return true;
+  });
+  const categoriaFiltro = categoriasTree.find((categoria) => categoria.id === Number(filters.categoria_id));
+  const subcategoriasFiltro = categoriaFiltro?.subcategorias || [];
 
   return (
     <div>
       <PageHeader title="Produtos" subtitle="Cadastre produtos por família e geração de variações (modelo TOTVS)." />
 
-      <div className="mb-4 flex flex-wrap items-end gap-3">
-        <Field label="Buscar" className="min-w-[240px] flex-1">
-          <Input placeholder="Nome, marca, código…" value={busca} onChange={(e) => onSearch(e.target.value)} />
-        </Field>
-        <Field label="Categoria">
-          <Select value={filters.categoria} onChange={(e) => setFilters((f) => ({ ...f, categoria: e.target.value, subcategoria: "" }))} className="w-44">
-            <option value="">Todas</option>
-            {Object.keys(categoriasTree)
-              .sort()
-              .map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-          </Select>
-        </Field>
-        <Field label="Subcategoria">
-          <Select value={filters.subcategoria} onChange={(e) => setFilters((f) => ({ ...f, subcategoria: e.target.value }))} className="w-44">
-            <option value="">Todas</option>
-            {subcategorias.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Button variant="outline" onClick={() => setModalFamilias(true)}>
-          Famílias
-        </Button>
-        <Button variant="outline" onClick={() => setModalEtiquetas(true)}>
-          Etiquetas
-        </Button>
-        <Button variant="outline" onClick={() => setModalImportar(true)}>
-          Importar catálogo
-        </Button>
-        <Button variant="outline" onClick={() => setModalImportarPlanilha(true)}>
-          Importar planilha
-        </Button>
-        <Button variant="outline" onClick={() => setModalImportarLote(true)}>
-          Importar lote
-        </Button>
-        <Button variant="outline" onClick={() => setModalUrl(true)}>
-          Novo via URL
-        </Button>
-        {temPermissao("produtos", "cadastrar") ? (
-          <Button variant="primary" onClick={() => (location.hash = "#/produtos/novo")}>
-            Novo produto
-          </Button>
-        ) : null}
-        <span className="mb-2 text-sm text-gray-500">{total} produto(s)</span>
+      <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Buscar no cadastro" hint="Nome, descricao, marca, sinonimo, SKU, EAN ou outro codigo" className="min-w-[280px] flex-1">
+            <Input placeholder="Digite qualquer termo ou codigo" value={busca} onChange={(e) => onSearch(e.target.value)} />
+          </Field>
+          <Field label="Status">
+            <Select value={filters.status_cadastro} onChange={(e) => alterarFiltros({ status_cadastro: e.target.value })} className="w-44">
+              {STATUS_CADASTRO.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+            </Select>
+          </Field>
+          <div className="flex rounded-md border border-gray-200 bg-gray-50 p-1" role="group" aria-label="Modo de visualizacao">
+            <button
+              type="button"
+              aria-pressed={visualizacao === "cards"}
+              onClick={() => trocarVisualizacao("cards")}
+              className={`rounded px-3 py-1.5 text-sm font-medium ${visualizacao === "cards" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+            >
+              Cartoes
+            </button>
+            {temPermissao("produtos", "editar") ? (
+              <button
+                type="button"
+                aria-pressed={visualizacao === "grade"}
+                onClick={() => trocarVisualizacao("grade")}
+                className={`rounded px-3 py-1.5 text-sm font-medium ${visualizacao === "grade" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+              >
+                Edicao rapida
+              </button>
+            ) : null}
+          </div>
+          <span className="pb-2 text-sm font-medium tabular-nums text-gray-600">{total} produto(s)</span>
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 gap-3 border-t border-gray-100 pt-3 sm:grid-cols-2 lg:grid-cols-5">
+          <Field label="Grupo">
+            <Select
+              value={filters.grupo_id}
+              onChange={(e) => alterarFiltros({ grupo_id: e.target.value, subgrupo_id: "", categoria_id: "", subcategoria_id: "" })}
+            >
+              <option value="">Todos os grupos</option>
+              {grupos.map((grupo) => <option key={grupo.id} value={grupo.id}>{grupo.codigo} - {grupo.nome}</option>)}
+            </Select>
+          </Field>
+          <Field label="Subgrupo">
+            <Select
+              value={filters.subgrupo_id}
+              disabled={!filters.grupo_id}
+              onChange={(e) => alterarFiltros({ subgrupo_id: e.target.value, categoria_id: "", subcategoria_id: "" })}
+            >
+              <option value="">Todos os subgrupos</option>
+              {subgruposFiltro.map((sub) => <option key={sub.id} value={sub.id}>{sub.codigo} - {sub.nome}</option>)}
+            </Select>
+          </Field>
+          <Field label="Categoria">
+            <Select
+              value={filters.categoria_id}
+              onChange={(e) => alterarFiltros({ categoria_id: e.target.value, subcategoria_id: "" })}
+            >
+              <option value="">Todas as categorias</option>
+              {categoriasFiltro.map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>)}
+            </Select>
+          </Field>
+          <Field label="Subcategoria">
+            <Select
+              value={filters.subcategoria_id}
+              disabled={!filters.categoria_id}
+              onChange={(e) => alterarFiltros({ subcategoria_id: e.target.value })}
+            >
+              <option value="">Todas as subcategorias</option>
+              {subcategoriasFiltro.map((sub) => <option key={sub.id} value={sub.id}>{sub.nome}</option>)}
+            </Select>
+          </Field>
+          <div className="flex items-end">
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={() => {
+                if (alterarFiltros({ q: "", status_cadastro: "", grupo_id: "", subgrupo_id: "", categoria_id: "", subcategoria_id: "" })) {
+                  setBusca("");
+                }
+              }}
+            >
+              Limpar filtros
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+          <Button variant="outline" onClick={() => setModalFamilias(true)}>Famílias</Button>
+          <Button variant="outline" onClick={() => setModalEtiquetas(true)}>Etiquetas</Button>
+          <Button variant="outline" onClick={() => setModalImportar(true)}>Importar catálogo</Button>
+          <Button variant="outline" onClick={() => setModalImportarPlanilha(true)}>Importar planilha</Button>
+          <Button variant="outline" onClick={() => setModalImportarLote(true)}>Importar lote</Button>
+          <Button variant="outline" onClick={() => setModalUrl(true)}>Novo via URL</Button>
+          {temPermissao("produtos", "cadastrar") ? (
+            <Button variant="primary" className="ml-auto" onClick={() => (location.hash = "#/produtos/novo")}>Novo produto</Button>
+          ) : null}
+        </div>
       </div>
 
       {carregando ? (
@@ -314,6 +442,15 @@ export default function Produtos() {
             </>
           )}
         </div>
+      ) : visualizacao === "grade" && temPermissao("produtos", "editar") ? (
+        <EdicaoRapidaProdutos
+          items={items}
+          grupos={grupos}
+          subgrupos={todosSubgrupos}
+          categorias={categoriasTree}
+          onDirtyChange={setGradeSuja}
+          onSaved={() => setRefreshKey((key) => key + 1)}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((p) => (
@@ -328,7 +465,11 @@ export default function Produtos() {
                     {p.subcategoria ? ` / ${p.subcategoria}` : ""}
                   </span>{" "}
                   {p.classe_abc ? <Badge tone="blue">{p.classe_abc}</Badge> : null}
+                  <Badge tone={statusCadastroTone(p.status_cadastro)}>{statusCadastroLabel(p.status_cadastro)}</Badge>
                 </p>
+                {p.grupo || p.subgrupo ? (
+                  <p className="mt-1 truncate text-[11px] text-gray-400">{[p.grupo, p.subgrupo].filter(Boolean).join(" / ")}</p>
+                ) : null}
                 <p className="mt-1 line-clamp-2 text-sm font-medium text-gray-900">{p.nome}</p>
                 {(() => {
                   const detalhe =
@@ -361,13 +502,13 @@ export default function Produtos() {
 
       {total > PAGE && (
         <div className="mt-6 flex items-center gap-1">
-          <Button size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+          <Button size="sm" disabled={page <= 1} onClick={() => mudarPagina(page - 1)}>
             «
           </Button>
           <span className="px-2 text-sm text-gray-500">
             Página {page} de {Math.ceil(total / PAGE)}
           </span>
-          <Button size="sm" disabled={page >= Math.ceil(total / PAGE)} onClick={() => setPage((p) => p + 1)}>
+          <Button size="sm" disabled={page >= Math.ceil(total / PAGE)} onClick={() => mudarPagina(page + 1)}>
             »
           </Button>
         </div>
@@ -1048,13 +1189,13 @@ export function ProdutoEditor() {
 
   const aoSalvarGrupo = async (id: number, _nome: string) => {
     setGrupos(await api.listarGrupos().catch(() => []));
-    setForm((f) => ({ ...f, grupo_id: String(id), subgrupo_id: "" }));
+    setForm((f) => ({ ...f, grupo_id: String(id), subgrupo_id: "", categoria: "", subcategoria: "" }));
     setSubgrupos(await api.listarSubgrupos(id).catch(() => []));
   };
 
   const aoSalvarSubgrupo = async (id: number, _nome: string) => {
     if (form.grupo_id) setSubgrupos(await api.listarSubgrupos(Number(form.grupo_id)).catch(() => []));
-    setForm((f) => ({ ...f, subgrupo_id: String(id) }));
+    setForm((f) => ({ ...f, subgrupo_id: String(id), categoria: "", subcategoria: "" }));
   };
 
   const salvar = async () => {
@@ -1195,8 +1336,8 @@ export function ProdutoEditor() {
 // - nada → todas (mantém a atual se for customizada).
   const subgrupoIdsDoGrupo = new Set(subgrupos.map((s) => s.id));
   const categoriasFiltradas = categoriasTree.filter((c) => {
-    if (form.subgrupo_id) return c.subgrupo_id === Number(form.subgrupo_id);
-    if (form.grupo_id) return c.subgrupo_id != null && subgrupoIdsDoGrupo.has(c.subgrupo_id);
+    if (form.subgrupo_id) return c.subgrupo_id == null || c.subgrupo_id === Number(form.subgrupo_id);
+    if (form.grupo_id) return c.subgrupo_id == null || subgrupoIdsDoGrupo.has(c.subgrupo_id);
     return true;
   });
   const catAtual = categoriasTree.find((c) => c.nome === form.categoria);
@@ -1307,7 +1448,7 @@ export function ProdutoEditor() {
               </Field>
               <Field label="Subgrupo (SKU)" hint="2º segmento do SKU rápido">
                 <div className="flex gap-2">
-                  <Select value={form.subgrupo_id} onChange={(e) => setForm({ ...form, subgrupo_id: e.target.value })} className="flex-1" disabled={!form.grupo_id}>
+                  <Select value={form.subgrupo_id} onChange={(e) => setForm({ ...form, subgrupo_id: e.target.value, categoria: "", subcategoria: "" })} className="flex-1" disabled={!form.grupo_id}>
                     <option value="">—</option>
                     {subgrupos.map((s) => (
                       <option key={s.id} value={String(s.id)}>{s.codigo} · {s.nome}</option>
@@ -1333,7 +1474,7 @@ export function ProdutoEditor() {
                   <option value="">— selecione —</option>
                   {categoriasFiltradas.map((c) => (
                     <option key={c.id} value={c.nome}>
-                      {c.nome}
+                      {c.nome}{c.subgrupo_id == null ? " (sem subgrupo)" : ""}
                     </option>
                   ))}
                   {form.categoria && !categoriasFiltradas.some((c) => c.nome === form.categoria) ? (
