@@ -37,15 +37,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configura Python do controle de release
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
       - name: Seleciona automaticamente a candidata aprovada mais recente
         id: candidate
         run: |
-          RC_TAG="$(python scripts/release_control.py candidate)"
+          export RELEASE_GIT_TAGS="$(git tag --list)"
+          RC_TAG="$(bash deployment/scripts/release-python.sh scripts/release_control.py candidate)"
           git checkout --detach "$RC_TAG"
           echo "rc_tag=$RC_TAG" >> "$GITHUB_OUTPUT"
           echo "Candidata selecionada automaticamente: $RC_TAG"
@@ -94,7 +90,7 @@ jobs:
           fi
 
           export RELEASE_VERSION
-          python - <<'PY'
+          bash deployment/scripts/release-python.sh - <<'PY'
           import json
           import os
           import pathlib
@@ -148,7 +144,7 @@ jobs:
           GH_API_URL: ${{ github.api_url }}
           GH_REPOSITORY: ${{ github.repository }}
         run: |
-          python - <<'PY'
+          bash deployment/scripts/release-python.sh - <<'PY'
           import json
           import os
           import urllib.request

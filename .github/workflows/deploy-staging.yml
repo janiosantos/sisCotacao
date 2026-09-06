@@ -48,24 +48,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configura Python do controle de release
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
       - name: Valida release e define identificação do build
         id: release
         env:
           RELEASE_BUMP: ${{ inputs.incremento }}
           DEPLOY_MODE: ${{ inputs.modo }}
         run: |
-          RELEASE_VERSION="$(python scripts/release_control.py next --bump "$RELEASE_BUMP")"
+          export RELEASE_GIT_TAGS="$(git tag --list)"
+          RELEASE_VERSION="$(bash deployment/scripts/release-python.sh scripts/release_control.py next --bump "$RELEASE_BUMP")"
           if git rev-parse -q --verify "refs/tags/$RELEASE_VERSION" >/dev/null; then
             echo "ERRO: a versão final $RELEASE_VERSION já possui tag e não pode ser reutilizada."
             exit 1
           fi
           MANIFEST="releases/$RELEASE_VERSION.json"
-          python - "$MANIFEST" "$RELEASE_VERSION" <<'PY'
+          bash deployment/scripts/release-python.sh - "$MANIFEST" "$RELEASE_VERSION" <<'PY'
           import json
           import pathlib
           import sys

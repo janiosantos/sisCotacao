@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -28,6 +29,9 @@ class ReleaseCandidate:
 
 
 def _git_tags() -> list[str]:
+    explicit_tags = os.getenv("RELEASE_GIT_TAGS")
+    if explicit_tags is not None:
+        return [tag.strip() for tag in explicit_tags.splitlines() if tag.strip()]
     result = subprocess.run(
         ["git", "tag", "--list"],
         check=True,

@@ -171,7 +171,7 @@ Status: **✅ corrigido no código; nenhum deploy executado.**
 - [x] Produção promove os mesmos IDs de imagem testados, sem rebuild.
 - [x] Componentes são derivados do manifesto e a tag final nasce após os gates produtivos.
 - [x] Histórico registra exclusivamente a versão promovida.
-- [x] Runtime Python do controle de release é provisionado explicitamente no runner.
+- [x] Controle de release usa Python nativo ou container local, sem depender da distribuição do runner.
 
 Validação: `actionlint` nos dois workflows e 27 testes backend combinados, incluindo
 6 testes do controle de release; `py_compile`, JSON do manifesto e Compose verdes. O próximo

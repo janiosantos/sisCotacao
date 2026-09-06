@@ -1,4 +1,4 @@
-from scripts.release_control import ReleaseControlError, latest_candidate, next_version
+from scripts.release_control import ReleaseControlError, _git_tags, latest_candidate, next_version
 
 
 def test_next_version_uses_latest_final_semver_and_ignores_legacy_tags():
@@ -53,3 +53,9 @@ def test_latest_candidate_rejects_ambiguous_cycles():
         assert "v2.41.0" in str(exc)
     else:
         raise AssertionError("candidatas ambiguas deveriam ser bloqueadas")
+
+
+def test_git_tags_accepts_explicit_runner_snapshot(monkeypatch):
+    monkeypatch.setenv("RELEASE_GIT_TAGS", "v2.40.0\nv2.40.1-rc.100.1\n")
+
+    assert _git_tags() == ["v2.40.0", "v2.40.1-rc.100.1"]
